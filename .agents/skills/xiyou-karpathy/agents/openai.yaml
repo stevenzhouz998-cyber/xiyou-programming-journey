@@ -1,0 +1,4 @@
+interface:
+  display_name: "西游商业交付门禁"
+  short_description: "防止空壳功能、伪美术资产和不实完成声明"
+  default_prompt: "Use $xiyou-karpathy to define evidence, implement the real system loop, and audit completion before reporting."
