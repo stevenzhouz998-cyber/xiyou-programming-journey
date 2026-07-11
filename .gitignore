@@ -3,6 +3,6 @@ dist/
 coverage/
 artifacts/
 .npmrc
-AGENTS.md
+.superpowers/
 .DS_Store
 *.log
