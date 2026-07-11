@@ -1,0 +1,19 @@
+{
+  "color": {
+    "paper": "#f3ead5",
+    "paperDeep": "#e7d7b7",
+    "ink": "#231f19",
+    "inkMuted": "#625c50",
+    "jade": "#2f735b",
+    "jadeDeep": "#1f5141",
+    "cinnabar": "#a73725",
+    "cinnabarDeep": "#79281d",
+    "gold": "#aa7c35",
+    "mist": "#d9d5c8",
+    "success": "#2f735b",
+    "locked": "#77736a"
+  },
+  "spacing": { "xs": 4, "sm": 8, "md": 16, "lg": 24, "xl": 32, "2xl": 48 },
+  "radius": { "sm": 8, "md": 14, "lg": 22, "pill": 999 },
+  "typography": { "display": "Noto Serif SC", "body": "Noto Sans SC" }
+}
