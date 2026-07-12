@@ -73,12 +73,16 @@ function currentCorruptionProtectionError(storage: Storage, currentRaw: string):
 }
 
 function writeAndVerify(storage: Storage, key: string, value: string, stage: string): string | null {
-  try { storage.setItem(key, value); } catch { /* verify because some stores throw after committing */ }
+  let writeError: unknown = null;
+  try { storage.setItem(key, value); } catch (error) { writeError = error; /* verify because some stores throw after committing */ }
   try {
     if (storage.getItem(key) === value) return null;
-    return `${stage}失败：写入内容校验不一致`;
+    return writeError
+      ? `${stage}失败：${errorMessage(writeError)}；写入内容校验不一致`
+      : `${stage}失败：写入内容校验不一致`;
   } catch (error) {
-    return `${stage}失败：无法校验写入结果（${errorMessage(error)}）`;
+    const writeDetail = writeError ? `${errorMessage(writeError)}；` : '';
+    return `${stage}失败：${writeDetail}无法校验写入结果（${errorMessage(error)}）`;
   }
 }
 

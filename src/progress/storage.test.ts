@@ -64,6 +64,14 @@ describe('progress storage transactions', () => {
     expect(storage.length).toBe(0);
   });
 
+  it('reports the original write failure when verification also fails', () => {
+    const storage = new MemoryStorage();
+    storage.failWrites.add(CURRENT_PROGRESS_KEY);
+    expect(saveProgressTransaction(progress('会话'), storage)).toMatchObject({
+      status: 'unsaved', error: expect.stringContaining(`blocked:${CURRENT_PROGRESS_KEY}`),
+    });
+  });
+
   it('loads a valid V2 current save normally', () => {
     const storage = new MemoryStorage();
     storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress('当前')));

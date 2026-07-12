@@ -1,16 +1,58 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
+import { createInitialProgress, serializeProgress } from './progress/progress';
+import { CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from './progress/storage';
+
+const originalStorage = localStorage;
+
+function installDynamicStorage(initial: Record<string, string>, failWrites = true, failMessage = 'storage disabled') {
+  const values = new Map(Object.entries(initial));
+  const controls = { failWrites, failMessage };
+  const storage: Storage = {
+    get length() { return values.size; },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => [...values.keys()][index] ?? null,
+    removeItem: (key) => { values.delete(key); },
+    setItem: (key, value) => {
+      if (controls.failWrites) throw new Error(controls.failMessage);
+      values.set(key, value);
+    },
+  };
+  Object.defineProperty(globalThis, 'localStorage', { value: storage, configurable: true });
+  Object.defineProperty(window, 'localStorage', { value: storage, configurable: true });
+  return controls;
+}
 
 describe('西游编程记', () => {
   beforeEach(() => {
+    Object.defineProperty(globalThis, 'localStorage', { value: originalStorage, configurable: true });
+    Object.defineProperty(window, 'localStorage', { value: originalStorage, configurable: true });
     localStorage.clear();
     window.history.pushState({}, '', '/');
     window.location.hash = '#/';
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: vi.fn(() => ({
+      matches: false,
+      media: '(prefers-reduced-motion: reduce)',
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })) });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    Object.defineProperty(globalThis, 'localStorage', { value: originalStorage, configurable: true });
+    Object.defineProperty(window, 'localStorage', { value: originalStorage, configurable: true });
   });
 
   it('shows the six-week canonical journey and the first mission', () => {
     render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
     expect(screen.getByRole('heading', { name: '西游编程记' })).toBeInTheDocument();
     expect(screen.getAllByText(/第[一二三四五六]周/)).toHaveLength(6);
     expect(screen.getByRole('button', { name: /开始第一关/ })).toBeEnabled();
@@ -18,6 +60,7 @@ describe('西游编程记', () => {
 
   it('opens the first canonical mission with source and three-level hints', () => {
     render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
     fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
     expect(screen.getByRole('heading', { name: '龙宫求兵' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /查看原著第三回/ })).toHaveAttribute('href', expect.stringContaining('wikisource.org'));
@@ -28,6 +71,7 @@ describe('西游编程记', () => {
 
   it('lets a child finish the first mission through the command scroll', () => {
     render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
     fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
     fireEvent.click(screen.getByRole('button', { name: '进入龙宫' }));
     fireEvent.click(screen.getByRole('button', { name: '请求兵器' }));
@@ -38,10 +82,160 @@ describe('西游编程记', () => {
 
   it('protects the parent report with the local PIN', () => {
     render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
     fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
     fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '2580' } });
     fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
     expect(screen.getByRole('heading', { name: '家长周报' })).toBeInTheDocument();
     expect(screen.getByText('学习数据仅保存在这台电脑')).toBeInTheDocument();
+  });
+
+  it('shows snapshot recovery below the header on every route', () => {
+    localStorage.setItem(CURRENT_PROGRESS_KEY, '{bad');
+    localStorage.setItem(SNAPSHOT_PROGRESS_KEY, serializeProgress({
+      ...createInitialProgress(), privacy: { localDataNoticeSeen: true },
+    }));
+    window.location.hash = '#/mission/w1-m1';
+    render(<App />);
+    expect(screen.getByRole('status')).toHaveTextContent('学习进度已经安全恢复');
+    expect(screen.getByRole('heading', { name: '龙宫求兵' })).toBeInTheDocument();
+  });
+
+  it('retries the real unsaved mission state until it is durably stored', () => {
+    const saved = serializeProgress({
+      ...createInitialProgress(), privacy: { localDataNoticeSeen: true },
+    });
+    const storage = installDynamicStorage({ [CURRENT_PROGRESS_KEY]: saved }, true, '磁盘错误 A');
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
+    fireEvent.click(screen.getByRole('button', { name: '进入龙宫' }));
+    fireEvent.click(screen.getByRole('button', { name: '请求兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '试用兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '运行指令' }));
+    expect(screen.getByRole('heading', { name: '闯关成功' })).toBeInTheDocument();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByRole('alert')).toHaveTextContent('磁盘错误 A');
+    storage.failMessage = '磁盘错误 B';
+    fireEvent.click(screen.getByRole('button', { name: '重试保存' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('磁盘错误 B');
+    storage.failWrites = false;
+    fireEvent.click(screen.getByRole('button', { name: '重试保存' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
+      missions: { 'w1-m1': { status: 'completed' } },
+    });
+  });
+
+  it('persists the first-use privacy acknowledgement', () => {
+    const first = render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
+    expect(screen.queryByRole('dialog', { name: '你的学习数据保存在这台设备' })).not.toBeInTheDocument();
+    first.unmount();
+    render(<App />);
+    expect(screen.queryByRole('dialog', { name: '你的学习数据保存在这台设备' })).not.toBeInTheDocument();
+  });
+
+  it('keeps privacy open after failure and closes it only after a real saved retry', () => {
+    const storage = installDynamicStorage({}, true, '隐私确认无法写入');
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
+    expect(screen.getByRole('dialog', { name: '你的学习数据保存在这台设备' })).toBeInTheDocument();
+    expect(screen.getByTestId('app-background')).toHaveAttribute('inert');
+    expect(screen.getByTestId('app-background')).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByText(/确认尚未保存/)).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('确认尚未保存');
+    expect(screen.getByRole('alert')).toHaveTextContent('隐私确认无法写入');
+    storage.failWrites = false;
+    fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
+    expect(screen.queryByRole('dialog', { name: '你的学习数据保存在这台设备' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ privacy: { localDataNoticeSeen: true } });
+    expect(screen.getByTestId('app-background')).not.toHaveAttribute('inert');
+    expect(screen.getByTestId('app-background')).not.toHaveAttribute('aria-hidden');
+  });
+
+  it('loads an imported file into the session but never claims success when persistence fails', async () => {
+    const current = { ...createInitialProgress(), learnerName: '旧进度', privacy: { localDataNoticeSeen: true } };
+    const storage = installDynamicStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(current) }, true, '导入写盘失败');
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
+    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '2580' } });
+    fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
+    const imported = { ...createInitialProgress(), learnerName: '导入会话', privacy: { localDataNoticeSeen: true } };
+    fireEvent.change(screen.getByLabelText('导入进度'), {
+      target: { files: [new File([serializeProgress(imported)], 'progress.json', { type: 'application/json' })] },
+    });
+    expect(await screen.findByText('进度已载入当前会话，但尚未保存到此设备，请重试或导出。')).toBeInTheDocument();
+    expect(screen.queryByText('进度已成功导入。')).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('导入写盘失败');
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ learnerName: '旧进度' });
+    expect(screen.getByText('导入会话')).toBeInTheDocument();
+    storage.failWrites = false;
+    await waitFor(() => expect(screen.getByRole('button', { name: '重试保存' })).toBeEnabled());
+  });
+
+  it('uses system reduced motion until the learner makes a persistent choice', () => {
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: vi.fn(() => ({
+      matches: true,
+      media: '(prefers-reduced-motion: reduce)',
+      onchange: null,
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+    })) });
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({
+      ...createInitialProgress(), privacy: { localDataNoticeSeen: true },
+    }));
+    const first = render(<App />);
+    expect(screen.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '使用普通动画' }));
+    expect(screen.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'false');
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).settings).toMatchObject({ reducedMotion: false, reducedMotionOverride: true });
+    first.unmount();
+    render(<App />);
+    expect(screen.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'false');
+  });
+
+  it('follows later system motion changes while no explicit override exists', () => {
+    let change: ((event: { matches: boolean }) => void) | undefined;
+    const removeEventListener = vi.fn();
+    const media = {
+      matches: false, media: '(prefers-reduced-motion: reduce)', onchange: null,
+      addEventListener: vi.fn((_type: string, listener: (event: { matches: boolean }) => void) => { change = listener; }),
+      removeEventListener, addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+    };
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: vi.fn(() => media) });
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({
+      ...createInitialProgress(), privacy: { localDataNoticeSeen: true },
+    }));
+    const view = render(<App />);
+    expect(screen.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'false');
+    act(() => change?.({ matches: true }));
+    expect(screen.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'true');
+    view.unmount();
+    expect(removeEventListener).toHaveBeenCalledOnce();
+  });
+
+  it('supports and cleans up legacy motion listeners', () => {
+    let change: ((event: { matches: boolean }) => void) | undefined;
+    const removeListener = vi.fn();
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: vi.fn(() => ({
+      matches: false, media: '(prefers-reduced-motion: reduce)', onchange: null,
+      addListener: vi.fn((listener: (event: { matches: boolean }) => void) => { change = listener; }),
+      removeListener,
+      dispatchEvent: vi.fn(),
+    })) });
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({ ...createInitialProgress(), privacy: { localDataNoticeSeen: true } }));
+    const view = render(<App />);
+    act(() => change?.({ matches: true }));
+    expect(screen.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'true');
+    view.unmount();
+    expect(removeListener).toHaveBeenCalledOnce();
+  });
+
+  it('falls back safely when matchMedia is unavailable', () => {
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: undefined });
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({ ...createInitialProgress(), privacy: { localDataNoticeSeen: true } }));
+    render(<App />);
+    expect(screen.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'false');
   });
 });

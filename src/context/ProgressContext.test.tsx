@@ -6,8 +6,9 @@ import { CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from '../progress/storage
 
 const originalStorage = localStorage;
 
-function installStorage(initial: Record<string, string>, failCurrentWrite = false) {
+function installStorage(initial: Record<string, string>, failWrites = false) {
   const values = new Map(Object.entries(initial));
+  const controls = { failWrites, failKeys: new Set<string>() };
   const storage: Storage = {
     get length() { return values.size; },
     clear: () => values.clear(),
@@ -15,12 +16,13 @@ function installStorage(initial: Record<string, string>, failCurrentWrite = fals
     key: (index) => [...values.keys()][index] ?? null,
     removeItem: (key) => { values.delete(key); },
     setItem: (key, value) => {
-      if (failCurrentWrite && key === CURRENT_PROGRESS_KEY) throw new Error('disk unavailable');
+      if (controls.failWrites || controls.failKeys.has(key)) throw new Error('disk unavailable');
       values.set(key, value);
     },
   };
   Object.defineProperty(globalThis, 'localStorage', { value: storage, configurable: true });
   Object.defineProperty(window, 'localStorage', { value: storage, configurable: true });
+  return controls;
 }
 
 afterEach(() => {
@@ -42,6 +44,8 @@ function Probe() {
       saveError: state.saveError,
     })}</output>
     <button onClick={() => state.replaceProgress({ ...state.progress, learnerName: '会话新名字' })}>保存</button>
+    <button onClick={() => state.acknowledgePrivacy()}>确认隐私</button>
+    <button onClick={() => state.retrySave()}>重试保存</button>
   </>;
 }
 
@@ -65,5 +69,36 @@ describe('ProgressContext persistence status', () => {
     expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
       learnerName: '会话新名字', saveStatus: 'unsaved', saveError: expect.stringContaining('写入当前存档'),
     });
+  });
+
+  it('retries only after first creating a real unsaved session state', () => {
+    const storage = installStorage({}, true);
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      learnerName: '会话新名字', saveStatus: 'unsaved', saveError: expect.any(String),
+    });
+    storage.failWrites = false;
+    fireEvent.click(screen.getByRole('button', { name: '重试保存' }));
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ saveStatus: 'saved', saveError: null });
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ learnerName: '会话新名字' });
+  });
+
+  it('retries a recovered snapshot that could not initially be written back', () => {
+    const storage = installStorage({
+      [CURRENT_PROGRESS_KEY]: '{bad',
+      [SNAPSHOT_PROGRESS_KEY]: serializeProgress({ ...createInitialProgress(), learnerName: '恢复会话' }),
+    });
+    storage.failKeys.add(CURRENT_PROGRESS_KEY);
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      learnerName: '恢复会话', loadStatus: 'recovered-from-snapshot', loadPersistence: 'unsaved',
+    });
+    storage.failKeys.clear();
+    fireEvent.click(screen.getByRole('button', { name: '重试保存' }));
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      loadStatus: 'recovered-from-snapshot', loadPersistence: 'saved', saveStatus: 'saved', saveError: null,
+    });
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ learnerName: '恢复会话' });
   });
 });

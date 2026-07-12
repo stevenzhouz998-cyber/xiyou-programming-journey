@@ -191,3 +191,11 @@ progress { width: 100%; accent-color: var(--jade); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+/* Persistence and privacy states must remain readable before the visual-polish pass. */
+.recovery-notice { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px 20px; background: #eef7ed; color: #243b25; }
+.recovery-notice p { margin: 2px 0 0; }
+.recovery-notice-alert { background: #fff0df; color: #5d2d13; }
+.privacy-panel { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: rgb(24 24 20 / 62%); }
+.privacy-card { width: min(560px, 100%); padding: 28px; border-radius: 18px; background: #fffdf5; color: #2f2b22; box-shadow: 0 20px 60px rgb(0 0 0 / 28%); }
+.privacy-card li { margin-block: 10px; }
+[data-reduced-motion="true"] *, [data-reduced-motion="true"] *::before, [data-reduced-motion="true"] *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }

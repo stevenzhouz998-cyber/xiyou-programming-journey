@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { HashRouter, Link, Route, Routes, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, BookOpenText, CheckCircle, DownloadSimple, LockKey, MapTrifold, Medal, SpeakerHigh, SpeakerSlash, UploadSimple, UsersThree } from '@phosphor-icons/react';
+import { ArrowLeft, BookOpenText, CheckCircle, DownloadSimple, Lightning, LockKey, MapTrifold, Medal, SpeakerHigh, SpeakerSlash, UploadSimple, UsersThree } from '@phosphor-icons/react';
 import { course, allMissions, getMission } from './course/course';
 import { ProgressProvider, useProgress } from './context/ProgressContext';
 import { getWeeklyReport, importProgress, isMissionUnlocked, serializeProgress } from './progress/progress';
@@ -9,6 +9,8 @@ import { BlocklyWorkspace } from './components/BlocklyWorkspace';
 import { PythonEditor } from './components/PythonEditor';
 import { AiLab } from './components/AiLab';
 import { GameScene } from './components/GameScene';
+import { PrivacyPanel } from './components/PrivacyPanel';
+import { RecoveryNotice } from './components/RecoveryNotice';
 import { assetUrl } from './utils/assets';
 import './styles.css';
 
@@ -27,11 +29,11 @@ function chapterLabel(chapter: number): string {
   return `${digits[tens]}十${ones === 0 ? '' : digits[ones]}`;
 }
 
-function Header() {
+function Header({ reducedMotion }: { reducedMotion: boolean }) {
   const navigate = useNavigate();
   const { progress, updateSettings } = useProgress();
   const totalStars = Object.values(progress.missions).reduce((sum, mission) => sum + mission.stars, 0);
-  return <header className="topbar"><button className="brand" type="button" onClick={() => navigate('/')}><span className="brand-seal">码</span><span><strong>西游编程记</strong><small>原著闯关 · 编程修行</small></span></button><div className="learner-summary"><img src={assetUrl("/assets/young-hero.png")} alt="小行者头像" /><span><strong>{progress.learnerName}</strong><small>{Object.keys(progress.missions).length}/30 关 · {totalStars} 星</small></span></div><nav><button type="button" onClick={() => navigate('/')}><MapTrifold size={20} />成长地图</button><button type="button" onClick={() => navigate('/parent')}><UsersThree size={20} />家长周报</button><button type="button" aria-label={progress.settings.muted ? '开启声音' : '关闭声音'} onClick={() => updateSettings({ muted: !progress.settings.muted })}>{progress.settings.muted ? <SpeakerSlash size={21} /> : <SpeakerHigh size={21} />}</button></nav></header>;
+  return <header className="topbar"><button className="brand" type="button" onClick={() => navigate('/')}><span className="brand-seal">码</span><span><strong>西游编程记</strong><small>原著闯关 · 编程修行</small></span></button><div className="learner-summary"><img src={assetUrl("/assets/young-hero.png")} alt="小行者头像" /><span><strong>{progress.learnerName}</strong><small>{Object.keys(progress.missions).length}/30 关 · {totalStars} 星</small></span></div><nav><button type="button" onClick={() => navigate('/')}><MapTrifold size={20} />成长地图</button><button type="button" onClick={() => navigate('/parent')}><UsersThree size={20} />家长周报</button><button type="button" aria-label={reducedMotion ? '使用普通动画' : '减弱动画'} onClick={() => updateSettings({ reducedMotion: !reducedMotion, reducedMotionOverride: true })}><Lightning size={21} />{reducedMotion ? '普通动画' : '减弱动画'}</button><button type="button" aria-label={progress.settings.muted ? '开启声音' : '关闭声音'} onClick={() => updateSettings({ muted: !progress.settings.muted })}>{progress.settings.muted ? <SpeakerSlash size={21} /> : <SpeakerHigh size={21} />}</button></nav></header>;
 }
 
 function HomePage() {
@@ -90,11 +92,44 @@ function ParentPage() {
     const blob = new Blob([serializeProgress(progress)], { type: 'application/json' });
     const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = '西游编程记-学习进度.json'; link.click(); URL.revokeObjectURL(link.href);
   };
-  const upload = (file?: File) => { if (!file) return; const reader = new FileReader(); reader.onload = () => { try { replaceProgress(importProgress(String(reader.result))); setError('进度已成功导入。'); } catch (caught) { setError(caught instanceof Error ? caught.message : '导入失败'); } }; reader.readAsText(file); };
+  const upload = (file?: File) => { if (!file) return; const reader = new FileReader(); reader.onload = () => { try { const result = replaceProgress(importProgress(String(reader.result))); setError(result.status === 'saved' ? '进度已成功导入。' : '进度已载入当前会话，但尚未保存到此设备，请重试或导出。'); } catch (caught) { setError(caught instanceof Error ? caught.message : '导入失败'); } }; reader.readAsText(file); };
 
   return <main className="parent-page"><div className="parent-heading"><div><span className="eyebrow">本地学习档案</span><h1>家长周报</h1><p>学习数据仅保存在这台电脑</p></div><Link className="button button-ghost" to="/">返回成长地图</Link></div><section className="report-summary"><article><strong>{Object.keys(progress.missions).length}</strong><span>已完成关卡</span></article><article><strong>{Object.values(progress.missions).reduce((sum, item) => sum + item.stars, 0)}</strong><span>累计星数</span></article><article><strong>{Object.values(progress.missions).reduce((sum, item) => sum + item.hintsUsed, 0)}</strong><span>使用提示</span></article></section><section className="weekly-reports">{course.weeks.map((week) => { const report = getWeeklyReport(progress, week.week); return <article className="weekly-report" key={week.id}><div><span>第{'一二三四五六'[week.week - 1]}周</span><h2>{week.title}</h2><p>{week.theme}</p></div><div className="report-progress"><strong>{report.completed}/5</strong><span>完成 · {report.stars} 星 · {report.hintsUsed} 次提示</span><progress value={report.completed} max={5} /></div><div><span className="eyebrow">需要留意</span><p>{report.needsSupport.length ? [...new Set(report.needsSupport)].join('、') : report.completed ? '本周暂未出现明显卡点' : '尚未开始本周学习'}</p></div></article>; })}</section><section className="data-tools"><div><h2>进度备份</h2><p>换浏览器或清理数据前，请先导出备份。</p></div><button type="button" className="button button-ghost" onClick={download}><DownloadSimple size={20} />导出进度</button><label className="button button-ghost"><UploadSimple size={20} />导入进度<input type="file" accept="application/json" onChange={(event) => upload(event.target.files?.[0])} /></label>{error && <p>{error}</p>}</section></main>;
 }
 
-function AppRoutes() { return <><Header /><Routes><Route path="/" element={<HomePage />} /><Route path="/mission/:id" element={<MissionPage />} /><Route path="/parent" element={<ParentPage />} /><Route path="*" element={<HomePage />} /></Routes></>; }
+function AppRoutes() {
+  const { progress, loadStatus, loadPersistence, loadError, corruptDownload, saveStatus, saveError, acknowledgePrivacy, retrySave } = useProgress();
+  const [systemReducedMotion, setSystemReducedMotion] = useState(() => (
+    typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ));
+
+  useEffect(() => {
+    if (progress.settings.reducedMotionOverride || typeof window.matchMedia !== 'function') return undefined;
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = (event: MediaQueryListEvent) => setSystemReducedMotion(event.matches);
+    setSystemReducedMotion(media.matches);
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update);
+      return () => media.removeEventListener('change', update);
+    }
+    media.addListener?.(update);
+    return () => media.removeListener?.(update);
+  }, [progress.settings.reducedMotionOverride]);
+
+  const effectiveReducedMotion = progress.settings.reducedMotionOverride
+    ? progress.settings.reducedMotion
+    : systemReducedMotion;
+  const persistence = loadPersistence === 'unsaved' || saveStatus === 'unsaved' ? 'unsaved' : 'saved';
+  const privacyOpen = !progress.privacy.localDataNoticeSeen;
+
+  return <div className="app-shell" data-testid="app-shell" data-reduced-motion={String(effectiveReducedMotion)}>
+    <RecoveryNotice loadStatus={loadStatus} persistence={persistence} loadError={loadError} saveError={saveError} hasCorruptDownload={corruptDownload !== null} onRetry={retrySave} />
+    <div data-testid="app-background" inert={privacyOpen ? true : undefined} aria-hidden={privacyOpen ? true : undefined}>
+      <Header reducedMotion={effectiveReducedMotion} />
+      <Routes><Route path="/" element={<HomePage />} /><Route path="/mission/:id" element={<MissionPage />} /><Route path="/parent" element={<ParentPage />} /><Route path="*" element={<HomePage />} /></Routes>
+    </div>
+    <PrivacyPanel acknowledged={progress.privacy.localDataNoticeSeen} onAcknowledge={acknowledgePrivacy} />
+  </div>;
+}
 
 export default function App() { return <HashRouter><ProgressProvider><AppRoutes /></ProgressProvider></HashRouter>; }
