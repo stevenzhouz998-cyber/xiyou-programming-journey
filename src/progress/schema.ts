@@ -1,6 +1,17 @@
 import { allMissions } from '../course/course';
 import type { MissionProgress, ProgressSettings, ProgressV1, ProgressV2 } from './types';
 
+export const createInitialProgress = (): ProgressV2 => ({
+  version: 2,
+  schemaRevision: 1,
+  learnerName: '小行者',
+  missions: {},
+  settings: { muted: false, reducedMotion: false, reducedMotionOverride: false, parentPin: '2580' },
+  privacy: { localDataNoticeSeen: false },
+  recovery: { lastRecoveredAt: null, source: null },
+  savedAt: new Date(0).toISOString(),
+});
+
 const missionIds = new Set(allMissions.map((mission) => mission.id));
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

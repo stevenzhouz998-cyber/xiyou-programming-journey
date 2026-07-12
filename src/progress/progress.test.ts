@@ -81,4 +81,5 @@ describe('progress rules', () => {
     expect(() => importProgress('{broken')).toThrow('进度文件无法读取');
     expect(() => importProgress('{"version":999}')).toThrow('进度版本不受支持');
   });
+
 });

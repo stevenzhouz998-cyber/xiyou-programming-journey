@@ -1,18 +1,9 @@
-import { parseProgress } from './schema';
+import { createInitialProgress, parseProgress } from './schema';
 import type { ProgressV2 } from './types';
 
 export type { MissionProgress, ProgressDocument, ProgressSettings, ProgressV1, ProgressV2 } from './types';
 
-export const createInitialProgress = (): ProgressV2 => ({
-  version: 2,
-  schemaRevision: 1,
-  learnerName: '小行者',
-  missions: {},
-  settings: { muted: false, reducedMotion: false, reducedMotionOverride: false, parentPin: '2580' },
-  privacy: { localDataNoticeSeen: false },
-  recovery: { lastRecoveredAt: null, source: null },
-  savedAt: new Date(0).toISOString(),
-});
+export { createInitialProgress } from './schema';
 
 import { allMissions } from '../course/course';
 
@@ -98,20 +89,4 @@ export function serializeProgress(progress: ProgressV2): string {
 
 export function importProgress(raw: string): ProgressV2 {
   return parseProgress(raw);
-}
-
-export const PROGRESS_STORAGE_KEY = 'xiyou-programming-progress-v1';
-
-export function loadProgress(storage: Pick<Storage, 'getItem'> = localStorage): ProgressV2 {
-  const raw = storage.getItem(PROGRESS_STORAGE_KEY);
-  if (!raw) return createInitialProgress();
-  try {
-    return importProgress(raw);
-  } catch {
-    return createInitialProgress();
-  }
-}
-
-export function saveProgress(progress: ProgressV2, storage: Pick<Storage, 'setItem'> = localStorage): void {
-  storage.setItem(PROGRESS_STORAGE_KEY, serializeProgress(progress));
 }

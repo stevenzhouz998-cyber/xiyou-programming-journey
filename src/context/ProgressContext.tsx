@@ -1,14 +1,23 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import {
   completeMission,
-  loadProgress,
-  saveProgress,
   type CompletionInput,
   type ProgressV2,
 } from '../progress/progress';
+import {
+  loadProgressTransaction,
+  saveProgressTransaction,
+  type LoadStatus,
+} from '../progress/storage';
 
-interface ProgressContextValue {
+export interface ProgressContextValue {
   progress: ProgressV2;
+  loadStatus: LoadStatus;
+  loadPersistence: 'saved' | 'unsaved';
+  loadError: string | null;
+  corruptDownload: string | null;
+  saveStatus: 'idle' | 'saved' | 'unsaved';
+  saveError: string | null;
   complete: (missionId: string, input: CompletionInput) => void;
   replaceProgress: (progress: ProgressV2) => void;
   updateSettings: (settings: Partial<ProgressV2['settings']>) => void;
@@ -17,15 +26,26 @@ interface ProgressContextValue {
 const ProgressContext = createContext<ProgressContextValue | null>(null);
 
 export function ProgressProvider({ children }: { children: ReactNode }) {
-  const [progress, setProgress] = useState<ProgressV2>(() => loadProgress());
+  const [initialLoad] = useState(() => loadProgressTransaction());
+  const [progress, setProgress] = useState<ProgressV2>(initialLoad.progress);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'unsaved'>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const commit = (next: ProgressV2) => {
     setProgress(next);
-    saveProgress(next);
+    const result = saveProgressTransaction(next);
+    setSaveStatus(result.status);
+    setSaveError(result.status === 'unsaved' ? result.error : null);
   };
 
   const value = useMemo<ProgressContextValue>(() => ({
     progress,
+    loadStatus: initialLoad.status,
+    loadPersistence: initialLoad.persistence,
+    loadError: initialLoad.error,
+    corruptDownload: initialLoad.corruptDownload,
+    saveStatus,
+    saveError,
     complete: (missionId, input) => commit(completeMission(progress, missionId, input)),
     replaceProgress: commit,
     updateSettings: (settings) => commit({
@@ -33,7 +53,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       settings: { ...progress.settings, ...settings },
       savedAt: new Date().toISOString(),
     }),
-  }), [progress]);
+  }), [initialLoad, progress, saveError, saveStatus]);
 
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;
 }
