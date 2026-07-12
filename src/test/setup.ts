@@ -15,5 +15,10 @@ const memoryStorage: Storage = {
 Object.defineProperty(globalThis, 'localStorage', { value: memoryStorage, configurable: true });
 Object.defineProperty(window, 'localStorage', { value: memoryStorage, configurable: true });
 Object.defineProperty(window.HTMLMediaElement.prototype, 'play', { value: () => Promise.resolve(), configurable: true });
+Object.defineProperty(window.HTMLCanvasElement.prototype, 'getContext', { value: () => new Proxy({
+  canvas: document.createElement('canvas'),
+  getImageData: () => ({ data: new Uint8ClampedArray(4) }),
+  measureText: () => ({ width: 0 }),
+}, { get: (target, property) => property in target ? target[property as keyof typeof target] : () => undefined }), configurable: true });
 
 afterEach(() => cleanup());

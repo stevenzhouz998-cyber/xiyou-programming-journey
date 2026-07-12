@@ -1,20 +1,35 @@
-import { useEffect, useState } from 'react';
-import { HashRouter, Link, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { HashRouter, Link, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, BookOpenText, CheckCircle, Lightning, LockKey, MapTrifold, Medal, SpeakerHigh, SpeakerSlash, UsersThree } from '@phosphor-icons/react';
 import { course, allMissions, getMission } from './course/course';
 import { ProgressProvider, useProgress } from './context/ProgressContext';
 import { getWeeklyReport, isMissionUnlocked } from './progress/progress';
 import { validateSequence } from './engine/validation';
-import { BlocklyWorkspace } from './components/BlocklyWorkspace';
-import { PythonEditor } from './components/PythonEditor';
-import { AiLab } from './components/AiLab';
-import { GameScene } from './components/GameScene';
+import { MissionTools } from './components/MissionTools';
 import { PrivacyPanel } from './components/PrivacyPanel';
 import { RecoveryNotice } from './components/RecoveryNotice';
 import { ParentDataTools } from './components/ParentDataTools';
 import { assetUrl } from './utils/assets';
 import { downloadTextFile } from './utils/download';
 import './styles.css';
+
+const GlobalModalIsolationContext = createContext<(open: boolean) => void>(() => undefined);
+
+function RouteFocus({ blocked }: { blocked: boolean }) {
+  const location = useLocation();
+  const initialRef = useRef(true);
+  useEffect(() => {
+    if (blocked) return undefined;
+    if (initialRef.current) { initialRef.current = false; return undefined; }
+    const frame = requestAnimationFrame(() => {
+      const target = document.querySelector<HTMLElement>('main h1, main[tabindex="-1"]');
+      if (target && !target.closest('[inert]')) { target.tabIndex = -1; target.focus(); }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [blocked, location.pathname]);
+  return null;
+}
 
 function playAudio(path: string, muted: boolean) {
   if (muted || typeof Audio === 'undefined') return;
@@ -55,8 +70,24 @@ function HintPanel({ hints, onUse }: { hints: { observe: string; think: string; 
   return <div className="hint-panel"><p className="eyebrow">卡住了？提示不会阻止通关</p>{items.map(([label, text]) => <div key={label}><button type="button" onClick={() => { setOpen(open === label ? null : label); if (open !== label) onUse(); }}>{label}</button>{open === label && <p>{text}</p>}</div>)}</div>;
 }
 
-function MissionPage() {
-  const { id = '' } = useParams();
+function SuccessDialog({ stars, feedback, hasNext, onMap, onNext }: { stars: number; feedback: string; hasNext: boolean; onMap: () => void; onNext: () => void }) {
+  const setGlobalModalOpen = useContext(GlobalModalIsolationContext);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<HTMLButtonElement>(null);
+  const nextRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { setGlobalModalOpen(true); (nextRef.current ?? mapRef.current)?.focus(); return () => setGlobalModalOpen(false); }, [setGlobalModalOpen]);
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') { event.preventDefault(); onMap(); return; }
+    if (event.key !== 'Tab') return;
+    const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>('button, [href], [tabindex]:not([tabindex="-1"])') ?? [])].filter((node) => !node.hasAttribute('disabled'));
+    const first = focusable[0]; const last = focusable.at(-1);
+    if (!first || !last) return;
+    if ((event.shiftKey && document.activeElement === first) || (!event.shiftKey && document.activeElement === last)) { event.preventDefault(); (event.shiftKey ? last : first).focus(); }
+  };
+  return createPortal(<div ref={dialogRef} className="success-overlay" role="dialog" aria-modal="true" aria-labelledby="success-heading" onKeyDown={onKeyDown}><div className="success-card"><span className="seal-medal"><Medal size={42} weight="fill" /></span><p className="eyebrow">原著事件复原完成</p><h2 id="success-heading">闯关成功</h2><div className="stars" aria-label={`${stars}颗星`}>{Array.from({ length: 3 }, (_, index) => <span key={index} className={index < stars ? 'lit' : ''}>★</span>)}</div><p>{feedback || '你把原著事实和代码规律都整理清楚了。'}</p><div className="success-actions"><button ref={mapRef} type="button" className="button button-ghost" onClick={onMap}>回成长地图</button>{hasNext && <button ref={nextRef} type="button" className="button button-primary" onClick={onNext}>继续下一关</button>}</div></div></div>, document.body);
+}
+
+function MissionPageContent({ reducedMotion, id }: { reducedMotion: boolean; id: string }) {
   const navigate = useNavigate();
   const mission = getMission(id);
   const { progress, complete } = useProgress();
@@ -79,7 +110,17 @@ function MissionPage() {
   };
   const next = allMissions[allMissions.findIndex((item) => item.id === mission.id) + 1];
 
-  return <main className="mission-page"><header className="mission-header"><button className="back-button" type="button" onClick={() => navigate('/')}><ArrowLeft size={21} />成长地图</button><div><span>第{mission.week}周 · 第{mission.order}关{mission.isBoss ? ' · BOSS' : ''}</span><h1>{mission.title}</h1></div><div className="canon-badge"><BookOpenText size={20} /><span>{mission.canon.title}</span></div></header><div className="mission-layout"><aside className="story-column"><span className="eyebrow">原著故事层</span><h2>{mission.subtitle}</h2>{mission.storyBeats.map((item) => <article className="story-beat" key={item.title}><CheckCircle size={20} weight="fill" /><div><strong>{item.title}</strong><p>{item.summary}</p></div></article>)}<a className="canon-link" href={mission.canon.sourceUrl} target="_blank" rel="noreferrer">查看原著第{mission.canon.chapters.map(chapterLabel).join('、')}回</a><HintPanel hints={mission.hints} onUse={() => setHintsUsed((count) => count + 1)} /></aside><section className="play-column"><div className="mission-objective"><span>今日任务</span><h2>{mission.objective}</h2><p>知识法宝：{mission.knowledge}</p></div><GameScene activeStep={activeStep} />{mission.mode === 'blockly' && <BlocklyWorkspace missionId={mission.id} commands={mission.expectedSequence} onRun={validate} />}{mission.mode === 'python' && <PythonEditor starterCode={mission.starterCode ?? ''} expectedOutput={mission.expectedOutput ?? ''} onPass={() => pass(hintsUsed === 0 ? 3 : hintsUsed === 1 ? 2 : 1)} />}{mission.mode === 'ai-lab' && <AiLab commands={mission.expectedSequence} onRun={validate} />}{feedback && !success && <div className="feedback-message">{feedback}</div>}</section></div>{success && <div className="success-overlay" role="dialog" aria-modal="true"><div className="success-card"><span className="seal-medal"><Medal size={42} weight="fill" /></span><p className="eyebrow">原著事件复原完成</p><h2>闯关成功</h2><div className="stars" aria-label={`${stars}颗星`}>{Array.from({ length: 3 }, (_, index) => <span key={index} className={index < stars ? 'lit' : ''}>★</span>)}</div><p>{feedback || '你把原著事实和代码规律都整理清楚了。'}</p><div className="success-actions"><button type="button" className="button button-ghost" onClick={() => navigate('/')}>回成长地图</button>{next && <button type="button" className="button button-primary" onClick={() => navigate(`/mission/${next.id}`)}>继续下一关</button>}</div></div></div>}</main>;
+  const toolProps = mission.mode === 'blockly'
+    ? { missionId: mission.id, commands: mission.expectedSequence, onRun: validate }
+    : mission.mode === 'python'
+      ? { starterCode: mission.starterCode ?? '', expectedOutput: mission.expectedOutput ?? '', onPass: () => pass(hintsUsed === 0 ? 3 : hintsUsed === 1 ? 2 : 1) }
+      : { commands: mission.expectedSequence, onRun: validate };
+  return <main className="mission-page"><div data-testid="mission-background" inert={success ? true : undefined} aria-hidden={success ? true : undefined}><header className="mission-header"><button className="back-button" type="button" onClick={() => navigate('/')}><ArrowLeft size={21} />成长地图</button><div><span>第{mission.week}周 · 第{mission.order}关{mission.isBoss ? ' · BOSS' : ''}</span><h1>{mission.title}</h1></div><div className="canon-badge"><BookOpenText size={20} /><span>{mission.canon.title}</span></div></header><div className="mission-layout"><aside className="story-column"><span className="eyebrow">原著故事层</span><h2>{mission.subtitle}</h2>{mission.storyBeats.map((item) => <article className="story-beat" key={item.title}><CheckCircle size={20} weight="fill" /><div><strong>{item.title}</strong><p>{item.summary}</p></div></article>)}<a className="canon-link" href={mission.canon.sourceUrl} target="_blank" rel="noreferrer">查看原著第{mission.canon.chapters.map(chapterLabel).join('、')}回</a><HintPanel hints={mission.hints} onUse={() => setHintsUsed((count) => count + 1)} /></aside><section className="play-column"><div className="mission-objective"><span>今日任务</span><h2>{mission.objective}</h2><p>知识法宝：{mission.knowledge}</p></div><MissionTools missionId={mission.id} mode={mission.mode} sceneProps={{ activeStep, reducedMotion }} toolProps={toolProps} />{feedback && !success && <div className="feedback-message">{feedback}</div>}</section></div></div>{success && <SuccessDialog stars={stars} feedback={feedback} hasNext={Boolean(next)} onMap={() => navigate('/')} onNext={() => next && navigate(`/mission/${next.id}`)} />}</main>;
+}
+
+function MissionPage({ reducedMotion }: { reducedMotion: boolean }) {
+  const { id = '' } = useParams();
+  return <MissionPageContent key={id} id={id} reducedMotion={reducedMotion} />;
 }
 
 function ParentPage() {
@@ -100,6 +141,7 @@ function AppRoutes() {
   const [systemReducedMotion, setSystemReducedMotion] = useState(() => (
     typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   ));
+  const [globalModalOpen, setGlobalModalOpen] = useState(false);
 
   useEffect(() => {
     if (progress.settings.reducedMotionOverride || typeof window.matchMedia !== 'function') return undefined;
@@ -120,14 +162,15 @@ function AppRoutes() {
   const persistence = loadPersistence === 'unsaved' || saveStatus === 'unsaved' ? 'unsaved' : saveStatus === 'saved' ? 'saved' : loadPersistence;
   const privacyOpen = !progress.privacy.localDataNoticeSeen;
 
-  return <div className="app-shell" data-testid="app-shell" data-reduced-motion={String(effectiveReducedMotion)}>
+  return <GlobalModalIsolationContext.Provider value={setGlobalModalOpen}><div className="app-shell" data-testid="app-shell" data-reduced-motion={String(effectiveReducedMotion)}>
     <RecoveryNotice loadStatus={loadStatus} persistence={persistence} loadError={loadError} saveError={saveError} hasCorruptDownload={corruptDownload !== null} onRetry={retrySave} />
-    <div data-testid="app-background" inert={privacyOpen ? true : undefined} aria-hidden={privacyOpen ? true : undefined}>
+    <div data-testid="app-background" inert={privacyOpen || globalModalOpen ? true : undefined} aria-hidden={privacyOpen || globalModalOpen ? true : undefined}>
       <Header reducedMotion={effectiveReducedMotion} />
-      <Routes><Route path="/" element={<HomePage />} /><Route path="/mission/:id" element={<MissionPage />} /><Route path="/parent" element={<ParentPage />} /><Route path="*" element={<HomePage />} /></Routes>
+      <RouteFocus blocked={privacyOpen || globalModalOpen} />
+      <Routes><Route path="/" element={<HomePage />} /><Route path="/mission/:id" element={<MissionPage reducedMotion={effectiveReducedMotion} />} /><Route path="/parent" element={<ParentPage />} /><Route path="*" element={<HomePage />} /></Routes>
     </div>
     <PrivacyPanel acknowledged={progress.privacy.localDataNoticeSeen} onAcknowledge={acknowledgePrivacy} />
-  </div>;
+  </div></GlobalModalIsolationContext.Provider>;
 }
 
 export default function App() { return <HashRouter><ProgressProvider><AppRoutes /></ProgressProvider></HashRouter>; }

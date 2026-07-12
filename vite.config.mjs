@@ -11,7 +11,22 @@ export default defineConfig({
     allowedHosts: ["terminal.local"],
   },
   plugins: [react()],
+  build: {
+    manifest: true,
+    chunkSizeWarningLimit: 1600,
+    rollupOptions: {
+      output: {
+        onlyExplicitManualChunks: true,
+        manualChunks(id) {
+          if (id.includes('/node_modules/phaser/')) return 'phaser';
+          if (id.includes('/node_modules/blockly/')) return 'blockly-editor';
+          if (id.includes('/node_modules/@codemirror/')) return 'codemirror-editor';
+        },
+      },
+    },
+  },
   test: {
+    include: ["src/**/*.test.{ts,tsx}"],
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     css: true,

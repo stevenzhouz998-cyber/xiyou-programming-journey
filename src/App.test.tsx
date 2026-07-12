@@ -70,15 +70,52 @@ describe('西游编程记', () => {
     expect(screen.getByRole('button', { name: '半成品提示' })).toBeInTheDocument();
   });
 
-  it('lets a child finish the first mission through the command scroll', () => {
+  it('lets a child finish the first mission through the command scroll', async () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
     fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
-    fireEvent.click(screen.getByRole('button', { name: '进入龙宫' }));
+    fireEvent.click(await screen.findByRole('button', { name: '进入龙宫' }));
     fireEvent.click(screen.getByRole('button', { name: '请求兵器' }));
     fireEvent.click(screen.getByRole('button', { name: '试用兵器' }));
     fireEvent.click(screen.getByRole('button', { name: '运行指令' }));
     expect(screen.getByRole('heading', { name: '闯关成功' })).toBeInTheDocument();
+  });
+
+  it('isolates and traps the success dialog, then resets state on same-mode navigation', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
+    fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
+    fireEvent.click(await screen.findByRole('button', { name: '进入龙宫' }));
+    fireEvent.click(screen.getByRole('button', { name: '请求兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '试用兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '运行指令' }));
+    const dialog = screen.getByRole('dialog', { name: '闯关成功' });
+    expect(screen.getByTestId('app-background')).toHaveAttribute('inert');
+    expect(screen.getByTestId('mission-background')).toHaveAttribute('inert');
+    expect(dialog.closest('[inert]')).toBeNull();
+    const next = screen.getByRole('button', { name: '继续下一关' });
+    expect(next).toHaveFocus();
+    const map = screen.getByRole('button', { name: '回成长地图' });
+    map.focus();
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+    expect(next).toHaveFocus();
+    fireEvent.click(next);
+    expect(screen.queryByRole('dialog', { name: '闯关成功' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('mission-background')).not.toHaveAttribute('inert');
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveFocus());
+  });
+
+  it('returns to the map when Escape closes the success dialog', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
+    fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
+    fireEvent.click(await screen.findByRole('button', { name: '进入龙宫' }));
+    fireEvent.click(screen.getByRole('button', { name: '请求兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '试用兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '运行指令' }));
+    fireEvent.keyDown(screen.getByRole('dialog', { name: '闯关成功' }), { key: 'Escape' });
+    const homeHeading = screen.getByRole('heading', { name: '西游编程记' });
+    await waitFor(() => expect(homeHeading).toHaveFocus());
   });
 
   it('protects the parent report with the local PIN', () => {
@@ -122,7 +159,7 @@ describe('西游编程记', () => {
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
     await waitFor(() => expect(background).not.toHaveAttribute('inert'));
     expect(focus).not.toHaveBeenCalled();
-    act(() => { frames.shift()?.(performance.now()); });
+    act(() => { while (frames.length && focus.mock.calls.length === 0) frames.shift()?.(performance.now()); });
     expect(focus).toHaveBeenCalledOnce();
     expect(opener).toHaveFocus();
   });
@@ -151,18 +188,18 @@ describe('西游编程记', () => {
     }));
     window.location.hash = '#/mission/w1-m1';
     render(<App />);
-    expect(screen.getByRole('status')).toHaveTextContent('学习进度已经安全恢复');
+    expect(screen.getAllByRole('status').some((status) => status.textContent?.includes('学习进度已经安全恢复'))).toBe(true);
     expect(screen.getByRole('heading', { name: '龙宫求兵' })).toBeInTheDocument();
   });
 
-  it('retries the real unsaved mission state until it is durably stored', () => {
+  it('retries the real unsaved mission state until it is durably stored', async () => {
     const saved = serializeProgress({
       ...createInitialProgress(), privacy: { localDataNoticeSeen: true },
     });
     const storage = installDynamicStorage({ [CURRENT_PROGRESS_KEY]: saved }, true, '磁盘错误 A');
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
-    fireEvent.click(screen.getByRole('button', { name: '进入龙宫' }));
+    fireEvent.click(await screen.findByRole('button', { name: '进入龙宫' }));
     fireEvent.click(screen.getByRole('button', { name: '请求兵器' }));
     fireEvent.click(screen.getByRole('button', { name: '试用兵器' }));
     fireEvent.click(screen.getByRole('button', { name: '运行指令' }));
