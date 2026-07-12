@@ -26,10 +26,45 @@ describe('progress rules', () => {
 
   it('keeps the best star score while counting attempts and hints', () => {
     let progress = createInitialProgress();
+    progress = {
+      ...progress,
+      privacy: { localDataNoticeSeen: true },
+      recovery: { lastRecoveredAt: '2026-07-12T00:00:00.000Z', source: 'snapshot' },
+    };
     progress = completeMission(progress, 'w1-m1', { stars: 3, hintsUsed: 0 });
     progress = completeMission(progress, 'w1-m1', { stars: 1, hintsUsed: 2 });
 
     expect(progress.missions['w1-m1']).toMatchObject({ stars: 3, attempts: 2, hintsUsed: 2, status: 'completed' });
+    expect(progress).toMatchObject({
+      version: 2,
+      schemaRevision: 1,
+      privacy: { localDataNoticeSeen: true },
+      recovery: { lastRecoveredAt: '2026-07-12T00:00:00.000Z', source: 'snapshot' },
+    });
+  });
+
+  it('normalizes completion input so the returned V2 remains schema-valid', () => {
+    const progress = completeMission(createInitialProgress(), 'w1-m1', { stars: Number.NaN, hintsUsed: 1.5 });
+    expect(() => importProgress(serializeProgress(progress))).not.toThrow();
+  });
+
+  it('rejects an unknown mission id', () => {
+    expect(() => completeMission(createInitialProgress(), 'unknown-mission', { stars: 2, hintsUsed: 0 }))
+      .toThrow('任务编号无效');
+  });
+
+  it('rejects attempts overflow instead of returning an invalid V2', () => {
+    const progress = completeMission(createInitialProgress(), 'w1-m1', { stars: 2, hintsUsed: 0 });
+    progress.missions['w1-m1'].attempts = Number.MAX_SAFE_INTEGER;
+    expect(() => completeMission(progress, 'w1-m1', { stars: 2, hintsUsed: 0 }))
+      .toThrow('任务进度计数超出安全范围');
+  });
+
+  it('rejects hints overflow instead of returning an invalid V2', () => {
+    const progress = completeMission(createInitialProgress(), 'w1-m1', { stars: 2, hintsUsed: 0 });
+    progress.missions['w1-m1'].hintsUsed = Number.MAX_SAFE_INTEGER;
+    expect(() => completeMission(progress, 'w1-m1', { stars: 2, hintsUsed: 1 }))
+      .toThrow('任务进度计数超出安全范围');
   });
 
   it('builds a parent report from local progress', () => {

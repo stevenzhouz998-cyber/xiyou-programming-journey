@@ -4,22 +4,22 @@ import {
   loadProgress,
   saveProgress,
   type CompletionInput,
-  type ProgressV1,
+  type ProgressV2,
 } from '../progress/progress';
 
 interface ProgressContextValue {
-  progress: ProgressV1;
+  progress: ProgressV2;
   complete: (missionId: string, input: CompletionInput) => void;
-  replaceProgress: (progress: ProgressV1) => void;
-  updateSettings: (settings: Partial<ProgressV1['settings']>) => void;
+  replaceProgress: (progress: ProgressV2) => void;
+  updateSettings: (settings: Partial<ProgressV2['settings']>) => void;
 }
 
 const ProgressContext = createContext<ProgressContextValue | null>(null);
 
 export function ProgressProvider({ children }: { children: ReactNode }) {
-  const [progress, setProgress] = useState<ProgressV1>(() => loadProgress());
+  const [progress, setProgress] = useState<ProgressV2>(() => loadProgress());
 
-  const commit = (next: ProgressV1) => {
+  const commit = (next: ProgressV2) => {
     setProgress(next);
     saveProgress(next);
   };
