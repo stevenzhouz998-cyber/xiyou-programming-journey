@@ -6,16 +6,22 @@ import {
 } from '../progress/progress';
 import {
   loadProgressTransaction,
+  clearProgressTransaction,
+  createProgressBackup,
+  importProgressTransaction,
   retrySave as retrySaveTransaction,
   saveProgressTransaction,
   type LoadStatus,
   type SaveResult,
+  type ImportResult,
+  type ProgressBackup,
+  type ClearResult,
 } from '../progress/storage';
 
 export interface ProgressContextValue {
   progress: ProgressV2;
   loadStatus: LoadStatus;
-  loadPersistence: 'saved' | 'unsaved';
+  loadPersistence: 'idle' | 'saved' | 'unsaved';
   loadError: string | null;
   corruptDownload: string | null;
   saveStatus: 'idle' | 'saved' | 'unsaved';
@@ -25,6 +31,9 @@ export interface ProgressContextValue {
   updateSettings: (settings: Partial<ProgressV2['settings']>) => SaveResult;
   acknowledgePrivacy: () => SaveResult;
   retrySave: () => SaveResult;
+  importProgressFile: (raw: string) => ImportResult;
+  clearProgress: () => ClearResult;
+  createBackup: () => ProgressBackup;
 }
 
 const ProgressContext = createContext<ProgressContextValue | null>(null);
@@ -32,7 +41,7 @@ const ProgressContext = createContext<ProgressContextValue | null>(null);
 export function ProgressProvider({ children }: { children: ReactNode }) {
   const [initialLoad] = useState(() => loadProgressTransaction());
   const [progress, setProgress] = useState<ProgressV2>(initialLoad.progress);
-  const [loadPersistence, setLoadPersistence] = useState<'saved' | 'unsaved'>(initialLoad.persistence);
+  const [loadPersistence, setLoadPersistence] = useState<'idle' | 'saved' | 'unsaved'>(initialLoad.persistence);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'unsaved'>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -69,6 +78,28 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     return result;
   };
 
+  const importProgressFile = (raw: string) => {
+    const result = importProgressTransaction(raw);
+    if (result.status === 'saved') {
+      setProgress(result.progress);
+      setSaveStatus('saved');
+      setSaveError(null);
+      setLoadPersistence('saved');
+    }
+    return result;
+  };
+
+  const clearProgress = () => {
+    const result = clearProgressTransaction();
+    if (result.status === 'cleared') {
+      setProgress(result.progress);
+      setSaveStatus('saved');
+      setSaveError(null);
+      setLoadPersistence('saved');
+    }
+    return result;
+  };
+
   const value = useMemo<ProgressContextValue>(() => ({
     progress,
     loadStatus: initialLoad.status,
@@ -86,6 +117,9 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     }),
     acknowledgePrivacy,
     retrySave,
+    importProgressFile,
+    clearProgress,
+    createBackup: () => createProgressBackup(progress),
   }), [initialLoad, loadPersistence, progress, saveError, saveStatus]);
 
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;

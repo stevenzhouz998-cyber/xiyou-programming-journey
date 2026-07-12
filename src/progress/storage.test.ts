@@ -59,7 +59,7 @@ describe('progress storage transactions', () => {
     const storage = new MemoryStorage();
     expect(loadProgressTransaction(storage, clock)).toEqual({
       progress: createInitialProgress(), status: 'normal', corruptDownload: null,
-      persistence: 'saved', error: null,
+      persistence: 'idle', error: null,
     });
     expect(storage.length).toBe(0);
   });
@@ -176,9 +176,9 @@ describe('progress storage transactions', () => {
       storage.failWrites.clear();
       const snapshotBefore = storage.getItem(SNAPSHOT_PROGRESS_KEY);
 
-      expect(transaction(storage)).toMatchObject({
-        status: 'unsaved', error: expect.stringContaining('损坏原文尚未安全保留'),
-      });
+      const result = transaction(storage);
+      expect(result).toMatchObject({ error: expect.stringContaining('损坏原文尚未安全保留') });
+      expect(['unsaved', 'unchanged']).toContain(result.status);
       expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe('{bad current');
       expect(storage.getItem(SNAPSHOT_PROGRESS_KEY)).toBe(snapshotBefore);
     }
@@ -196,7 +196,7 @@ describe('progress storage transactions', () => {
       storage.setItem(CURRENT_PROGRESS_KEY, corruptRaw);
       storage.setItem(CORRUPT_PROGRESS_KEY, envelope);
 
-      expect(transaction(storage).status).toBe('saved');
+      expect(['saved', 'cleared']).toContain(transaction(storage).status);
       expect(storage.getItem(CURRENT_PROGRESS_KEY)).not.toBe(corruptRaw);
       expect(storage.getItem(CORRUPT_PROGRESS_KEY)).toBe(envelope);
     }
@@ -368,6 +368,18 @@ describe('progress storage transactions', () => {
     expect(storage.getItem(SNAPSHOT_PROGRESS_KEY)).toBe(serializeProgress(old));
   });
 
+  it('rolls back every import key byte-for-byte when writing current fails', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress('旧')));
+    storage.setItem(SNAPSHOT_PROGRESS_KEY, 'snapshot bytes');
+    storage.setItem(CORRUPT_PROGRESS_KEY, 'corrupt bytes');
+    const before = storage.snapshot();
+    storage.failWrites.add(CURRENT_PROGRESS_KEY);
+    const result = importProgressTransaction(serializeProgress(progress('新')), storage);
+    expect(result.status).toBe('unsaved');
+    expect(storage.snapshot()).toEqual(before);
+  });
+
   it('creates a stable dated JSON backup without DOM side effects', () => {
     const backup = createProgressBackup(progress('备份'), clock);
     expect(backup).toEqual({
@@ -382,7 +394,7 @@ describe('progress storage transactions', () => {
     const old = progress('旧');
     storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(old));
     const result = clearProgressTransaction(storage);
-    expect(result).toEqual({ status: 'saved', progress: createInitialProgress() });
+    expect(result).toEqual({ status: 'cleared', progress: createInitialProgress() });
     expect(storage.getItem(SNAPSHOT_PROGRESS_KEY)).toBe(serializeProgress(old));
     expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe(serializeProgress(createInitialProgress()));
   });
@@ -392,7 +404,17 @@ describe('progress storage transactions', () => {
     const oldRaw = serializeProgress(progress('旧'));
     storage.setItem(CURRENT_PROGRESS_KEY, oldRaw);
     storage.failWrites.add(CURRENT_PROGRESS_KEY);
-    expect(clearProgressTransaction(storage).status).toBe('unsaved');
+    expect(clearProgressTransaction(storage).status).toBe('unchanged');
     expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe(oldRaw);
+  });
+
+  it('reports unknown when clear commits but the result cannot be read back', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress('旧')));
+    storage.failReadAfterWrites.add(CURRENT_PROGRESS_KEY);
+    const result = clearProgressTransaction(storage);
+    expect(result).toMatchObject({ status: 'unknown', error: expect.stringContaining('无法确认') });
+    storage.failReads.clear();
+    expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe(serializeProgress(createInitialProgress()));
   });
 });

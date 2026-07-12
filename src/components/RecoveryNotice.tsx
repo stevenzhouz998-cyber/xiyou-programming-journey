@@ -3,7 +3,7 @@ import type { LoadStatus } from '../progress/storage';
 
 interface RecoveryNoticeProps {
   loadStatus: LoadStatus;
-  persistence: 'saved' | 'unsaved';
+  persistence: 'idle' | 'saved' | 'unsaved';
   loadError: string | null;
   saveError: string | null;
   hasCorruptDownload: boolean;

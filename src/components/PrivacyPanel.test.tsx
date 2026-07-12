@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { PrivacyPanel } from './PrivacyPanel';
 
@@ -24,7 +24,7 @@ describe('PrivacyPanel', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('traps focus, ignores Escape, and restores the previous focus on unmount', () => {
+  it('traps focus, ignores Escape, and restores the previous focus on unmount', async () => {
     const previous = document.createElement('button');
     previous.textContent = '原来的按钮';
     document.body.append(previous);
@@ -39,7 +39,7 @@ describe('PrivacyPanel', () => {
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     view.unmount();
-    expect(previous).toHaveFocus();
+    await waitFor(() => expect(previous).toHaveFocus());
     previous.remove();
   });
 });

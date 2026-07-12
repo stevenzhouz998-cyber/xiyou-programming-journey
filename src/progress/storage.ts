@@ -14,14 +14,22 @@ export interface LoadResult {
   progress: ProgressV2;
   status: LoadStatus;
   corruptDownload: string | null;
-  persistence: 'saved' | 'unsaved';
+  persistence: 'idle' | 'saved' | 'unsaved';
   error: string | null;
 }
 export type SaveResult =
   | { status: 'saved'; progress: ProgressV2 }
   | { status: 'unsaved'; progress: ProgressV2; error: string };
-export type ImportResult = SaveResult | { status: 'rejected'; error: string };
+export type ImportResult =
+  | ({ status: 'saved'; progress: ProgressV2 } & { sourceVersion: 1 | 2 })
+  | ({ status: 'unsaved'; progress: ProgressV2; error: string; storageMayHaveChanged?: false } & { sourceVersion: 1 | 2 })
+  | { status: 'rollback-failed'; progress: ProgressV2; error: string; sourceVersion: 1 | 2; storageMayHaveChanged: true }
+  | { status: 'rejected'; error: string };
 export interface ProgressBackup { filename: string; contents: string; mimeType: 'application/json' }
+export type ClearResult =
+  | { status: 'cleared'; progress: ProgressV2 }
+  | { status: 'unchanged'; progress: ProgressV2; error: string }
+  | { status: 'unknown'; progress: ProgressV2; error: string };
 
 type Clock = () => Date;
 const systemClock: Clock = () => new Date();
@@ -91,12 +99,13 @@ function loadResult(
   status: LoadStatus,
   corruptDownload: string | null,
   errors: string[] = [],
+  idle = false,
 ): LoadResult {
   return {
     progress,
     status,
     corruptDownload,
-    persistence: errors.length === 0 ? 'saved' : 'unsaved',
+    persistence: errors.length ? 'unsaved' : idle ? 'idle' : 'saved',
     error: errors.length === 0 ? null : errors.join('；'),
   };
 }
@@ -123,7 +132,7 @@ export function loadProgressTransaction(storage: Storage = localStorage, clock: 
       }
     }
     // No write is required yet, so there is no pending persistence failure.
-    return loadResult(createInitialProgress(), 'normal', null);
+    return loadResult(createInitialProgress(), 'normal', null, [], true);
   }
 
   const current = valid(currentRaw);
@@ -192,10 +201,34 @@ export function retrySave(progress: ProgressV2, storage: Storage = localStorage)
 }
 
 export function importProgressTransaction(raw: string, storage: Storage = localStorage): ImportResult {
+  let sourceVersion: 1 | 2;
+  try {
+    const source: unknown = JSON.parse(raw);
+    const version = typeof source === 'object' && source !== null ? (source as { version?: unknown }).version : undefined;
+    sourceVersion = version === 1 ? 1 : 2;
+  } catch { return { status: 'rejected', error: '进度文件无法读取' }; }
   let progress: ProgressV2;
   try { progress = parseProgress(raw); }
   catch (error) { return { status: 'rejected', error: errorMessage(error) }; }
-  return saveProgressTransaction(progress, storage);
+  const keys = [CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY, CORRUPT_PROGRESS_KEY] as const;
+  const before = new Map<string, string | null>();
+  try { for (const key of keys) before.set(key, storage.getItem(key)); }
+  catch (error) { return { status: 'unsaved', progress, sourceVersion, error: `导入前读取存储失败：${errorMessage(error)}` }; }
+  const result = saveProgressTransaction(progress, storage);
+  if (result.status === 'saved') return { ...result, sourceVersion };
+
+  const rollbackErrors: string[] = [];
+  for (const key of keys) {
+    const original = before.get(key) ?? null;
+    try {
+      if (storage.getItem(key) !== original) {
+        if (original === null) storage.removeItem(key); else storage.setItem(key, original);
+      }
+      if (storage.getItem(key) !== original) rollbackErrors.push(`${key}校验不一致`);
+    } catch (error) { rollbackErrors.push(`${key}: ${errorMessage(error)}`); }
+  }
+  if (rollbackErrors.length) return { status: 'rollback-failed', progress, sourceVersion, storageMayHaveChanged: true, error: `${result.error}；回滚失败：${rollbackErrors.join('；')}` };
+  return { ...result, sourceVersion, storageMayHaveChanged: false };
 }
 
 export function createProgressBackup(progress: ProgressV2, clock: Clock = systemClock): ProgressBackup {
@@ -203,6 +236,29 @@ export function createProgressBackup(progress: ProgressV2, clock: Clock = system
   return { filename: `xiyou-progress-${date}.json`, contents: serialize(progress), mimeType: 'application/json' };
 }
 
-export function clearProgressTransaction(storage: Storage = localStorage): SaveResult {
-  return saveProgressTransaction(createInitialProgress(), storage);
+export function clearProgressTransaction(storage: Storage = localStorage): ClearResult {
+  const target = createInitialProgress();
+  const targetRaw = serialize(target);
+  let beforeRaw: string | null;
+  try { beforeRaw = storage.getItem(CURRENT_PROGRESS_KEY); }
+  catch (error) { return { status: 'unknown', progress: target, error: `清空前无法读取存档：${errorMessage(error)}` }; }
+  const before = valid(beforeRaw);
+  if (beforeRaw !== null && !before) {
+    const protectionError = currentCorruptionProtectionError(storage, beforeRaw);
+    if (protectionError) return { status: 'unchanged', progress: target, error: protectionError };
+  }
+  if (before) {
+    const snapshotError = writeAndVerify(storage, SNAPSHOT_PROGRESS_KEY, beforeRaw!, '写入快照');
+    if (snapshotError) return { status: 'unchanged', progress: target, error: snapshotError };
+  }
+  let writeError: unknown;
+  try { storage.setItem(CURRENT_PROGRESS_KEY, targetRaw); } catch (error) { writeError = error; }
+  try {
+    const after = storage.getItem(CURRENT_PROGRESS_KEY);
+    if (after === targetRaw) return { status: 'cleared', progress: target };
+    if (after === beforeRaw) return { status: 'unchanged', progress: target, error: `清空写入失败${writeError ? `：${errorMessage(writeError)}` : ''}` };
+    return { status: 'unknown', progress: target, error: '清空后读回内容与原存档和目标都不一致' };
+  } catch (error) {
+    return { status: 'unknown', progress: target, error: `清空后无法确认读回结果：${errorMessage(error)}` };
+  }
 }

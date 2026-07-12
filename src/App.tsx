@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { HashRouter, Link, Route, Routes, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, BookOpenText, CheckCircle, DownloadSimple, Lightning, LockKey, MapTrifold, Medal, SpeakerHigh, SpeakerSlash, UploadSimple, UsersThree } from '@phosphor-icons/react';
+import { ArrowLeft, BookOpenText, CheckCircle, Lightning, LockKey, MapTrifold, Medal, SpeakerHigh, SpeakerSlash, UsersThree } from '@phosphor-icons/react';
 import { course, allMissions, getMission } from './course/course';
 import { ProgressProvider, useProgress } from './context/ProgressContext';
-import { getWeeklyReport, importProgress, isMissionUnlocked, serializeProgress } from './progress/progress';
+import { getWeeklyReport, isMissionUnlocked } from './progress/progress';
 import { validateSequence } from './engine/validation';
 import { BlocklyWorkspace } from './components/BlocklyWorkspace';
 import { PythonEditor } from './components/PythonEditor';
@@ -11,7 +11,9 @@ import { AiLab } from './components/AiLab';
 import { GameScene } from './components/GameScene';
 import { PrivacyPanel } from './components/PrivacyPanel';
 import { RecoveryNotice } from './components/RecoveryNotice';
+import { ParentDataTools } from './components/ParentDataTools';
 import { assetUrl } from './utils/assets';
+import { downloadTextFile } from './utils/download';
 import './styles.css';
 
 function playAudio(path: string, muted: boolean) {
@@ -81,20 +83,16 @@ function MissionPage() {
 }
 
 function ParentPage() {
-  const { progress, replaceProgress } = useProgress();
+  const data = useProgress();
+  const { progress } = data;
   const [pin, setPin] = useState('');
   const [allowed, setAllowed] = useState(false);
   const [error, setError] = useState('');
+  const [dataDialogOpen, setDataDialogOpen] = useState(false);
   const inputRef = (element: HTMLInputElement | null) => { if (element) element.value = ''; };
   if (!allowed) return <main className="parent-gate"><div className="gate-card"><img src={assetUrl("/assets/mentor.png")} alt="家长入口导师" /><span className="eyebrow">仅供家长查看</span><h1>家长周报</h1><p>请输入本机家长 PIN。默认 PIN 为 2580，可在后续设置中修改。</p><label htmlFor="parent-pin">家长 PIN</label><input ref={inputRef} id="parent-pin" aria-label="家长 PIN" inputMode="numeric" maxLength={6} onChange={(event) => setPin(event.target.value)} />{error && <p className="form-error">{error}</p>}<button type="button" className="button button-primary" onClick={() => pin === progress.settings.parentPin ? setAllowed(true) : setError('PIN 不正确，请再检查一次。')}>进入周报</button><Link to="/">返回孩子的成长地图</Link></div></main>;
 
-  const download = () => {
-    const blob = new Blob([serializeProgress(progress)], { type: 'application/json' });
-    const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = '西游编程记-学习进度.json'; link.click(); URL.revokeObjectURL(link.href);
-  };
-  const upload = (file?: File) => { if (!file) return; const reader = new FileReader(); reader.onload = () => { try { const result = replaceProgress(importProgress(String(reader.result))); setError(result.status === 'saved' ? '进度已成功导入。' : '进度已载入当前会话，但尚未保存到此设备，请重试或导出。'); } catch (caught) { setError(caught instanceof Error ? caught.message : '导入失败'); } }; reader.readAsText(file); };
-
-  return <main className="parent-page"><div className="parent-heading"><div><span className="eyebrow">本地学习档案</span><h1>家长周报</h1><p>学习数据仅保存在这台电脑</p></div><Link className="button button-ghost" to="/">返回成长地图</Link></div><section className="report-summary"><article><strong>{Object.keys(progress.missions).length}</strong><span>已完成关卡</span></article><article><strong>{Object.values(progress.missions).reduce((sum, item) => sum + item.stars, 0)}</strong><span>累计星数</span></article><article><strong>{Object.values(progress.missions).reduce((sum, item) => sum + item.hintsUsed, 0)}</strong><span>使用提示</span></article></section><section className="weekly-reports">{course.weeks.map((week) => { const report = getWeeklyReport(progress, week.week); return <article className="weekly-report" key={week.id}><div><span>第{'一二三四五六'[week.week - 1]}周</span><h2>{week.title}</h2><p>{week.theme}</p></div><div className="report-progress"><strong>{report.completed}/5</strong><span>完成 · {report.stars} 星 · {report.hintsUsed} 次提示</span><progress value={report.completed} max={5} /></div><div><span className="eyebrow">需要留意</span><p>{report.needsSupport.length ? [...new Set(report.needsSupport)].join('、') : report.completed ? '本周暂未出现明显卡点' : '尚未开始本周学习'}</p></div></article>; })}</section><section className="data-tools"><div><h2>进度备份</h2><p>换浏览器或清理数据前，请先导出备份。</p></div><button type="button" className="button button-ghost" onClick={download}><DownloadSimple size={20} />导出进度</button><label className="button button-ghost"><UploadSimple size={20} />导入进度<input type="file" accept="application/json" onChange={(event) => upload(event.target.files?.[0])} /></label>{error && <p>{error}</p>}</section></main>;
+  return <main className="parent-page"><div data-testid="parent-data-background" inert={dataDialogOpen ? true : undefined} aria-hidden={dataDialogOpen ? true : undefined}><div className="parent-heading"><div><span className="eyebrow">本地学习档案</span><h1>家长周报</h1><p>学习数据仅保存在这台电脑</p></div><Link className="button button-ghost" to="/">返回成长地图</Link></div><section className="report-summary"><article><strong>{Object.keys(progress.missions).length}</strong><span>已完成关卡</span></article><article><strong>{Object.values(progress.missions).reduce((sum, item) => sum + item.stars, 0)}</strong><span>累计星数</span></article><article><strong>{Object.values(progress.missions).reduce((sum, item) => sum + item.hintsUsed, 0)}</strong><span>使用提示</span></article></section><section className="weekly-reports">{course.weeks.map((week) => { const report = getWeeklyReport(progress, week.week); return <article className="weekly-report" key={week.id}><div><span>第{'一二三四五六'[week.week - 1]}周</span><h2>{week.title}</h2><p>{week.theme}</p></div><div className="report-progress"><strong>{report.completed}/5</strong><span>完成 · {report.stars} 星 · {report.hintsUsed} 次提示</span><progress value={report.completed} max={5} /></div><div><span className="eyebrow">需要留意</span><p>{report.needsSupport.length ? [...new Set(report.needsSupport)].join('、') : report.completed ? '本周暂未出现明显卡点' : '尚未开始本周学习'}</p></div></article>; })}</section><ParentDataTools progress={progress} loadStatus={data.loadStatus} loadPersistence={data.loadPersistence} saveStatus={data.saveStatus} corruptDownload={data.corruptDownload} onImport={data.importProgressFile} onClear={data.clearProgress} onCreateBackup={data.createBackup} onDownload={downloadTextFile} onDialogOpenChange={setDataDialogOpen} /></div></main>;
 }
 
 function AppRoutes() {
@@ -119,7 +117,7 @@ function AppRoutes() {
   const effectiveReducedMotion = progress.settings.reducedMotionOverride
     ? progress.settings.reducedMotion
     : systemReducedMotion;
-  const persistence = loadPersistence === 'unsaved' || saveStatus === 'unsaved' ? 'unsaved' : 'saved';
+  const persistence = loadPersistence === 'unsaved' || saveStatus === 'unsaved' ? 'unsaved' : saveStatus === 'saved' ? 'saved' : loadPersistence;
   const privacyOpen = !progress.privacy.localDataNoticeSeen;
 
   return <div className="app-shell" data-testid="app-shell" data-reduced-motion={String(effectiveReducedMotion)}>

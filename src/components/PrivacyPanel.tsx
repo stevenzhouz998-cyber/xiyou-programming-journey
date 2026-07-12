@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { focusAfterInert } from '../utils/focus';
 
 type AcknowledgeResult = { status: 'saved' } | { status: 'unsaved'; error: string };
 
@@ -12,13 +13,18 @@ export function PrivacyPanel({
   const [error, setError] = useState('');
   const dialogRef = useRef<HTMLElement>(null);
   const primaryActionRef = useRef<HTMLButtonElement>(null);
+  const mountedRef = useRef(true);
+  const cancelFocusRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => () => { mountedRef.current = false; cancelFocusRef.current?.(); }, []);
 
   useEffect(() => {
     if (acknowledged) return undefined;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     primaryActionRef.current?.focus();
     return () => {
-      if (previous?.isConnected) previous.focus();
+      cancelFocusRef.current?.();
+      cancelFocusRef.current = focusAfterInert(previous, () => true);
     };
   }, [acknowledged]);
 

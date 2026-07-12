@@ -46,6 +46,7 @@ describe('西游编程记', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     Object.defineProperty(globalThis, 'localStorage', { value: originalStorage, configurable: true });
     Object.defineProperty(window, 'localStorage', { value: originalStorage, configurable: true });
   });
@@ -88,6 +89,59 @@ describe('西游编程记', () => {
     fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
     expect(screen.getByRole('heading', { name: '家长周报' })).toBeInTheDocument();
     expect(screen.getByText('学习数据仅保存在这台电脑')).toBeInTheDocument();
+  });
+
+  it('keeps data operations protected after a wrong PIN', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
+    fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
+    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '0000' } });
+    fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
+    expect(screen.getByText('PIN 不正确，请再检查一次。')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '清空学习数据' })).not.toBeInTheDocument();
+  });
+
+  it('isolates the entire parent page while the clear dialog is open', async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.push(callback); return frames.length; });
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({ ...createInitialProgress(), privacy: { localDataNoticeSeen: true } }));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
+    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '2580' } });
+    fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
+    const opener = screen.getByRole('button', { name: '清空学习数据' });
+    fireEvent.click(opener);
+    const background = screen.getByTestId('parent-data-background');
+    expect(background).toHaveAttribute('inert');
+    expect(background).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByRole('dialog')).not.toHaveAttribute('inert');
+    const focus = vi.spyOn(opener, 'focus').mockImplementation(() => {
+      if (opener.closest('[inert]')) throw new Error('focus attempted inside inert background');
+      HTMLElement.prototype.focus.call(opener);
+    });
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    await waitFor(() => expect(background).not.toHaveAttribute('inert'));
+    expect(focus).not.toHaveBeenCalled();
+    act(() => { frames.shift()?.(performance.now()); });
+    expect(focus).toHaveBeenCalledOnce();
+    expect(opener).toHaveFocus();
+  });
+
+  it('focuses the privacy acknowledgement after a successful backed-up clear', async () => {
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({ ...createInitialProgress(), learnerName: '旧进度', privacy: { localDataNoticeSeen: true } }));
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:backup');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
+    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '2580' } });
+    fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
+    fireEvent.click(screen.getByRole('button', { name: '清空学习数据' }));
+    fireEvent.change(screen.getByLabelText('输入“清空”以确认'), { target: { value: '清空' } });
+    fireEvent.click(screen.getByRole('button', { name: '备份并清空' }));
+    const acknowledge = await screen.findByRole('button', { name: '我知道了' });
+    await waitFor(() => expect(acknowledge).toHaveFocus());
+    expect(screen.getByTestId('app-background')).toHaveAttribute('inert');
   });
 
   it('shows snapshot recovery below the header on every route', () => {
@@ -155,7 +209,7 @@ describe('西游编程记', () => {
     expect(screen.getByTestId('app-background')).not.toHaveAttribute('aria-hidden');
   });
 
-  it('loads an imported file into the session but never claims success when persistence fails', async () => {
+  it('keeps current React progress unchanged when imported persistence fails', async () => {
     const current = { ...createInitialProgress(), learnerName: '旧进度', privacy: { localDataNoticeSeen: true } };
     const storage = installDynamicStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(current) }, true, '导入写盘失败');
     render(<App />);
@@ -166,13 +220,11 @@ describe('西游编程记', () => {
     fireEvent.change(screen.getByLabelText('导入进度'), {
       target: { files: [new File([serializeProgress(imported)], 'progress.json', { type: 'application/json' })] },
     });
-    expect(await screen.findByText('进度已载入当前会话，但尚未保存到此设备，请重试或导出。')).toBeInTheDocument();
-    expect(screen.queryByText('进度已成功导入。')).not.toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('当前进度未被修改');
     expect(screen.getByRole('alert')).toHaveTextContent('导入写盘失败');
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ learnerName: '旧进度' });
-    expect(screen.getByText('导入会话')).toBeInTheDocument();
-    storage.failWrites = false;
-    await waitFor(() => expect(screen.getByRole('button', { name: '重试保存' })).toBeEnabled());
+    expect(screen.getByText('旧进度')).toBeInTheDocument();
+    expect(screen.queryByText('导入会话')).not.toBeInTheDocument();
   });
 
   it('uses system reduced motion until the learner makes a persistent choice', () => {

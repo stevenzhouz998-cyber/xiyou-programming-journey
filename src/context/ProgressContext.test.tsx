@@ -46,10 +46,19 @@ function Probe() {
     <button onClick={() => state.replaceProgress({ ...state.progress, learnerName: '会话新名字' })}>保存</button>
     <button onClick={() => state.acknowledgePrivacy()}>确认隐私</button>
     <button onClick={() => state.retrySave()}>重试保存</button>
+    <button onClick={() => state.importProgressFile(serializeProgress({ ...createInitialProgress(), learnerName: '导入名字' }))}>导入</button>
+    <button onClick={() => state.clearProgress()}>清空</button>
   </>;
 }
 
 describe('ProgressContext persistence status', () => {
+  it('starts idle before the first durable mutation and then becomes saved', () => {
+    installStorage({});
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ loadPersistence: 'idle', saveStatus: 'idle' });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ loadPersistence: 'saved', saveStatus: 'saved' });
+  });
   it('exposes snapshot recovery load details', () => {
     installStorage({
       [CURRENT_PROGRESS_KEY]: '{bad',
@@ -100,5 +109,26 @@ describe('ProgressContext persistence status', () => {
       loadStatus: 'recovered-from-snapshot', loadPersistence: 'saved', saveStatus: 'saved', saveError: null,
     });
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ learnerName: '恢复会话' });
+  });
+
+  it('replaces React progress only after an import is durably saved', () => {
+    const storage = installStorage({
+      [CURRENT_PROGRESS_KEY]: serializeProgress({ ...createInitialProgress(), learnerName: '旧名字' }),
+    }, true);
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    fireEvent.click(screen.getByRole('button', { name: '导入' }));
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ learnerName: '旧名字' });
+    storage.failWrites = false;
+    fireEvent.click(screen.getByRole('button', { name: '导入' }));
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ learnerName: '导入名字', saveStatus: 'saved' });
+  });
+
+  it('keeps current session progress when clear cannot be stored', () => {
+    installStorage({
+      [CURRENT_PROGRESS_KEY]: serializeProgress({ ...createInitialProgress(), learnerName: '保留我' }),
+    }, true);
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    fireEvent.click(screen.getByRole('button', { name: '清空' }));
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ learnerName: '保留我' });
   });
 });
