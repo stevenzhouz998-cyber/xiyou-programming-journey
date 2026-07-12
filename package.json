@@ -10,6 +10,9 @@
     "test": "npm run test:unit && npm run test:bundle-script",
     "test:unit": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:update-evidence": "XIYOU_UPDATE_EVIDENCE=1 playwright test",
+    "install:browsers": "playwright install chromium firefox webkit",
     "typecheck": "tsc --noEmit",
     "test:bundle-script": "node --test scripts/check-bundle-budget.test.mjs",
     "verify:bundle": "npm run test:bundle-script && npm run build && node scripts/check-bundle-budget.mjs"
@@ -28,6 +31,7 @@
     "vite": "6.4.2"
   },
   "devDependencies": {
+    "@playwright/test": "1.55.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@types/node": "^24.13.3",

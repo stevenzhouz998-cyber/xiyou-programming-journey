@@ -1,7 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@600;700;900&display=swap');
-
 :root {
-  font-family: 'Noto Sans SC', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
   color: #231f19;
   background: #f3ead5;
   font-synthesis: none;
@@ -25,13 +23,13 @@
 html { background: var(--paper); }
 body { margin: 0; min-height: 100vh; background: var(--paper); }
 img { max-width: 100%; }
-main, section, article, aside, header, nav, div { min-width: 0; }
+main, section, article, aside, header, nav, form, div { min-width: 0; }
 p, h1, h2, h3, a, button, .canon-badge { overflow-wrap: anywhere; }
 button, input, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline: 3px solid #d28f2c; outline-offset: 3px; }
 h1, h2, h3, p { margin-top: 0; }
-h1, h2, .brand strong { font-family: 'Noto Serif SC', serif; }
+h1, h2, .brand strong { font-family: 'Songti SC', 'STSong', serif; }
 
 .topbar {
   position: relative;
@@ -57,7 +55,7 @@ h1, h2, .brand strong { font-family: 'Noto Serif SC', serif; }
 .topbar nav button:hover { color: var(--jade-deep); background: rgba(47,115,91,.09); }
 
 .home-page { min-height: calc(100vh - 70px); position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr); }
-.world-map-backdrop { position: absolute; inset: 0; background-image: url('/assets/world-map.png'); background-size: cover; background-position: center; z-index: 0; }
+.world-map-backdrop { position: absolute; inset: 0; background-image: url('/assets/world-map.jpg'); background-size: cover; background-position: center; z-index: 0; }
 .home-page::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: rgba(243,234,213,.12); z-index: 1; }
 .hero-copy, .journey-panel { position: relative; z-index: 2; }
 .hero-copy { padding: 7vh 24px 38px clamp(46px, 5vw, 82px); align-self: center; }
@@ -90,7 +88,7 @@ h1, h2, .brand strong { font-family: 'Noto Serif SC', serif; }
 .mission-dots button.boss { border-radius: 8px; color: white; background: var(--cinnabar); border-color: var(--cinnabar); }
 .mission-dots button:disabled { cursor: not-allowed; background: #d8d1c2; color: #77736a; border-color: #b8b0a2; }
 
-.mission-page { min-height: calc(100vh - 70px); background-image: url('/assets/world-map.png'); background-size: cover; background-position: center; padding-bottom: 22px; }
+.mission-page { min-height: calc(100vh - 70px); background-image: url('/assets/world-map.jpg'); background-size: cover; background-position: center; padding-bottom: 22px; }
 .mission-header { min-height: 78px; display: grid; grid-template-columns: 190px 1fr minmax(330px, auto); align-items: center; padding: 9px 34px; background: rgba(247,240,223,.93); border-bottom: 1px solid var(--line); }
 .mission-header h1 { margin: 2px 0 0; font-size: 27px; }
 .mission-header > div > span { color: var(--cinnabar); font-weight: 700; }
@@ -114,7 +112,7 @@ h1, h2, .brand strong { font-family: 'Noto Serif SC', serif; }
 .mission-objective > span { color: white; background: var(--cinnabar); border-radius: 8px; padding: 7px 10px; font-weight: 700; }
 .mission-objective h2 { font-size: 22px; margin: 0; }
 .mission-objective p { color: var(--jade-deep); margin: 0; }
-.game-scene { width: 100%; min-height: 180px; aspect-ratio: 19 / 5; overflow: hidden; background-image: url('/assets/world-map.png'); background-size: cover; background-position: center; border-bottom: 1px solid var(--line); }
+.game-scene { width: 100%; min-height: 180px; aspect-ratio: 19 / 5; overflow: hidden; background-image: url('/assets/world-map.jpg'); background-size: cover; background-position: center; border-bottom: 1px solid var(--line); }
 .game-scene canvas { display: block; width: 100% !important; height: 100% !important; }
 
 .code-workspace, .python-workspace, .ai-lab { padding: 14px 22px 18px; }
@@ -157,7 +155,7 @@ h1, h2, .brand strong { font-family: 'Noto Serif SC', serif; }
 .stars .lit { color: #c5882d; text-shadow: 0 2px 0 #8d5f20; }
 .success-actions { display: flex; justify-content: center; gap: 10px; margin-top: 24px; }
 
-.parent-gate { min-height: calc(100vh - 70px); display: grid; place-items: center; background-image: url('/assets/world-map.png'); background-size: cover; }
+.parent-gate { min-height: calc(100vh - 70px); display: grid; place-items: center; background-image: url('/assets/world-map.jpg'); background-size: cover; }
 .gate-card { width: 430px; display: flex; flex-direction: column; align-items: stretch; text-align: center; padding: 34px; background: rgba(248,242,227,.96); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); }
 .gate-card img { width: 100px; height: 100px; object-fit: cover; border-radius: 50%; margin: 0 auto 16px; border: 2px solid var(--gold); }
 .gate-card h1 { font-size: 32px; margin: 5px 0 10px; }
@@ -263,7 +261,7 @@ progress { width: 100%; accent-color: var(--jade); }
   .success-overlay, .privacy-panel, .clear-progress-overlay { padding: 14px; }
   .success-card, .privacy-card, .clear-progress-card, .gate-card { width: min(100%, 520px); padding: 24px 18px; }
   .success-card h2 { font-size: 32px; }
-  .gate-card { margin: 14px; }
+  .gate-card { width: calc(100% - 28px); margin: 14px; }
   .parent-page { padding: 22px 14px; }
   .parent-heading { display: flex; gap: 16px; }
   .weekly-report { grid-template-columns: 1fr; gap: 14px; }

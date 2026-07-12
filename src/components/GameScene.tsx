@@ -27,8 +27,8 @@ export function GameScene({ activeStep = 0, reducedMotion = false }: { activeSte
     if (navigator.userAgent.includes('jsdom')) return undefined;
       class QuestScene extends Phaser.Scene {
         preload() {
-          this.load.image('world', assetUrl('/assets/world-map.png'));
-          this.load.image('hero', assetUrl('/assets/young-hero.png'));
+          this.load.image('world', assetUrl('/assets/world-map.jpg'));
+          this.load.image('hero', assetUrl('/assets/young-hero.jpg'));
         }
         create() {
           const width = this.scale.width;
@@ -61,5 +61,5 @@ export function GameScene({ activeStep = 0, reducedMotion = false }: { activeSte
 
   useEffect(() => { updateHero(); }, [activeStep, reducedMotion]);
 
-  return <div id={id} className="game-scene" role="img" aria-label="水墨原著事件演示场景" />;
+  return <div id={id} className="game-scene" data-motion-mode={reducedMotion ? 'reduced' : 'standard'} role="img" aria-label="水墨原著事件演示场景" />;
 }

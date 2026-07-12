@@ -42,9 +42,18 @@ export function RecoveryNotice({ loadStatus, persistence, loadError, saveError, 
         ? '学习进度已升级'
         : '有一份存档信息需要家长查看';
 
+  const dismiss = () => {
+    setDismissed(true);
+    const target = document.querySelector<HTMLElement>('main h1, main[tabindex="-1"]');
+    if (target && !target.closest('[inert]')) {
+      target.tabIndex = -1;
+      target.focus();
+    }
+  };
+
   return <aside className="recovery-notice" role="status">
     <strong>{message}</strong>
     {hasDetails && <a href="#/parent?recovery=1">请家长查看详情</a>}
-    <button type="button" aria-label="关闭进度提示" onClick={() => setDismissed(true)}>关闭</button>
+    <button type="button" aria-label="关闭进度提示" onClick={dismiss}>关闭</button>
   </aside>;
 }

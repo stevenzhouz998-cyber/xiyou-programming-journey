@@ -3,7 +3,7 @@ import { assetUrl } from './assets';
 
 describe('assetUrl', () => {
   it('joins assets to a repository base path', () => {
-    expect(assetUrl('/assets/mentor.png', '/xiyou-programming-journey/')).toBe('/xiyou-programming-journey/assets/mentor.png');
+    expect(assetUrl('/assets/mentor.png', '/xiyou-programming-journey/')).toBe('/xiyou-programming-journey/assets/mentor.jpg');
   });
 
   it('does not duplicate slashes', () => {

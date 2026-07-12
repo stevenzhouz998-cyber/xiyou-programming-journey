@@ -48,3 +48,10 @@ it('updates one Phaser scene without rebuilding and destroys it once', async () 
   view.unmount();
   expect(destroy).toHaveBeenCalledOnce();
 });
+
+it('exposes the same motion branch that controls hero tweening', () => {
+  const view = render(<GameScene reducedMotion />);
+  expect(view.getByRole('img')).toHaveAttribute('data-motion-mode', 'reduced');
+  view.rerender(<GameScene reducedMotion={false} />);
+  expect(view.getByRole('img')).toHaveAttribute('data-motion-mode', 'standard');
+});

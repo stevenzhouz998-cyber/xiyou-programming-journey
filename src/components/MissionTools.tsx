@@ -27,7 +27,11 @@ class ToolErrorBoundary extends Component<{ children: ReactNode; reloadPage: () 
   }
 }
 
-export function MissionTools({ missionId, mode, toolProps, sceneProps, loaders = defaultLoaders, reloadPage = () => window.location.reload() }: {
+export function MissionTools({ missionId, mode, toolProps, sceneProps, loaders = defaultLoaders, reloadPage = () => {
+  const url = new URL(window.location.href);
+  url.searchParams.set('tool-retry', String(Date.now()));
+  window.location.replace(url.toString());
+} }: {
   missionId: string;
   mode: ToolMode;
   toolProps: Record<string, unknown>;

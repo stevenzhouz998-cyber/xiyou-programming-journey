@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 import { dirname, isAbsolute, join, normalize, relative, resolve, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 export const ENTRY_GZIP_LIMIT = 180 * 1024;
 export const PHASER_RAW_LIMIT = 1600 * 1024;
 export const GAME_SCENE_RAW_LIMIT = 1900 * 1024;
+export const HOME_TOTAL_LIMIT = 650 * 1024;
 
 const MODE_ROOTS = ['src/components/BlocklyWorkspace.tsx', 'src/components/PythonEditor.tsx', 'src/components/AiLab.tsx', 'src/components/GameScene.tsx'];
 const isPhaserSource = (key, chunk) => chunk.name === 'phaser' || /node_modules[\\/]phaser(?:[\\/]|$)/i.test(`${key} ${chunk.src ?? ''}`);
@@ -14,6 +15,22 @@ const assertSafeFile = (file) => {
   const portable = file.replaceAll('\\', '/');
   if (isAbsolute(file) || win32.isAbsolute(file) || portable === '..' || portable.startsWith('../') || portable.split('/').includes('..') || normalized === '..') throw new Error(`Bundle budget: unsafe manifest file path ${file}.`);
 };
+
+export function assertNoSourceVisualAssets(files) {
+  const sourceAsset = files.find((file) => /\.(?:png|avif)$/i.test(file));
+  if (sourceAsset) throw new Error(`Bundle budget: non-shipping visual source remains in public: ${sourceAsset}.`);
+}
+
+async function listFiles(root, relativeRoot = '') {
+  const entries = await readdir(join(root, relativeRoot), { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const relativePath = join(relativeRoot, entry.name);
+    if (entry.isDirectory()) files.push(...await listFiles(root, relativePath));
+    else files.push(relativePath.replaceAll('\\', '/'));
+  }
+  return files;
+}
 
 function collectClosure(manifest, root, includeDynamic) {
   const keys = new Set();
@@ -72,6 +89,7 @@ export function analyzeManifest(manifest, gzipSizes, rawSizes = {}) {
 
 async function main() {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  assertNoSourceVisualAssets(await listFiles(join(root, 'public')));
   const manifestPath = join(root, 'dist', '.vite', 'manifest.json');
   let manifest;
   try { manifest = JSON.parse(await readFile(manifestPath, 'utf8')); }
@@ -89,13 +107,20 @@ async function main() {
     rawSizes[file] = (await stat(path)).size;
   }
   const result = analyzeManifest(manifest, gzipSizes, rawSizes);
+  const homeFiles = ['index.html', 'assets/world-map.jpg', 'assets/mentor.jpg', 'assets/young-hero.jpg'];
+  const cssFiles = [...new Set(Object.values(manifest).flatMap((chunk) => chunk.css ?? []))];
+  const homeStaticBytes = result.entryGzipBytes;
+  let homeTotalBytes = homeStaticBytes;
+  for (const file of [...homeFiles, ...cssFiles]) homeTotalBytes += (await stat(join(root, 'dist', file))).size;
+  if (homeTotalBytes > HOME_TOTAL_LIMIT) throw new Error(`Bundle budget: conservative homepage total is ${(homeTotalBytes / 1024).toFixed(1)} KiB, over 650 KiB.`);
   console.log(`Entry static JS: ${(result.entryGzipBytes / 1024).toFixed(1)} KiB gzip / 180 KiB`);
+  console.log(`Conservative homepage total: ${(homeTotalBytes / 1024).toFixed(1)} KiB / 650 KiB`);
   const phaserEntry = Object.entries(manifest).find(([key, chunk]) => isPhaserSource(key, chunk));
   if (phaserEntry) console.log(`Phaser identified by manifest ${phaserEntry[1].name === 'phaser' ? 'name' : 'provenance'}: ${phaserEntry[0]}`);
   for (const [mode, closure] of Object.entries(result.closures)) console.log(`${mode.split('/').at(-1).replace('.tsx', '')} closure: ${(closure.rawBytes / 1024).toFixed(1)} KiB raw, ${(closure.gzipBytes / 1024).toFixed(1)} KiB gzip`);
   console.log('Dynamic JS chunks (not part of homepage entry):');
   for (const chunk of result.dynamic.sort((a, b) => b.rawBytes - a.rawBytes)) console.log(`  ${chunk.file}: ${(chunk.rawBytes / 1024).toFixed(1)} KiB raw, ${(chunk.gzipBytes / 1024).toFixed(1)} KiB gzip${/phaser/i.test(`${chunk.key} ${chunk.file}`) ? ' (approved Phaser ceiling: 1600 KiB raw)' : ''}`);
-  console.log('Homepage total-resource target remains 650 KiB; browser transfer measurement is verified in the browser QA task.');
+  console.log('Homepage total-resource target is enforced statically and re-measured in browser QA.');
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch((error) => { console.error(error.message); process.exitCode = 1; });

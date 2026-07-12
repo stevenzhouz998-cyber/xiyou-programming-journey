@@ -22,7 +22,7 @@ describe('ParentDataTools', () => {
   });
   it('rejects malformed imports and says current progress was not changed', async () => {
     render(<ParentDataTools {...props()} />);
-    fireEvent.change(screen.getByLabelText('导入进度'), { target: { files: [new File(['{bad'], 'bad.json')] } });
+    fireEvent.change(screen.getByLabelText('选择进度文件'), { target: { files: [new File(['{bad'], 'bad.json')] } });
     expect(await screen.findByRole('alert')).toHaveTextContent('当前进度未被修改');
   });
 
@@ -77,14 +77,31 @@ describe('ParentDataTools', () => {
   it('reports the imported source version', async () => {
     const imported = { status: 'saved' as const, progress: createInitialProgress(), sourceVersion: 1 as const };
     render(<ParentDataTools {...props({ onImport: vi.fn(() => imported) })} />);
-    fireEvent.change(screen.getByLabelText('导入进度'), { target: { files: [new File(['{}'], 'v1.json')] } });
+    fireEvent.change(screen.getByLabelText('选择进度文件'), { target: { files: [new File(['{}'], 'v1.json')] } });
     expect(await screen.findByRole('status')).toHaveTextContent('已将 V1 迁移为 V2');
+  });
+
+  it('uses a real button to open the hidden import file input', () => {
+    render(<ParentDataTools {...props()} />);
+    const button = screen.getByRole('button', { name: '导入进度' });
+    const input = screen.getByLabelText('选择进度文件') as HTMLInputElement;
+    const click = vi.spyOn(input, 'click').mockImplementation(() => undefined);
+    fireEvent.click(button);
+    expect(click).toHaveBeenCalledOnce();
+  });
+
+  it('shows the rollback-failed warning without claiming storage stayed unchanged', async () => {
+    const failed = { status: 'rollback-failed' as const, progress: createInitialProgress(), error: '回滚写入失败' };
+    render(<ParentDataTools {...props({ onImport: vi.fn(() => failed) })} />);
+    fireEvent.change(screen.getByLabelText('选择进度文件'), { target: { files: [new File(['{}'], 'v2.json')] } });
+    expect(await screen.findByRole('alert')).toHaveTextContent('设备存储可能部分变化');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('当前进度未被修改');
   });
 
   it('clears the file input so the same file can be selected again', async () => {
     const onImport = vi.fn(() => ({ status: 'rejected' as const, error: 'bad' }));
     render(<ParentDataTools {...props({ onImport })} />);
-    const input = screen.getByLabelText('导入进度') as HTMLInputElement;
+    const input = screen.getByLabelText('选择进度文件') as HTMLInputElement;
     const file = new File(['{}'], 'same.json');
     fireEvent.change(input, { target: { files: [file] } });
     await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1));
@@ -98,7 +115,7 @@ describe('ParentDataTools', () => {
     const file = new File(['{}'], 'unreadable.json');
     Object.defineProperty(file, 'text', { value: vi.fn().mockRejectedValue(new Error('读取器故障')) });
     render(<ParentDataTools {...props({ onImport })} />);
-    const input = screen.getByLabelText('导入进度') as HTMLInputElement;
+    const input = screen.getByLabelText('选择进度文件') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [file] } });
     expect(await screen.findByRole('alert')).toHaveTextContent('文件读取失败');
     expect(screen.getByRole('alert')).toHaveTextContent('当前进度未被修改');
@@ -115,7 +132,7 @@ describe('ParentDataTools', () => {
     Object.defineProperty(second, 'text', { value: () => new Promise<string>((resolve) => { resolveSecond = resolve; }) });
     const onImport = vi.fn(() => ({ status: 'rejected' as const, error: 'bad' }));
     render(<ParentDataTools {...props({ onImport })} />);
-    const input = screen.getByLabelText('导入进度');
+    const input = screen.getByLabelText('选择进度文件');
     fireEvent.change(input, { target: { files: [first] } });
     fireEvent.change(input, { target: { files: [second] } });
     resolveSecond('second');

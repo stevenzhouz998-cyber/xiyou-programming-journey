@@ -128,6 +128,18 @@ describe('西游编程记', () => {
     expect(screen.getByText('学习数据仅保存在这台电脑')).toBeInTheDocument();
   });
 
+  it('submits the parent PIN through the form keyboard path', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
+    fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
+    const input = screen.getByLabelText('家长 PIN');
+    fireEvent.change(input, { target: { value: '2580' } });
+    const form = input.closest('form');
+    expect(form).not.toBeNull();
+    fireEvent.submit(form!);
+    expect(screen.getByText('学习数据仅保存在这台电脑')).toBeInTheDocument();
+  });
+
   it('keeps data operations protected after a wrong PIN', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
@@ -254,7 +266,7 @@ describe('西游编程记', () => {
     fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '2580' } });
     fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
     const imported = { ...createInitialProgress(), learnerName: '导入会话', privacy: { localDataNoticeSeen: true } };
-    fireEvent.change(screen.getByLabelText('导入进度'), {
+    fireEvent.change(screen.getByLabelText('选择进度文件'), {
       target: { files: [new File([serializeProgress(imported)], 'progress.json', { type: 'application/json' })] },
     });
     expect(await screen.findByRole('alert')).toHaveTextContent('当前进度未被修改');

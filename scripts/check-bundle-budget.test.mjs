@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeManifest } from './check-bundle-budget.mjs';
+import { analyzeManifest, assertNoSourceVisualAssets } from './check-bundle-budget.mjs';
 
 const base = {
   'src/main.tsx': { file: 'assets/main.js', isEntry: true, imports: ['vendor.js'] },
@@ -93,4 +93,10 @@ test('fails when GameScene dependency cannot be identified as Phaser', () => {
   const manifest = { ...base, 'src/components/GameScene.tsx': { file: 'assets/scene.js', imports: ['_vendor.js'] }, '_vendor.js': { file: 'assets/vendor-x.js', imports: [] } };
   const sizes = { 'assets/main.js': 1, 'assets/vendor.js': 1, 'assets/scene.js': 1, 'assets/vendor-x.js': 700_000 };
   assert.throws(() => analyzeManifest(manifest, sizes, sizes), /无法识别Phaser预算对象/);
+});
+
+test('rejects non-shipping visual source formats from the public directory', () => {
+  assert.throws(() => assertNoSourceVisualAssets(['assets/world-map.jpg', 'assets/world-map.png']), /world-map\.png/);
+  assert.throws(() => assertNoSourceVisualAssets(['assets/mentor.avif']), /mentor\.avif/);
+  assert.doesNotThrow(() => assertNoSourceVisualAssets(['assets/world-map.jpg', 'assets/audio/welcome.m4a']));
 });

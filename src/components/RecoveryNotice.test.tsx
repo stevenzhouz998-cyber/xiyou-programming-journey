@@ -41,6 +41,16 @@ describe('RecoveryNotice', () => {
     expect(screen.getByRole('link', { name: '请家长查看详情' })).toHaveAttribute('href', '#/parent?recovery=1');
   });
 
+  it('returns focus to the main heading after keyboard dismissal', () => {
+    render(<><main><h1 tabIndex={-1}>Current page</h1></main><RecoveryNotice loadStatus="recovered-from-snapshot" persistence="saved" loadError={null} saveError={null} hasCorruptDownload onRetry={vi.fn()} /></>);
+    const close = screen.getByRole('button', { name: '关闭进度提示' });
+    close.focus();
+    fireEvent.keyDown(close, { key: 'Enter' });
+    fireEvent.click(close);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Current page' })).toHaveFocus();
+  });
+
   it('explains unavailable storage and links to preserved corruption details', () => {
     render(<RecoveryNotice loadStatus="storage-unavailable" persistence="unsaved" loadError="浏览器禁止本地存储" saveError={null} hasCorruptDownload onRetry={vi.fn()} />);
     expect(screen.getByRole('alert')).toHaveTextContent('浏览器禁止本地存储');

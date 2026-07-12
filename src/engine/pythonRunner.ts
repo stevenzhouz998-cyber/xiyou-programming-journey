@@ -11,14 +11,18 @@ export function runPython(code: string, timeoutMs = 3000): Promise<PythonRunResu
 
   return new Promise((resolve) => {
     const worker = new Worker(new URL('../workers/python.worker.ts', import.meta.url), { type: 'module' });
-    let timer: number | undefined;
+    let settled = false;
+    let timer = window.setTimeout(() => finish({ output: '', error: '运行环境超过 3 秒未就绪，已安全停止。请检查网络后再试。' }), timeoutMs);
     const finish = (result: PythonRunResult) => {
-      if (timer) window.clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
       worker.terminate();
       resolve(result);
     };
     worker.onmessage = (event: MessageEvent<{ type: string; output?: string; error?: string }>) => {
       if (event.data.type === 'ready') {
+        window.clearTimeout(timer);
         timer = window.setTimeout(() => finish({ output: '', error: '运行超过 3 秒，已安全停止。检查循环条件再试一次。' }), timeoutMs);
         worker.postMessage({ code });
       } else if (event.data.type === 'result') {

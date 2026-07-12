@@ -38,6 +38,7 @@ export function ParentDataTools(props: ParentDataToolsProps) {
   const [phrase, setPhrase] = useState('');
   const dialogRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const openerRef = useRef<HTMLButtonElement>(null);
   const mountedRef = useRef(true);
   const cancelFocusRef = useRef<(() => void) | null>(null);
@@ -128,7 +129,8 @@ export function ParentDataTools(props: ParentDataToolsProps) {
       <p>数据仅保存在当前浏览器。</p>
       <dl className="data-status"><div><dt>载入状态</dt><dd>{props.loadStatus}</dd></div><div><dt>存储状态</dt><dd>{props.loadPersistence === 'idle' ? '尚未保存过' : props.loadPersistence === 'saved' ? '已保存' : '未保存'} / {props.saveStatus}</dd></div><div><dt>最后保存</dt><dd>{props.loadPersistence === 'idle' ? '尚无保存时间' : props.progress.savedAt}</dd></div></dl>
       <button type="button" className="button button-ghost" onClick={exportBackup}><DownloadSimple size={20} />导出进度</button>
-      <label className="button button-ghost"><UploadSimple size={20} />导入进度<input aria-label="导入进度" type="file" accept="application/json,.json" onChange={(event) => { const input = event.currentTarget; void importFile(input.files?.[0]).finally(() => { input.value = ''; }); }} /></label>
+      <button type="button" className="button button-ghost" onClick={() => importInputRef.current?.click()}><UploadSimple size={20} />导入进度</button>
+      <input ref={importInputRef} aria-label="选择进度文件" type="file" accept="application/json,.json" onChange={(event) => { const input = event.currentTarget; void importFile(input.files?.[0]).finally(() => { input.value = ''; }); }} />
       {props.corruptDownload !== null && <button type="button" className="button button-ghost" onClick={() => props.onDownload('xiyou-corrupt-progress.json', props.corruptDownload!, 'application/json')}>下载损坏原文</button>}
       <button ref={openerRef} type="button" className="button button-danger" onClick={openConfirm}>清空学习数据</button>
       {message && <p role="status" aria-live="polite">{message}</p>}
