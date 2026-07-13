@@ -38,7 +38,7 @@
 - Modify: `src/progress/progress.ts`
 - Modify: `src/progress/progress.test.ts`
 
-- [ ] **Step 1: Write failing schema and migration tests**
+- [x] **Step 1: Write failing schema and migration tests**
 
 Create tests that establish the complete boundary:
 
@@ -87,7 +87,7 @@ describe('progress V2 schema', () => {
 
 Extend `progress.test.ts` to assert `completeMission()` returns V2 and preserves `privacy`, `recovery`, and `schemaRevision`.
 
-- [ ] **Step 2: Run the focused tests and verify the red state**
+- [x] **Step 2: Run the focused tests and verify the red state**
 
 Run:
 
@@ -97,7 +97,7 @@ npm test -- src/progress/schema.test.ts src/progress/progress.test.ts
 
 Expected: FAIL because `types.ts`, `schema.ts`, `ProgressV2`, and migration behavior do not exist.
 
-- [ ] **Step 3: Define V1 and V2 contracts**
+- [x] **Step 3: Define V1 and V2 contracts**
 
 In `types.ts`, define reusable types with these exact public shapes:
 
@@ -139,7 +139,7 @@ export interface ProgressV2 {
 export type ProgressDocument = ProgressV1 | ProgressV2;
 ```
 
-- [ ] **Step 4: Implement strict validation and migration**
+- [x] **Step 4: Implement strict validation and migration**
 
 In `schema.ts`:
 
@@ -153,7 +153,7 @@ In `schema.ts`:
 
 Update `progress.ts` to import types, return `ProgressV2` from `createInitialProgress`, and preserve all V2 branches in domain updates. Re-export types needed by existing consumers.
 
-- [ ] **Step 5: Run focused and full unit verification**
+- [x] **Step 5: Run focused and full unit verification**
 
 Run:
 
@@ -165,7 +165,7 @@ npm test
 
 Expected: all commands exit 0; the suite contains explicit migration and malformed-field coverage.
 
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 6: Commit Task 1**
 
 ```bash
 git add src/progress/types.ts src/progress/schema.ts src/progress/schema.test.ts src/progress/progress.ts src/progress/progress.test.ts
@@ -179,7 +179,7 @@ git commit -m "feat: add strict progress v2 schema"
 - Create: `src/progress/storage.test.ts`
 - Modify: `src/progress/progress.ts`
 
-- [ ] **Step 1: Write failing transaction and recovery tests**
+- [x] **Step 1: Write failing transaction and recovery tests**
 
 Use an in-memory `Storage` fake that can throw on selected writes. Cover:
 
@@ -225,7 +225,7 @@ it('returns an unsaved result when a write fails', () => {
 
 Also cover: no stored value, valid V1 migration, invalid snapshot, retry after write failure, and current data unchanged after rejected import.
 
-- [ ] **Step 2: Verify tests fail before implementation**
+- [x] **Step 2: Verify tests fail before implementation**
 
 Run:
 
@@ -235,7 +235,7 @@ npm test -- src/progress/storage.test.ts
 
 Expected: FAIL because storage keys and transaction functions do not exist.
 
-- [ ] **Step 3: Implement explicit storage results**
+- [x] **Step 3: Implement explicit storage results**
 
 Export these contracts from `storage.ts`:
 
@@ -260,11 +260,11 @@ Implement:
 
 Never remove corrupt keys during automatic recovery. Never catch and discard storage errors without returning `unsaved`.
 
-- [ ] **Step 4: Remove the legacy silent-reset path**
+- [x] **Step 4: Remove the legacy silent-reset path**
 
 Replace `loadProgress` and `saveProgress` exports in `progress.ts` with compatibility re-exports that delegate to the new typed storage module, then update tests so no caller can receive a bare progress object without knowing the load status.
 
-- [ ] **Step 5: Verify storage behavior**
+- [x] **Step 5: Verify storage behavior**
 
 Run:
 
@@ -275,7 +275,7 @@ npm run typecheck
 
 Expected: exit 0 with current/snapshot/corrupt, write failure, import atomicity and migration tests passing.
 
-- [ ] **Step 6: Commit Task 2**
+- [x] **Step 6: Commit Task 2**
 
 ```bash
 git add src/progress/storage.ts src/progress/storage.test.ts src/progress/progress.ts
@@ -293,7 +293,7 @@ git commit -m "feat: add recoverable progress storage"
 - Modify: `src/App.tsx`
 - Modify: `src/App.test.tsx`
 
-- [ ] **Step 1: Write failing context and component tests**
+- [x] **Step 1: Write failing context and component tests**
 
 Cover these public behaviors:
 
@@ -319,7 +319,7 @@ it('explains local-only data before acknowledgement', () => {
 
 Extend `App.test.tsx` with injected storage tests for recovery notice, retry save, privacy acknowledgement persistence, and user motion override.
 
-- [ ] **Step 2: Run focused tests and verify failure**
+- [x] **Step 2: Run focused tests and verify failure**
 
 ```bash
 npm test -- src/components/RecoveryNotice.test.tsx src/components/PrivacyPanel.test.tsx src/App.test.tsx
@@ -327,7 +327,7 @@ npm test -- src/components/RecoveryNotice.test.tsx src/components/PrivacyPanel.t
 
 Expected: FAIL because the components and typed context state do not exist.
 
-- [ ] **Step 3: Upgrade ProgressContext**
+- [x] **Step 3: Upgrade ProgressContext**
 
 Expose:
 
@@ -349,7 +349,7 @@ interface ProgressContextValue {
 
 Initialize once from `loadProgressWithRecovery`. Centralize all mutations through one `commit` function that updates React state and records `saved` or `unsaved`. Do not show success wording when persistence failed.
 
-- [ ] **Step 4: Implement visible recovery and privacy behavior**
+- [x] **Step 4: Implement visible recovery and privacy behavior**
 
 - Render `RecoveryNotice` below the global header on all routes.
 - Use `role="status"` for recovered state and `role="alert"` for unsaved state.
@@ -358,7 +358,7 @@ Initialize once from `loadProgressWithRecovery`. Centralize all mutations throug
 - Add a visible reduced-motion control beside mute. Use `matchMedia('(prefers-reduced-motion: reduce)')` only when `reducedMotionOverride` is false; an explicit user toggle sets the override.
 - Apply `data-reduced-motion="true|false"` to the root application element so Phaser and CSS can observe the same setting.
 
-- [ ] **Step 5: Verify components and state**
+- [x] **Step 5: Verify components and state**
 
 ```bash
 npm test -- src/components/RecoveryNotice.test.tsx src/components/PrivacyPanel.test.tsx src/App.test.tsx
@@ -368,7 +368,7 @@ npm test
 
 Expected: all pass with assertions for recovery, unsaved status, privacy and motion persistence.
 
-- [ ] **Step 6: Commit Task 3**
+- [x] **Step 6: Commit Task 3**
 
 ```bash
 git add src/components/RecoveryNotice.tsx src/components/RecoveryNotice.test.tsx src/components/PrivacyPanel.tsx src/components/PrivacyPanel.test.tsx src/context/ProgressContext.tsx src/App.tsx src/App.test.tsx
@@ -385,7 +385,7 @@ git commit -m "feat: surface save recovery and privacy"
 - Modify: `src/App.tsx`
 - Modify: `src/App.test.tsx`
 
-- [ ] **Step 1: Write failing parent workflow tests**
+- [x] **Step 1: Write failing parent workflow tests**
 
 Cover:
 
@@ -413,7 +413,7 @@ it('requires explicit confirmation and creates a backup before clear', async () 
 
 Add tests for last saved time, load status, corrupt-source download availability, successful import version reporting, focus return after closing confirmation, and wrong PIN.
 
-- [ ] **Step 2: Verify tests fail**
+- [x] **Step 2: Verify tests fail**
 
 ```bash
 npm test -- src/components/ParentDataTools.test.tsx src/App.test.tsx
@@ -421,7 +421,7 @@ npm test -- src/components/ParentDataTools.test.tsx src/App.test.tsx
 
 Expected: FAIL because safe parent tools do not exist.
 
-- [ ] **Step 3: Extract ParentDataTools**
+- [x] **Step 3: Extract ParentDataTools**
 
 The component must receive typed callbacks and never touch storage directly. It renders:
 
@@ -434,11 +434,11 @@ The component must receive typed callbacks and never touch storage directly. It 
 
 Implement `downloadTextFile(filename, contents, mimeType)` in `src/utils/download.ts`. Unit-test that it creates an object URL, assigns the filename, clicks once, revokes the URL, and always removes the temporary anchor.
 
-- [ ] **Step 4: Wire parent actions to transactional storage**
+- [x] **Step 4: Wire parent actions to transactional storage**
 
 Replace the ad hoc `FileReader` and direct `replaceProgress` path in `App.tsx`. Keep the PIN gate. A malformed or future-version import must not mutate progress. Clearing must call backup before `clearProgress` and retain the generated download even if storage clear fails.
 
-- [ ] **Step 5: Verify parent workflows**
+- [x] **Step 5: Verify parent workflows**
 
 ```bash
 npm test -- src/components/ParentDataTools.test.tsx src/utils/download.test.ts src/App.test.tsx src/progress/storage.test.ts
@@ -447,7 +447,7 @@ npm run typecheck
 
 Expected: all pass, including atomic import and backup-before-clear ordering.
 
-- [ ] **Step 6: Commit Task 4**
+- [x] **Step 6: Commit Task 4**
 
 ```bash
 git add src/components/ParentDataTools.tsx src/components/ParentDataTools.test.tsx src/utils/download.ts src/utils/download.test.ts src/App.tsx src/App.test.tsx
@@ -466,7 +466,7 @@ git commit -m "feat: protect parent data operations"
 - Create: `scripts/check-bundle-budget.mjs`
 - Create: `src/responsive.test.tsx`
 
-- [ ] **Step 1: Write failing accessibility and lazy-loading checks**
+- [x] **Step 1: Write failing accessibility and lazy-loading checks**
 
 In `responsive.test.tsx`, assert:
 
@@ -494,7 +494,7 @@ it('does not statically import mission editors from the application entry', asyn
 
 Add a static CSS assertion that `html` and `body` no longer contain `min-width: 1180px` and that media queries exist for `900px` and `600px`.
 
-- [ ] **Step 2: Verify red state**
+- [x] **Step 2: Verify red state**
 
 ```bash
 npm test -- src/responsive.test.tsx
@@ -502,7 +502,7 @@ npm test -- src/responsive.test.tsx
 
 Expected: FAIL on document language, static editor imports and hard-coded minimum width.
 
-- [ ] **Step 3: Implement responsive and focus-safe layout**
+- [x] **Step 3: Implement responsive and focus-safe layout**
 
 - Set `lang="zh-CN"`.
 - Remove global minimum width.
@@ -511,11 +511,11 @@ Expected: FAIL on document language, static editor imports and hard-coded minimu
 - Add `:focus-visible` coverage for buttons, links, inputs, editor controls and dialog actions.
 - With reduced motion, disable Phaser tweens in `GameScene` rather than only shortening CSS animations.
 
-- [ ] **Step 4: Lazy-load mission-only code**
+- [x] **Step 4: Lazy-load mission-only code**
 
 Use `React.lazy` and `Suspense` for Blockly, Python, AI and GameScene modules. Render a text loading status with retry guidance. Keep the home and parent routes free of Blockly, CodeMirror and Phaser static imports. Do not replace real tools with mock UI.
 
-- [ ] **Step 5: Add deterministic build-budget verification**
+- [x] **Step 5: Add deterministic build-budget verification**
 
 Configure Vite `build.manifest = true`. Create `scripts/check-bundle-budget.mjs` that:
 
@@ -533,7 +533,7 @@ Add:
 "verify:bundle": "npm run build && node scripts/check-bundle-budget.mjs"
 ```
 
-- [ ] **Step 6: Verify responsive shell and budgets**
+- [x] **Step 6: Verify responsive shell and budgets**
 
 ```bash
 npm test -- src/responsive.test.tsx src/App.test.tsx
@@ -544,7 +544,7 @@ npm test
 
 Expected: all exit 0; output proves entry gzip ≤ 180 KB and Phaser is dynamic.
 
-- [ ] **Step 7: Commit Task 5**
+- [x] **Step 7: Commit Task 5**
 
 ```bash
 git add src/App.tsx src/styles.css src/components/GameScene.tsx index.html vite.config.mjs package.json scripts/check-bundle-budget.mjs src/responsive.test.tsx
@@ -560,7 +560,7 @@ git commit -m "feat: add responsive performance-budgeted shell"
 - Create: `e2e/commercial-foundation.spec.ts`
 - Create: `docs/verification/commercial-foundation.md`
 
-- [ ] **Step 1: Install the browser test dependency**
+- [x] **Step 1: Install the browser test dependency**
 
 Run:
 
@@ -571,7 +571,7 @@ npx playwright install chromium firefox webkit
 
 Expected: package files contain `@playwright/test`; required browser binaries install successfully.
 
-- [ ] **Step 2: Create Playwright projects and a failing smoke path**
+- [x] **Step 2: Create Playwright projects and a failing smoke path**
 
 Configure a local Vite web server and these projects:
 
@@ -588,7 +588,7 @@ Set `baseURL` to the Vite repository base and add `test:e2e` to package scripts.
 
 Start with a test that asserts no page-level horizontal overflow at all three viewport widths. Run it before responsive implementation is accepted; it must fail against the baseline CSS and pass after Task 5.
 
-- [ ] **Step 3: Implement the complete acceptance paths**
+- [x] **Step 3: Implement the complete acceptance paths**
 
 In `commercial-foundation.spec.ts`, cover:
 
@@ -603,7 +603,7 @@ In `commercial-foundation.spec.ts`, cover:
 
 Use actual visible controls. Do not write progress directly except in the dedicated corruption setup that tests recovery.
 
-- [ ] **Step 4: Run all browser projects**
+- [x] **Step 4: Run all browser projects**
 
 ```bash
 npm run test:e2e
@@ -611,7 +611,7 @@ npm run test:e2e
 
 Expected: all acceptance tests pass in desktop Chromium, tablet WebKit, mobile Chromium and desktop Firefox.
 
-- [ ] **Step 5: Record verification evidence**
+- [x] **Step 5: Record verification evidence**
 
 Write `docs/verification/commercial-foundation.md` with:
 
@@ -623,7 +623,7 @@ Write `docs/verification/commercial-foundation.md` with:
 - Residual risks: local storage can be deliberately cleared; low-end physical-device performance still needs release-device sampling.
 - Completion statement: only `Parent / saves` and the implemented portion of `UI / release` reach `System loop complete`; whole site remains `not complete`.
 
-- [ ] **Step 6: Run final fresh verification**
+- [x] **Step 6: Run final fresh verification**
 
 ```bash
 git diff --check
@@ -636,7 +636,7 @@ git status --short
 
 Expected: all commands exit 0; only planned files are modified before the task commit.
 
-- [ ] **Step 7: Commit Task 6**
+- [x] **Step 7: Commit Task 6**
 
 ```bash
 git add package.json package-lock.json playwright.config.ts e2e/commercial-foundation.spec.ts docs/verification/commercial-foundation.md
