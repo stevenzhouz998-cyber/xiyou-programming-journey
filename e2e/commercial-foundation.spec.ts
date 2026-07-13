@@ -71,6 +71,7 @@ test.afterEach(() => {
 
 const currentKey = 'xiyou-programming-progress-v2';
 const snapshotKey = 'xiyou-programming-progress-snapshot-v2';
+const corruptKey = 'xiyou-programming-progress-corrupt-v2';
 
 const v1 = (completed = false) => ({
   version: 1, learnerName: '小行者',
@@ -182,13 +183,23 @@ test('snapshot recovery preserves corrupt source and exposes download', async ({
   await expect(page.getByRole('heading', { name: '西游编程记', level: 1 })).toBeFocused();
   await expect(page.getByTestId('app-background')).not.toHaveAttribute('inert', '');
   expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).recovery.source, currentKey)).toBe('snapshot');
+  const envelope = await page.evaluate(key => localStorage.getItem(key), corruptKey);
+  expect(envelope).not.toBeNull();
+  await page.reload();
+  await expect(page.getByText('有一份存档信息需要家长查看')).toBeVisible();
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).recovery.source, currentKey)).toBe('snapshot');
+  expect(await page.evaluate(key => localStorage.getItem(key), corruptKey)).toBe(envelope);
   await page.goto('/xiyou-programming-journey/#/parent');
   await expect(page.getByRole('heading', { name: '家长周报', level: 1 })).toBeFocused();
   await page.getByLabel('家长 PIN').fill('2580');
   await page.getByLabel('家长 PIN').press('Enter');
   const downloaded = page.waitForEvent('download');
   await page.getByRole('button', { name: '下载损坏原文' }).click();
-  await downloaded;
+  const download = await downloaded;
+  const downloadedPath = await download.path();
+  expect(downloadedPath).not.toBeNull();
+  expect(fs.readFileSync(downloadedPath!, 'utf8')).toBe(envelope);
+  expect(await page.evaluate(key => localStorage.getItem(key), corruptKey)).toBe(envelope);
 });
 
 test('keyboard-only PIN, hint and clear cancellation preserve focus isolation', async ({ page }) => {

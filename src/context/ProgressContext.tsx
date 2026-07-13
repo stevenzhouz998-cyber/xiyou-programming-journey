@@ -24,6 +24,7 @@ export interface ProgressContextValue {
   loadPersistence: 'idle' | 'saved' | 'unsaved';
   loadError: string | null;
   corruptDownload: string | null;
+  corruptError: string | null;
   saveStatus: 'idle' | 'saved' | 'unsaved';
   saveError: string | null;
   complete: (missionId: string, input: CompletionInput) => SaveResult;
@@ -106,6 +107,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     loadPersistence,
     loadError: initialLoad.error,
     corruptDownload: initialLoad.corruptDownload,
+    corruptError: initialLoad.corruptError,
     saveStatus,
     saveError,
     complete: (missionId, input) => commit(completeMission(progress, missionId, input)),

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import { createInitialProgress, serializeProgress } from './progress/progress';
-import { CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from './progress/storage';
+import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from './progress/storage';
 
 const originalStorage = localStorage;
 
@@ -202,6 +202,25 @@ describe('西游编程记', () => {
     render(<App />);
     expect(screen.getAllByRole('status').some((status) => status.textContent?.includes('学习进度已经安全恢复'))).toBe(true);
     expect(screen.getByRole('heading', { name: '龙宫求兵' })).toBeInTheDocument();
+  });
+
+  it('keeps parent recovery details available after a recovered save is reopened', () => {
+    const recovered = {
+      ...createInitialProgress(), privacy: { localDataNoticeSeen: true },
+      recovery: { lastRecoveredAt: '2026-07-12T08:09:10.000Z', source: 'snapshot' as const },
+    };
+    const envelope = JSON.stringify({
+      current: '{bad', snapshot: serializeProgress(createInitialProgress()), capturedAt: '2026-07-12T08:09:10.000Z',
+    });
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(recovered));
+    localStorage.setItem(CORRUPT_PROGRESS_KEY, envelope);
+    window.location.hash = '#/parent';
+    render(<App />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('有一份存档信息需要家长查看');
+    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '2580' } });
+    fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
+    expect(screen.getByRole('button', { name: '下载损坏原文' })).toBeInTheDocument();
   });
 
   it('retries the real unsaved mission state until it is durably stored', async () => {

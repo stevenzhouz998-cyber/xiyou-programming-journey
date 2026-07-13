@@ -41,6 +41,14 @@ describe('RecoveryNotice', () => {
     expect(screen.getByRole('link', { name: '请家长查看详情' })).toHaveAttribute('href', '#/parent?recovery=1');
   });
 
+  it('warns a parent about unreadable preserved details without claiming progress is unsaved', () => {
+    render(<RecoveryNotice loadStatus="normal" persistence="saved" loadError={null} corruptError="损坏存档信息无法读取" saveError={null} hasCorruptDownload={false} onRetry={vi.fn()} />);
+    expect(screen.getByRole('status')).toHaveTextContent('有一份存档信息需要家长查看');
+    expect(screen.getByRole('status')).toHaveTextContent('损坏存档信息无法读取');
+    expect(screen.queryByText('本次进度尚未保存')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '请家长查看详情' })).toBeInTheDocument();
+  });
+
   it('returns focus to the main heading after keyboard dismissal', () => {
     render(<><main><h1 tabIndex={-1}>Current page</h1></main><RecoveryNotice loadStatus="recovered-from-snapshot" persistence="saved" loadError={null} saveError={null} hasCorruptDownload onRetry={vi.fn()} /></>);
     const close = screen.getByRole('button', { name: '关闭进度提示' });

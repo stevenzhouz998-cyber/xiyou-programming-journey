@@ -5,17 +5,19 @@ interface RecoveryNoticeProps {
   loadStatus: LoadStatus;
   persistence: 'idle' | 'saved' | 'unsaved';
   loadError: string | null;
+  corruptError?: string | null;
   saveError: string | null;
   hasCorruptDownload: boolean;
   onRetry: () => unknown;
 }
 
-export function RecoveryNotice({ loadStatus, persistence, loadError, saveError, hasCorruptDownload, onRetry }: RecoveryNoticeProps) {
+export function RecoveryNotice({ loadStatus, persistence, loadError, corruptError = null, saveError, hasCorruptDownload, onRetry }: RecoveryNoticeProps) {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => setDismissed(false), [persistence, loadStatus]);
 
   const hasDetails = hasCorruptDownload
+    || corruptError !== null
     || loadStatus === 'recovered-from-snapshot'
     || loadStatus === 'reset-after-corruption';
 
@@ -53,6 +55,7 @@ export function RecoveryNotice({ loadStatus, persistence, loadError, saveError, 
 
   return <aside className="recovery-notice" role="status">
     <strong>{message}</strong>
+    {corruptError && <p>{corruptError}</p>}
     {hasDetails && <a href="#/parent?recovery=1">请家长查看详情</a>}
     <button type="button" aria-label="关闭进度提示" onClick={dismiss}>关闭</button>
   </aside>;

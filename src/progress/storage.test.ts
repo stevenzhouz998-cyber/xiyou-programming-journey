@@ -59,7 +59,7 @@ describe('progress storage transactions', () => {
     const storage = new MemoryStorage();
     expect(loadProgressTransaction(storage, clock)).toEqual({
       progress: createInitialProgress(), status: 'normal', corruptDownload: null,
-      persistence: 'idle', error: null,
+      persistence: 'idle', error: null, corruptError: null,
     });
     expect(storage.length).toBe(0);
   });
@@ -76,6 +76,50 @@ describe('progress storage transactions', () => {
     const storage = new MemoryStorage();
     storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress('当前')));
     expect(loadProgressTransaction(storage, clock)).toMatchObject({ status: 'normal', persistence: 'saved', error: null, progress: { learnerName: '当前' } });
+  });
+
+  it('keeps a valid corrupt envelope downloadable after recovered current is reopened', () => {
+    const storage = new MemoryStorage();
+    const recovered = {
+      ...progress('已恢复'),
+      recovery: { lastRecoveredAt: NOW.toISOString(), source: 'snapshot' as const },
+    };
+    const envelope = JSON.stringify({
+      current: '{bad current',
+      snapshot: serializeProgress(progress('恢复源快照')),
+      capturedAt: NOW.toISOString(),
+    });
+    storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(recovered));
+    storage.setItem(CORRUPT_PROGRESS_KEY, envelope);
+
+    expect(loadProgressTransaction(storage, clock)).toMatchObject({
+      status: 'normal', persistence: 'saved', error: null, corruptError: null,
+      corruptDownload: envelope,
+      progress: { learnerName: '已恢复' },
+    });
+    expect(storage.getItem(CORRUPT_PROGRESS_KEY)).toBe(envelope);
+  });
+
+  it('keeps valid current saved while exposing malformed or unreadable corrupt-envelope errors', () => {
+    const malformed = new MemoryStorage();
+    malformed.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress('有效当前')));
+    malformed.setItem(CORRUPT_PROGRESS_KEY, '{bad envelope');
+    expect(loadProgressTransaction(malformed, clock)).toMatchObject({
+      status: 'normal', persistence: 'saved', error: null, corruptDownload: null,
+      corruptError: expect.stringContaining('损坏存档信息无法读取'),
+      progress: { learnerName: '有效当前' },
+    });
+    expect(malformed.getItem(CORRUPT_PROGRESS_KEY)).toBe('{bad envelope');
+
+    const unreadable = new MemoryStorage();
+    unreadable.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress('有效当前')));
+    unreadable.setItem(CORRUPT_PROGRESS_KEY, JSON.stringify({ current: '{bad', snapshot: null, capturedAt: NOW.toISOString() }));
+    unreadable.failReads.add(CORRUPT_PROGRESS_KEY);
+    expect(loadProgressTransaction(unreadable, clock)).toMatchObject({
+      status: 'normal', persistence: 'saved', error: null, corruptDownload: null,
+      corruptError: expect.stringContaining('无法读取损坏存档信息'),
+      progress: { learnerName: '有效当前' },
+    });
   });
 
   it('migrates a valid legacy V1 and preserves the legacy key', () => {

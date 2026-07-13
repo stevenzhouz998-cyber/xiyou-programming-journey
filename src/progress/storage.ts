@@ -16,6 +16,7 @@ export interface LoadResult {
   corruptDownload: string | null;
   persistence: 'idle' | 'saved' | 'unsaved';
   error: string | null;
+  corruptError: string | null;
 }
 export type SaveResult =
   | { status: 'saved'; progress: ProgressV2 }
@@ -53,6 +54,45 @@ function isCanonicalIso(value: unknown): value is string {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
 }
 
+interface CorruptEnvelope {
+  current: string;
+  snapshot: string | null;
+  capturedAt: string;
+}
+
+function parseCorruptEnvelope(raw: string): CorruptEnvelope {
+  const envelope: unknown = JSON.parse(raw);
+  if (typeof envelope !== 'object' || envelope === null || Object.getPrototypeOf(envelope) !== Object.prototype) {
+    throw new Error('损坏存档信息无法读取：信封格式无效');
+  }
+  const record = envelope as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (keys.length !== 3 || !['current', 'snapshot', 'capturedAt'].every((key) => keys.includes(key))
+    || typeof record.current !== 'string'
+    || (record.snapshot !== null && typeof record.snapshot !== 'string')
+    || !isCanonicalIso(record.capturedAt)) {
+    throw new Error('损坏存档信息无法读取：信封内容无效');
+  }
+  return record as unknown as CorruptEnvelope;
+}
+
+function readPreservedCorruption(storage: Storage): { corruptDownload: string | null; corruptError: string | null } {
+  let raw: string | null;
+  try { raw = storage.getItem(CORRUPT_PROGRESS_KEY); }
+  catch (error) { return { corruptDownload: null, corruptError: `无法读取损坏存档信息：${errorMessage(error)}` }; }
+  if (raw === null) return { corruptDownload: null, corruptError: null };
+  try {
+    parseCorruptEnvelope(raw);
+    return { corruptDownload: raw, corruptError: null };
+  } catch (error) {
+    const detail = errorMessage(error);
+    return {
+      corruptDownload: null,
+      corruptError: detail.startsWith('损坏存档信息无法读取') ? detail : `损坏存档信息无法读取：${detail}`,
+    };
+  }
+}
+
 function currentCorruptionProtectionError(storage: Storage, currentRaw: string): string | null {
   let envelopeRaw: string | null;
   try { envelopeRaw = storage.getItem(CORRUPT_PROGRESS_KEY); }
@@ -60,18 +100,8 @@ function currentCorruptionProtectionError(storage: Storage, currentRaw: string):
   if (envelopeRaw === null) return '损坏原文尚未安全保留：缺少损坏存档信封';
 
   try {
-    const envelope: unknown = JSON.parse(envelopeRaw);
-    if (typeof envelope !== 'object' || envelope === null || Object.getPrototypeOf(envelope) !== Object.prototype) {
-      return '损坏原文尚未安全保留：损坏存档信封格式无效';
-    }
-    const record = envelope as Record<string, unknown>;
-    const keys = Object.keys(record);
-    if (keys.length !== 3 || !['current', 'snapshot', 'capturedAt'].every((key) => keys.includes(key))) {
-      return '损坏原文尚未安全保留：损坏存档信封格式无效';
-    }
-    if (record.current !== currentRaw
-      || (record.snapshot !== null && typeof record.snapshot !== 'string')
-      || !isCanonicalIso(record.capturedAt)) {
+    const record = parseCorruptEnvelope(envelopeRaw);
+    if (record.current !== currentRaw) {
       return '损坏原文尚未安全保留：损坏存档信封不匹配';
     }
     return null;
@@ -100,6 +130,7 @@ function loadResult(
   corruptDownload: string | null,
   errors: string[] = [],
   idle = false,
+  corruptError: string | null = null,
 ): LoadResult {
   return {
     progress,
@@ -107,6 +138,7 @@ function loadResult(
     corruptDownload,
     persistence: errors.length ? 'unsaved' : idle ? 'idle' : 'saved',
     error: errors.length === 0 ? null : errors.join('；'),
+    corruptError,
   };
 }
 
@@ -136,7 +168,10 @@ export function loadProgressTransaction(storage: Storage = localStorage, clock: 
   }
 
   const current = valid(currentRaw);
-  if (current) return loadResult(current, 'normal', null);
+  if (current) {
+    const preserved = readPreservedCorruption(storage);
+    return loadResult(current, 'normal', preserved.corruptDownload, [], false, preserved.corruptError);
+  }
 
   const capturedAt = clock().toISOString();
   let snapshotRaw: string | null;

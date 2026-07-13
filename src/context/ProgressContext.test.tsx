@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ProgressProvider, useProgress } from './ProgressContext';
 import { createInitialProgress, serializeProgress } from '../progress/progress';
-import { CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from '../progress/storage';
+import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from '../progress/storage';
 
 const originalStorage = localStorage;
 
@@ -40,6 +40,7 @@ function Probe() {
       loadPersistence: state.loadPersistence,
       loadError: state.loadError,
       corruptDownload: state.corruptDownload,
+      corruptError: state.corruptError,
       saveStatus: state.saveStatus,
       saveError: state.saveError,
     })}</output>
@@ -69,6 +70,25 @@ describe('ProgressContext persistence status', () => {
       learnerName: '快照名字', loadStatus: 'recovered-from-snapshot', loadPersistence: 'saved', loadError: null,
     });
     expect(JSON.parse(screen.getByTestId('state').textContent!).corruptDownload).toContain('"current":"{bad"');
+  });
+
+  it('exposes the preserved corrupt source again on the second initialization', () => {
+    const recovered = {
+      ...createInitialProgress(), learnerName: '已恢复',
+      recovery: { lastRecoveredAt: '2026-07-12T08:09:10.000Z', source: 'snapshot' as const },
+    };
+    const envelope = JSON.stringify({
+      current: '{bad', snapshot: serializeProgress(createInitialProgress()), capturedAt: '2026-07-12T08:09:10.000Z',
+    });
+    installStorage({
+      [CURRENT_PROGRESS_KEY]: serializeProgress(recovered),
+      [CORRUPT_PROGRESS_KEY]: envelope,
+    });
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      learnerName: '已恢复', loadStatus: 'normal', loadPersistence: 'saved',
+      loadError: null, corruptError: null, corruptDownload: envelope,
+    });
   });
 
   it('keeps unsaved progress in the session and exposes save failure', () => {

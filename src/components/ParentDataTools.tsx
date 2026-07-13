@@ -13,6 +13,7 @@ export interface ParentDataToolsProps {
   loadPersistence: 'idle' | 'saved' | 'unsaved';
   saveStatus: 'idle' | 'saved' | 'unsaved';
   corruptDownload: string | null;
+  corruptError?: string | null;
   onImport: (raw: string) => ImportResult;
   onClear: () => ClearResult;
   onCreateBackup: () => ProgressBackup;
@@ -132,6 +133,7 @@ export function ParentDataTools(props: ParentDataToolsProps) {
       <button type="button" className="button button-ghost" onClick={() => importInputRef.current?.click()}><UploadSimple size={20} />导入进度</button>
       <input ref={importInputRef} aria-label="选择进度文件" type="file" accept="application/json,.json" onChange={(event) => { const input = event.currentTarget; void importFile(input.files?.[0]).finally(() => { input.value = ''; }); }} />
       {props.corruptDownload !== null && <button type="button" className="button button-ghost" onClick={() => props.onDownload('xiyou-corrupt-progress.json', props.corruptDownload!, 'application/json')}>下载损坏原文</button>}
+      {props.corruptError && <p role="status">存档恢复信息需要家长检查：{props.corruptError}</p>}
       <button ref={openerRef} type="button" className="button button-danger" onClick={openConfirm}>清空学习数据</button>
       {message && <p role="status" aria-live="polite">{message}</p>}
       {importAlert && <p role="alert">{importAlert}</p>}
