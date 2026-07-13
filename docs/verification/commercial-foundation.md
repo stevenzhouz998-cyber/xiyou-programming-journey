@@ -1,7 +1,7 @@
 # Commercial foundation browser verification
 
 - Date: 2026-07-13 (Asia/Shanghai)
-- Tested product tree SHA: `742f62355b343efcbbcf6f1e4d5ad60339bdd290`
+- Tested product tree SHA: `4f845efaecd9098fa6616728b73cc1b7bf7dc799`
 - Runner: Playwright 1.55.0, local release-like Vite preview, no HTTP compression
 - Projects: Chromium 1440×1024, WebKit 768×1024, touch Chromium 390×844, Firefox 1440×1024
 - Scenarios: 10 per project / 40 total; no skipped browser projects
@@ -10,7 +10,7 @@ Fresh machine setup is reproducible with `npm ci && npm run install:browsers`. L
 
 ## Executed evidence
 
-The suite performs the privacy acknowledgement, child failure and real Blockly command/run success, reload persistence, parent PIN/export, V1 migration, malformed import rollback, snapshot recovery and corrupt-source download, backup-and-clear, keyboard-only dialog/focus/import paths, recovery-notice focus return, system and user reduced-motion overrides, persistent visible mute controls, real CodeMirror/Python and AI tool loading, lazy-chunk failure/recovery, 320 px overflow, coarse-pointer targets, GitHub Pages base paths, unknown hash behavior, console/page/request health, and screenshots.
+The suite performs the privacy acknowledgement, child failure and real Blockly command/run success, reload persistence, parent PIN/export, V1 migration, malformed import rollback, snapshot recovery, a second reopen with the recovered current save, byte-exact corrupt-source download and retained corrupt envelope, backup-and-clear, keyboard-only dialog/focus/import paths, recovery-notice focus return, system and user reduced-motion overrides, persistent visible mute controls, real CodeMirror/Python and AI tool loading, lazy-chunk failure/recovery, 320 px overflow, coarse-pointer targets, GitHub Pages base paths, unknown hash behavior, console/page/request health, and screenshots.
 
 Commands used for the final gate:
 
@@ -22,7 +22,7 @@ npm run test:e2e -- --reporter=list
 git diff --check
 ```
 
-The fresh product-tree gate reported 154/154 Vitest tests, 14/14 bundle-script tests, 40/40 Playwright scenarios, zero skipped browser projects, and a clean worktree after the ordinary browser run. Ordinary `npm run test:e2e` screenshots and transfer metrics stay under Playwright's per-test output directories and do not modify tracked evidence. The tracked screenshots below are updated only with `npm run test:e2e:update-evidence`; that explicit run also passed 40/40. Its fixed no-argument `Date` makes dynamic save timestamps repeatable without virtualizing timers or the Performance API. A repeated parent-evidence scenario produced the same SHA-256 `3d5a12e3ef82982149de188c277fb8376dcbbac84cb05b58d412c23ab4281518`.
+The fresh product-tree gate reported 159/159 Vitest tests, 14/14 bundle-script tests, 40/40 Playwright scenarios, zero skipped browser projects, and a clean worktree after the ordinary browser run. The recovery scenario passed in all four projects after recovering a snapshot, reloading the now-valid current save a second time, opening the PIN-protected parent page, downloading the exact persisted corruption envelope, and confirming the envelope key remained unchanged. Malformed or unreadable envelopes keep a valid current save at `normal` / `saved`, expose a separate parent-facing recovery-information error, and are never offered as downloads. Ordinary `npm run test:e2e` screenshots and transfer metrics stay under Playwright's per-test output directories and do not modify tracked evidence. The tracked screenshots below are updated only with `npm run test:e2e:update-evidence`; that explicit run also passed 40/40 at the previous screenshot baseline. Its fixed no-argument `Date` makes dynamic save timestamps repeatable without virtualizing timers or the Performance API. A repeated parent-evidence scenario produced the same SHA-256 `3d5a12e3ef82982149de188c277fb8376dcbbac84cb05b58d412c23ab4281518`.
 
 ## Metrics
 
@@ -55,7 +55,7 @@ These are browser evidence, not shipping assets. They retain the existing warm-p
 
 | Row | Evidence level | Result |
 | --- | --- | --- |
-| Parent / saves | PIN, export, V1→V2 migration, malformed import preservation, snapshot recovery, corrupt download, backup-before-clear, privacy reset, and refresh paths in real browsers | **System loop complete for the implemented parent/save foundation** |
+| Parent / saves | PIN, export, V1→V2 migration, malformed import preservation, snapshot recovery, second-reopen corrupt download retention, backup-before-clear, privacy reset, and refresh paths in real browsers | **System loop complete for the implemented parent/save foundation** |
 | UI / release | Four browser/device projects, 320 px overflow, keyboard/focus, touch targets, reduced-motion connection, lazy failure, base path and console checks | **Not complete**: public deployed cold-transfer/Lighthouse, production 404, asset-manifest provenance and deployed version matching remain unverified |
 | Blockly | First level actual command palette, visible workspace, wrong-order feedback and success/persistence | **One-level playable evidence only**; not full Blockly-system or 30-level evidence |
 | Python / AI | A valid V2 mode fixture is imported through the real parent PIN and keyboard-operated import transaction; it is used only to verify the real tool modes load and attempt real content. Pyodide health allowances are phase-scoped to `python-runtime`, the exact pinned jsDelivr directory, request/HTTP failures, and Firefox's exact normalized known console event on `w4-m2`. | **Mode UI and failure-path verification only**; fixture import is not a child progression or completion claim |
