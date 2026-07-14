@@ -46,6 +46,89 @@ describe('WorkspaceDraftV1', () => {
     }
   })
 
+  it('initializes and renders a restored chain in a real WorkspaceSvg', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const svgWorkspace = Blockly.inject(host, { sounds: false })
+    const draft: WorkspaceDraftV1 = {
+      version: 1,
+      blocks: [
+        { id: 'enter-svg', type: 'xiyou_enter_palace', nextId: 'request-svg', x: 5, y: 7 },
+        {
+          id: 'request-svg',
+          type: 'xiyou_request_weapon',
+          nextId: 'test-svg',
+          x: 5,
+          y: 57,
+        },
+        { id: 'test-svg', type: 'xiyou_test_weapon', nextId: null, x: 5, y: 107 },
+      ],
+    }
+
+    try {
+      loadWorkspaceDraft(svgWorkspace, draft)
+      const blocks = svgWorkspace.getAllBlocks(false) as Blockly.BlockSvg[]
+      const canvas = svgWorkspace.getBlockCanvas()
+
+      expect(blocks).toHaveLength(3)
+      for (const block of blocks) {
+        expect(canvas?.contains(block.getSvgRoot())).toBe(true)
+        expect(block.getSvgRoot().querySelector('.blocklyPath')).not.toBeNull()
+      }
+      expect(svgWorkspace.getBlockById('enter-svg')?.getNextBlock()?.id).toBe('request-svg')
+      expect(svgWorkspace.getBlockById('request-svg')?.getNextBlock()?.id).toBe('test-svg')
+    } finally {
+      svgWorkspace.dispose()
+      host.remove()
+    }
+  })
+
+  it('removes partial SVG blocks before restoring after an apply failure', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const svgWorkspace = Blockly.inject(host, { sounds: false })
+    const original: WorkspaceDraftV1 = {
+      version: 1,
+      blocks: [
+        { id: 'original-svg', type: 'xiyou_enter_palace', nextId: null, x: 4, y: 8 },
+      ],
+    }
+    const incoming: WorkspaceDraftV1 = {
+      version: 1,
+      blocks: [
+        { id: 'incoming-one', type: 'xiyou_request_weapon', nextId: 'incoming-two', x: 5, y: 9 },
+        { id: 'incoming-two', type: 'xiyou_test_weapon', nextId: null, x: 5, y: 59 },
+      ],
+    }
+
+    try {
+      loadWorkspaceDraft(svgWorkspace, original)
+      const realNewBlock = svgWorkspace.newBlock.bind(svgWorkspace)
+      let calls = 0
+      svgWorkspace.newBlock = ((prototypeName: string, id?: string) => {
+        const block = realNewBlock(prototypeName, id)
+        calls += 1
+        if (calls === 2) throw new Error('synthetic svg apply failure')
+        return block
+      }) as typeof svgWorkspace.newBlock
+
+      expect(() => loadWorkspaceDraft(svgWorkspace, incoming)).toThrow(
+        /synthetic svg apply failure/,
+      )
+
+      const blocks = svgWorkspace.getAllBlocks(false) as Blockly.BlockSvg[]
+      const canvas = svgWorkspace.getBlockCanvas()
+      const roots = blocks.map((block) => block.getSvgRoot())
+      expect(saveWorkspaceDraft(svgWorkspace)).toEqual(original)
+      expect(blocks.map((block) => block.id)).toEqual(['original-svg'])
+      expect(Array.from(canvas?.children ?? [])).toEqual(roots)
+      expect(roots.every((root) => root.isConnected)).toBe(true)
+    } finally {
+      svgWorkspace.dispose()
+      host.remove()
+    }
+  })
+
   it('preserves finite fractional Blockly positions within the safe numeric range', () => {
     const draft: WorkspaceDraftV1 = {
       version: 1,

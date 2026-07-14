@@ -35,3 +35,41 @@ export function registerDragonPalaceBlocks(): void {
     ])
   }
 }
+
+type SvgBlockCapabilities = Blockly.Block & {
+  getSvgRoot(): SVGGElement
+  initSvg(): void
+  render(): void
+}
+
+type SvgWorkspaceCapabilities = Blockly.Workspace & {
+  getBlockCanvas(): SVGElement | null
+}
+
+function isSvgBlock(block: Blockly.Block): block is SvgBlockCapabilities {
+  const candidate = block as unknown as Record<string, unknown>
+  return (
+    typeof candidate.getSvgRoot === 'function' &&
+    typeof candidate.initSvg === 'function' &&
+    typeof candidate.render === 'function'
+  )
+}
+
+function isSvgWorkspace(workspace: Blockly.Workspace): workspace is SvgWorkspaceCapabilities {
+  const candidate = workspace as unknown as Record<string, unknown>
+  return typeof candidate.getBlockCanvas === 'function'
+}
+
+export function initializeWorkspaceBlock(block: Blockly.Block): void {
+  if (!isSvgBlock(block) || !isSvgWorkspace(block.workspace)) return
+  const canvas = block.workspace.getBlockCanvas()
+  if (canvas?.contains(block.getSvgRoot())) return
+  block.initSvg()
+}
+
+export function renderWorkspaceTopBlocks(workspace: Blockly.Workspace): void {
+  if (!isSvgWorkspace(workspace)) return
+  for (const topBlock of workspace.getTopBlocks(false)) {
+    if (isSvgBlock(topBlock)) topBlock.render()
+  }
+}

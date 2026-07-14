@@ -1,5 +1,10 @@
 import type { Block, Workspace } from 'blockly'
-import { isDragonBlockType, type DragonBlockType } from './dragonPalaceBlocks'
+import {
+  initializeWorkspaceBlock,
+  isDragonBlockType,
+  renderWorkspaceTopBlocks,
+  type DragonBlockType,
+} from './dragonPalaceBlocks'
 
 export interface WorkspaceDraftV1 {
   version: 1
@@ -142,6 +147,7 @@ function applyValidatedDraft(workspace: Workspace, draft: WorkspaceDraftV1): voi
 
   for (const saved of draft.blocks) {
     const block = workspace.newBlock(saved.type, saved.id)
+    initializeWorkspaceBlock(block)
     block.moveBy(saved.x, saved.y)
     created.set(saved.id, block)
   }
@@ -153,8 +159,11 @@ function applyValidatedDraft(workspace: Workspace, draft: WorkspaceDraftV1): voi
     if (!block?.nextConnection || !next?.previousConnection) {
       throw new Error(`Cannot restore block connection: ${saved.id}`)
     }
-    block.nextConnection.connect(next.previousConnection)
+    if (!block.nextConnection.connect(next.previousConnection)) {
+      throw new Error(`Failed to restore block connection: ${saved.id}`)
+    }
   }
+  renderWorkspaceTopBlocks(workspace)
 }
 
 export function loadWorkspaceDraft(workspace: Workspace, draft: WorkspaceDraftV1): void {
