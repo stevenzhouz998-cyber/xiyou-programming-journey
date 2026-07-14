@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { runDragonPalaceBattle } from '../battle/dragonPalace';
 import { createInitialProgress } from './progress';
-import { migrateProgress, parseProgress } from './schema';
+import { migrateProgress, parseProgress, PROGRESS_SCHEMA_LIMITS } from './schema';
 import type { MissionSession, ProgressV3 } from './types';
 
 const NOW = '2026-07-12T00:00:00.000Z';
+const {
+  maxRawJsonBytes: MAX_RAW_JSON_BYTES,
+  maxWorkspaceBlocks: MAX_WORKSPACE_BLOCKS,
+  maxTraceInstructions: MAX_TRACE_INSTRUCTIONS,
+  maxBattleEvents: MAX_BATTLE_EVENTS,
+  maxPersistedTextLength: MAX_PERSISTED_TEXT_LENGTH,
+} = PROGRESS_SCHEMA_LIMITS;
 
 const validMission = {
   status: 'completed' as const,
@@ -451,6 +458,132 @@ describe('progress schema', () => {
     const value = validV3();
     value.sessions['w1-m1'].lastRun = runDragonPalaceBattle(trace.slice(0, 1));
     expect(() => migrateProgress(value)).toThrow(/lastTrace.*不一致|确定性/);
+  });
+
+  it('rejects duplicate trace provenance even when the run is canonical for that duplicate trace', () => {
+    const value = validV3();
+    const duplicateTrace = [
+      { instructionId: 'instruction:reused', sourceBlockId: 'reused', opcode: 'enter_palace' as const },
+      { instructionId: 'instruction:reused', sourceBlockId: 'reused', opcode: 'request_weapon' as const },
+    ];
+    value.sessions['w1-m1'].lastTrace = duplicateTrace;
+    value.sessions['w1-m1'].lastRun = runDragonPalaceBattle(duplicateTrace);
+    expect(() => migrateProgress(value)).toThrow(/lastTrace.*重复.*(?:sourceBlockId|instructionId)/);
+  });
+
+  it('allows repeated opcodes when each trace instruction has distinct provenance', () => {
+    const value = validV3();
+    const repeatedOpcodeTrace = [
+      { instructionId: 'instruction:first', sourceBlockId: 'first', opcode: 'enter_palace' as const },
+      { instructionId: 'instruction:second', sourceBlockId: 'second', opcode: 'enter_palace' as const },
+    ];
+    value.sessions['w1-m1'].lastTrace = repeatedOpcodeTrace;
+    value.sessions['w1-m1'].lastRun = runDragonPalaceBattle(repeatedOpcodeTrace);
+    expect(() => migrateProgress(value)).not.toThrow();
+  });
+
+  it('enforces the raw UTF-8 byte budget at the exact boundary before parsing JSON', () => {
+    const base = JSON.stringify(createInitialProgress());
+    const baseBytes = new TextEncoder().encode(base).byteLength;
+    const atLimit = `${base}${' '.repeat(MAX_RAW_JSON_BYTES - baseBytes)}`;
+    expect(new TextEncoder().encode(atLimit).byteLength).toBe(MAX_RAW_JSON_BYTES);
+    expect(parseProgress(atLimit)).toEqual(createInitialProgress());
+    expect(() => parseProgress(`${atLimit} `)).toThrow(/UTF-8字节.*1048576/);
+
+    const multibyteOverLimit = JSON.stringify({ version: 3, padding: '你'.repeat(350_000) });
+    expect(multibyteOverLimit.length).toBeLessThan(MAX_RAW_JSON_BYTES);
+    expect(new TextEncoder().encode(multibyteOverLimit).byteLength).toBeGreaterThan(MAX_RAW_JSON_BYTES);
+    expect(() => parseProgress(multibyteOverLimit)).toThrow(/UTF-8字节.*1048576/);
+  });
+
+  it('enforces the persisted string boundary through both object and JSON entrypoints', () => {
+    const boundary = validV3();
+    boundary.learnerName = '孩'.repeat(MAX_PERSISTED_TEXT_LENGTH);
+    expect(migrateProgress(boundary).learnerName).toHaveLength(MAX_PERSISTED_TEXT_LENGTH);
+    expect(parseProgress(JSON.stringify(boundary)).learnerName).toHaveLength(MAX_PERSISTED_TEXT_LENGTH);
+
+    const overLimit = validV3();
+    overLimit.learnerName = '孩'.repeat(MAX_PERSISTED_TEXT_LENGTH + 1);
+    expect(() => migrateProgress(overLimit)).toThrow(/learnerName.*256个字符/);
+    expect(() => parseProgress(JSON.stringify(overLimit))).toThrow(/learnerName.*256个字符/);
+  });
+
+  it('enforces workspace block count before deep block validation and keeps the 500-block boundary', () => {
+    const boundary = validV3();
+    boundary.sessions['w1-m1'].workspace.blocks = Array.from(
+      { length: MAX_WORKSPACE_BLOCKS },
+      (_, index) => ({ id: `block-${index}`, type: 'xiyou_enter_palace', nextId: null, x: index, y: 0 }),
+    );
+    boundary.sessions['w1-m1'].lastTrace = [];
+    boundary.sessions['w1-m1'].lastRun = null;
+    expect(migrateProgress(boundary).sessions['w1-m1'].workspace.blocks).toHaveLength(MAX_WORKSPACE_BLOCKS);
+
+    const overLimit = validV3();
+    const poison = { id: 'poison', type: 'xiyou_enter_palace' as const, nextId: null, x: 0, y: 0 };
+    Object.defineProperty(poison, 'id', { get: () => { throw new Error('deep block traversal happened'); } });
+    overLimit.sessions['w1-m1'].workspace.blocks = [
+      poison,
+      ...Array.from(
+        { length: MAX_WORKSPACE_BLOCKS },
+        (_, index) => ({ id: `over-${index}`, type: 'xiyou_enter_palace' as const, nextId: null, x: index, y: 0 }),
+      ),
+    ];
+    expect(() => migrateProgress(overLimit)).toThrow(/workspace\.blocks.*最多500项/);
+  });
+
+  it('enforces trace count before instruction parsing and keeps the 500-instruction boundary', () => {
+    const makeTrace = (length: number) => Array.from({ length }, (_, index) => ({
+      instructionId: `instruction:trace-${index}`,
+      sourceBlockId: `trace-${index}`,
+      opcode: 'enter_palace' as const,
+    }));
+    const boundary = validV3();
+    boundary.sessions['w1-m1'].lastTrace = makeTrace(MAX_TRACE_INSTRUCTIONS);
+    boundary.sessions['w1-m1'].lastRun = null;
+    expect(migrateProgress(boundary).sessions['w1-m1'].lastTrace).toHaveLength(MAX_TRACE_INSTRUCTIONS);
+
+    const overLimit = validV3();
+    overLimit.sessions['w1-m1'].lastTrace = makeTrace(MAX_TRACE_INSTRUCTIONS + 1);
+    expect(() => migrateProgress(overLimit)).toThrow(/lastTrace.*最多500项/);
+  });
+
+  it('applies the event boundary before canonical comparison', () => {
+    const boundary = validV3();
+    const canonical = boundary.sessions['w1-m1'].lastRun!;
+    canonical.events = [
+      structuredClone(canonical.events[0]),
+      ...Array.from(
+        { length: MAX_BATTLE_EVENTS - 2 },
+        () => structuredClone(canonical.events[1]),
+      ),
+      structuredClone(canonical.events.at(-1)!),
+    ];
+    expect(() => migrateProgress(boundary)).toThrow(/确定性运行结果不一致/);
+    expect(() => migrateProgress(boundary)).not.toThrow(/events.*最多1002项/);
+
+    const overLimit = validV3();
+    overLimit.sessions['w1-m1'].lastRun!.events = Array.from(
+      { length: MAX_BATTLE_EVENTS + 1 },
+      () => structuredClone(overLimit.sessions['w1-m1'].lastRun!.events[0]),
+    );
+    expect(() => migrateProgress(overLimit)).toThrow(/lastRun\.events.*最多1002项/);
+  });
+
+  it('detects a maximum-sized workspace cycle without changing draft semantics', () => {
+    const value = validV3();
+    value.sessions['w1-m1'].workspace.blocks = Array.from(
+      { length: MAX_WORKSPACE_BLOCKS },
+      (_, index) => ({
+        id: `cycle-${index}`,
+        type: 'xiyou_enter_palace',
+        nextId: `cycle-${(index + 1) % MAX_WORKSPACE_BLOCKS}`,
+        x: index,
+        y: 0,
+      }),
+    );
+    value.sessions['w1-m1'].lastTrace = [];
+    value.sessions['w1-m1'].lastRun = null;
+    expect(() => migrateProgress(value)).toThrow(/workspace.*cycle/);
   });
 
   it('allows a null lastRun and still returns an isolated session tree', () => {

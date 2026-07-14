@@ -19,6 +19,16 @@ import type {
   ProgressV3,
 } from './types';
 
+export const PROGRESS_SCHEMA_LIMITS = {
+  maxRawJsonBytes: 1024 * 1024,
+  maxWorkspaceBlocks: 500,
+  maxTraceInstructions: 500,
+  maxBattleEvents: 1002,
+  maxPersistedTextLength: 256,
+} as const;
+
+const utf8Encoder = new TextEncoder();
+
 export const createInitialProgress = (): ProgressV3 => ({
   version: 3,
   schemaRevision: 1,
@@ -64,6 +74,12 @@ function array(value: unknown, field: string): unknown[] {
   return value;
 }
 
+function boundedArray(value: unknown, field: string, maximum: number): unknown[] {
+  const result = array(value, field);
+  if (result.length > maximum) invalid(`${field}最多${maximum}项`);
+  return result;
+}
+
 function exactKeys(value: Record<string, unknown>, field: string, allowed: readonly string[]): void {
   const unexpected = Object.keys(value).find((key) => !allowed.includes(key));
   if (unexpected) invalid(`${field}包含未知字段 ${unexpected}`);
@@ -73,6 +89,9 @@ function exactKeys(value: Record<string, unknown>, field: string, allowed: reado
 
 function string(value: unknown, field: string): string {
   if (typeof value !== 'string') invalid(`${field}必须是文本`);
+  if (value.length > PROGRESS_SCHEMA_LIMITS.maxPersistedTextLength) {
+    invalid(`${field}最多${PROGRESS_SCHEMA_LIMITS.maxPersistedTextLength}个字符`);
+  }
   return value;
 }
 
@@ -226,7 +245,11 @@ function workspace(value: unknown, field: string): WorkspaceDraftV1 {
   const source = object(value, field);
   exactKeys(source, field, ['version', 'blocks']);
   if (source.version !== 1) invalid(`${field}.version必须是1`);
-  const blocks = array(source.blocks, `${field}.blocks`).map((rawBlock, index) => {
+  const blocks = boundedArray(
+    source.blocks,
+    `${field}.blocks`,
+    PROGRESS_SCHEMA_LIMITS.maxWorkspaceBlocks,
+  ).map((rawBlock, index) => {
     const blockField = `${field}.blocks[${index}]`;
     const block = object(rawBlock, blockField);
     exactKeys(block, blockField, ['id', 'type', 'nextId', 'x', 'y']);
@@ -250,23 +273,27 @@ function workspace(value: unknown, field: string): WorkspaceDraftV1 {
     ids.add(block.id);
   }
   const predecessors = new Set<string>();
+  const incomingEdges = new Map([...ids].map((id) => [id, 0]));
   for (const block of blocks) {
     if (block.nextId === null) continue;
     if (!ids.has(block.nextId)) invalid(`${field}包含未知nextId ${block.nextId}`);
     if (block.nextId === block.id) invalid(`${field}包含自环 ${block.id}`);
     if (predecessors.has(block.nextId)) invalid(`${field}中的 ${block.nextId} 有多个前驱`);
     predecessors.add(block.nextId);
+    incomingEdges.set(block.nextId, 1);
   }
   const nextById = new Map(blocks.map((block) => [block.id, block.nextId]));
-  for (const start of ids) {
-    const path = new Set<string>();
-    let cursor: string | null = start;
-    while (cursor !== null) {
-      if (path.has(cursor)) invalid(`${field}包含cycle ${cursor}`);
-      path.add(cursor);
-      cursor = nextById.get(cursor) ?? null;
-    }
+  const queue = blocks.filter((block) => incomingEdges.get(block.id) === 0).map((block) => block.id);
+  let visited = 0;
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+    visited += 1;
+    const next = nextById.get(current) ?? null;
+    if (next === null) continue;
+    incomingEdges.set(next, (incomingEdges.get(next) ?? 0) - 1);
+    if (incomingEdges.get(next) === 0) queue.push(next);
   }
+  if (visited !== blocks.length) invalid(`${field}包含cycle`);
   return { version: 1, blocks };
 }
 
@@ -281,8 +308,30 @@ function instruction(value: unknown, field: string): BattleInstruction {
   return { instructionId, sourceBlockId, opcode: opcode(source.opcode, `${field}.opcode`) };
 }
 
-function trace(value: unknown, field: string): BattleInstruction[] {
-  return array(value, field).map((item, index) => instruction(item, `${field}[${index}]`));
+interface ParsedTrace {
+  instructions: BattleInstruction[];
+  provenance: ReadonlyMap<string, BattleInstruction>;
+}
+
+function trace(value: unknown, field: string): ParsedTrace {
+  const instructions = boundedArray(
+    value,
+    field,
+    PROGRESS_SCHEMA_LIMITS.maxTraceInstructions,
+  ).map((item, index) => instruction(item, `${field}[${index}]`));
+  const sourceBlockIds = new Set<string>();
+  const provenance = new Map<string, BattleInstruction>();
+  for (const item of instructions) {
+    if (sourceBlockIds.has(item.sourceBlockId)) {
+      invalid(`${field}包含重复sourceBlockId ${item.sourceBlockId}`);
+    }
+    if (provenance.has(item.instructionId)) {
+      invalid(`${field}包含重复instructionId ${item.instructionId}`);
+    }
+    sourceBlockIds.add(item.sourceBlockId);
+    provenance.set(item.instructionId, item);
+  }
+  return { instructions, provenance };
 }
 
 function sameInstruction(
@@ -294,7 +343,11 @@ function sameInstruction(
     && candidate.opcode === item.opcode;
 }
 
-function event(value: unknown, field: string, lastTrace: readonly BattleInstruction[]): BattleEvent {
+function event(
+  value: unknown,
+  field: string,
+  provenance: ReadonlyMap<string, BattleInstruction>,
+): BattleEvent {
   const source = object(value, field);
   exactKeys(source, field, ['type', 'state', 'instructionId', 'sourceBlockId', 'opcode', 'messageCode']);
   if (typeof source.type !== 'string' || !eventTypes.has(source.type as BattleEvent['type'])) {
@@ -315,7 +368,8 @@ function event(value: unknown, field: string, lastTrace: readonly BattleInstruct
     sourceBlockId: source.sourceBlockId,
     opcode: source.opcode,
   }, field);
-  if (!lastTrace.some((item) => sameInstruction(parsedInstruction, item))) {
+  const traceInstruction = provenance.get(parsedInstruction.instructionId);
+  if (traceInstruction === undefined || !sameInstruction(parsedInstruction, traceInstruction)) {
     invalid(`${field}的指令来源不在lastTrace中`);
   }
   return { type, state: parsedState, ...parsedInstruction, messageCode };
@@ -333,7 +387,7 @@ function penalty(value: unknown, field: string): BattleRunResult['penalty'] {
 function diagnostic(
   value: unknown,
   field: string,
-  lastTrace: readonly BattleInstruction[],
+  provenance: ReadonlyMap<string, BattleInstruction>,
   events: readonly BattleEvent[],
 ): BattleDiagnostic {
   const source = object(value, field);
@@ -347,7 +401,8 @@ function diagnostic(
       sourceBlockId: source.sourceBlockId,
       opcode: source.opcode,
     }, field);
-    if (!lastTrace.some((item) => sameInstruction(parsedInstruction, item))) {
+    const traceInstruction = provenance.get(parsedInstruction.instructionId);
+    if (traceInstruction === undefined || !sameInstruction(parsedInstruction, traceInstruction)) {
       invalid(`${field}的指令来源不在lastTrace中`);
     }
     const parsed = {
@@ -434,12 +489,16 @@ function verifyCanonicalRunResult(
   return parsed;
 }
 
-function runResult(value: unknown, field: string, lastTrace: readonly BattleInstruction[]): BattleRunResult | null {
+function runResult(value: unknown, field: string, lastTrace: ParsedTrace): BattleRunResult | null {
   if (value === null) return null;
   const source = object(value, field);
   exactKeys(source, field, ['completed', 'finalState', 'events', 'diagnostic', 'penalty']);
-  const events = array(source.events, `${field}.events`).map((item, index) => (
-    event(item, `${field}.events[${index}]`, lastTrace)
+  const events = boundedArray(
+    source.events,
+    `${field}.events`,
+    PROGRESS_SCHEMA_LIMITS.maxBattleEvents,
+  ).map((item, index) => (
+    event(item, `${field}.events[${index}]`, lastTrace.provenance)
   ));
   if (events.length < 2 || events[0].type !== 'run-started' || events.at(-1)?.type !== 'run-finished') {
     invalid(`${field}.events必须以run-started开始并以run-finished结束`);
@@ -458,12 +517,17 @@ function runResult(value: unknown, field: string, lastTrace: readonly BattleInst
     return verifyCanonicalRunResult(
       { completed: true, finalState: 'weapon-tested', events, diagnostic: null, penalty: parsedPenalty },
       field,
-      lastTrace,
+      lastTrace.instructions,
     );
   }
   if (source.completed !== false) invalid(`${field}.completed必须是布尔值`);
   if (source.diagnostic === null) invalid(`${field}未完成运行必须包含diagnostic`);
-  const parsedDiagnostic = diagnostic(source.diagnostic, `${field}.diagnostic`, lastTrace, events);
+  const parsedDiagnostic = diagnostic(
+    source.diagnostic,
+    `${field}.diagnostic`,
+    lastTrace.provenance,
+    events,
+  );
   if (parsedDiagnostic.state !== finalState) invalid(`${field}.diagnostic.state必须等于finalState`);
   if (parsedDiagnostic.type === 'program-ended-incomplete'
     && events.some((item) => item.type === 'instruction-rejected')) {
@@ -472,7 +536,7 @@ function runResult(value: unknown, field: string, lastTrace: readonly BattleInst
   return verifyCanonicalRunResult(
     { completed: false, finalState, events, diagnostic: parsedDiagnostic, penalty: parsedPenalty },
     field,
-    lastTrace,
+    lastTrace.instructions,
   );
 }
 
@@ -496,7 +560,7 @@ function session(value: unknown, field: string): MissionSession {
   ]);
   return {
     workspace: workspace(source.workspace, `${field}.workspace`),
-    lastTrace,
+    lastTrace: lastTrace.instructions,
     lastRun: runResult(source.lastRun, `${field}.lastRun`, lastTrace),
     totalRuns: nonNegativeInteger(source.totalRuns, `${field}.totalRuns`),
     runtimeFailures: nonNegativeInteger(source.runtimeFailures, `${field}.runtimeFailures`),
@@ -558,6 +622,10 @@ export function migrateProgress(value: unknown): ProgressV3 {
 }
 
 export function parseProgress(raw: string): ProgressV3 {
+  const rawBytes = utf8Encoder.encode(raw).byteLength;
+  if (rawBytes > PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes) {
+    invalid(`原始JSON的UTF-8字节最多${PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes}`);
+  }
   let value: unknown;
   try {
     value = JSON.parse(raw);
