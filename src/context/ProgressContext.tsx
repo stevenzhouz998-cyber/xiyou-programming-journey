@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   completeMission,
   type CompletionInput,
@@ -54,11 +54,13 @@ const ProgressContext = createContext<ProgressContextValue | null>(null);
 export function ProgressProvider({ children }: { children: ReactNode }) {
   const [initialLoad] = useState(() => loadProgressTransaction());
   const [progress, setProgress] = useState<ProgressV3>(initialLoad.progress);
+  const progressRef = useRef<ProgressV3>(initialLoad.progress);
   const [loadPersistence, setLoadPersistence] = useState<'idle' | 'saved' | 'unsaved'>(initialLoad.persistence);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'unsaved'>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const commit = (next: ProgressV3) => {
+    progressRef.current = next;
     setProgress(next);
     const result = saveProgressTransaction(next);
     setSaveStatus(result.status);
@@ -68,7 +70,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   };
 
   const retrySave = () => {
-    const result = retrySaveTransaction(progress);
+    const result = retrySaveTransaction(progressRef.current);
     setSaveStatus(result.status);
     setSaveError(result.status === 'unsaved' ? result.error : null);
     if (result.status === 'saved') setLoadPersistence('saved');
@@ -83,13 +85,14 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     if (!allMissions.some((mission) => mission.id === missionId)) {
       throw new Error('任务编号无效');
     }
-    const current = progress.sessions[missionId]
-      ? structuredClone(progress.sessions[missionId])
+    const currentProgress = progressRef.current;
+    const current = currentProgress.sessions[missionId]
+      ? structuredClone(currentProgress.sessions[missionId])
       : createMissionSession(now);
     const updated = update(current);
     const next = migrateProgress({
-      ...progress,
-      sessions: { ...progress.sessions, [missionId]: updated },
+      ...currentProgress,
+      sessions: { ...currentProgress.sessions, [missionId]: updated },
       savedAt: now,
     });
     return commit(next);
@@ -97,7 +100,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
 
   const acknowledgePrivacy = () => {
     const next: ProgressV3 = {
-      ...progress,
+      ...progressRef.current,
       privacy: { localDataNoticeSeen: true },
       savedAt: new Date().toISOString(),
     };
@@ -105,6 +108,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     setSaveStatus(result.status);
     setSaveError(result.status === 'unsaved' ? result.error : null);
     if (result.status === 'saved') {
+      progressRef.current = next;
       setProgress(next);
       setLoadPersistence('saved');
     }
@@ -114,6 +118,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   const importProgressFile = (raw: string) => {
     const result = importProgressTransaction(raw);
     if (result.status === 'saved') {
+      progressRef.current = result.progress;
       setProgress(result.progress);
       setSaveStatus('saved');
       setSaveError(null);
@@ -125,6 +130,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   const clearProgress = () => {
     const result = clearProgressTransaction();
     if (result.status === 'cleared') {
+      progressRef.current = result.progress;
       setProgress(result.progress);
       setSaveStatus('saved');
       setSaveError(null);
@@ -142,7 +148,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     corruptError: initialLoad.corruptError,
     saveStatus,
     saveError,
-    complete: (missionId, input) => commit(completeMission(progress, missionId, input)),
+    complete: (missionId, input) => commit(completeMission(progressRef.current, missionId, input)),
     updateMissionSession: (missionId, update) => (
       updateMissionSessionAt(missionId, update, new Date().toISOString())
     ),
@@ -156,15 +162,15 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     },
     replaceProgress: commit,
     updateSettings: (settings) => commit({
-      ...progress,
-      settings: { ...progress.settings, ...settings },
+      ...progressRef.current,
+      settings: { ...progressRef.current.settings, ...settings },
       savedAt: new Date().toISOString(),
     }),
     acknowledgePrivacy,
     retrySave,
     importProgressFile,
     clearProgress,
-    createBackup: () => createProgressBackup(progress),
+    createBackup: () => createProgressBackup(progressRef.current),
   }), [initialLoad, loadPersistence, progress, saveError, saveStatus]);
 
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;

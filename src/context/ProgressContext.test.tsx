@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ProgressProvider, useProgress, type ProgressContextValue } from './ProgressContext';
 import { createInitialProgress, serializeProgress } from '../progress/progress';
 import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from '../progress/storage';
-import { createMissionSession, recordCompileFailure } from '../progress/session';
+import {
+  createMissionSession,
+  recordCompileFailure,
+  recordHint,
+} from '../progress/session';
 
 const originalStorage = localStorage;
 const SESSION_NOW = '2026-07-15T06:00:00.000Z';
@@ -271,5 +275,75 @@ describe('ProgressContext persistence status', () => {
 
     expect(screen.getByTestId('state').textContent).toBe(before);
     expect(localStorage.getItem(CURRENT_PROGRESS_KEY)).toBe(storedBefore);
+  });
+
+  it('serializes two distinct hint mutations issued in the same event', () => {
+    installStorage({});
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    let first: ReturnType<ProgressContextValue['recordMissionHint']> | undefined;
+    let second: ReturnType<ProgressContextValue['recordMissionHint']> | undefined;
+
+    act(() => {
+      first = latestContext!.recordMissionHint('w1-m1', 'observe');
+      second = latestContext!.recordMissionHint('w1-m1', 'think');
+    });
+
+    expect(first).toMatchObject({ status: 'saved' });
+    expect(second).toMatchObject({ status: 'saved' });
+    const state = JSON.parse(screen.getByTestId('state').textContent!);
+    expect(state.sessions['w1-m1'].usedHintTiers).toEqual(['observe', 'think']);
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).sessions['w1-m1'])
+      .toEqual(state.sessions['w1-m1']);
+  });
+
+  it('serializes two generic session updaters issued in the same event', () => {
+    installStorage({});
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    let first: ReturnType<ProgressContextValue['updateMissionSession']> | undefined;
+    let second: ReturnType<ProgressContextValue['updateMissionSession']> | undefined;
+
+    act(() => {
+      first = latestContext!.updateMissionSession('w1-m1', (session) => (
+        recordCompileFailure(session, 'program-structure', SESSION_NOW)
+      ));
+      second = latestContext!.updateMissionSession('w1-m1', (session) => (
+        recordHint(session, 'partial', SESSION_NOW)
+      ));
+    });
+
+    expect(first).toMatchObject({ status: 'saved' });
+    expect(second).toMatchObject({ status: 'saved' });
+    const state = JSON.parse(screen.getByTestId('state').textContent!);
+    expect(state.sessions['w1-m1']).toMatchObject({
+      compileFailures: 1,
+      conceptFailures: { programStructure: 1 },
+      usedHintTiers: ['partial'],
+    });
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).sessions['w1-m1'])
+      .toEqual(state.sessions['w1-m1']);
+  });
+
+  it('immediately retries the latest unsaved session before React rerenders', () => {
+    const storage = installStorage({}, true);
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    let failed: ReturnType<ProgressContextValue['recordMissionHint']> | undefined;
+    let retried: ReturnType<ProgressContextValue['retrySave']> | undefined;
+
+    act(() => {
+      failed = latestContext!.recordMissionHint('w1-m1', 'observe');
+      storage.failWrites = false;
+      retried = latestContext!.retrySave();
+    });
+
+    expect(failed).toMatchObject({ status: 'unsaved' });
+    expect(retried).toMatchObject({ status: 'saved' });
+    const state = JSON.parse(screen.getByTestId('state').textContent!);
+    expect(state).toMatchObject({
+      saveStatus: 'saved',
+      saveError: null,
+      sessions: { 'w1-m1': { usedHintTiers: ['observe'] } },
+    });
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).sessions['w1-m1'])
+      .toEqual(state.sessions['w1-m1']);
   });
 });
