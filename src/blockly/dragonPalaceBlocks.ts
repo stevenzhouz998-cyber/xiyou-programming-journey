@@ -11,7 +11,7 @@ export type DragonBlockType = keyof typeof DRAGON_BLOCK_OPCODE
 
 const DRAGON_BLOCK_LABEL: Record<DragonBlockType, string> = {
   xiyou_enter_palace: '进入龙宫',
-  xiyou_request_weapon: '索要兵器',
+  xiyou_request_weapon: '请求兵器',
   xiyou_test_weapon: '试用兵器',
 }
 

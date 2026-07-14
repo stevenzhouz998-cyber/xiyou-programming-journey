@@ -8,6 +8,11 @@ import {
 import { compileDragonPalaceWorkspace } from './compiler'
 
 const blockTypes = Object.keys(DRAGON_BLOCK_OPCODE) as DragonBlockType[]
+const approvedLabels: Record<DragonBlockType, string> = {
+  xiyou_enter_palace: '进入龙宫',
+  xiyou_request_weapon: '请求兵器',
+  xiyou_test_weapon: '试用兵器',
+}
 
 function addBlock(workspace: Blockly.Workspace, type: DragonBlockType, id: string) {
   return workspace.newBlock(type, id)
@@ -39,6 +44,7 @@ describe('compileDragonPalaceWorkspace', () => {
       expect(block.previousConnection).not.toBeNull()
       expect(block.nextConnection).not.toBeNull()
       expect(block.getField('OPCODE')).toBeNull()
+      expect(block.toString()).toBe(approvedLabels[type])
     }
   })
 

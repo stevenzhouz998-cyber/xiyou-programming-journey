@@ -65,6 +65,104 @@ describe('WorkspaceDraftV1', () => {
     expect(saveWorkspaceDraft(workspace)).toEqual(draft)
   })
 
+  it('restores the exact prior workspace when applying a validated draft throws', () => {
+    const enter = workspace.newBlock('xiyou_enter_palace', 'existing-enter')
+    const request = workspace.newBlock('xiyou_request_weapon', 'existing-request')
+    enter.moveBy(11, 17)
+    request.moveBy(11, 67)
+    connect(enter, request)
+    const beforeDraft = saveWorkspaceDraft(workspace)
+    const beforeDraftBytes = JSON.stringify(beforeDraft)
+    const beforeTrace = compileDragonPalaceWorkspace(workspace)
+    const incoming: WorkspaceDraftV1 = {
+      version: 1,
+      blocks: [
+        {
+          id: 'incoming',
+          type: 'xiyou_test_weapon',
+          nextId: null,
+          x: 100,
+          y: 200,
+        },
+      ],
+    }
+    const incomingSnapshot = structuredClone(incoming)
+    const realNewBlock = workspace.newBlock.bind(workspace)
+    let shouldFail = true
+    workspace.newBlock = ((prototypeName: string, id?: string) => {
+      if (shouldFail) {
+        shouldFail = false
+        throw new Error('synthetic apply failure')
+      }
+      return realNewBlock(prototypeName, id)
+    }) as typeof workspace.newBlock
+
+    expect(() => loadWorkspaceDraft(workspace, incoming)).toThrow(/synthetic apply failure/)
+
+    expect(incoming).toEqual(incomingSnapshot)
+    expect(JSON.stringify(saveWorkspaceDraft(workspace))).toBe(beforeDraftBytes)
+    expect(compileDragonPalaceWorkspace(workspace)).toEqual(beforeTrace)
+  })
+
+  it('rejects before clearing when the prior workspace cannot be represented losslessly', () => {
+    const malformed = workspace.newBlock('xiyou_enter_palace', 'malformed-existing')
+    malformed.moveBy(4, 6)
+    malformed.setNextStatement(false)
+    const incoming: WorkspaceDraftV1 = {
+      version: 1,
+      blocks: [
+        {
+          id: 'incoming',
+          type: 'xiyou_test_weapon',
+          nextId: null,
+          x: 100,
+          y: 200,
+        },
+      ],
+    }
+
+    expect(() => loadWorkspaceDraft(workspace, incoming)).toThrow(/snapshot/i)
+
+    expect(workspace.getAllBlocks(false)).toEqual([malformed])
+    expect(malformed.nextConnection).toBeNull()
+    expect(malformed.getRelativeToSurfaceXY()).toEqual(new Blockly.utils.Coordinate(4, 6))
+  })
+
+  it.each([
+    {
+      name: 'a multi-block cycle',
+      draft: {
+        version: 1,
+        blocks: [
+          { id: 'a', type: 'xiyou_enter_palace', nextId: 'b', x: 0, y: 0 },
+          { id: 'b', type: 'xiyou_request_weapon', nextId: 'c', x: 0, y: 50 },
+          { id: 'c', type: 'xiyou_test_weapon', nextId: 'a', x: 0, y: 100 },
+        ],
+      },
+    },
+    {
+      name: 'multiple predecessors',
+      draft: {
+        version: 1,
+        blocks: [
+          { id: 'a', type: 'xiyou_enter_palace', nextId: 'c', x: 0, y: 0 },
+          { id: 'b', type: 'xiyou_request_weapon', nextId: 'c', x: 0, y: 50 },
+          { id: 'c', type: 'xiyou_test_weapon', nextId: null, x: 0, y: 100 },
+        ],
+      },
+    },
+  ])('rejects $name without changing the target or input', ({ draft }) => {
+    const existing = workspace.newBlock('xiyou_test_weapon', 'existing')
+    existing.moveBy(7, 9)
+    const before = saveWorkspaceDraft(workspace)
+    const inputBefore = structuredClone(draft)
+
+    expect(() => loadWorkspaceDraft(workspace, draft as WorkspaceDraftV1)).toThrow()
+
+    expect(draft).toEqual(inputBefore)
+    expect(saveWorkspaceDraft(workspace)).toEqual(before)
+  })
+
   it.each([
     {
       name: 'duplicate ids',
