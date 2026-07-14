@@ -1,9 +1,12 @@
 import { createInitialProgress, parseProgress } from './schema';
 import type { ProgressV3 } from './types';
 
-export const CURRENT_PROGRESS_KEY = 'xiyou-programming-progress-v2';
-export const SNAPSHOT_PROGRESS_KEY = 'xiyou-programming-progress-snapshot-v2';
-export const CORRUPT_PROGRESS_KEY = 'xiyou-programming-progress-corrupt-v2';
+export const CURRENT_PROGRESS_KEY = 'xiyou-programming-progress-v3';
+export const SNAPSHOT_PROGRESS_KEY = 'xiyou-programming-progress-snapshot-v3';
+export const CORRUPT_PROGRESS_KEY = 'xiyou-programming-progress-corrupt-v3';
+export const LEGACY_V2_CURRENT_KEY = 'xiyou-programming-progress-v2';
+export const LEGACY_V2_SNAPSHOT_KEY = 'xiyou-programming-progress-snapshot-v2';
+export const LEGACY_V2_CORRUPT_KEY = 'xiyou-programming-progress-corrupt-v2';
 export const LEGACY_PROGRESS_KEY = 'xiyou-programming-progress-v1';
 export const CURRENT = CURRENT_PROGRESS_KEY;
 export const SNAPSHOT = SNAPSHOT_PROGRESS_KEY;
@@ -48,6 +51,19 @@ function valid(raw: string | null): ProgressV3 | null {
   try { return parseProgress(raw); } catch { return null; }
 }
 
+function validLegacy(raw: string | null, version: 1 | 2): ProgressV3 | null {
+  if (raw === null) return null;
+  try {
+    const source: unknown = JSON.parse(raw);
+    if (typeof source !== 'object' || source === null || (source as { version?: unknown }).version !== version) {
+      return null;
+    }
+    return parseProgress(raw);
+  } catch {
+    return null;
+  }
+}
+
 function isCanonicalIso(value: unknown): value is string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return false;
   const parsed = new Date(value);
@@ -76,21 +92,37 @@ function parseCorruptEnvelope(raw: string): CorruptEnvelope {
   return record as unknown as CorruptEnvelope;
 }
 
-function readPreservedCorruption(storage: Storage): { corruptDownload: string | null; corruptError: string | null } {
+function readCorruptEnvelope(
+  storage: Storage,
+  key: typeof CORRUPT_PROGRESS_KEY | typeof LEGACY_V2_CORRUPT_KEY,
+): { state: 'absent' | 'present' | 'error'; corruptDownload: string | null; corruptError: string | null } {
   let raw: string | null;
-  try { raw = storage.getItem(CORRUPT_PROGRESS_KEY); }
-  catch (error) { return { corruptDownload: null, corruptError: `无法读取损坏存档信息：${errorMessage(error)}` }; }
-  if (raw === null) return { corruptDownload: null, corruptError: null };
+  try { raw = storage.getItem(key); }
+  catch (error) {
+    return {
+      state: 'error',
+      corruptDownload: null,
+      corruptError: `无法读取损坏存档信息：${errorMessage(error)}`,
+    };
+  }
+  if (raw === null) return { state: 'absent', corruptDownload: null, corruptError: null };
   try {
     parseCorruptEnvelope(raw);
-    return { corruptDownload: raw, corruptError: null };
+    return { state: 'present', corruptDownload: raw, corruptError: null };
   } catch (error) {
     const detail = errorMessage(error);
     return {
+      state: 'error',
       corruptDownload: null,
       corruptError: detail.startsWith('损坏存档信息无法读取') ? detail : `损坏存档信息无法读取：${detail}`,
     };
   }
+}
+
+function readPreservedCorruption(storage: Storage): { corruptDownload: string | null; corruptError: string | null } {
+  const current = readCorruptEnvelope(storage, CORRUPT_PROGRESS_KEY);
+  if (current.state !== 'absent') return current;
+  return readCorruptEnvelope(storage, LEGACY_V2_CORRUPT_KEY);
 }
 
 function currentCorruptionProtectionError(storage: Storage, currentRaw: string): string | null {
@@ -149,22 +181,53 @@ export function loadProgressTransaction(storage: Storage = localStorage, clock: 
     return loadResult(createInitialProgress(), 'storage-unavailable', null, [`读取当前存档失败：${errorMessage(error)}`]);
   }
   if (currentRaw === null) {
+    let legacyV2Raw: string | null;
+    try { legacyV2Raw = storage.getItem(LEGACY_V2_CURRENT_KEY); }
+    catch (error) {
+      return loadResult(createInitialProgress(), 'storage-unavailable', null, [`读取 V2 旧版存档失败：${errorMessage(error)}`]);
+    }
+    const legacyV2 = validLegacy(legacyV2Raw, 2);
+    if (legacyV2) {
+      const preserved = readPreservedCorruption(storage);
+      const error = writeAndVerify(storage, CURRENT_PROGRESS_KEY, serialize(legacyV2), '迁移当前存档');
+      return loadResult(
+        legacyV2,
+        'migrated',
+        preserved.corruptDownload,
+        error ? [error] : [],
+        false,
+        preserved.corruptError,
+      );
+    }
+
     let legacyRaw: string | null;
     try { legacyRaw = storage.getItem(LEGACY_PROGRESS_KEY); }
     catch (error) {
       return loadResult(createInitialProgress(), 'storage-unavailable', null, [`读取旧版存档失败：${errorMessage(error)}`]);
     }
-    if (legacyRaw !== null) {
-      try {
-        const migrated = parseProgress(legacyRaw);
-        const error = writeAndVerify(storage, CURRENT_PROGRESS_KEY, serialize(migrated), '迁移当前存档');
-        return loadResult(migrated, 'migrated', null, error ? [error] : []);
-      } catch {
-        // A malformed legacy save is ignored; the original remains available for rollback.
-      }
+    const legacy = validLegacy(legacyRaw, 1);
+    if (legacy) {
+      const preserved = readPreservedCorruption(storage);
+      const error = writeAndVerify(storage, CURRENT_PROGRESS_KEY, serialize(legacy), '迁移当前存档');
+      return loadResult(
+        legacy,
+        'migrated',
+        preserved.corruptDownload,
+        error ? [error] : [],
+        false,
+        preserved.corruptError,
+      );
     }
     // No write is required yet, so there is no pending persistence failure.
-    return loadResult(createInitialProgress(), 'normal', null, [], true);
+    const preserved = readPreservedCorruption(storage);
+    return loadResult(
+      createInitialProgress(),
+      'normal',
+      preserved.corruptDownload,
+      [],
+      true,
+      preserved.corruptError,
+    );
   }
 
   const current = valid(currentRaw);
