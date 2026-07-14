@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 
 export const MAX_RASTER_BYTES = 512 * 1024;
 export const MAX_MISSION_MEDIA_BYTES = Math.floor(1.25 * 1024 * 1024);
+export const REQUIRED_TOOL = 'OpenAI built-in image_gen';
+export const REQUIRED_PROVENANCE = 'generated in-project with built-in image_gen; provenance verified';
+export const REQUIRED_ART_DIRECTION = 'commercial children’s learning game, refined Chinese ink-and-color illustration, Journey to the West Dragon Palace, warm jade/cinnabar/gold palette, readable silhouettes, no text, no logo, no emoji, no UI frame.';
 
 const EXPECTED_COLUMNS = [
   'Asset ID',
@@ -61,15 +64,38 @@ export function parseAssetManifest(markdown) {
   const divider = splitMarkdownRow(lines[headerIndex + 1] ?? '');
   if (divider.length !== EXPECTED_COLUMNS.length || !isDivider(divider)) throw new Error('Asset manifest: exact nine-column divider is missing.');
 
-  const rows = [];
+  const manifestRows = [];
   for (let index = headerIndex + 2; index < lines.length; index += 1) {
     const line = lines[index].trim();
     if (!line.startsWith('|')) break;
     const cells = splitMarkdownRow(line);
     if (cells.length !== EXPECTED_COLUMNS.length) throw new Error(`Asset manifest: row ${index + 1} must contain exactly nine columns.`);
-    rows.push(Object.fromEntries(FIELD_NAMES.map((field, fieldIndex) => [field, cells[fieldIndex]])));
+    manifestRows.push(Object.fromEntries(FIELD_NAMES.map((field, fieldIndex) => [field, cells[fieldIndex]])));
   }
-  return rows;
+
+  const promptRecords = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const headingMatch = /^### (Prompt DP-\d{3} .+)$/.exec(lines[index].trim());
+    if (!headingMatch) continue;
+    const heading = headingMatch[1];
+    let fenceIndex = index + 1;
+    while (fenceIndex < lines.length && lines[fenceIndex].trim() === '') fenceIndex += 1;
+    if (lines[fenceIndex]?.trim() !== '```text') throw new Error(`Asset manifest: ${heading} must be followed immediately by a fenced text prompt record.`);
+    const promptLines = [];
+    let closingIndex = fenceIndex + 1;
+    while (closingIndex < lines.length && lines[closingIndex].trim() !== '```') {
+      promptLines.push(lines[closingIndex]);
+      closingIndex += 1;
+    }
+    if (closingIndex >= lines.length) throw new Error(`Asset manifest: ${heading} fenced text prompt record is not closed.`);
+    promptRecords.push({ heading, anchor: `#${markdownHeadingAnchor(heading)}`, prompt: promptLines.join('\n').trim() });
+    index = closingIndex;
+  }
+  return { manifestRows, promptRecords };
+}
+
+function markdownHeadingAnchor(heading) {
+  return heading.toLowerCase().trim().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-');
 }
 
 function assertSafeAssetPath(path) {
@@ -99,13 +125,57 @@ function parseDimensions(value, assetId) {
   return { width: Number(match[1]), height: Number(match[2]) };
 }
 
-export function verifyAssetManifest({ manifestRows, publicFiles, mode = 'check' }) {
+function verifyPromptRecords(promptRecords, manifestRows) {
+  if (!Array.isArray(promptRecords)) throw new Error('Asset manifest: structured prompt records are required by the pure verifier.');
+  const headings = new Set();
+  const anchors = new Set();
+  const recordDpIds = new Set();
+  const recordsByAnchor = new Map();
+
+  for (const record of promptRecords) {
+    if (!record || typeof record.heading !== 'string') throw new Error('Asset manifest: prompt heading is required.');
+    const headingMatch = /^Prompt (DP-\d{3}) (.+)$/.exec(record.heading);
+    if (!headingMatch) throw new Error(`Asset manifest: invalid prompt heading ${record.heading}.`);
+    const [, dpId] = headingMatch;
+    if (headings.has(record.heading)) throw new Error(`Asset manifest: duplicate prompt heading ${record.heading}.`);
+    headings.add(record.heading);
+    if (anchors.has(record.anchor)) throw new Error(`Asset manifest: duplicate prompt anchor ${record.anchor}.`);
+    anchors.add(record.anchor);
+    if (recordDpIds.has(dpId)) throw new Error(`Asset manifest: duplicate prompt DP number ${dpId}.`);
+    recordDpIds.add(dpId);
+    const expectedAnchor = `#${markdownHeadingAnchor(record.heading)}`;
+    if (record.anchor !== expectedAnchor) throw new Error(`Asset manifest: prompt anchor ${record.anchor} does not match heading ${record.heading}.`);
+    if (typeof record.prompt !== 'string' || record.prompt.trim() === '') throw new Error(`Asset manifest: prompt text for ${record.heading} must be non-empty.`);
+    if (!record.prompt.includes(REQUIRED_ART_DIRECTION)) throw new Error(`Asset manifest: ${record.heading} is missing the exact shared art direction.`);
+    recordsByAnchor.set(record.anchor, { ...record, dpId });
+  }
+
+  const referencedAnchors = new Set();
+  const referencedDpIds = new Set();
+  for (const row of manifestRows) {
+    const linkMatch = /^\[Prompt (DP-\d{3})\]\((#prompt-dp-\d{3}-[a-z0-9]+(?:-[a-z0-9]+)*)\)$/.exec(row.promptOrSourceReference);
+    if (!linkMatch) throw new Error(`Asset manifest: ${row.assetId} must use an exact prompt markdown link such as [Prompt DP-001](#prompt-dp-001-background).`);
+    const [, linkDpId, anchor] = linkMatch;
+    if (referencedAnchors.has(anchor)) throw new Error(`Asset manifest: duplicate prompt reference ${anchor}.`);
+    referencedAnchors.add(anchor);
+    if (referencedDpIds.has(linkDpId)) throw new Error(`Asset manifest: duplicate prompt DP number ${linkDpId} in shipping rows.`);
+    referencedDpIds.add(linkDpId);
+    const record = recordsByAnchor.get(anchor);
+    if (!record) throw new Error(`Asset manifest: prompt anchor ${anchor} is missing for ${row.assetId}.`);
+    if (record.dpId !== linkDpId) throw new Error(`Asset manifest: prompt DP label ${linkDpId} does not match heading ${record.heading}.`);
+  }
+  for (const anchor of recordsByAnchor.keys()) if (!referencedAnchors.has(anchor)) throw new Error(`Asset manifest: unreferenced prompt record ${anchor}.`);
+}
+
+export function verifyAssetManifest({ manifestRows, publicFiles, promptRecords, mode = 'check' }) {
   if (!['check', 'verify'].includes(mode)) throw new Error(`Asset manifest: unknown verification mode ${mode}.`);
   const rowPaths = assertUniquePaths(manifestRows, 'assetId', 'asset id');
   const filePaths = assertUniquePaths(publicFiles, 'path', 'public file');
 
   for (const path of filePaths) if (!rowPaths.has(path)) throw new Error(`Asset manifest: missing manifest row for ${path}.`);
   for (const path of rowPaths) if (!filePaths.has(path)) throw new Error(`Asset manifest: extra manifest row for ${path}.`);
+
+  verifyPromptRecords(promptRecords, manifestRows);
 
   const filesByPath = new Map(publicFiles.map((file) => [file.path, file]));
   let totalBytes = 0;
@@ -114,6 +184,8 @@ export function verifyAssetManifest({ manifestRows, publicFiles, mode = 'check' 
     if (!row.sha256) throw new Error(`Asset manifest: missing SHA-256 for ${row.assetId}.`);
     if (!/^[a-f0-9]{64}$/.test(row.sha256)) throw new Error(`Asset manifest: invalid SHA-256 for ${row.assetId}.`);
     for (const [field, label] of REQUIRED_METADATA) if (!row[field]?.trim()) throw new Error(`Asset manifest: missing ${label} for ${row.assetId}.`);
+    if (row.toolOrSource !== REQUIRED_TOOL) throw new Error(`Asset manifest: ${row.assetId} tool or source must be exactly ${REQUIRED_TOOL}.`);
+    if (row.licenseProvenance !== REQUIRED_PROVENANCE) throw new Error(`Asset manifest: ${row.assetId} license/provenance must be exactly ${REQUIRED_PROVENANCE}.`);
     if (!QA_STATUSES.has(row.qaStatus)) throw new Error(`Asset manifest: invalid QA status ${row.qaStatus} for ${row.assetId}.`);
     if (mode === 'verify' && row.qaStatus !== 'visual-qa-passed') throw new Error(`Asset manifest: ${row.assetId} must be visual-qa-passed for release verification.`);
     if (mode === 'check' && !['provenance-verified', 'visual-qa-passed'].includes(row.qaStatus)) {
@@ -174,7 +246,7 @@ async function main() {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const manifestPath = join(root, 'docs', 'assets', 'asset-manifest.md');
   const assetRoot = join(root, 'public', 'assets', 'dragon-palace');
-  const rows = parseAssetManifest(await readFile(manifestPath, 'utf8'));
+  const { manifestRows, promptRecords } = parseAssetManifest(await readFile(manifestPath, 'utf8'));
   const publicFiles = [];
   for (const relativePath of await listFiles(assetRoot)) {
     const absolutePath = resolve(assetRoot, relativePath);
@@ -189,7 +261,7 @@ async function main() {
     });
   }
   const mode = process.argv.includes('--require-visual-qa') ? 'verify' : 'check';
-  const result = verifyAssetManifest({ manifestRows: rows, publicFiles, mode });
+  const result = verifyAssetManifest({ manifestRows, publicFiles, promptRecords, mode });
   console.log(`Dragon Palace assets: ${result.assetCount} files, ${result.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
 }
 
