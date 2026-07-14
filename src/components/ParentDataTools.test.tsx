@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ParentDataTools } from './ParentDataTools';
 import { createInitialProgress } from '../progress/progress';
+import { PROGRESS_SCHEMA_LIMITS } from '../progress/schema';
 
 function props(overrides = {}) {
   return {
@@ -24,6 +25,25 @@ describe('ParentDataTools', () => {
     render(<ParentDataTools {...props()} />);
     fireEvent.change(screen.getByLabelText('选择进度文件'), { target: { files: [new File(['{bad'], 'bad.json')] } });
     expect(await screen.findByRole('alert')).toHaveTextContent('当前进度未被修改');
+  });
+
+  it('rejects an oversized import before reading the file or calling the import transaction', async () => {
+    const onImport = vi.fn();
+    const text = vi.fn().mockResolvedValue('{}');
+    const file = new File(
+      [new Uint8Array(PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes + 1)],
+      'oversized.json',
+      { type: 'application/json' },
+    );
+    Object.defineProperty(file, 'text', { value: text });
+    render(<ParentDataTools {...props({ onImport })} />);
+
+    fireEvent.change(screen.getByLabelText('选择进度文件'), { target: { files: [file] } });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('文件大小超过');
+    expect(screen.getByRole('alert')).toHaveTextContent('当前进度未被修改');
+    expect(text).not.toHaveBeenCalled();
+    expect(onImport).not.toHaveBeenCalled();
   });
 
   it('shows corrupt download only when source exists', () => {

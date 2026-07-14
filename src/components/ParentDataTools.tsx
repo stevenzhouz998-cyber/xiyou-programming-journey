@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DownloadSimple, UploadSimple } from '@phosphor-icons/react';
 import type { ProgressV3 } from '../progress/progress';
+import { PROGRESS_SCHEMA_LIMITS } from '../progress/schema';
 import type { ClearResult, ImportResult, LoadStatus, ProgressBackup } from '../progress/storage';
 import { focusAfterInert } from '../utils/focus';
 
@@ -70,6 +71,10 @@ export function ParentDataTools(props: ParentDataToolsProps) {
     if (!file) return;
     const sequence = ++importSequenceRef.current;
     setMessage(''); setImportAlert('');
+    if (file.size > PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes) {
+      setImportAlert('导入失败：文件大小超过 1 MiB 上限。当前进度未被修改。');
+      return;
+    }
     try {
       const raw = await readFile(file);
       if (!mountedRef.current || sequence !== importSequenceRef.current) return;

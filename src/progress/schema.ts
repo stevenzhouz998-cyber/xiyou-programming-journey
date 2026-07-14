@@ -19,12 +19,17 @@ import type {
   ProgressV3,
 } from './types';
 
+const INSTRUCTION_ID_PREFIX = 'instruction:';
+const MAX_BLOCK_OR_SOURCE_ID_LENGTH = 256;
+
 export const PROGRESS_SCHEMA_LIMITS = {
   maxRawJsonBytes: 1024 * 1024,
   maxWorkspaceBlocks: 500,
   maxTraceInstructions: 500,
   maxBattleEvents: 1002,
-  maxPersistedTextLength: 256,
+  maxBlockOrSourceIdLength: MAX_BLOCK_OR_SOURCE_ID_LENGTH,
+  maxInstructionIdLength: INSTRUCTION_ID_PREFIX.length + MAX_BLOCK_OR_SOURCE_ID_LENGTH,
+  maxMessageCodeLength: 256,
 } as const;
 
 const utf8Encoder = new TextEncoder();
@@ -89,14 +94,17 @@ function exactKeys(value: Record<string, unknown>, field: string, allowed: reado
 
 function string(value: unknown, field: string): string {
   if (typeof value !== 'string') invalid(`${field}必须是文本`);
-  if (value.length > PROGRESS_SCHEMA_LIMITS.maxPersistedTextLength) {
-    invalid(`${field}最多${PROGRESS_SCHEMA_LIMITS.maxPersistedTextLength}个字符`);
-  }
   return value;
 }
 
-function nonEmptyString(value: unknown, field: string): string {
+function boundedString(value: unknown, field: string, maximum: number): string {
   const result = string(value, field);
+  if (result.length > maximum) invalid(`${field}最多${maximum}个字符`);
+  return result;
+}
+
+function nonEmptyBoundedString(value: unknown, field: string, maximum: number): string {
+  const result = boundedString(value, field, maximum);
   if (result.length === 0) invalid(`${field}不能为空`);
   return result;
 }
@@ -253,11 +261,21 @@ function workspace(value: unknown, field: string): WorkspaceDraftV1 {
     const blockField = `${field}.blocks[${index}]`;
     const block = object(rawBlock, blockField);
     exactKeys(block, blockField, ['id', 'type', 'nextId', 'x', 'y']);
-    const id = nonEmptyString(block.id, `${blockField}.id`);
+    const id = nonEmptyBoundedString(
+      block.id,
+      `${blockField}.id`,
+      PROGRESS_SCHEMA_LIMITS.maxBlockOrSourceIdLength,
+    );
     if (typeof block.type !== 'string' || !blockTypes.has(block.type as DragonBlockType)) {
       invalid(`${blockField}.type不是已知workspace积木`);
     }
-    const nextId = block.nextId === null ? null : nonEmptyString(block.nextId, `${blockField}.nextId`);
+    const nextId = block.nextId === null
+      ? null
+      : nonEmptyBoundedString(
+        block.nextId,
+        `${blockField}.nextId`,
+        PROGRESS_SCHEMA_LIMITS.maxBlockOrSourceIdLength,
+      );
     return {
       id,
       type: block.type as DragonBlockType,
@@ -300,9 +318,17 @@ function workspace(value: unknown, field: string): WorkspaceDraftV1 {
 function instruction(value: unknown, field: string): BattleInstruction {
   const source = object(value, field);
   exactKeys(source, field, ['instructionId', 'sourceBlockId', 'opcode']);
-  const sourceBlockId = nonEmptyString(source.sourceBlockId, `${field}.sourceBlockId`);
-  const instructionId = nonEmptyString(source.instructionId, `${field}.instructionId`);
-  if (instructionId !== `instruction:${sourceBlockId}`) {
+  const sourceBlockId = nonEmptyBoundedString(
+    source.sourceBlockId,
+    `${field}.sourceBlockId`,
+    PROGRESS_SCHEMA_LIMITS.maxBlockOrSourceIdLength,
+  );
+  const instructionId = nonEmptyBoundedString(
+    source.instructionId,
+    `${field}.instructionId`,
+    PROGRESS_SCHEMA_LIMITS.maxInstructionIdLength,
+  );
+  if (instructionId !== `${INSTRUCTION_ID_PREFIX}${sourceBlockId}`) {
     invalid(`${field}.instructionId必须由sourceBlockId派生`);
   }
   return { instructionId, sourceBlockId, opcode: opcode(source.opcode, `${field}.opcode`) };
@@ -355,7 +381,11 @@ function event(
   }
   const type = source.type as BattleEvent['type'];
   const parsedState = state(source.state, `${field}.state`);
-  const messageCode = nonEmptyString(source.messageCode, `${field}.messageCode`);
+  const messageCode = nonEmptyBoundedString(
+    source.messageCode,
+    `${field}.messageCode`,
+    PROGRESS_SCHEMA_LIMITS.maxMessageCodeLength,
+  );
   if (type === 'run-started' || type === 'run-finished') {
     if (source.instructionId !== null || source.sourceBlockId !== null || source.opcode !== null) {
       invalid(`${field}生命周期事件不得携带指令来源`);
@@ -410,7 +440,11 @@ function diagnostic(
       concept: 'sequence-precondition' as const,
       state: state(source.state, `${field}.state`),
       ...parsedInstruction,
-      messageCode: nonEmptyString(source.messageCode, `${field}.messageCode`),
+      messageCode: nonEmptyBoundedString(
+        source.messageCode,
+        `${field}.messageCode`,
+        PROGRESS_SCHEMA_LIMITS.maxMessageCodeLength,
+      ),
     };
     const matchingEvent = events.some((item) => item.type === 'instruction-rejected'
       && item.state === parsed.state
@@ -430,7 +464,11 @@ function diagnostic(
     }
     const sourceBlockId = source.sourceBlockId === null
       ? null
-      : nonEmptyString(source.sourceBlockId, `${field}.sourceBlockId`);
+      : nonEmptyBoundedString(
+        source.sourceBlockId,
+        `${field}.sourceBlockId`,
+        PROGRESS_SCHEMA_LIMITS.maxBlockOrSourceIdLength,
+      );
     const lastValidSource = [...events].reverse().find((item) => item.type === 'state-changed')?.sourceBlockId ?? null;
     if (sourceBlockId !== lastValidSource) invalid(`${field}.sourceBlockId必须是最后有效指令来源或null`);
     return {
@@ -440,7 +478,11 @@ function diagnostic(
       instructionId: null,
       sourceBlockId,
       opcode: null,
-      messageCode: nonEmptyString(source.messageCode, `${field}.messageCode`),
+      messageCode: nonEmptyBoundedString(
+        source.messageCode,
+        `${field}.messageCode`,
+        PROGRESS_SCHEMA_LIMITS.maxMessageCodeLength,
+      ),
     };
   }
   invalid(`${field}.type无效`);
@@ -622,6 +664,9 @@ export function migrateProgress(value: unknown): ProgressV3 {
 }
 
 export function parseProgress(raw: string): ProgressV3 {
+  if (raw.length > PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes) {
+    invalid(`原始JSON的UTF-8字节最多${PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes}`);
+  }
   const rawBytes = utf8Encoder.encode(raw).byteLength;
   if (rawBytes > PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes) {
     invalid(`原始JSON的UTF-8字节最多${PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes}`);

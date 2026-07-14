@@ -10,7 +10,8 @@ const {
   maxWorkspaceBlocks: MAX_WORKSPACE_BLOCKS,
   maxTraceInstructions: MAX_TRACE_INSTRUCTIONS,
   maxBattleEvents: MAX_BATTLE_EVENTS,
-  maxPersistedTextLength: MAX_PERSISTED_TEXT_LENGTH,
+  maxBlockOrSourceIdLength: MAX_BLOCK_OR_SOURCE_ID_LENGTH,
+  maxInstructionIdLength: MAX_INSTRUCTION_ID_LENGTH,
 } = PROGRESS_SCHEMA_LIMITS;
 
 const validMission = {
@@ -496,16 +497,59 @@ describe('progress schema', () => {
     expect(() => parseProgress(multibyteOverLimit)).toThrow(/UTF-8字节.*1048576/);
   });
 
-  it('enforces the persisted string boundary through both object and JSON entrypoints', () => {
-    const boundary = validV3();
-    boundary.learnerName = '孩'.repeat(MAX_PERSISTED_TEXT_LENGTH);
-    expect(migrateProgress(boundary).learnerName).toHaveLength(MAX_PERSISTED_TEXT_LENGTH);
-    expect(parseProgress(JSON.stringify(boundary)).learnerName).toHaveLength(MAX_PERSISTED_TEXT_LENGTH);
+  it('migrates long legacy learner names without loss and round-trips them as V3', () => {
+    const learnerName = '旧名字'.repeat(100);
+    for (const legacy of [
+      { ...validV1, learnerName },
+      { ...validV2, learnerName },
+    ]) {
+      const migrated = migrateProgress(legacy);
+      expect(migrated.learnerName).toBe(learnerName);
+      expect(parseProgress(JSON.stringify(migrated))).toEqual(migrated);
+    }
+  });
 
-    const overLimit = validV3();
-    overLimit.learnerName = '孩'.repeat(MAX_PERSISTED_TEXT_LENGTH + 1);
-    expect(() => migrateProgress(overLimit)).toThrow(/learnerName.*256个字符/);
-    expect(() => parseProgress(JSON.stringify(overLimit))).toThrow(/learnerName.*256个字符/);
+  it('round-trips a maximum-length block id through derived trace provenance and engine result', () => {
+    const blockId = 'b'.repeat(MAX_BLOCK_OR_SOURCE_ID_LENGTH);
+    const value = validV3();
+    value.sessions['w1-m1'].workspace.blocks = [
+      { id: blockId, type: 'xiyou_enter_palace', nextId: null, x: 0, y: 0 },
+    ];
+    value.sessions['w1-m1'].lastTrace = [{
+      instructionId: `instruction:${blockId}`,
+      sourceBlockId: blockId,
+      opcode: 'enter_palace',
+    }];
+    value.sessions['w1-m1'].lastRun = runDragonPalaceBattle(value.sessions['w1-m1'].lastTrace);
+
+    const parsed = parseProgress(JSON.stringify(value));
+    expect(parsed).toEqual(value);
+    expect(parsed.sessions['w1-m1'].lastTrace[0].instructionId).toHaveLength(
+      MAX_INSTRUCTION_ID_LENGTH,
+    );
+  });
+
+  it('rejects block, source, and derived-instruction ids above their field limits', () => {
+    const blockOverLimit = validV3();
+    blockOverLimit.sessions['w1-m1'].workspace.blocks[0].id = 'b'.repeat(MAX_BLOCK_OR_SOURCE_ID_LENGTH + 1);
+    expect(() => migrateProgress(blockOverLimit)).toThrow(/workspace.*id.*256个字符/);
+
+    const sourceOverLimit = validV3();
+    const sourceId = 's'.repeat(MAX_BLOCK_OR_SOURCE_ID_LENGTH + 1);
+    sourceOverLimit.sessions['w1-m1'].lastTrace = [{
+      instructionId: `instruction:${sourceId}`,
+      sourceBlockId: sourceId,
+      opcode: 'enter_palace',
+    }];
+    sourceOverLimit.sessions['w1-m1'].lastRun = null;
+    expect(() => migrateProgress(sourceOverLimit)).toThrow(/sourceBlockId.*256个字符/);
+
+    const instructionOverLimit = validV3();
+    instructionOverLimit.sessions['w1-m1'].lastTrace[0].instructionId = 'i'.repeat(
+      MAX_INSTRUCTION_ID_LENGTH + 1,
+    );
+    instructionOverLimit.sessions['w1-m1'].lastRun = null;
+    expect(() => migrateProgress(instructionOverLimit)).toThrow(/instructionId.*268个字符/);
   });
 
   it('enforces workspace block count before deep block validation and keeps the 500-block boundary', () => {
