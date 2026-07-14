@@ -45,6 +45,10 @@ const LABEL_BY_OPCODE = Object.fromEntries(
   ACTIONS.map(({ type, label }) => [DRAGON_BLOCK_OPCODE[type], label]),
 ) as Record<(typeof DRAGON_BLOCK_OPCODE)[DragonBlockType], string>
 
+const LABEL_BY_TYPE = Object.fromEntries(
+  ACTIONS.map(({ type, label }) => [type, label]),
+) as Record<DragonBlockType, string>
+
 const LEGACY_ACTION_LABELS = {
   '进入龙宫': 'xiyou_enter_palace',
   '请求兵器': 'xiyou_request_weapon',
@@ -113,12 +117,131 @@ function registerLegacyActionBlock(): void {
 }
 
 function withoutBlocklyEvents<T>(operation: () => T): T {
-  Blockly.Events.disable()
+  const wasEnabled = Blockly.Events.isEnabled()
+  if (wasEnabled) Blockly.Events.disable()
   try {
     return operation()
   } finally {
-    Blockly.Events.enable()
+    if (wasEnabled) Blockly.Events.enable()
   }
+}
+
+const MAX_LEGACY_BYTES = 128 * 1024
+const MAX_LEGACY_NODES = 256
+const MAX_LEGACY_ID_LENGTH = 128
+
+type LegacyRawNode = {
+  id: string
+  label: keyof typeof LEGACY_ACTION_LABELS
+  nextId: string | null
+  isTop: boolean
+  x: number | null
+  y: number | null
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+function assertExactKeys(
+  value: Record<string, unknown>,
+  expected: readonly string[],
+  label: string,
+): void {
+  const actual = Object.keys(value).sort()
+  const canonical = [...expected].sort()
+  if (actual.length !== canonical.length || actual.some((key, index) => key !== canonical[index])) {
+    throw new Error(`${label} has unknown or missing fields`)
+  }
+}
+
+function isSafeLegacyCoordinate(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isFinite(value)
+    && Math.abs(value) <= Number.MAX_SAFE_INTEGER
+}
+
+function validateLegacyRaw(raw: string): { parsed: Record<string, unknown>; nodes: LegacyRawNode[] } {
+  if (raw.length > MAX_LEGACY_BYTES) {
+    throw new Error('Legacy workspace exceeds the byte limit')
+  }
+  if (new TextEncoder().encode(raw).byteLength > MAX_LEGACY_BYTES) {
+    throw new Error('Legacy workspace exceeds the byte limit')
+  }
+  const parsed: unknown = JSON.parse(raw)
+  if (!isPlainRecord(parsed)) throw new Error('Legacy workspace root is malformed')
+  assertExactKeys(parsed, ['blocks'], 'Legacy workspace root')
+
+  const container = parsed.blocks
+  if (!isPlainRecord(container)) throw new Error('Legacy blocks container is malformed')
+  assertExactKeys(container, ['languageVersion', 'blocks'], 'Legacy blocks container')
+  if (container.languageVersion !== 0 || !Array.isArray(container.blocks)) {
+    throw new Error('Legacy blocks container has an unsupported version')
+  }
+
+  const ids = new Set<string>()
+  const nodes: LegacyRawNode[] = []
+  const visit = (value: unknown, isTop: boolean, depth: number): LegacyRawNode => {
+    if (depth > MAX_LEGACY_NODES || nodes.length >= MAX_LEGACY_NODES) {
+      throw new Error('Legacy workspace exceeds the node limit')
+    }
+    if (!isPlainRecord(value)) throw new Error('Legacy block is malformed')
+    const hasNext = Object.prototype.hasOwnProperty.call(value, 'next')
+    assertExactKeys(
+      value,
+      isTop
+        ? ['type', 'id', 'x', 'y', 'fields', ...(hasNext ? ['next'] : [])]
+        : ['type', 'id', 'fields', ...(hasNext ? ['next'] : [])],
+      'Legacy block',
+    )
+    if (value.type !== 'xiyou_action') throw new Error('Unknown legacy block type')
+    if (
+      typeof value.id !== 'string'
+      || value.id.length === 0
+      || value.id.length > MAX_LEGACY_ID_LENGTH
+      || ids.has(value.id)
+    ) {
+      throw new Error('Legacy block id is missing, duplicated, or too long')
+    }
+    ids.add(value.id)
+    if (!isPlainRecord(value.fields)) throw new Error('Legacy block fields are malformed')
+    assertExactKeys(value.fields, ['ACTION'], 'Legacy block fields')
+    const label = value.fields.ACTION
+    if (
+      typeof label !== 'string'
+      || !Object.prototype.hasOwnProperty.call(LEGACY_ACTION_LABELS, label)
+    ) {
+      throw new Error('Unknown legacy action label')
+    }
+    if (isTop && (!isSafeLegacyCoordinate(value.x) || !isSafeLegacyCoordinate(value.y))) {
+      throw new Error('Legacy top block position is unsafe')
+    }
+
+    const node: LegacyRawNode = {
+      id: value.id,
+      label: label as keyof typeof LEGACY_ACTION_LABELS,
+      nextId: null,
+      isTop,
+      x: isTop ? value.x as number : null,
+      y: isTop ? value.y as number : null,
+    }
+    nodes.push(node)
+    if (hasNext) {
+      if (!isPlainRecord(value.next)) throw new Error('Legacy next connection is malformed')
+      assertExactKeys(value.next, ['block'], 'Legacy next connection')
+      const next = visit(value.next.block, false, depth + 1)
+      node.nextId = next.id
+    }
+    return node
+  }
+
+  if (container.blocks.length > MAX_LEGACY_NODES) {
+    throw new Error('Legacy workspace exceeds the node limit')
+  }
+  for (const top of container.blocks) visit(top, true, 1)
+  return { parsed, nodes }
 }
 
 function assertLegacyConnection(block: Blockly.Block): void {
@@ -156,49 +279,46 @@ function assertLegacyConnection(block: Blockly.Block): void {
 }
 
 function convertLegacyWorkspace(raw: string): WorkspaceDraftV1 {
-  const parsed: unknown = JSON.parse(raw)
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error('Legacy workspace payload is malformed')
-  }
+  const validated = validateLegacyRaw(raw)
 
   registerLegacyActionBlock()
   const legacyWorkspace = new Blockly.Workspace()
   const validationWorkspace = new Blockly.Workspace()
   try {
     withoutBlocklyEvents(() => {
-      Blockly.serialization.workspaces.load(parsed, legacyWorkspace)
+      Blockly.serialization.workspaces.load(validated.parsed, legacyWorkspace)
     })
 
-    const ids = new Set<string>()
-    const predecessorIds = new Set<string>()
-    const blocks = legacyWorkspace.getAllBlocks(false).map((block) => {
-      if (block.type !== 'xiyou_action') throw new Error('Unknown legacy block type')
-      if (ids.has(block.id)) throw new Error('Duplicate legacy block id')
-      ids.add(block.id)
-      assertLegacyConnection(block)
+    const loadedBlocks = legacyWorkspace.getAllBlocks(false)
+    if (loadedBlocks.length !== validated.nodes.length) {
+      throw new Error('Legacy loader changed the block count')
+    }
+    const rawTopIds = validated.nodes.filter((node) => node.isTop).map((node) => node.id).sort()
+    const loadedTopIds = legacyWorkspace.getTopBlocks(false).map((block) => block.id).sort()
+    if (JSON.stringify(rawTopIds) !== JSON.stringify(loadedTopIds)) {
+      throw new Error('Legacy loader changed the top-level chains')
+    }
 
+    const blocks = validated.nodes.map((saved) => {
+      const block = legacyWorkspace.getBlockById(saved.id)
+      if (block === null) throw new Error('Legacy loader changed a block id')
+      if (block.type !== 'xiyou_action') throw new Error('Unknown legacy block type')
+      assertLegacyConnection(block)
       const label = block.getFieldValue('ACTION')
-      if (typeof label !== 'string' || !(label in LEGACY_ACTION_LABELS)) {
-        throw new Error('Unknown legacy action label')
+      if (label !== saved.label || (block.getNextBlock()?.id ?? null) !== saved.nextId) {
+        throw new Error('Legacy loader changed block content or connections')
       }
       const position = block.getRelativeToSurfaceXY()
-      if (
-        !Number.isFinite(position.x)
-        || !Number.isFinite(position.y)
-        || Math.abs(position.x) > Number.MAX_SAFE_INTEGER
-        || Math.abs(position.y) > Number.MAX_SAFE_INTEGER
-      ) {
+      if (!isSafeLegacyCoordinate(position.x) || !isSafeLegacyCoordinate(position.y)) {
         throw new Error('Unsafe legacy block position')
       }
-      const nextId = block.getNextBlock()?.id ?? null
-      if (nextId !== null) {
-        if (predecessorIds.has(nextId)) throw new Error('Legacy block has multiple predecessors')
-        predecessorIds.add(nextId)
+      if (saved.isTop && (position.x !== saved.x || position.y !== saved.y)) {
+        throw new Error('Legacy loader changed a top-level position')
       }
       return {
-        id: block.id,
-        type: LEGACY_ACTION_LABELS[label as keyof typeof LEGACY_ACTION_LABELS],
-        nextId,
+        id: saved.id,
+        type: LEGACY_ACTION_LABELS[saved.label],
+        nextId: saved.nextId,
         x: position.x,
         y: position.y,
       }
@@ -243,6 +363,37 @@ function compileIssue(result: CompileResult): string | null {
   }
 }
 
+type DisplayBlock = { id: string; label: string }
+
+function displayBlocksFromWorkspace(workspace: Blockly.Workspace): DisplayBlock[] {
+  const compare = (left: Blockly.Block, right: Blockly.Block) => {
+    const leftPosition = left.getRelativeToSurfaceXY()
+    const rightPosition = right.getRelativeToSurfaceXY()
+    return leftPosition.y - rightPosition.y
+      || leftPosition.x - rightPosition.x
+      || left.id.localeCompare(right.id)
+  }
+  const ordered: Blockly.Block[] = []
+  const visited = new Set<string>()
+  for (const top of workspace.getTopBlocks(false).sort(compare)) {
+    let block: Blockly.Block | null = top
+    while (block !== null && !visited.has(block.id)) {
+      visited.add(block.id)
+      ordered.push(block)
+      block = block.getNextBlock()
+    }
+  }
+  for (const block of workspace.getAllBlocks(false).sort(compare)) {
+    if (!visited.has(block.id)) ordered.push(block)
+  }
+  return ordered.map((block) => ({
+    id: block.id,
+    label: Object.prototype.hasOwnProperty.call(LABEL_BY_TYPE, block.type)
+      ? LABEL_BY_TYPE[block.type as DragonBlockType]
+      : '无法识别的积木',
+  }))
+}
+
 export function BlocklyWorkspace({
   missionId,
   draft,
@@ -266,34 +417,53 @@ export function BlocklyWorkspace({
     trace: [],
     diagnostics: [{ code: 'empty-workspace', sourceBlockId: null, concept: 'program-structure' }],
   }))
+  const [displayBlocks, setDisplayBlocks] = useState<DisplayBlock[]>([])
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'unsaved'>('idle')
   const [migrationError, setMigrationError] = useState(false)
+  const [legacyReadError, setLegacyReadError] = useState(false)
+  const [legacyCleanupWarning, setLegacyCleanupWarning] = useState(false)
   const [workspaceError, setWorkspaceError] = useState<string | null>(null)
 
   onDraftChangeRef.current = onDraftChange
   onFocusHandledRef.current = onFocusHandled
 
-  const refreshWorkspace = (persist: boolean) => {
+  const removePendingLegacy = () => {
+    const key = pendingLegacyKeyRef.current
+    if (key === null) return
+    try {
+      localStorage.removeItem(key)
+      pendingLegacyKeyRef.current = null
+      setLegacyCleanupWarning(false)
+    } catch {
+      setLegacyCleanupWarning(true)
+    }
+  }
+
+  const refreshWorkspace = (persist: boolean, force = false) => {
     const workspace = workspaceRef.current
     if (workspace === null) return
     const compiled = compileDragonPalaceWorkspace(workspace)
     setCompileResult(compiled)
+    setDisplayBlocks(displayBlocksFromWorkspace(workspace))
     if (!persist) return
 
+    let nextDraft: WorkspaceDraftV1
     try {
-      const nextDraft = saveWorkspaceDraft(workspace)
-      const nextBytes = JSON.stringify(nextDraft)
-      if (lastDraftBytesRef.current === nextBytes) return
-      lastDraftBytesRef.current = nextBytes
-      const result = onDraftChangeRef.current(nextDraft)
-      setSaveStatus(result.status)
-      if (result.status === 'saved' && pendingLegacyKeyRef.current !== null) {
-        localStorage.removeItem(pendingLegacyKeyRef.current)
-        pendingLegacyKeyRef.current = null
-      }
-      setWorkspaceError(null)
+      nextDraft = saveWorkspaceDraft(workspace)
     } catch {
       setWorkspaceError('当前积木结构无法安全保存，原草稿保持不变。')
+      return
+    }
+    const nextBytes = JSON.stringify(nextDraft)
+    if (!force && lastDraftBytesRef.current === nextBytes) return
+    lastDraftBytesRef.current = nextBytes
+    try {
+      const result = onDraftChangeRef.current(nextDraft)
+      setSaveStatus(result.status)
+      if (result.status === 'saved') removePendingLegacy()
+      setWorkspaceError(null)
+    } catch {
+      setSaveStatus('unsaved')
     }
   }
 
@@ -301,43 +471,43 @@ export function BlocklyWorkspace({
     const host = hostRef.current
     if (host === null) return undefined
 
+    setMigrationError(false)
+    setLegacyReadError(false)
+    setLegacyCleanupWarning(false)
+    setWorkspaceError(null)
+    setSaveStatus('idle')
+    pendingLegacyKeyRef.current = null
+
+    const oldKey = legacyKey(missionId)
+    let oldBytes: string | null = null
+    if (draft.blocks.length === 0) {
+      try {
+        oldBytes = localStorage.getItem(oldKey)
+      } catch {
+        setLegacyReadError(true)
+      }
+    }
+
     registerDragonPalaceBlocks()
     const workspace = adapter.create(host)
     workspaceRef.current = workspace
-    setMigrationError(false)
-    setWorkspaceError(null)
-    setSaveStatus('idle')
-
     let initialDraft = draft
-    const oldKey = legacyKey(missionId)
-    if (draft.blocks.length === 0) {
-      const oldBytes = localStorage.getItem(oldKey)
-      if (oldBytes !== null) {
-        try {
-          initialDraft = convertLegacyWorkspace(oldBytes)
-          pendingLegacyKeyRef.current = oldKey
-        } catch {
-          setMigrationError(true)
-        }
+    if (oldBytes !== null) {
+      try {
+        initialDraft = convertLegacyWorkspace(oldBytes)
+        pendingLegacyKeyRef.current = oldKey
+      } catch {
+        setMigrationError(true)
       }
     }
 
     withoutBlocklyEvents(() => loadWorkspaceDraft(workspace, initialDraft))
     lastDraftBytesRef.current = JSON.stringify(initialDraft)
     lastPropDraftBytesRef.current = JSON.stringify(draft)
-    setCompileResult(compileDragonPalaceWorkspace(workspace))
+    refreshWorkspace(false)
 
     if (pendingLegacyKeyRef.current !== null) {
-      try {
-        const result = onDraftChangeRef.current(initialDraft)
-        setSaveStatus(result.status)
-        if (result.status === 'saved') {
-          localStorage.removeItem(pendingLegacyKeyRef.current)
-          pendingLegacyKeyRef.current = null
-        }
-      } catch {
-        setSaveStatus('unsaved')
-      }
+      refreshWorkspace(true, true)
     }
 
     const listener = (event: Blockly.Events.Abstract) => {
@@ -367,7 +537,7 @@ export function BlocklyWorkspace({
     try {
       withoutBlocklyEvents(() => loadWorkspaceDraft(workspace, draft))
       lastDraftBytesRef.current = incomingBytes
-      setCompileResult(compileDragonPalaceWorkspace(workspace))
+      refreshWorkspace(false)
       setWorkspaceError(null)
     } catch {
       setWorkspaceError('传入的积木草稿无法安全恢复，当前工作区保持不变。')
@@ -487,15 +657,56 @@ export function BlocklyWorkspace({
             })}
           </ol>
         ) : (
-          <p role="status">{compileIssue(compileResult)}</p>
+          <>
+            <p role="status">{compileIssue(compileResult)}</p>
+            {displayBlocks.length > 0 ? (
+              <ul className="block-program-list" aria-label="工作区积木（尚未形成唯一顺序）">
+                {displayBlocks.map((block) => (
+                  <li
+                    key={block.id}
+                    tabIndex={-1}
+                    ref={(node) => {
+                      if (node === null) itemRefs.current.delete(block.id)
+                      else itemRefs.current.set(block.id, node)
+                    }}
+                  >
+                    <span>{block.label}</span>
+                    <span className="block-program-actions">
+                      <button
+                        type="button"
+                        aria-label={`删除：${block.label}`}
+                        onClick={() => mutate((workspace) => {
+                          deleteActionBlock(workspace, block.id)
+                        })}
+                      >
+                        删除
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </>
         )}
       </div>
 
       {saveStatus === 'unsaved' ? (
-        <p className="unsaved-session" role="status">尚未保存，请稍后重试。</p>
+        <div className="unsaved-session" role="status">
+          <p>尚未保存，请稍后重试。</p>
+          <button type="button" onClick={() => refreshWorkspace(true, true)}>重试保存</button>
+        </div>
       ) : null}
       {migrationError ? (
         <p role="alert">旧版积木草稿无法安全迁移，原始草稿已保留。</p>
+      ) : null}
+      {legacyReadError ? (
+        <p role="alert">无法读取旧版积木草稿，已继续加载当前草稿。</p>
+      ) : null}
+      {legacyCleanupWarning ? (
+        <div role="alert">
+          <p>新草稿已保存但旧备份未清理。</p>
+          <button type="button" onClick={() => refreshWorkspace(true, true)}>重试清理旧备份</button>
+        </div>
       ) : null}
       {workspaceError ? <p role="alert">{workspaceError}</p> : null}
 

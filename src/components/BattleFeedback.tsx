@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { BattleDiagnostic } from '../battle/types'
 import type { CompileDiagnostic } from '../blockly/compiler'
 
@@ -5,7 +6,8 @@ type FeedbackDiagnostic = CompileDiagnostic | BattleDiagnostic
 
 interface Props {
   diagnostic: FeedbackDiagnostic | null
-  onFocusBlock: (blockId: string | null) => void
+  onFocusBlock: (blockId: string) => void
+  onFocusWorkspace: () => void
 }
 
 const COMPILE_COPY: Record<CompileDiagnostic['code'], string> = {
@@ -40,21 +42,27 @@ function feedbackCopy(diagnostic: FeedbackDiagnostic): string {
     ?? '这条指令和当前场景顺序对不上，请观察场景状态。'
 }
 
-export function BattleFeedback({ diagnostic, onFocusBlock }: Props) {
+export function BattleFeedback({ diagnostic, onFocusBlock, onFocusWorkspace }: Props) {
+  const alertRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (diagnostic !== null) alertRef.current?.focus()
+  }, [diagnostic])
+
   if (diagnostic === null) return null
   const sourceBlockId = diagnostic.sourceBlockId
   const returnsToWorkspace = !isCompileDiagnostic(diagnostic)
     && diagnostic.type === 'program-ended-incomplete'
 
   return (
-    <section className="battle-feedback" role="alert" tabIndex={-1}>
+    <section ref={alertRef} className="battle-feedback" role="alert" tabIndex={-1}>
       <p>{feedbackCopy(diagnostic)}</p>
       {sourceBlockId !== null ? (
         <button type="button" onClick={() => onFocusBlock(sourceBlockId)}>
           回到问题积木
         </button>
       ) : returnsToWorkspace ? (
-        <button type="button" onClick={() => onFocusBlock(null)}>
+        <button type="button" onClick={onFocusWorkspace}>
           回到编程工作台
         </button>
       ) : null}

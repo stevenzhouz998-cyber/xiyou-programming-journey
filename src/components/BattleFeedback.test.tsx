@@ -17,7 +17,7 @@ describe('BattleFeedback', () => {
       concept: 'program-structure',
     }
 
-    render(<BattleFeedback diagnostic={diagnostic} onFocusBlock={() => undefined} />)
+    render(<BattleFeedback diagnostic={diagnostic} onFocusBlock={() => undefined} onFocusWorkspace={() => undefined} />)
 
     expect(screen.getByRole('alert')).toHaveTextContent(copy)
   })
@@ -34,7 +34,7 @@ describe('BattleFeedback', () => {
       messageCode: 'dragon-palace.sequence-precondition.outside-palace.request_weapon',
     }
 
-    render(<BattleFeedback diagnostic={diagnostic} onFocusBlock={onFocusBlock} />)
+    render(<BattleFeedback diagnostic={diagnostic} onFocusBlock={onFocusBlock} onFocusWorkspace={() => undefined} />)
     fireEvent.click(screen.getByRole('button', { name: '回到问题积木' }))
 
     expect(screen.getByRole('alert')).toHaveTextContent('龙王还听不到请求')
@@ -54,7 +54,7 @@ describe('BattleFeedback', () => {
       messageCode: 'dragon-palace.program-ended-incomplete.entered-palace',
     }
 
-    render(<BattleFeedback diagnostic={diagnostic} onFocusBlock={onFocusBlock} />)
+    render(<BattleFeedback diagnostic={diagnostic} onFocusBlock={onFocusBlock} onFocusWorkspace={() => undefined} />)
     fireEvent.click(screen.getByRole('button', { name: '回到问题积木' }))
 
     expect(screen.getByRole('alert')).toHaveTextContent('在最后一块积木之后还缺一步')
@@ -63,6 +63,7 @@ describe('BattleFeedback', () => {
 
   it('provides an explicit workspace path without fabricating a source id', () => {
     const onFocusBlock = vi.fn()
+    const onFocusWorkspace = vi.fn()
     const diagnostic: BattleDiagnostic = {
       type: 'program-ended-incomplete',
       concept: 'completeness',
@@ -73,11 +74,25 @@ describe('BattleFeedback', () => {
       messageCode: 'dragon-palace.program-ended-incomplete.outside-palace',
     }
 
-    render(<BattleFeedback diagnostic={diagnostic} onFocusBlock={onFocusBlock} />)
+    render(
+      <>
+        <div aria-label="Blockly 积木编辑区" tabIndex={0} />
+        <BattleFeedback
+          diagnostic={diagnostic}
+          onFocusBlock={onFocusBlock}
+          onFocusWorkspace={() => {
+            onFocusWorkspace()
+            screen.getByLabelText('Blockly 积木编辑区').focus()
+          }}
+        />
+      </>,
+    )
     fireEvent.click(screen.getByRole('button', { name: '回到编程工作台' }))
 
     expect(screen.queryByRole('button', { name: '回到问题积木' })).not.toBeInTheDocument()
-    expect(onFocusBlock).toHaveBeenCalledWith(null)
+    expect(onFocusBlock).not.toHaveBeenCalled()
+    expect(onFocusWorkspace).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).toBe(screen.getByLabelText('Blockly 积木编辑区'))
   })
 
   it('never renders an arbitrary external runtime message code', () => {
@@ -91,9 +106,36 @@ describe('BattleFeedback', () => {
       messageCode: '<script>external-words</script>',
     }
 
-    render(<BattleFeedback diagnostic={diagnostic} onFocusBlock={() => undefined} />)
+    render(<BattleFeedback diagnostic={diagnostic} onFocusBlock={() => undefined} onFocusWorkspace={() => undefined} />)
 
     expect(screen.getByRole('alert')).toHaveTextContent('这条指令和当前场景顺序对不上')
     expect(screen.getByRole('alert')).not.toHaveTextContent('external-words')
+  })
+
+  it('focuses the alert for each new diagnostic', () => {
+    const first: CompileDiagnostic = {
+      code: 'empty-workspace', sourceBlockId: null, concept: 'program-structure',
+    }
+    const second: CompileDiagnostic = {
+      code: 'multiple-top-level', sourceBlockId: 'real-block', concept: 'program-structure',
+    }
+    const view = render(
+      <>
+        <button type="button">outside focus</button>
+        <BattleFeedback diagnostic={first} onFocusBlock={() => undefined} onFocusWorkspace={() => undefined} />
+      </>,
+    )
+    expect(document.activeElement).toBe(screen.getByRole('alert'))
+
+    screen.getByRole('button', { name: 'outside focus' }).focus()
+    view.rerender(
+      <>
+        <button type="button">outside focus</button>
+        <BattleFeedback diagnostic={second} onFocusBlock={() => undefined} onFocusWorkspace={() => undefined} />
+      </>,
+    )
+
+    expect(document.activeElement).toBe(screen.getByRole('alert'))
+    expect(screen.getByRole('alert')).toHaveTextContent('多个开头')
   })
 })

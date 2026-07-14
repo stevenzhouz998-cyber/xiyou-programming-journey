@@ -1,8 +1,10 @@
 import * as Blockly from 'blockly'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { BattleDiagnostic } from '../battle/types'
 import type { CompileResult } from '../blockly/compiler'
 import type { WorkspaceDraftV1 } from '../blockly/draft'
+import { BattleFeedback } from './BattleFeedback'
 import {
   BlocklyWorkspace,
   BlocklyWorkspaceAdapterProvider,
@@ -49,23 +51,34 @@ function legacyBytes(labels: readonly string[]): string {
   }
 }
 
+type MutableJson = Record<string, any>
+
+function mutateLegacyBytes(mutate: (value: MutableJson) => void): string {
+  const value = JSON.parse(legacyBytes(['进入龙宫'])) as MutableJson
+  mutate(value)
+  return JSON.stringify(value)
+}
+
 function setup({
   draft = EMPTY_DRAFT,
   focusBlockId = null,
   onDraftChange = vi.fn(() => ({ status: 'saved' as const })),
   onRun = vi.fn<(result: CompileResult) => void>(),
   onFocusHandled = vi.fn<() => void>(),
+  workspace = new Blockly.Workspace(),
+  adapter,
 }: {
   draft?: WorkspaceDraftV1
   focusBlockId?: string | null
   onDraftChange?: ReturnType<typeof vi.fn<(draft: WorkspaceDraftV1) => { status: 'saved' | 'unsaved' }>>
   onRun?: ReturnType<typeof vi.fn<(result: CompileResult) => void>>
   onFocusHandled?: ReturnType<typeof vi.fn<() => void>>
+  workspace?: Blockly.Workspace
+  adapter?: BlocklyWorkspaceAdapter
 } = {}) {
-  const workspace = new Blockly.Workspace()
-  const adapter: BlocklyWorkspaceAdapter = { create: vi.fn(() => workspace) }
+  const resolvedAdapter: BlocklyWorkspaceAdapter = adapter ?? { create: vi.fn(() => workspace) }
   const view = render(
-    <BlocklyWorkspaceAdapterProvider adapter={adapter}>
+    <BlocklyWorkspaceAdapterProvider adapter={resolvedAdapter}>
       <BlocklyWorkspace
         missionId="w1-m1"
         draft={draft}
@@ -76,10 +89,13 @@ function setup({
       />
     </BlocklyWorkspaceAdapterProvider>,
   )
-  return { workspace, adapter, onDraftChange, onRun, onFocusHandled, ...view }
+  return { workspace, adapter: resolvedAdapter, onDraftChange, onRun, onFocusHandled, ...view }
 }
 
-afterEach(() => localStorage.clear())
+afterEach(() => {
+  vi.restoreAllMocks()
+  localStorage.clear()
+})
 
 describe('BlocklyWorkspace', () => {
   it('adds and connects real Blockly blocks, then submits the compiler result at click time', async () => {
@@ -124,7 +140,7 @@ describe('BlocklyWorkspace', () => {
     })
   })
 
-  it('submits an honest multiple-top-level compile failure and does not invent an ordered program', () => {
+  it('shows real multi-top blocks and lets a keyboard user delete one into a compilable saved chain', () => {
     const draft: WorkspaceDraftV1 = {
       version: 1,
       blocks: [
@@ -132,10 +148,10 @@ describe('BlocklyWorkspace', () => {
         { id: 'request-top', type: 'xiyou_request_weapon', nextId: null, x: 100, y: 0 },
       ],
     }
-    const { onRun } = setup({ draft })
+    const { onRun, onDraftChange, workspace } = setup({ draft })
 
     expect(screen.getByText(/多个开头/)).toBeInTheDocument()
-    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+    expect(screen.getByRole('list', { name: /尚未形成唯一顺序/ })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }))
 
     expect(onRun).toHaveBeenCalledWith({
@@ -144,6 +160,20 @@ describe('BlocklyWorkspace', () => {
       diagnostics: [
         { code: 'multiple-top-level', sourceBlockId: 'enter-top', concept: 'program-structure' },
       ],
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '删除：请求兵器' }))
+
+    expect(workspace.getBlockById('request-top')).toBeNull()
+    expect(screen.getByRole('list')).toHaveTextContent('进入龙宫')
+    expect(onDraftChange).toHaveBeenLastCalledWith({
+      version: 1,
+      blocks: [expect.objectContaining({ id: 'enter-top', nextId: null })],
+    })
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }))
+    expect(onRun).toHaveBeenLastCalledWith({
+      ok: true,
+      trace: [expect.objectContaining({ sourceBlockId: 'enter-top', opcode: 'enter_palace' })],
     })
   })
 
@@ -277,6 +307,112 @@ describe('BlocklyWorkspace', () => {
     expect(localStorage.getItem(LEGACY_KEY)).toBe(original)
   })
 
+  it.each([
+    ['missing id', () => mutateLegacyBytes((value) => { delete value.blocks.blocks[0].id })],
+    ['duplicate id', () => mutateLegacyBytes((value) => {
+      value.blocks.blocks.push(structuredClone(value.blocks.blocks[0]))
+    })],
+    ['cyclic repeated id', () => mutateLegacyBytes((value) => {
+      const root = value.blocks.blocks[0]
+      root.next = { block: { type: root.type, id: root.id, fields: root.fields } }
+    })],
+    ['multiple predecessors', () => mutateLegacyBytes((value) => {
+      const root = value.blocks.blocks[0]
+      const child = { type: root.type, id: 'shared-child', fields: root.fields }
+      root.next = { block: structuredClone(child) }
+      value.blocks.blocks.push({
+        type: root.type,
+        id: 'second-top',
+        x: 100,
+        y: 100,
+        fields: root.fields,
+        next: { block: structuredClone(child) },
+      })
+    })],
+    ['unknown root field', () => mutateLegacyBytes((value) => { value.extra = true })],
+    ['unknown block field', () => mutateLegacyBytes((value) => {
+      value.blocks.blocks[0].extra = true
+    })],
+    ['unknown block type', () => mutateLegacyBytes((value) => {
+      value.blocks.blocks[0].type = 'xiyou_enter_palace'
+    })],
+    ['malformed next', () => mutateLegacyBytes((value) => {
+      value.blocks.blocks[0].next = {}
+    })],
+    ['unsafe coordinate', () => mutateLegacyBytes((value) => {
+      value.blocks.blocks[0].x = Number.MAX_SAFE_INTEGER + 1
+    })],
+    ['oversized bytes', () => `${' '.repeat(128 * 1024)}${legacyBytes(['进入龙宫'])}`],
+  ])('rejects raw legacy %s before save or deletion', async (_name, makeBytes) => {
+    const original = makeBytes()
+    localStorage.setItem(LEGACY_KEY, original)
+    const onDraftChange = vi.fn(() => ({ status: 'saved' as const }))
+    const removeItem = vi.spyOn(localStorage, 'removeItem')
+
+    setup({ onDraftChange })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('旧版积木草稿无法安全迁移')
+    expect(onDraftChange).not.toHaveBeenCalled()
+    expect(removeItem).not.toHaveBeenCalled()
+    expect(localStorage.getItem(LEGACY_KEY)).toBe(original)
+  })
+
+  it('reads legacy storage before creating the workspace and recovers from a read exception', () => {
+    const order: string[] = []
+    const workspace = new Blockly.Workspace()
+    const dispose = vi.spyOn(workspace, 'dispose')
+    const adapter: BlocklyWorkspaceAdapter = {
+      create: () => {
+        order.push('create')
+        return workspace
+      },
+    }
+    vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+      order.push('get')
+      throw new Error('storage blocked')
+    })
+
+    const view = setup({ workspace, adapter })
+
+    expect(order).toEqual(['get', 'create'])
+    expect(screen.getByRole('alert')).toHaveTextContent('无法读取旧版积木草稿')
+    expect(workspace.getAllBlocks(false)).toEqual([])
+    view.unmount()
+    expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps saved status and the original backup when legacy cleanup throws', async () => {
+    const original = legacyBytes(['进入龙宫'])
+    localStorage.setItem(LEGACY_KEY, original)
+    vi.spyOn(localStorage, 'removeItem').mockImplementation(() => {
+      throw new Error('remove blocked')
+    })
+
+    setup({ onDraftChange: vi.fn(() => ({ status: 'saved' as const })) })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('新草稿已保存但旧备份未清理')
+    expect(screen.queryByText(/尚未保存/)).not.toBeInTheDocument()
+    expect(localStorage.getItem(LEGACY_KEY)).toBe(original)
+  })
+
+  it('retries the unchanged real draft and removes pending legacy bytes after save succeeds', async () => {
+    const original = legacyBytes(['进入龙宫'])
+    localStorage.setItem(LEGACY_KEY, original)
+    const onDraftChange = vi
+      .fn<(draft: WorkspaceDraftV1) => { status: 'saved' | 'unsaved' }>()
+      .mockReturnValueOnce({ status: 'unsaved' })
+      .mockReturnValueOnce({ status: 'saved' })
+
+    setup({ onDraftChange })
+    await screen.findByText(/尚未保存/)
+    fireEvent.click(screen.getByRole('button', { name: '重试保存' }))
+
+    expect(onDraftChange).toHaveBeenCalledTimes(2)
+    expect(onDraftChange.mock.calls[1][0]).toEqual(onDraftChange.mock.calls[0][0])
+    expect(screen.queryByText(/尚未保存/)).not.toBeInTheDocument()
+    expect(localStorage.getItem(LEGACY_KEY)).toBeNull()
+  })
+
   it('never lets legacy bytes overwrite a non-empty V3 draft', () => {
     const original = legacyBytes(['请求兵器'])
     localStorage.setItem(LEGACY_KEY, original)
@@ -330,5 +466,52 @@ describe('BlocklyWorkspace', () => {
 
     expect(removeListener).toHaveBeenCalledWith(addListener.mock.calls[0][0])
     expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets no-source feedback focus the real Blockly workspace without a fake block request', () => {
+    const workspace = new Blockly.Workspace()
+    const adapter: BlocklyWorkspaceAdapter = { create: () => workspace }
+    const onFocusBlock = vi.fn<(blockId: string) => void>()
+    const onFocusWorkspace = vi.fn<() => void>()
+    const onFocusHandled = vi.fn<() => void>()
+    const diagnostic: BattleDiagnostic = {
+      type: 'program-ended-incomplete',
+      concept: 'completeness',
+      state: 'outside-palace',
+      instructionId: null,
+      sourceBlockId: null,
+      opcode: null,
+      messageCode: 'dragon-palace.program-ended-incomplete.outside-palace',
+    }
+
+    render(
+      <>
+        <BlocklyWorkspaceAdapterProvider adapter={adapter}>
+          <BlocklyWorkspace
+            missionId="w1-m1"
+            draft={EMPTY_DRAFT}
+            onDraftChange={() => ({ status: 'saved' })}
+            onRun={() => undefined}
+            focusBlockId={null}
+            onFocusHandled={onFocusHandled}
+          />
+        </BlocklyWorkspaceAdapterProvider>
+        <BattleFeedback
+          diagnostic={diagnostic}
+          onFocusBlock={onFocusBlock}
+          onFocusWorkspace={() => {
+            onFocusWorkspace()
+            screen.getByLabelText('Blockly 积木编辑区').focus()
+          }}
+        />
+      </>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '回到编程工作台' }))
+
+    expect(document.activeElement).toBe(screen.getByLabelText('Blockly 积木编辑区'))
+    expect(onFocusWorkspace).toHaveBeenCalledTimes(1)
+    expect(onFocusBlock).not.toHaveBeenCalled()
+    expect(onFocusHandled).not.toHaveBeenCalled()
   })
 })

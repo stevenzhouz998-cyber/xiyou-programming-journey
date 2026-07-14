@@ -139,6 +139,24 @@ describe('workspace commands', () => {
     expect(opcodes(workspace)).toEqual(['enter_palace', 'test_weapon'])
   })
 
+  it('deletes within one of multiple canonical chains without changing the other chains', () => {
+    const firstHead = workspace.newBlock('xiyou_enter_palace', 'first-head')
+    const firstTail = workspace.newBlock('xiyou_request_weapon', 'first-tail')
+    const secondOnly = workspace.newBlock('xiyou_test_weapon', 'second-only')
+    if (!firstHead.nextConnection || !firstTail.previousConnection) {
+      throw new Error('Expected statement connections')
+    }
+    firstHead.nextConnection.connect(firstTail.previousConnection)
+
+    expect(deleteActionBlock(workspace, secondOnly.id)).toBe(true)
+
+    expect(workspace.getAllBlocks(false).map((block) => block.id).sort()).toEqual(
+      ['first-head', 'first-tail'],
+    )
+    expect(firstHead.getNextBlock()).toBe(firstTail)
+    expect(opcodes(workspace)).toEqual(['enter_palace', 'request_weapon'])
+  })
+
   it('deletes the head block without deleting its successor', () => {
     const head = appendActionBlock(workspace, 'xiyou_enter_palace')
     const tail = appendActionBlock(workspace, 'xiyou_request_weapon')

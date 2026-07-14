@@ -42,7 +42,7 @@ function assertCanonicalConnections(block: Block): void {
   }
 }
 
-function uniqueChain(workspace: Workspace): Block[] {
+function canonicalChains(workspace: Workspace): Block[][] {
   const allBlocks = workspace.getAllBlocks(false)
   if (allBlocks.length === 0) return []
 
@@ -51,23 +51,33 @@ function uniqueChain(workspace: Workspace): Block[] {
     assertCanonicalConnections(block)
   }
 
-  const topBlocks = workspace.getTopBlocks(false)
-  if (topBlocks.length !== 1) {
-    throw new Error(`Expected one main chain, found multiple top-level chains: ${topBlocks.length}`)
-  }
-
-  const chain: Block[] = []
   const visited = new Set<string>()
-  let current: Block | null = topBlocks[0]
-  while (current !== null) {
-    if (visited.has(current.id)) throw new Error('Invalid cyclic block chain')
-    visited.add(current.id)
-    chain.push(current)
-    current = current.getNextBlock()
+  const chains = workspace.getTopBlocks(false).map((topBlock) => {
+    const chain: Block[] = []
+    let current: Block | null = topBlock
+    while (current !== null) {
+      if (visited.has(current.id)) throw new Error('Invalid cyclic or shared block chain')
+      visited.add(current.id)
+      chain.push(current)
+      current = current.getNextBlock()
+    }
+    return chain
+  })
+
+  if (visited.size !== allBlocks.length) {
+    throw new Error('Invalid disconnected or cyclic block chain')
+  }
+  return chains
+}
+
+function uniqueChain(workspace: Workspace): Block[] {
+  const chains = canonicalChains(workspace)
+  if (chains.length === 0) return []
+  if (chains.length !== 1) {
+    throw new Error(`Expected one main chain, found multiple top-level chains: ${chains.length}`)
   }
 
-  if (chain.length !== allBlocks.length) throw new Error('Invalid disconnected block chain')
-  return chain
+  return chains[0]
 }
 
 function assertChainEndpoints(chain: readonly Block[]): void {
@@ -213,9 +223,11 @@ export function moveActionBlock(
 export function deleteActionBlock(workspace: Workspace, blockId: string): boolean {
   const block = workspace.getBlockById(blockId)
   if (block === null) return false
-  const chain = uniqueChain(workspace)
+  const chains = canonicalChains(workspace)
+  const chain = chains.find((candidate) => candidate.some((item) => item.id === blockId))
+  if (!chain) throw new Error(`Block is not in a canonical chain: ${blockId}`)
   const targetIndex = chain.findIndex((candidate) => candidate.id === blockId)
-  if (targetIndex === -1) throw new Error(`Block is not in the main chain: ${blockId}`)
+  if (targetIndex === -1) throw new Error(`Block is not in its canonical chain: ${blockId}`)
   const positions = capturePositions(chain)
   const remaining = chain.filter((candidate) => candidate.id !== blockId)
 
