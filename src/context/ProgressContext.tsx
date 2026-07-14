@@ -2,8 +2,12 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 import {
   completeMission,
   type CompletionInput,
+  type MissionSession,
   type ProgressV3,
 } from '../progress/progress';
+import { allMissions } from '../course/course';
+import { migrateProgress } from '../progress/schema';
+import { createMissionSession, recordHint } from '../progress/session';
 import {
   loadProgressTransaction,
   clearProgressTransaction,
@@ -28,6 +32,14 @@ export interface ProgressContextValue {
   saveStatus: 'idle' | 'saved' | 'unsaved';
   saveError: string | null;
   complete: (missionId: string, input: CompletionInput) => SaveResult;
+  updateMissionSession: (
+    missionId: string,
+    update: (session: MissionSession) => MissionSession,
+  ) => SaveResult;
+  recordMissionHint: (
+    missionId: string,
+    tier: MissionSession['usedHintTiers'][number],
+  ) => SaveResult;
   replaceProgress: (progress: ProgressV3) => SaveResult;
   updateSettings: (settings: Partial<ProgressV3['settings']>) => SaveResult;
   acknowledgePrivacy: () => SaveResult;
@@ -61,6 +73,26 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     setSaveError(result.status === 'unsaved' ? result.error : null);
     if (result.status === 'saved') setLoadPersistence('saved');
     return result;
+  };
+
+  const updateMissionSessionAt = (
+    missionId: string,
+    update: (session: MissionSession) => MissionSession,
+    now: string,
+  ) => {
+    if (!allMissions.some((mission) => mission.id === missionId)) {
+      throw new Error('任务编号无效');
+    }
+    const current = progress.sessions[missionId]
+      ? structuredClone(progress.sessions[missionId])
+      : createMissionSession(now);
+    const updated = update(current);
+    const next = migrateProgress({
+      ...progress,
+      sessions: { ...progress.sessions, [missionId]: updated },
+      savedAt: now,
+    });
+    return commit(next);
   };
 
   const acknowledgePrivacy = () => {
@@ -111,6 +143,17 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     saveStatus,
     saveError,
     complete: (missionId, input) => commit(completeMission(progress, missionId, input)),
+    updateMissionSession: (missionId, update) => (
+      updateMissionSessionAt(missionId, update, new Date().toISOString())
+    ),
+    recordMissionHint: (missionId, tier) => {
+      const now = new Date().toISOString();
+      return updateMissionSessionAt(
+        missionId,
+        (session) => recordHint(session, tier, now),
+        now,
+      );
+    },
     replaceProgress: commit,
     updateSettings: (settings) => commit({
       ...progress,

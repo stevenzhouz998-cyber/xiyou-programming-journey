@@ -1,10 +1,13 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ProgressProvider, useProgress } from './ProgressContext';
+import { ProgressProvider, useProgress, type ProgressContextValue } from './ProgressContext';
 import { createInitialProgress, serializeProgress } from '../progress/progress';
 import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from '../progress/storage';
+import { createMissionSession, recordCompileFailure } from '../progress/session';
 
 const originalStorage = localStorage;
+const SESSION_NOW = '2026-07-15T06:00:00.000Z';
+let latestContext: ProgressContextValue | null = null;
 
 function installStorage(initial: Record<string, string>, failWrites = false) {
   const values = new Map(Object.entries(initial));
@@ -33,6 +36,7 @@ afterEach(() => {
 
 function Probe() {
   const state = useProgress();
+  latestContext = state;
   return <>
     <output data-testid="state">{JSON.stringify({
       learnerName: state.progress.learnerName,
@@ -43,6 +47,8 @@ function Probe() {
       corruptError: state.corruptError,
       saveStatus: state.saveStatus,
       saveError: state.saveError,
+      sessions: state.progress.sessions,
+      progressSavedAt: state.progress.savedAt,
     })}</output>
     <button onClick={() => state.replaceProgress({ ...state.progress, learnerName: '会话新名字' })}>保存</button>
     <button onClick={() => state.acknowledgePrivacy()}>确认隐私</button>
@@ -150,5 +156,120 @@ describe('ProgressContext persistence status', () => {
     render(<ProgressProvider><Probe /></ProgressProvider>);
     fireEvent.click(screen.getByRole('button', { name: '清空' }));
     expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ learnerName: '保留我' });
+  });
+
+  it('creates a missing mission session and commits an updater result through V3 storage', () => {
+    installStorage({});
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    let result: ReturnType<ProgressContextValue['updateMissionSession']> | undefined;
+    act(() => {
+      result = latestContext!.updateMissionSession('w1-m1', (session) => (
+        recordCompileFailure(session, 'program-structure', SESSION_NOW)
+      ));
+    });
+
+    expect(result).toMatchObject({ status: 'saved' });
+    const state = JSON.parse(screen.getByTestId('state').textContent!);
+    expect(state.sessions['w1-m1']).toMatchObject({
+      compileFailures: 1,
+      totalRuns: 0,
+      conceptFailures: { programStructure: 1 },
+      savedAt: SESSION_NOW,
+    });
+    expect(state.progressSavedAt).toMatch(/^\d{4}-\d{2}-\d{2}T.*\.\d{3}Z$/);
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).sessions['w1-m1'])
+      .toEqual(state.sessions['w1-m1']);
+  });
+
+  it('updates an existing session instead of resetting its prior evidence', () => {
+    const session = recordCompileFailure(createMissionSession(SESSION_NOW), 'program-structure', SESSION_NOW);
+    installStorage({
+      [CURRENT_PROGRESS_KEY]: serializeProgress({
+        ...createInitialProgress(),
+        sessions: { 'w1-m1': session },
+        savedAt: SESSION_NOW,
+      }),
+    });
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    act(() => {
+      latestContext!.updateMissionSession('w1-m1', (current) => (
+        recordCompileFailure(current, 'program-structure', SESSION_NOW)
+      ));
+    });
+
+    expect(JSON.parse(screen.getByTestId('state').textContent!).sessions['w1-m1'])
+      .toMatchObject({ compileFailures: 2, conceptFailures: { programStructure: 2 } });
+  });
+
+  it('keeps an unsaved session mutation in memory and retries the same evidence', () => {
+    const storage = installStorage({}, true);
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    act(() => {
+      latestContext!.recordMissionHint('w1-m1', 'observe');
+    });
+    const unsaved = JSON.parse(screen.getByTestId('state').textContent!);
+    expect(unsaved).toMatchObject({
+      saveStatus: 'unsaved',
+      saveError: expect.any(String),
+      sessions: { 'w1-m1': { usedHintTiers: ['observe'] } },
+    });
+    expect(localStorage.getItem(CURRENT_PROGRESS_KEY)).toBeNull();
+
+    storage.failWrites = false;
+    act(() => { latestContext!.retrySave(); });
+
+    const saved = JSON.parse(screen.getByTestId('state').textContent!);
+    expect(saved).toMatchObject({ saveStatus: 'saved', saveError: null });
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).sessions['w1-m1'])
+      .toEqual(saved.sessions['w1-m1']);
+  });
+
+  it('delegates hint recording to the session helper and deduplicates repeated tiers', () => {
+    installStorage({});
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    act(() => { latestContext!.recordMissionHint('w1-m1', 'think'); });
+    act(() => { latestContext!.recordMissionHint('w1-m1', 'think'); });
+
+    expect(JSON.parse(screen.getByTestId('state').textContent!).sessions['w1-m1'].usedHintTiers)
+      .toEqual(['think']);
+  });
+
+  it('rejects unknown missions before calling the updater or changing memory', () => {
+    installStorage({});
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    const before = screen.getByTestId('state').textContent;
+    let updaterCalled = false;
+
+    expect(() => latestContext!.updateMissionSession('unknown-mission', (session) => {
+      updaterCalled = true;
+      return session;
+    })).toThrow('任务编号无效');
+    expect(updaterCalled).toBe(false);
+    expect(screen.getByTestId('state').textContent).toBe(before);
+    expect(localStorage.getItem(CURRENT_PROGRESS_KEY)).toBeNull();
+  });
+
+  it('rejects an invalid updater result without allowing updater mutation to pollute memory', () => {
+    const session = createMissionSession(SESSION_NOW);
+    installStorage({
+      [CURRENT_PROGRESS_KEY]: serializeProgress({
+        ...createInitialProgress(), sessions: { 'w1-m1': session }, savedAt: SESSION_NOW,
+      }),
+    });
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    const before = screen.getByTestId('state').textContent;
+    const storedBefore = localStorage.getItem(CURRENT_PROGRESS_KEY);
+
+    expect(() => latestContext!.updateMissionSession('w1-m1', (draft) => {
+      draft.totalRuns = -1;
+      return draft;
+    })).toThrow(/非负整数/);
+
+    expect(screen.getByTestId('state').textContent).toBe(before);
+    expect(localStorage.getItem(CURRENT_PROGRESS_KEY)).toBe(storedBefore);
   });
 });
