@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { runDragonPalaceBattle } from './dragonPalace'
-import type { BattleInstruction } from './types'
+import type { BattleInstruction, BattlePenalty } from './types'
+
+const zeroPenalty = {
+  livesLost: 0,
+  resourcesLost: 0,
+  starsLost: 0,
+} satisfies BattlePenalty
+
+// @ts-expect-error Battle penalties must reject non-zero life loss at compile time.
+const nonzeroPenalty = { livesLost: 1, resourcesLost: 0, starsLost: 0 } satisfies BattlePenalty
+
+void zeroPenalty
+void nonzeroPenalty
 
 function instruction(
   instructionId: string,

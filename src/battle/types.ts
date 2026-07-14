@@ -47,9 +47,9 @@ export type BattleDiagnostic =
     }
 
 export interface BattlePenalty {
-  livesLost: number
-  resourcesLost: number
-  starsLost: number
+  livesLost: 0
+  resourcesLost: 0
+  starsLost: 0
 }
 
 export interface BattleRunResult {
