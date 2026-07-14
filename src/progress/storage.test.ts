@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createInitialProgress, serializeProgress } from './progress';
+import { PROGRESS_SCHEMA_LIMITS } from './schema';
 import {
   CORRUPT,
   CORRUPT_PROGRESS_KEY,
@@ -419,6 +420,35 @@ describe('progress storage transactions', () => {
     }
   });
 
+  it('never accepts a matching legacy V2 envelope as protection for corrupt V3 current', () => {
+    const corruptV3 = '{bad V3 current';
+    const legacyEnvelope = JSON.stringify({
+      current: corruptV3,
+      snapshot: null,
+      capturedAt: NOW.toISOString(),
+    });
+    const cases = [
+      ['save', (storage: Storage) => saveProgressTransaction(progress('新保存'), storage), 'unsaved'],
+      ['import', (storage: Storage) => importProgressTransaction(serializeProgress(progress('新导入')), storage), 'unsaved'],
+      ['clear', (storage: Storage) => clearProgressTransaction(storage), 'unchanged'],
+    ] as const;
+
+    for (const [, transaction, expectedStatus] of cases) {
+      const storage = new MemoryStorage();
+      storage.setItem(CURRENT_PROGRESS_KEY, corruptV3);
+      storage.setItem(LEGACY_V2_CORRUPT_KEY, legacyEnvelope);
+
+      expect(transaction(storage)).toMatchObject({
+        status: expectedStatus,
+        error: expect.stringContaining('损坏原文尚未安全保留'),
+      });
+      expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe(corruptV3);
+      expect(storage.getItem(CORRUPT_PROGRESS_KEY)).toBeNull();
+      expect(storage.getItem(SNAPSHOT_PROGRESS_KEY)).toBeNull();
+      expect(storage.getItem(LEGACY_V2_CORRUPT_KEY)).toBe(legacyEnvelope);
+    }
+  });
+
   it('allows save, import, and clear when an exact valid corrupt envelope protects current', () => {
     for (const transaction of [
       (storage: Storage) => saveProgressTransaction(progress('稍后保存'), storage),
@@ -595,6 +625,58 @@ describe('progress storage transactions', () => {
       const before = storage.snapshot();
       expect(importProgressTransaction(raw, storage).status).toBe('rejected');
       expect(storage.snapshot()).toEqual(before);
+    }
+  });
+
+  it('rejects oversized malformed ASCII import before JSON parsing or storage mutation', () => {
+    const storage = new MemoryStorage();
+    const raw = 'x'.repeat(PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes + 1);
+    const parse = vi.spyOn(JSON, 'parse');
+    try {
+      expect(importProgressTransaction(raw, storage)).toMatchObject({
+        status: 'rejected',
+        error: expect.stringContaining(`最多${PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes}`),
+      });
+      expect(parse).not.toHaveBeenCalled();
+      expect(storage.snapshot()).toEqual({});
+    } finally {
+      parse.mockRestore();
+    }
+  });
+
+  it('rejects oversized multibyte import before JSON parsing or storage mutation', () => {
+    const storage = new MemoryStorage();
+    const raw = '界'.repeat(Math.floor(PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes / 3) + 1);
+    expect(raw.length).toBeLessThan(PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes);
+    expect(new TextEncoder().encode(raw).byteLength).toBeGreaterThan(PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes);
+    const parse = vi.spyOn(JSON, 'parse');
+    try {
+      expect(importProgressTransaction(raw, storage)).toMatchObject({
+        status: 'rejected',
+        error: expect.stringContaining(`最多${PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes}`),
+      });
+      expect(parse).not.toHaveBeenCalled();
+      expect(storage.snapshot()).toEqual({});
+    } finally {
+      parse.mockRestore();
+    }
+  });
+
+  it('rejects oversized legacy current before JSON parsing and leaves every key unchanged', () => {
+    const storage = new MemoryStorage();
+    const raw = 'x'.repeat(PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes + 1);
+    storage.setItem(LEGACY_V2_CURRENT_KEY, raw);
+    const before = storage.snapshot();
+    const parse = vi.spyOn(JSON, 'parse');
+    try {
+      expect(loadProgressTransaction(storage, clock)).toMatchObject({
+        status: 'normal', persistence: 'idle', progress: createInitialProgress(),
+      });
+      expect(parse).not.toHaveBeenCalled();
+      expect(storage.snapshot()).toEqual(before);
+      expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBeNull();
+    } finally {
+      parse.mockRestore();
     }
   });
 

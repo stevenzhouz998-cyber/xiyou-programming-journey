@@ -54,11 +54,12 @@ function valid(raw: string | null): ProgressV3 | null {
 function validLegacy(raw: string | null, version: 1 | 2): ProgressV3 | null {
   if (raw === null) return null;
   try {
+    const progress = parseProgress(raw);
     const source: unknown = JSON.parse(raw);
     if (typeof source !== 'object' || source === null || (source as { version?: unknown }).version !== version) {
       return null;
     }
-    return parseProgress(raw);
+    return progress;
   } catch {
     return null;
   }
@@ -299,6 +300,10 @@ export function retrySave(progress: ProgressV3, storage: Storage = localStorage)
 }
 
 export function importProgressTransaction(raw: string, storage: Storage = localStorage): ImportResult {
+  let progress: ProgressV3;
+  try { progress = parseProgress(raw); }
+  catch (error) { return { status: 'rejected', error: errorMessage(error) }; }
+
   let sourceVersion: 1 | 2 | 3;
   try {
     const source: unknown = JSON.parse(raw);
@@ -311,9 +316,6 @@ export function importProgressTransaction(raw: string, storage: Storage = localS
     }
     sourceVersion = version;
   } catch { return { status: 'rejected', error: '进度文件无法读取' }; }
-  let progress: ProgressV3;
-  try { progress = parseProgress(raw); }
-  catch (error) { return { status: 'rejected', error: errorMessage(error) }; }
   const keys = [CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY, CORRUPT_PROGRESS_KEY] as const;
   const before = new Map<string, string | null>();
   try { for (const key of keys) before.set(key, storage.getItem(key)); }
