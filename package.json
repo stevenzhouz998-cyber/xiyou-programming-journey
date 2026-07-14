@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "npm run test:unit && npm run test:bundle-script",
+    "test": "npm run test:unit && npm run test:bundle-script && npm run test:assets",
     "test:unit": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
@@ -15,7 +15,10 @@
     "install:browsers": "playwright install chromium firefox webkit",
     "typecheck": "tsc --noEmit",
     "test:bundle-script": "node --test scripts/check-bundle-budget.test.mjs",
-    "verify:bundle": "npm run test:bundle-script && npm run build && node scripts/check-bundle-budget.mjs"
+    "verify:bundle": "npm run test:bundle-script && npm run build && node scripts/check-bundle-budget.mjs",
+    "test:assets": "node --test scripts/check-asset-manifest.test.mjs",
+    "check:assets": "node scripts/check-asset-manifest.mjs",
+    "verify:assets": "node scripts/check-asset-manifest.mjs --require-visual-qa"
   },
   "dependencies": {
     "@codemirror/lang-python": "^6.2.1",
