@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DownloadSimple, UploadSimple } from '@phosphor-icons/react';
-import type { ProgressV2 } from '../progress/progress';
+import type { ProgressV3 } from '../progress/progress';
 import type { ClearResult, ImportResult, LoadStatus, ProgressBackup } from '../progress/storage';
 import { focusAfterInert } from '../utils/focus';
 
 type Download = (filename: string, contents: string, mime: string) => void;
 
 export interface ParentDataToolsProps {
-  progress: ProgressV2;
+  progress: ProgressV3;
   loadStatus: LoadStatus;
   loadPersistence: 'idle' | 'saved' | 'unsaved';
   saveStatus: 'idle' | 'saved' | 'unsaved';
@@ -75,7 +75,12 @@ export function ParentDataTools(props: ParentDataToolsProps) {
       if (!mountedRef.current || sequence !== importSequenceRef.current) return;
       const result = props.onImport(raw);
       if (result.status === 'saved') {
-        setMessage(`导入成功：${result.sourceVersion === 1 ? '已将 V1 迁移为 V2' : '来源版本 V2'}。`);
+        const versionMessage = result.sourceVersion === 1
+          ? '已将 V1 升级为 V3'
+          : result.sourceVersion === 2
+            ? '已将 V2 升级为 V3'
+            : '来源版本 V3';
+        setMessage(`导入成功：${versionMessage}。`);
       } else if (result.status === 'rollback-failed') {
         setImportAlert(`导入失败：${result.error}。当前页面进度未改变，但设备存储可能部分变化，请导出当前进度并刷新检查。`);
       } else {

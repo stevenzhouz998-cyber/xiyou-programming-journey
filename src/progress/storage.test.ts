@@ -54,6 +54,12 @@ function legacy(name = '旧行者') {
   });
 }
 
+function legacyV2(name = 'V2 行者') {
+  const current = createInitialProgress();
+  const { sessions: _sessions, ...withoutSessions } = current;
+  return JSON.stringify({ ...withoutSessions, version: 2, learnerName: name }, null, 2);
+}
+
 describe('progress storage transactions', () => {
   it('returns initial progress without writing when no save exists', () => {
     const storage = new MemoryStorage();
@@ -72,7 +78,7 @@ describe('progress storage transactions', () => {
     });
   });
 
-  it('loads a valid V2 current save normally', () => {
+  it('loads a valid current V3 save normally while retaining V2 key strings', () => {
     const storage = new MemoryStorage();
     storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress('当前')));
     expect(loadProgressTransaction(storage, clock)).toMatchObject({ status: 'normal', persistence: 'saved', error: null, progress: { learnerName: '当前' } });
@@ -126,7 +132,7 @@ describe('progress storage transactions', () => {
     const storage = new MemoryStorage();
     storage.setItem(LEGACY_PROGRESS_KEY, legacy());
     const result = loadProgressTransaction(storage, clock);
-    expect(result).toMatchObject({ status: 'migrated', persistence: 'saved', error: null, progress: { version: 2, learnerName: '旧行者' } });
+    expect(result).toMatchObject({ status: 'migrated', persistence: 'saved', error: null, progress: { version: 3, sessions: {}, learnerName: '旧行者' } });
     expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe(serializeProgress(result.progress));
     expect(storage.getItem(LEGACY_PROGRESS_KEY)).toBe(legacy());
   });
@@ -408,8 +414,22 @@ describe('progress storage transactions', () => {
     const old = progress('旧');
     storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(old));
     const result = importProgressTransaction(legacy('导入'), storage);
-    expect(result).toMatchObject({ status: 'saved', progress: { version: 2, learnerName: '导入' } });
+    expect(result).toMatchObject({ status: 'saved', sourceVersion: 1, progress: { version: 3, sessions: {}, learnerName: '导入' } });
     expect(storage.getItem(SNAPSHOT_PROGRESS_KEY)).toBe(serializeProgress(old));
+  });
+
+  it.each([
+    [1, () => legacy('V1 来源')],
+    [2, () => legacyV2('V2 来源')],
+    [3, () => serializeProgress(progress('V3 来源'))],
+  ] as const)('reports sourceVersion %s and returns V3 for a valid import', (sourceVersion, raw) => {
+    const storage = new MemoryStorage();
+    const result = importProgressTransaction(raw(), storage);
+    expect(result).toMatchObject({
+      status: 'saved',
+      sourceVersion,
+      progress: { version: 3, sessions: {} },
+    });
   });
 
   it('rolls back every import key byte-for-byte when writing current fails', () => {

@@ -1,7 +1,15 @@
 import { createInitialProgress, parseProgress } from './schema';
-import type { ProgressV2 } from './types';
+import type { ProgressV3 } from './types';
 
-export type { MissionProgress, ProgressDocument, ProgressSettings, ProgressV1, ProgressV2 } from './types';
+export type {
+  MissionProgress,
+  MissionSession,
+  ProgressDocument,
+  ProgressSettings,
+  ProgressV1,
+  ProgressV2,
+  ProgressV3,
+} from './types';
 
 export { createInitialProgress } from './schema';
 
@@ -39,7 +47,7 @@ function safeCount(base: number, increment: number): number {
   return result;
 }
 
-export function completeMission(progress: ProgressV2, missionId: string, input: CompletionInput): ProgressV2 {
+export function completeMission(progress: ProgressV3, missionId: string, input: CompletionInput): ProgressV3 {
   if (!allMissions.some((mission) => mission.id === missionId)) throw new Error('任务编号无效');
   const previous = progress.missions[missionId];
   const stars = normalizeStars(input.stars);
@@ -61,14 +69,14 @@ export function completeMission(progress: ProgressV2, missionId: string, input: 
   };
 }
 
-export function isMissionUnlocked(progress: ProgressV2, missionId: string): boolean {
+export function isMissionUnlocked(progress: ProgressV3, missionId: string): boolean {
   const index = allMissions.findIndex((mission) => mission.id === missionId);
   if (index < 0) return false;
   if (index === 0) return true;
   return progress.missions[allMissions[index - 1].id]?.status === 'completed';
 }
 
-export function getWeeklyReport(progress: ProgressV2, week: number): WeeklyReport {
+export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyReport {
   const missions = allMissions.filter((mission) => mission.week === week);
   const records = missions.flatMap((mission) => progress.missions[mission.id] ? [progress.missions[mission.id]] : []);
   return {
@@ -83,10 +91,10 @@ export function getWeeklyReport(progress: ProgressV2, week: number): WeeklyRepor
   };
 }
 
-export function serializeProgress(progress: ProgressV2): string {
+export function serializeProgress(progress: ProgressV3): string {
   return JSON.stringify(progress, null, 2);
 }
 
-export function importProgress(raw: string): ProgressV2 {
+export function importProgress(raw: string): ProgressV3 {
   return parseProgress(raw);
 }

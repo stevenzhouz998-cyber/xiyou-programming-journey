@@ -2,7 +2,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 import {
   completeMission,
   type CompletionInput,
-  type ProgressV2,
+  type ProgressV3,
 } from '../progress/progress';
 import {
   loadProgressTransaction,
@@ -19,7 +19,7 @@ import {
 } from '../progress/storage';
 
 export interface ProgressContextValue {
-  progress: ProgressV2;
+  progress: ProgressV3;
   loadStatus: LoadStatus;
   loadPersistence: 'idle' | 'saved' | 'unsaved';
   loadError: string | null;
@@ -28,8 +28,8 @@ export interface ProgressContextValue {
   saveStatus: 'idle' | 'saved' | 'unsaved';
   saveError: string | null;
   complete: (missionId: string, input: CompletionInput) => SaveResult;
-  replaceProgress: (progress: ProgressV2) => SaveResult;
-  updateSettings: (settings: Partial<ProgressV2['settings']>) => SaveResult;
+  replaceProgress: (progress: ProgressV3) => SaveResult;
+  updateSettings: (settings: Partial<ProgressV3['settings']>) => SaveResult;
   acknowledgePrivacy: () => SaveResult;
   retrySave: () => SaveResult;
   importProgressFile: (raw: string) => ImportResult;
@@ -41,12 +41,12 @@ const ProgressContext = createContext<ProgressContextValue | null>(null);
 
 export function ProgressProvider({ children }: { children: ReactNode }) {
   const [initialLoad] = useState(() => loadProgressTransaction());
-  const [progress, setProgress] = useState<ProgressV2>(initialLoad.progress);
+  const [progress, setProgress] = useState<ProgressV3>(initialLoad.progress);
   const [loadPersistence, setLoadPersistence] = useState<'idle' | 'saved' | 'unsaved'>(initialLoad.persistence);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'unsaved'>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const commit = (next: ProgressV2) => {
+  const commit = (next: ProgressV3) => {
     setProgress(next);
     const result = saveProgressTransaction(next);
     setSaveStatus(result.status);
@@ -64,7 +64,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   };
 
   const acknowledgePrivacy = () => {
-    const next: ProgressV2 = {
+    const next: ProgressV3 = {
       ...progress,
       privacy: { localDataNoticeSeen: true },
       savedAt: new Date().toISOString(),

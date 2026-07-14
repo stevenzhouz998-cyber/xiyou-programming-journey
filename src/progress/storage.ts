@@ -1,5 +1,5 @@
 import { createInitialProgress, parseProgress } from './schema';
-import type { ProgressV2 } from './types';
+import type { ProgressV3 } from './types';
 
 export const CURRENT_PROGRESS_KEY = 'xiyou-programming-progress-v2';
 export const SNAPSHOT_PROGRESS_KEY = 'xiyou-programming-progress-snapshot-v2';
@@ -11,7 +11,7 @@ export const CORRUPT = CORRUPT_PROGRESS_KEY;
 
 export type LoadStatus = 'normal' | 'migrated' | 'recovered-from-snapshot' | 'reset-after-corruption' | 'storage-unavailable';
 export interface LoadResult {
-  progress: ProgressV2;
+  progress: ProgressV3;
   status: LoadStatus;
   corruptDownload: string | null;
   persistence: 'idle' | 'saved' | 'unsaved';
@@ -19,18 +19,18 @@ export interface LoadResult {
   corruptError: string | null;
 }
 export type SaveResult =
-  | { status: 'saved'; progress: ProgressV2 }
-  | { status: 'unsaved'; progress: ProgressV2; error: string };
+  | { status: 'saved'; progress: ProgressV3 }
+  | { status: 'unsaved'; progress: ProgressV3; error: string };
 export type ImportResult =
-  | ({ status: 'saved'; progress: ProgressV2 } & { sourceVersion: 1 | 2 })
-  | ({ status: 'unsaved'; progress: ProgressV2; error: string; storageMayHaveChanged?: false } & { sourceVersion: 1 | 2 })
-  | { status: 'rollback-failed'; progress: ProgressV2; error: string; sourceVersion: 1 | 2; storageMayHaveChanged: true }
+  | ({ status: 'saved'; progress: ProgressV3 } & { sourceVersion: 1 | 2 | 3 })
+  | ({ status: 'unsaved'; progress: ProgressV3; error: string; storageMayHaveChanged?: false } & { sourceVersion: 1 | 2 | 3 })
+  | { status: 'rollback-failed'; progress: ProgressV3; error: string; sourceVersion: 1 | 2 | 3; storageMayHaveChanged: true }
   | { status: 'rejected'; error: string };
 export interface ProgressBackup { filename: string; contents: string; mimeType: 'application/json' }
 export type ClearResult =
-  | { status: 'cleared'; progress: ProgressV2 }
-  | { status: 'unchanged'; progress: ProgressV2; error: string }
-  | { status: 'unknown'; progress: ProgressV2; error: string };
+  | { status: 'cleared'; progress: ProgressV3 }
+  | { status: 'unchanged'; progress: ProgressV3; error: string }
+  | { status: 'unknown'; progress: ProgressV3; error: string };
 
 type Clock = () => Date;
 const systemClock: Clock = () => new Date();
@@ -39,11 +39,11 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function serialize(progress: ProgressV2): string {
+function serialize(progress: ProgressV3): string {
   return JSON.stringify(progress, null, 2);
 }
 
-function valid(raw: string | null): ProgressV2 | null {
+function valid(raw: string | null): ProgressV3 | null {
   if (raw === null) return null;
   try { return parseProgress(raw); } catch { return null; }
 }
@@ -125,7 +125,7 @@ function writeAndVerify(storage: Storage, key: string, value: string, stage: str
 }
 
 function loadResult(
-  progress: ProgressV2,
+  progress: ProgressV3,
   status: LoadStatus,
   corruptDownload: string | null,
   errors: string[] = [],
@@ -189,7 +189,7 @@ export function loadProgressTransaction(storage: Storage = localStorage, clock: 
   if (corruptError) errors.push(corruptError);
 
   const snapshot = valid(snapshotRaw);
-  const progress: ProgressV2 = snapshot
+  const progress: ProgressV3 = snapshot
     ? { ...snapshot, recovery: { lastRecoveredAt: capturedAt, source: 'snapshot' } }
     : { ...createInitialProgress(), recovery: { lastRecoveredAt: capturedAt, source: 'initial' } };
   // Never destroy the only corrupt source before its envelope is durably verified.
@@ -205,7 +205,7 @@ export function loadProgressTransaction(storage: Storage = localStorage, clock: 
   );
 }
 
-export function saveProgressTransaction(progress: ProgressV2, storage: Storage = localStorage): SaveResult {
+export function saveProgressTransaction(progress: ProgressV3, storage: Storage = localStorage): SaveResult {
   try {
     parseProgress(serialize(progress));
   } catch (error) {
@@ -231,18 +231,24 @@ export function saveProgressTransaction(progress: ProgressV2, storage: Storage =
   }
 }
 
-export function retrySave(progress: ProgressV2, storage: Storage = localStorage): SaveResult {
+export function retrySave(progress: ProgressV3, storage: Storage = localStorage): SaveResult {
   return saveProgressTransaction(progress, storage);
 }
 
 export function importProgressTransaction(raw: string, storage: Storage = localStorage): ImportResult {
-  let sourceVersion: 1 | 2;
+  let sourceVersion: 1 | 2 | 3;
   try {
     const source: unknown = JSON.parse(raw);
-    const version = typeof source === 'object' && source !== null ? (source as { version?: unknown }).version : undefined;
-    sourceVersion = version === 1 ? 1 : 2;
+    if (typeof source !== 'object' || source === null || Object.getPrototypeOf(source) !== Object.prototype) {
+      return { status: 'rejected', error: '进度文件格式无效：顶层必须是普通对象' };
+    }
+    const version = (source as { version?: unknown }).version;
+    if (version !== 1 && version !== 2 && version !== 3) {
+      return { status: 'rejected', error: '进度版本不受支持' };
+    }
+    sourceVersion = version;
   } catch { return { status: 'rejected', error: '进度文件无法读取' }; }
-  let progress: ProgressV2;
+  let progress: ProgressV3;
   try { progress = parseProgress(raw); }
   catch (error) { return { status: 'rejected', error: errorMessage(error) }; }
   const keys = [CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY, CORRUPT_PROGRESS_KEY] as const;
@@ -266,7 +272,7 @@ export function importProgressTransaction(raw: string, storage: Storage = localS
   return { ...result, sourceVersion, storageMayHaveChanged: false };
 }
 
-export function createProgressBackup(progress: ProgressV2, clock: Clock = systemClock): ProgressBackup {
+export function createProgressBackup(progress: ProgressV3, clock: Clock = systemClock): ProgressBackup {
   const date = clock().toISOString().slice(0, 10);
   return { filename: `xiyou-progress-${date}.json`, contents: serialize(progress), mimeType: 'application/json' };
 }

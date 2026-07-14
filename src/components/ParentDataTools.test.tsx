@@ -74,11 +74,15 @@ describe('ParentDataTools', () => {
     expect(screen.getByRole('status')).toHaveTextContent('存储已禁用');
   });
 
-  it('reports the imported source version', async () => {
-    const imported = { status: 'saved' as const, progress: createInitialProgress(), sourceVersion: 1 as const };
+  it.each([
+    [1, '已将 V1 升级为 V3'],
+    [2, '已将 V2 升级为 V3'],
+    [3, '来源版本 V3'],
+  ] as const)('reports imported source version V%s truthfully', async (sourceVersion, expected) => {
+    const imported = { status: 'saved' as const, progress: createInitialProgress(), sourceVersion };
     render(<ParentDataTools {...props({ onImport: vi.fn(() => imported) })} />);
-    fireEvent.change(screen.getByLabelText('选择进度文件'), { target: { files: [new File(['{}'], 'v1.json')] } });
-    expect(await screen.findByRole('status')).toHaveTextContent('已将 V1 迁移为 V2');
+    fireEvent.change(screen.getByLabelText('选择进度文件'), { target: { files: [new File(['{}'], `v${sourceVersion}.json`)] } });
+    expect(await screen.findByRole('status')).toHaveTextContent(expected);
   });
 
   it('uses a real button to open the hidden import file input', () => {
