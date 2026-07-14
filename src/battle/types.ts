@@ -12,19 +12,33 @@ export interface BattleInstruction {
   opcode: BattleOpcode
 }
 
-export interface BattleEvent {
-  type:
-    | 'run-started'
-    | 'instruction-accepted'
-    | 'instruction-rejected'
-    | 'state-changed'
-    | 'run-finished'
+interface BattleEventBase {
   state: DragonPalaceState
-  instructionId: string | null
-  sourceBlockId: string | null
-  opcode: BattleOpcode | null
   messageCode: string
 }
+
+type BattleLifecycleEvent<T extends 'run-started' | 'run-finished'> = BattleEventBase & {
+  type: T
+  instructionId: null
+  sourceBlockId: null
+  opcode: null
+}
+
+type BattleInstructionEvent<
+  T extends 'instruction-accepted' | 'instruction-rejected' | 'state-changed',
+> = BattleEventBase & {
+  type: T
+  instructionId: string
+  sourceBlockId: string
+  opcode: BattleOpcode
+}
+
+export type BattleEvent =
+  | BattleLifecycleEvent<'run-started'>
+  | BattleLifecycleEvent<'run-finished'>
+  | BattleInstructionEvent<'instruction-accepted'>
+  | BattleInstructionEvent<'instruction-rejected'>
+  | BattleInstructionEvent<'state-changed'>
 
 export type BattleDiagnostic =
   | {
@@ -52,10 +66,21 @@ export interface BattlePenalty {
   starsLost: 0
 }
 
-export interface BattleRunResult {
-  completed: boolean
-  finalState: DragonPalaceState
+interface BattleRunResultBase {
   events: BattleEvent[]
-  diagnostic: BattleDiagnostic | null
   penalty: BattlePenalty
 }
+
+export type BattleRunResult = BattleRunResultBase &
+  (
+    | {
+        completed: true
+        finalState: 'weapon-tested'
+        diagnostic: null
+      }
+    | {
+        completed: false
+        finalState: DragonPalaceState
+        diagnostic: BattleDiagnostic
+      }
+  )

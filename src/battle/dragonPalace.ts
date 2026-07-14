@@ -109,18 +109,34 @@ export function runDragonPalaceBattle(
     )
   }
 
-  const completed = state === 'weapon-tested'
-  const diagnostic: BattleDiagnostic | null = completed
-    ? null
-    : {
-        type: 'program-ended-incomplete',
-        concept: 'completeness',
-        state,
-        instructionId: null,
-        sourceBlockId: lastValidSourceBlockId,
-        opcode: null,
-        messageCode: `dragon-palace.program-ended-incomplete.${state}`,
-      }
+  if (state === 'weapon-tested') {
+    events.push({
+      type: 'run-finished',
+      state,
+      instructionId: null,
+      sourceBlockId: null,
+      opcode: null,
+      messageCode: 'dragon-palace.run-finished.completed',
+    })
+
+    return {
+      completed: true,
+      finalState: state,
+      events,
+      diagnostic: null,
+      penalty: { livesLost: 0, resourcesLost: 0, starsLost: 0 },
+    }
+  }
+
+  const diagnostic: BattleDiagnostic = {
+    type: 'program-ended-incomplete',
+    concept: 'completeness',
+    state,
+    instructionId: null,
+    sourceBlockId: lastValidSourceBlockId,
+    opcode: null,
+    messageCode: `dragon-palace.program-ended-incomplete.${state}`,
+  }
 
   events.push({
     type: 'run-finished',
@@ -128,13 +144,11 @@ export function runDragonPalaceBattle(
     instructionId: null,
     sourceBlockId: null,
     opcode: null,
-    messageCode: completed
-      ? 'dragon-palace.run-finished.completed'
-      : 'dragon-palace.run-finished.incomplete',
+    messageCode: 'dragon-palace.run-finished.incomplete',
   })
 
   return {
-    completed,
+    completed: false,
     finalState: state,
     events,
     diagnostic,

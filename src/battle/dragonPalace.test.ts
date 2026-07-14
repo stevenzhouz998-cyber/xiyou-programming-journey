@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { runDragonPalaceBattle } from './dragonPalace'
-import type { BattleInstruction, BattlePenalty } from './types'
+import type {
+  BattleDiagnostic,
+  BattleEvent,
+  BattleInstruction,
+  BattleOpcode,
+  BattlePenalty,
+  BattleRunResult,
+  DragonPalaceState,
+} from './types'
 
 const zeroPenalty = {
   livesLost: 0,
@@ -9,10 +17,65 @@ const zeroPenalty = {
 } satisfies BattlePenalty
 
 // @ts-expect-error Battle penalties must reject non-zero life loss at compile time.
-const nonzeroPenalty = { livesLost: 1, resourcesLost: 0, starsLost: 0 } satisfies BattlePenalty
+const lifePenalty = { livesLost: 1, resourcesLost: 0, starsLost: 0 } satisfies BattlePenalty
+// @ts-expect-error Battle penalties must reject non-zero resource loss at compile time.
+const resourcePenalty = { livesLost: 0, resourcesLost: 1, starsLost: 0 } satisfies BattlePenalty
+// @ts-expect-error Battle penalties must reject non-zero star loss at compile time.
+const starPenalty = { livesLost: 0, resourcesLost: 0, starsLost: 1 } satisfies BattlePenalty
+
+// @ts-expect-error Lifecycle events cannot carry instruction provenance.
+const invalidLifecycleEvent = { type: 'run-started', state: 'outside-palace', instructionId: 'instruction', sourceBlockId: 'block', opcode: 'enter_palace', messageCode: 'invalid' } satisfies BattleEvent
+// @ts-expect-error Real-instruction events require complete instruction provenance.
+const invalidInstructionEvent = { type: 'instruction-accepted', state: 'outside-palace', instructionId: null, sourceBlockId: null, opcode: null, messageCode: 'invalid' } satisfies BattleEvent
+
+// @ts-expect-error A completed run must end at weapon-tested.
+const invalidCompletedRun = { completed: true, finalState: 'outside-palace', events: [], diagnostic: null, penalty: zeroPenalty } satisfies BattleRunResult
+// @ts-expect-error An incomplete run must carry a diagnostic.
+const invalidIncompleteRun = { completed: false, finalState: 'outside-palace', events: [], diagnostic: null, penalty: zeroPenalty } satisfies BattleRunResult
 
 void zeroPenalty
-void nonzeroPenalty
+void lifePenalty
+void resourcePenalty
+void starPenalty
+void invalidLifecycleEvent
+void invalidInstructionEvent
+void invalidCompletedRun
+void invalidIncompleteRun
+
+function assertBattleEventNarrowing(event: BattleEvent): void {
+  if (event.type === 'run-started' || event.type === 'run-finished') {
+    const instructionId: null = event.instructionId
+    const sourceBlockId: null = event.sourceBlockId
+    const opcode: null = event.opcode
+    void instructionId
+    void sourceBlockId
+    void opcode
+    return
+  }
+
+  const instructionId: string = event.instructionId
+  const sourceBlockId: string = event.sourceBlockId
+  const opcode: BattleOpcode = event.opcode
+  void instructionId
+  void sourceBlockId
+  void opcode
+}
+
+function assertBattleRunResultNarrowing(result: BattleRunResult): void {
+  if (result.completed) {
+    const finalState: 'weapon-tested' = result.finalState
+    const diagnostic: null = result.diagnostic
+    void finalState
+    void diagnostic
+    return
+  }
+
+  const diagnostic: BattleDiagnostic = result.diagnostic
+  void diagnostic
+}
+
+void assertBattleEventNarrowing
+void assertBattleRunResultNarrowing
 
 function instruction(
   instructionId: string,
@@ -84,6 +147,16 @@ describe('dragon palace battle engine', () => {
       sourceBlockId: 'test-block',
       opcode: 'test_weapon',
     })
+
+    const requestRejection = requestFirst.events.find(
+      (event) => event.type === 'instruction-rejected',
+    )
+    const testRejection = testFirst.events.find(
+      (event) => event.type === 'instruction-rejected',
+    )
+    expect(requestRejection?.messageCode).toBe(requestFirst.diagnostic?.messageCode)
+    expect(testRejection?.messageCode).toBe(testFirst.diagnostic?.messageCode)
+    expect(requestRejection?.messageCode).not.toBe(testRejection?.messageCode)
   })
 
   it('rejects a repeated instruction and stops at the state reached before it', () => {
@@ -172,5 +245,57 @@ describe('dragon palace battle engine', () => {
     runDragonPalaceBattle(trace)
 
     expect(trace).toEqual(snapshot)
+  })
+
+  const prefixByState: Record<DragonPalaceState, BattleInstruction[]> = {
+    'outside-palace': [],
+    'entered-palace': [instruction('prefix-enter', 'prefix-enter-block', 'enter_palace')],
+    'weapon-requested': [
+      instruction('prefix-enter', 'prefix-enter-block', 'enter_palace'),
+      instruction('prefix-request', 'prefix-request-block', 'request_weapon'),
+    ],
+    'weapon-tested': [
+      instruction('prefix-enter', 'prefix-enter-block', 'enter_palace'),
+      instruction('prefix-request', 'prefix-request-block', 'request_weapon'),
+      instruction('prefix-test', 'prefix-test-block', 'test_weapon'),
+    ],
+  }
+
+  const transitionCases: Array<{
+    state: DragonPalaceState
+    opcode: BattleOpcode
+    nextState: DragonPalaceState | null
+  }> = [
+    { state: 'outside-palace', opcode: 'enter_palace', nextState: 'entered-palace' },
+    { state: 'outside-palace', opcode: 'request_weapon', nextState: null },
+    { state: 'outside-palace', opcode: 'test_weapon', nextState: null },
+    { state: 'entered-palace', opcode: 'enter_palace', nextState: null },
+    { state: 'entered-palace', opcode: 'request_weapon', nextState: 'weapon-requested' },
+    { state: 'entered-palace', opcode: 'test_weapon', nextState: null },
+    { state: 'weapon-requested', opcode: 'enter_palace', nextState: null },
+    { state: 'weapon-requested', opcode: 'request_weapon', nextState: null },
+    { state: 'weapon-requested', opcode: 'test_weapon', nextState: 'weapon-tested' },
+    { state: 'weapon-tested', opcode: 'enter_palace', nextState: null },
+    { state: 'weapon-tested', opcode: 'request_weapon', nextState: null },
+    { state: 'weapon-tested', opcode: 'test_weapon', nextState: null },
+  ]
+
+  it.each(transitionCases)('$state + $opcode transitions to $nextState', ({
+    state,
+    opcode,
+    nextState,
+  }) => {
+    const attemptedInstruction = instruction('attempt', 'attempt-block', opcode)
+    const result = runDragonPalaceBattle([...prefixByState[state], attemptedInstruction])
+    const attemptedEvent = result.events.find(
+      (event) => event.instructionId === attemptedInstruction.instructionId,
+    )
+
+    expect(attemptedEvent?.type).toBe(
+      nextState === null ? 'instruction-rejected' : 'instruction-accepted',
+    )
+    expect(result.finalState).toBe(nextState ?? state)
+    expect(result.completed).toBe(nextState === 'weapon-tested')
+    expect(result.diagnostic === null).toBe(nextState === 'weapon-tested')
   })
 })
