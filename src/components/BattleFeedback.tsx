@@ -6,6 +6,7 @@ type FeedbackDiagnostic = CompileDiagnostic | BattleDiagnostic
 
 interface Props {
   diagnostic: FeedbackDiagnostic | null
+  occurrenceId: string | number
   onFocusBlock: (blockId: string) => void
   onFocusWorkspace: () => void
 }
@@ -42,12 +43,18 @@ function feedbackCopy(diagnostic: FeedbackDiagnostic): string {
     ?? '这条指令和当前场景顺序对不上，请观察场景状态。'
 }
 
-export function BattleFeedback({ diagnostic, onFocusBlock, onFocusWorkspace }: Props) {
+export function BattleFeedback({
+  diagnostic,
+  occurrenceId,
+  onFocusBlock,
+  onFocusWorkspace,
+}: Props) {
   const alertRef = useRef<HTMLElement>(null)
+  const hasDiagnostic = diagnostic !== null
 
   useEffect(() => {
-    if (diagnostic !== null) alertRef.current?.focus()
-  }, [diagnostic])
+    if (hasDiagnostic) alertRef.current?.focus()
+  }, [hasDiagnostic, occurrenceId])
 
   if (diagnostic === null) return null
   const sourceBlockId = diagnostic.sourceBlockId

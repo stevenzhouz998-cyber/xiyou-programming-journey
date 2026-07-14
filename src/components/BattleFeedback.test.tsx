@@ -17,7 +17,7 @@ describe('BattleFeedback', () => {
       concept: 'program-structure',
     }
 
-    render(<BattleFeedback diagnostic={diagnostic} onFocusBlock={() => undefined} onFocusWorkspace={() => undefined} />)
+    render(<BattleFeedback diagnostic={diagnostic} occurrenceId={1} onFocusBlock={() => undefined} onFocusWorkspace={() => undefined} />)
 
     expect(screen.getByRole('alert')).toHaveTextContent(copy)
   })
@@ -34,7 +34,7 @@ describe('BattleFeedback', () => {
       messageCode: 'dragon-palace.sequence-precondition.outside-palace.request_weapon',
     }
 
-    render(<BattleFeedback diagnostic={diagnostic} onFocusBlock={onFocusBlock} onFocusWorkspace={() => undefined} />)
+    render(<BattleFeedback diagnostic={diagnostic} occurrenceId={1} onFocusBlock={onFocusBlock} onFocusWorkspace={() => undefined} />)
     fireEvent.click(screen.getByRole('button', { name: '回到问题积木' }))
 
     expect(screen.getByRole('alert')).toHaveTextContent('龙王还听不到请求')
@@ -54,7 +54,7 @@ describe('BattleFeedback', () => {
       messageCode: 'dragon-palace.program-ended-incomplete.entered-palace',
     }
 
-    render(<BattleFeedback diagnostic={diagnostic} onFocusBlock={onFocusBlock} onFocusWorkspace={() => undefined} />)
+    render(<BattleFeedback diagnostic={diagnostic} occurrenceId={1} onFocusBlock={onFocusBlock} onFocusWorkspace={() => undefined} />)
     fireEvent.click(screen.getByRole('button', { name: '回到问题积木' }))
 
     expect(screen.getByRole('alert')).toHaveTextContent('在最后一块积木之后还缺一步')
@@ -79,6 +79,7 @@ describe('BattleFeedback', () => {
         <div aria-label="Blockly 积木编辑区" tabIndex={0} />
         <BattleFeedback
           diagnostic={diagnostic}
+          occurrenceId={1}
           onFocusBlock={onFocusBlock}
           onFocusWorkspace={() => {
             onFocusWorkspace()
@@ -106,23 +107,20 @@ describe('BattleFeedback', () => {
       messageCode: '<script>external-words</script>',
     }
 
-    render(<BattleFeedback diagnostic={diagnostic} onFocusBlock={() => undefined} onFocusWorkspace={() => undefined} />)
+    render(<BattleFeedback diagnostic={diagnostic} occurrenceId={1} onFocusBlock={() => undefined} onFocusWorkspace={() => undefined} />)
 
     expect(screen.getByRole('alert')).toHaveTextContent('这条指令和当前场景顺序对不上')
     expect(screen.getByRole('alert')).not.toHaveTextContent('external-words')
   })
 
-  it('focuses the alert for each new diagnostic', () => {
-    const first: CompileDiagnostic = {
+  it('focuses once per explicit failure occurrence instead of diagnostic object identity', () => {
+    const diagnostic: CompileDiagnostic = {
       code: 'empty-workspace', sourceBlockId: null, concept: 'program-structure',
-    }
-    const second: CompileDiagnostic = {
-      code: 'multiple-top-level', sourceBlockId: 'real-block', concept: 'program-structure',
     }
     const view = render(
       <>
         <button type="button">outside focus</button>
-        <BattleFeedback diagnostic={first} onFocusBlock={() => undefined} onFocusWorkspace={() => undefined} />
+        <BattleFeedback diagnostic={diagnostic} occurrenceId={1} onFocusBlock={() => undefined} onFocusWorkspace={() => undefined} />
       </>,
     )
     expect(document.activeElement).toBe(screen.getByRole('alert'))
@@ -131,11 +129,18 @@ describe('BattleFeedback', () => {
     view.rerender(
       <>
         <button type="button">outside focus</button>
-        <BattleFeedback diagnostic={second} onFocusBlock={() => undefined} onFocusWorkspace={() => undefined} />
+        <BattleFeedback diagnostic={{ ...diagnostic }} occurrenceId={1} onFocusBlock={() => undefined} onFocusWorkspace={() => undefined} />
       </>,
     )
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'outside focus' }))
 
+    view.rerender(
+      <>
+        <button type="button">outside focus</button>
+        <BattleFeedback diagnostic={{ ...diagnostic }} occurrenceId={2} onFocusBlock={() => undefined} onFocusWorkspace={() => undefined} />
+      </>,
+    )
     expect(document.activeElement).toBe(screen.getByRole('alert'))
-    expect(screen.getByRole('alert')).toHaveTextContent('多个开头')
+    expect(screen.getByRole('alert')).toHaveTextContent('指令卷轴还是空的')
   })
 })

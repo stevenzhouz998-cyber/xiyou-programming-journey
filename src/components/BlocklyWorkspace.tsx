@@ -21,6 +21,7 @@ import {
   deleteActionBlock,
   moveActionBlock,
 } from '../blockly/workspaceCommands'
+import { PROGRESS_SCHEMA_LIMITS } from '../progress/schema'
 
 interface Props {
   missionId: 'w1-m1'
@@ -126,10 +127,6 @@ function withoutBlocklyEvents<T>(operation: () => T): T {
   }
 }
 
-const MAX_LEGACY_BYTES = 128 * 1024
-const MAX_LEGACY_NODES = 256
-const MAX_LEGACY_ID_LENGTH = 128
-
 type LegacyRawNode = {
   id: string
   label: keyof typeof LEGACY_ACTION_LABELS
@@ -164,10 +161,10 @@ function isSafeLegacyCoordinate(value: unknown): value is number {
 }
 
 function validateLegacyRaw(raw: string): { parsed: Record<string, unknown>; nodes: LegacyRawNode[] } {
-  if (raw.length > MAX_LEGACY_BYTES) {
+  if (raw.length > PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes) {
     throw new Error('Legacy workspace exceeds the byte limit')
   }
-  if (new TextEncoder().encode(raw).byteLength > MAX_LEGACY_BYTES) {
+  if (new TextEncoder().encode(raw).byteLength > PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes) {
     throw new Error('Legacy workspace exceeds the byte limit')
   }
   const parsed: unknown = JSON.parse(raw)
@@ -185,7 +182,10 @@ function validateLegacyRaw(raw: string): { parsed: Record<string, unknown>; node
   const ids = new Set<string>()
   const nodes: LegacyRawNode[] = []
   const visit = (value: unknown, isTop: boolean, depth: number): LegacyRawNode => {
-    if (depth > MAX_LEGACY_NODES || nodes.length >= MAX_LEGACY_NODES) {
+    if (
+      depth > PROGRESS_SCHEMA_LIMITS.maxWorkspaceBlocks
+      || nodes.length >= PROGRESS_SCHEMA_LIMITS.maxWorkspaceBlocks
+    ) {
       throw new Error('Legacy workspace exceeds the node limit')
     }
     if (!isPlainRecord(value)) throw new Error('Legacy block is malformed')
@@ -201,7 +201,7 @@ function validateLegacyRaw(raw: string): { parsed: Record<string, unknown>; node
     if (
       typeof value.id !== 'string'
       || value.id.length === 0
-      || value.id.length > MAX_LEGACY_ID_LENGTH
+      || value.id.length > PROGRESS_SCHEMA_LIMITS.maxBlockOrSourceIdLength
       || ids.has(value.id)
     ) {
       throw new Error('Legacy block id is missing, duplicated, or too long')
@@ -238,7 +238,7 @@ function validateLegacyRaw(raw: string): { parsed: Record<string, unknown>; node
     return node
   }
 
-  if (container.blocks.length > MAX_LEGACY_NODES) {
+  if (container.blocks.length > PROGRESS_SCHEMA_LIMITS.maxWorkspaceBlocks) {
     throw new Error('Legacy workspace exceeds the node limit')
   }
   for (const top of container.blocks) visit(top, true, 1)
@@ -533,12 +533,15 @@ export function BlocklyWorkspace({
     if (!workspaceReady || workspace === null) return
     const incomingBytes = JSON.stringify(draft)
     if (incomingBytes === lastPropDraftBytesRef.current) return
-    lastPropDraftBytesRef.current = incomingBytes
-    if (incomingBytes === lastDraftBytesRef.current) return
+    if (incomingBytes === lastDraftBytesRef.current) {
+      lastPropDraftBytesRef.current = incomingBytes
+      return
+    }
 
     try {
       withoutBlocklyEvents(() => loadWorkspaceDraft(workspace, draft))
       lastDraftBytesRef.current = incomingBytes
+      lastPropDraftBytesRef.current = incomingBytes
       refreshWorkspace(false)
       setWorkspaceError(null)
     } catch {

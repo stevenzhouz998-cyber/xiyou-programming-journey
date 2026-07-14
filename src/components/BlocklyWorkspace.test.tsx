@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BattleDiagnostic } from '../battle/types'
 import type { CompileResult } from '../blockly/compiler'
 import type { WorkspaceDraftV1 } from '../blockly/draft'
+import { PROGRESS_SCHEMA_LIMITS } from '../progress/schema'
 import { BattleFeedback } from './BattleFeedback'
 import {
   BlocklyWorkspace,
@@ -57,6 +58,21 @@ function mutateLegacyBytes(mutate: (value: MutableJson) => void): string {
   const value = JSON.parse(legacyBytes(['进入龙宫'])) as MutableJson
   mutate(value)
   return JSON.stringify(value)
+}
+
+function boundedLegacyBytes(blockCount: number, idLength: number): string {
+  const blocks = Array.from({ length: blockCount }, (_, index) => {
+    const prefix = `legacy-${index}-`
+    if (prefix.length > idLength) throw new Error('Requested legacy id length is too short')
+    return {
+      type: 'xiyou_action',
+      id: prefix.padEnd(idLength, 'x'),
+      x: index * 2,
+      y: index * 3,
+      fields: { ACTION: '进入龙宫' },
+    }
+  })
+  return JSON.stringify({ blocks: { languageVersion: 0, blocks } })
 }
 
 function setup({
@@ -263,7 +279,9 @@ describe('BlocklyWorkspace', () => {
 
   it('migrates all three exact legacy labels with stable ids and connections, then removes saved bytes', async () => {
     localStorage.setItem(LEGACY_KEY, legacyBytes(['进入龙宫', '请求兵器', '试用兵器']))
-    const onDraftChange = vi.fn(() => ({ status: 'saved' as const }))
+    const onDraftChange = vi.fn<(draft: WorkspaceDraftV1) => { status: 'saved' }>(
+      () => ({ status: 'saved' }),
+    )
 
     setup({ onDraftChange })
 
@@ -278,6 +296,64 @@ describe('BlocklyWorkspace', () => {
     })
     expect(localStorage.getItem(LEGACY_KEY)).toBeNull()
     expect(screen.getAllByRole('listitem')).toHaveLength(3)
+  })
+
+  it('accepts a legacy block id with 129 characters', async () => {
+    localStorage.setItem(LEGACY_KEY, boundedLegacyBytes(1, 129))
+    const onDraftChange = vi.fn<(draft: WorkspaceDraftV1) => { status: 'saved' }>(
+      () => ({ status: 'saved' }),
+    )
+
+    setup({ onDraftChange })
+
+    await waitFor(() => expect(onDraftChange).toHaveBeenCalledTimes(1))
+    expect(onDraftChange.mock.calls[0]![0].blocks[0]?.id).toHaveLength(129)
+  })
+
+  it('accepts 257 legacy blocks', async () => {
+    localStorage.setItem(LEGACY_KEY, boundedLegacyBytes(257, 24))
+    const onDraftChange = vi.fn<(draft: WorkspaceDraftV1) => { status: 'saved' }>(
+      () => ({ status: 'saved' }),
+    )
+
+    setup({ onDraftChange })
+
+    await waitFor(() => expect(onDraftChange).toHaveBeenCalledTimes(1))
+    expect(onDraftChange.mock.calls[0]![0].blocks).toHaveLength(257)
+  })
+
+  it('accepts 500 blocks with 256-character ids above the old byte limit and preserves unsaved bytes', async () => {
+    const original = boundedLegacyBytes(500, 256)
+    expect(new TextEncoder().encode(original).byteLength).toBeGreaterThan(128 * 1024)
+    expect(new TextEncoder().encode(original).byteLength).toBeLessThan(
+      PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes,
+    )
+    localStorage.setItem(LEGACY_KEY, original)
+    const onDraftChange = vi.fn<(draft: WorkspaceDraftV1) => { status: 'unsaved' }>(
+      () => ({ status: 'unsaved' }),
+    )
+
+    setup({ onDraftChange })
+
+    await screen.findByText(/尚未保存/)
+    expect(onDraftChange).toHaveBeenCalledTimes(1)
+    expect(onDraftChange.mock.calls[0]![0].blocks).toHaveLength(500)
+    expect(onDraftChange.mock.calls[0]![0].blocks[0]?.id).toHaveLength(256)
+    expect(localStorage.getItem(LEGACY_KEY)).toBe(original)
+  })
+
+  it.each([
+    ['257-character id', boundedLegacyBytes(1, 257)],
+    ['501 blocks', boundedLegacyBytes(501, 24)],
+  ])('rejects a legacy workspace beyond the shared %s limit', async (_name, original) => {
+    localStorage.setItem(LEGACY_KEY, original)
+    const onDraftChange = vi.fn(() => ({ status: 'saved' as const }))
+
+    setup({ onDraftChange })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('旧版积木草稿无法安全迁移')
+    expect(onDraftChange).not.toHaveBeenCalled()
+    expect(localStorage.getItem(LEGACY_KEY)).toBe(original)
   })
 
   it('migrates the exact legacy empty workspace bytes and removes them only after saving', async () => {
@@ -375,7 +451,7 @@ describe('BlocklyWorkspace', () => {
     ['unsafe coordinate', () => mutateLegacyBytes((value) => {
       value.blocks.blocks[0].x = Number.MAX_SAFE_INTEGER + 1
     })],
-    ['oversized bytes', () => `${' '.repeat(128 * 1024)}${legacyBytes(['进入龙宫'])}`],
+    ['oversized bytes', () => `${' '.repeat(PROGRESS_SCHEMA_LIMITS.maxRawJsonBytes)}${legacyBytes(['进入龙宫'])}`],
   ])('rejects raw legacy %s before save or deletion', async (_name, makeBytes) => {
     const original = makeBytes()
     localStorage.setItem(LEGACY_KEY, original)
@@ -465,6 +541,63 @@ describe('BlocklyWorkspace', () => {
     expect(localStorage.getItem(LEGACY_KEY)).toBe(original)
   })
 
+  it('retries an equal cloned incoming draft after a transactional load failure', async () => {
+    const workspace = new Blockly.Workspace()
+    const realNewBlock = workspace.newBlock.bind(workspace)
+    let failIncomingOnce = true
+    workspace.newBlock = ((type: string, id?: string) => {
+      if (id === 'incoming-retry' && failIncomingOnce) {
+        failIncomingOnce = false
+        throw new Error('synthetic incoming load failure')
+      }
+      return realNewBlock(type, id)
+    }) as typeof workspace.newBlock
+    const incoming: WorkspaceDraftV1 = {
+      version: 1,
+      blocks: [
+        { id: 'incoming-retry', type: 'xiyou_enter_palace', nextId: null, x: 20, y: 30 },
+      ],
+    }
+    const result = setup({ workspace })
+
+    result.rerender(
+      <BlocklyWorkspaceAdapterProvider adapter={result.adapter}>
+        <BlocklyWorkspace
+          missionId="w1-m1"
+          draft={incoming}
+          onDraftChange={result.onDraftChange}
+          onRun={result.onRun}
+          focusBlockId={null}
+          onFocusHandled={result.onFocusHandled}
+        />
+      </BlocklyWorkspaceAdapterProvider>,
+    )
+    expect(await screen.findByRole('alert')).toHaveTextContent('传入的积木草稿无法安全恢复')
+    expect(workspace.getAllBlocks(false)).toEqual([])
+
+    result.rerender(
+      <BlocklyWorkspaceAdapterProvider adapter={result.adapter}>
+        <BlocklyWorkspace
+          missionId="w1-m1"
+          draft={structuredClone(incoming)}
+          onDraftChange={result.onDraftChange}
+          onRun={result.onRun}
+          focusBlockId={null}
+          onFocusHandled={result.onFocusHandled}
+        />
+      </BlocklyWorkspaceAdapterProvider>,
+    )
+
+    await waitFor(() => expect(workspace.getBlockById('incoming-retry')).not.toBeNull())
+    expect(screen.queryByText(/传入的积木草稿无法安全恢复/)).not.toBeInTheDocument()
+    expect(screen.getByRole('list')).toHaveTextContent('进入龙宫')
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }))
+    expect(result.onRun).toHaveBeenLastCalledWith({
+      ok: true,
+      trace: [expect.objectContaining({ sourceBlockId: 'incoming-retry', opcode: 'enter_palace' })],
+    })
+  })
+
   it('clears through the real workspace and persists the empty draft', () => {
     const { workspace, onDraftChange } = setup()
     fireEvent.click(screen.getByRole('button', { name: '加入：进入龙宫' }))
@@ -531,6 +664,7 @@ describe('BlocklyWorkspace', () => {
         </BlocklyWorkspaceAdapterProvider>
         <BattleFeedback
           diagnostic={diagnostic}
+          occurrenceId={1}
           onFocusBlock={onFocusBlock}
           onFocusWorkspace={() => {
             onFocusWorkspace()
