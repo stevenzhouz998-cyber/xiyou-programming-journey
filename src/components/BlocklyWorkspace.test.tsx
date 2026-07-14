@@ -280,6 +280,38 @@ describe('BlocklyWorkspace', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(3)
   })
 
+  it('migrates the exact legacy empty workspace bytes and removes them only after saving', async () => {
+    localStorage.setItem(LEGACY_KEY, '{}')
+    const onDraftChange = vi.fn(() => ({ status: 'saved' as const }))
+
+    setup({ onDraftChange })
+
+    await waitFor(() => expect(onDraftChange).toHaveBeenCalledTimes(1))
+    expect(onDraftChange).toHaveBeenCalledWith(EMPTY_DRAFT)
+    expect(localStorage.getItem(LEGACY_KEY)).toBeNull()
+    expect(screen.getByText(/指令卷轴还是空的/)).toBeInTheDocument()
+  })
+
+  it('keeps exact legacy empty bytes while unsaved and retries the same empty draft', async () => {
+    localStorage.setItem(LEGACY_KEY, '{}')
+    const onDraftChange = vi
+      .fn<(draft: WorkspaceDraftV1) => { status: 'saved' | 'unsaved' }>()
+      .mockReturnValueOnce({ status: 'unsaved' })
+      .mockReturnValueOnce({ status: 'saved' })
+
+    setup({ onDraftChange })
+
+    await screen.findByText(/尚未保存/)
+    expect(onDraftChange).toHaveBeenNthCalledWith(1, EMPTY_DRAFT)
+    expect(localStorage.getItem(LEGACY_KEY)).toBe('{}')
+
+    fireEvent.click(screen.getByRole('button', { name: '重试保存' }))
+
+    expect(onDraftChange).toHaveBeenNthCalledWith(2, EMPTY_DRAFT)
+    expect(screen.queryByText(/尚未保存/)).not.toBeInTheDocument()
+    expect(localStorage.getItem(LEGACY_KEY)).toBeNull()
+  })
+
   it('keeps original legacy bytes and shows unsaved when the migrated draft cannot be persisted', async () => {
     const original = legacyBytes(['进入龙宫'])
     localStorage.setItem(LEGACY_KEY, original)
@@ -295,6 +327,7 @@ describe('BlocklyWorkspace', () => {
   it.each([
     ['unknown label', () => legacyBytes(['潜入龙宫'])],
     ['malformed bytes', () => '{not-json'],
+    ['empty object with unknown keys', () => JSON.stringify({ unexpected: true })],
   ])('preserves %s instead of guessing a migration', async (_name, makeBytes) => {
     const original = makeBytes()
     localStorage.setItem(LEGACY_KEY, original)

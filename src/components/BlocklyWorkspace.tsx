@@ -172,6 +172,7 @@ function validateLegacyRaw(raw: string): { parsed: Record<string, unknown>; node
   }
   const parsed: unknown = JSON.parse(raw)
   if (!isPlainRecord(parsed)) throw new Error('Legacy workspace root is malformed')
+  if (Object.keys(parsed).length === 0) return { parsed, nodes: [] }
   assertExactKeys(parsed, ['blocks'], 'Legacy workspace root')
 
   const container = parsed.blocks
@@ -280,6 +281,7 @@ function assertLegacyConnection(block: Blockly.Block): void {
 
 function convertLegacyWorkspace(raw: string): WorkspaceDraftV1 {
   const validated = validateLegacyRaw(raw)
+  if (validated.nodes.length === 0) return { version: 1, blocks: [] }
 
   registerLegacyActionBlock()
   const legacyWorkspace = new Blockly.Workspace()

@@ -217,6 +217,45 @@ describe('workspace commands', () => {
 
     expect(workspaceState(workspace)).toEqual(before)
   })
+
+  it('rolls back every chain and position when a multi-top target reconnect throws', () => {
+    const targetHead = workspace.newBlock('xiyou_enter_palace', 'target-head')
+    const targetMiddle = workspace.newBlock('xiyou_request_weapon', 'target-middle')
+    const targetTail = workspace.newBlock('xiyou_test_weapon', 'target-tail')
+    const otherHead = workspace.newBlock('xiyou_enter_palace', 'other-head')
+    const otherTail = workspace.newBlock('xiyou_request_weapon', 'other-tail')
+    if (
+      !targetHead.nextConnection
+      || !targetMiddle.previousConnection
+      || !targetMiddle.nextConnection
+      || !targetTail.previousConnection
+      || !otherHead.nextConnection
+      || !otherTail.previousConnection
+    ) {
+      throw new Error('Expected statement connections')
+    }
+    targetHead.nextConnection.connect(targetMiddle.previousConnection)
+    targetMiddle.nextConnection.connect(targetTail.previousConnection)
+    otherHead.nextConnection.connect(otherTail.previousConnection)
+    targetHead.moveBy(20, 40)
+    otherHead.moveBy(300, 60)
+    const before = workspaceState(workspace)
+    const realConnect = targetHead.nextConnection.connect.bind(targetHead.nextConnection)
+    let shouldFail = true
+    targetHead.nextConnection.connect = ((other: Blockly.Connection) => {
+      if (shouldFail) {
+        shouldFail = false
+        throw new Error('synthetic multi-top delete reconnect failure')
+      }
+      return realConnect(other)
+    }) as typeof targetHead.nextConnection.connect
+
+    expect(() => deleteActionBlock(workspace, targetMiddle.id)).toThrow(
+      /synthetic multi-top delete reconnect failure/,
+    )
+
+    expect(workspaceState(workspace)).toEqual(before)
+  })
 })
 
 describe('WorkspaceSvg commands', () => {
