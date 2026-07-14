@@ -258,6 +258,11 @@ git commit -m "feat: compile real dragon palace blockly programs"
 - Modify: `src/progress/progress.ts`
 - Modify: `src/progress/schema.test.ts`
 - Modify: `src/progress/progress.test.ts`
+- Modify: `src/progress/storage.ts` (current-progress type propagation only; V3 keys remain Task 4)
+- Modify: `src/progress/storage.test.ts` (V3 result expectations only; key migration remains Task 4)
+- Modify: `src/context/ProgressContext.tsx`
+- Modify: `src/components/ParentDataTools.tsx`
+- Modify: `src/components/ParentDataTools.test.tsx`
 
 - [ ] **Step 1: Write failing V3 schema tests**
 
@@ -308,18 +313,20 @@ Make `ProgressDocument = ProgressV1 | ProgressV2 | ProgressV3` and move runtime 
 
 - [ ] **Step 5: Update progress rules without changing other missions**
 
-Change `completeMission`, `isMissionUnlocked`, export/import, and weekly reports to accept ProgressV3. Preserve existing best-star behavior. For `w1-m1`, parent support also includes session concepts marked by the Task 5 threshold; other missions keep current behavior.
+Change `completeMission`, `isMissionUnlocked`, export/import, and weekly reports to accept ProgressV3. Preserve existing best-star behavior. Do not derive session support in this task; Task 5 owns the approved failure/hint thresholds and will add `w1-m1` session concepts to the parent report without changing the V3 schema.
+
+Propagate ProgressV3 as the current runtime type through storage results, ProgressContext, and ParentDataTools so this task remains typecheck-clean. Keep the existing V2 storage key constants and transaction algorithm unchanged until Task 4. Import results may report `sourceVersion: 1 | 2 | 3`, and parent-facing import copy must truthfully say V1/V2 were upgraded to V3 or that the source was already V3.
 
 - [ ] **Step 6: Run focused and existing progress tests**
 
-Run: `npm run test:unit -- src/progress/schema.test.ts src/progress/progress.test.ts && npm run typecheck`
+Run: `npm run test:unit -- src/progress/schema.test.ts src/progress/progress.test.ts src/progress/storage.test.ts src/context/ProgressContext.test.tsx src/components/ParentDataTools.test.tsx && npm test && npm run typecheck`
 
-Expected: all progress tests PASS and no V2 runtime type remains.
+Expected: all progress/storage/context/data-tool tests and the full suite PASS; no V2 current-runtime type remains, while V2 is retained only as a legacy document type and storage-key source for Task 4.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/progress/types.ts src/progress/schema.ts src/progress/progress.ts src/progress/schema.test.ts src/progress/progress.test.ts
+git add src/progress/types.ts src/progress/schema.ts src/progress/progress.ts src/progress/schema.test.ts src/progress/progress.test.ts src/progress/storage.ts src/progress/storage.test.ts src/context/ProgressContext.tsx src/components/ParentDataTools.tsx src/components/ParentDataTools.test.tsx
 git commit -m "feat: add strict progress v3 mission sessions"
 ```
 
