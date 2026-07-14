@@ -1,5 +1,6 @@
 import { allMissions } from '../course/course';
 import type { DragonBlockType } from '../blockly/dragonPalaceBlocks';
+import { runDragonPalaceBattle } from '../battle/dragonPalace';
 import type {
   BattleDiagnostic,
   BattleEvent,
@@ -390,6 +391,49 @@ function diagnostic(
   invalid(`${field}.type无效`);
 }
 
+function sameEvent(left: BattleEvent, right: BattleEvent): boolean {
+  return left.type === right.type
+    && left.state === right.state
+    && left.instructionId === right.instructionId
+    && left.sourceBlockId === right.sourceBlockId
+    && left.opcode === right.opcode
+    && left.messageCode === right.messageCode;
+}
+
+function sameDiagnostic(left: BattleDiagnostic | null, right: BattleDiagnostic | null): boolean {
+  if (left === null || right === null) return left === right;
+  return left.type === right.type
+    && left.concept === right.concept
+    && left.state === right.state
+    && left.instructionId === right.instructionId
+    && left.sourceBlockId === right.sourceBlockId
+    && left.opcode === right.opcode
+    && left.messageCode === right.messageCode;
+}
+
+function sameRunResult(left: BattleRunResult, right: BattleRunResult): boolean {
+  return left.completed === right.completed
+    && left.finalState === right.finalState
+    && left.events.length === right.events.length
+    && left.events.every((item, index) => sameEvent(item, right.events[index]))
+    && sameDiagnostic(left.diagnostic, right.diagnostic)
+    && left.penalty.livesLost === right.penalty.livesLost
+    && left.penalty.resourcesLost === right.penalty.resourcesLost
+    && left.penalty.starsLost === right.penalty.starsLost;
+}
+
+function verifyCanonicalRunResult(
+  parsed: BattleRunResult,
+  field: string,
+  lastTrace: readonly BattleInstruction[],
+): BattleRunResult {
+  const canonical = runDragonPalaceBattle(lastTrace);
+  if (!sameRunResult(parsed, canonical)) {
+    invalid(`${field}与lastTrace确定性运行结果不一致`);
+  }
+  return parsed;
+}
+
 function runResult(value: unknown, field: string, lastTrace: readonly BattleInstruction[]): BattleRunResult | null {
   if (value === null) return null;
   const source = object(value, field);
@@ -411,7 +455,11 @@ function runResult(value: unknown, field: string, lastTrace: readonly BattleInst
     if (events.some((item) => item.type === 'instruction-rejected')) {
       invalid(`${field}完成运行不得包含instruction-rejected`);
     }
-    return { completed: true, finalState: 'weapon-tested', events, diagnostic: null, penalty: parsedPenalty };
+    return verifyCanonicalRunResult(
+      { completed: true, finalState: 'weapon-tested', events, diagnostic: null, penalty: parsedPenalty },
+      field,
+      lastTrace,
+    );
   }
   if (source.completed !== false) invalid(`${field}.completed必须是布尔值`);
   if (source.diagnostic === null) invalid(`${field}未完成运行必须包含diagnostic`);
@@ -421,7 +469,11 @@ function runResult(value: unknown, field: string, lastTrace: readonly BattleInst
     && events.some((item) => item.type === 'instruction-rejected')) {
     invalid(`${field}不完整运行不得包含instruction-rejected`);
   }
-  return { completed: false, finalState, events, diagnostic: parsedDiagnostic, penalty: parsedPenalty };
+  return verifyCanonicalRunResult(
+    { completed: false, finalState, events, diagnostic: parsedDiagnostic, penalty: parsedPenalty },
+    field,
+    lastTrace,
+  );
 }
 
 function session(value: unknown, field: string): MissionSession {

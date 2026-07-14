@@ -395,6 +395,72 @@ describe('progress schema', () => {
     expect(() => migrateProgress(rejected)).toThrow(/lastRun/);
   });
 
+  it('rejects forged accepted and state-changed events that the trace cannot execute', () => {
+    const value = validV3();
+    const impossibleTrace = [trace[2]];
+    value.sessions['w1-m1'].lastTrace = impossibleTrace;
+    value.sessions['w1-m1'].lastRun = {
+      completed: true,
+      finalState: 'weapon-tested',
+      events: [
+        {
+          type: 'run-started', state: 'outside-palace', instructionId: null, sourceBlockId: null,
+          opcode: null, messageCode: 'forged.start',
+        },
+        {
+          type: 'instruction-accepted', state: 'outside-palace', ...impossibleTrace[0],
+          messageCode: 'forged.accepted',
+        },
+        {
+          type: 'state-changed', state: 'weapon-tested', ...impossibleTrace[0],
+          messageCode: 'forged.state-changed',
+        },
+        {
+          type: 'run-finished', state: 'weapon-tested', instructionId: null, sourceBlockId: null,
+          opcode: null, messageCode: 'forged.finished',
+        },
+      ],
+      diagnostic: null,
+      penalty: { livesLost: 0, resourcesLost: 0, starsLost: 0 },
+    };
+
+    expect(() => migrateProgress(value)).toThrow(/lastTrace.*不一致|确定性/);
+  });
+
+  it.each([
+    ['missing event', (events: NonNullable<MissionSession['lastRun']>['events']) => { events.splice(1, 1); }],
+    ['reordered events', (events: NonNullable<MissionSession['lastRun']>['events']) => {
+      [events[1], events[2]] = [events[2], events[1]];
+    }],
+    ['duplicate event', (events: NonNullable<MissionSession['lastRun']>['events']) => {
+      events.splice(1, 0, structuredClone(events[1]));
+    }],
+  ])('rejects a canonical run with %s', (_label, mutate) => {
+    const value = validV3();
+    mutate(value.sessions['w1-m1'].lastRun!.events);
+    expect(() => migrateProgress(value)).toThrow(/lastTrace.*不一致|确定性/);
+  });
+
+  it('rejects noncanonical message codes even when every event field is otherwise valid', () => {
+    const value = validV3();
+    value.sessions['w1-m1'].lastRun!.events[1].messageCode = 'forged.noncanonical-message';
+    expect(() => migrateProgress(value)).toThrow(/lastTrace.*不一致|确定性/);
+  });
+
+  it('rejects a valid run result generated from a different trace', () => {
+    const value = validV3();
+    value.sessions['w1-m1'].lastRun = runDragonPalaceBattle(trace.slice(0, 1));
+    expect(() => migrateProgress(value)).toThrow(/lastTrace.*不一致|确定性/);
+  });
+
+  it('allows a null lastRun and still returns an isolated session tree', () => {
+    const value = validV3();
+    value.sessions['w1-m1'].lastRun = null;
+    const parsed = migrateProgress(value);
+    expect(parsed.sessions['w1-m1'].lastRun).toBeNull();
+    expect(parsed.sessions['w1-m1']).not.toBe(value.sessions['w1-m1']);
+  });
+
   it.each([null, [], new Date(), Object.create(null)])('rejects non-plain document objects', (value) => {
     expect(() => migrateProgress(value)).toThrow('进度文件格式无效');
   });
