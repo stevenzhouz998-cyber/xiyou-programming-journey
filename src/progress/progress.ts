@@ -4,6 +4,11 @@ import type { ProgressV3 } from './types';
 export type {
   MissionProgress,
   MissionSession,
+  MissionSessionById,
+  MissionSessions,
+  ExecutableMissionId,
+  DragonPalaceMissionSession,
+  RuyiStaffMissionSession,
   ProgressDocument,
   ProgressSettings,
   ProgressV1,
@@ -27,6 +32,8 @@ export interface WeeklyReport {
   total: number;
   stars: number;
   hintsUsed: number;
+  sessionRuns: number;
+  sessionAdjustments: number;
   needsSupport: string[];
 }
 
@@ -97,15 +104,25 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
   const missionSupport = missions
     .filter((mission) => (progress.missions[mission.id]?.hintsUsed ?? 0) >= 2)
     .map((mission) => mission.knowledge);
-  const sessionSupport = week === 1 && progress.sessions['w1-m1']
-    ? getSessionSupport(progress.sessions['w1-m1'])
-    : [];
+  const dragonSession = week === 1 ? progress.sessions['w1-m1'] : undefined;
+  const ruyiSession = week === 1 ? progress.sessions['w1-m2'] : undefined;
+  const sessionSupport = [
+    ...(dragonSession ? getSessionSupport(dragonSession, 'w1-m1') : []),
+    ...(ruyiSession ? getSessionSupport(ruyiSession, 'w1-m2') : []),
+  ];
+  const sessionRuns = (dragonSession?.totalRuns ?? 0) + (ruyiSession?.totalRuns ?? 0);
+  const sessionAdjustments = (dragonSession?.compileFailures ?? 0)
+    + (dragonSession?.runtimeFailures ?? 0)
+    + (ruyiSession?.compileFailures ?? 0)
+    + (ruyiSession?.runtimeFailures ?? 0);
   return {
     week,
     completed: records.length,
     total: missions.length,
     stars: records.reduce((sum, record) => sum + record.stars, 0),
     hintsUsed: records.reduce((sum, record) => sum + record.hintsUsed, 0),
+    sessionRuns,
+    sessionAdjustments,
     needsSupport: [...new Set([...missionSupport, ...sessionSupport])],
   };
 }

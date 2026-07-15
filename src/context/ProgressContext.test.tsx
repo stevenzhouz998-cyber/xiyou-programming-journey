@@ -1,17 +1,25 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ProgressProvider, useProgress, type ProgressContextValue } from './ProgressContext';
-import { createInitialProgress, serializeProgress } from '../progress/progress';
+import { completeMission, createInitialProgress, serializeProgress } from '../progress/progress';
 import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, LEGACY_PROGRESS_KEY, REVISION_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from '../progress/storage';
 import {
   createMissionSession,
   recordCompileFailure,
   recordHint,
+  recordRun,
 } from '../progress/session';
+import { runRuyiStaffBattle } from '../battle/ruyiStaff';
+import type { RuyiStaffInstruction } from '../battle/types';
 
 const originalStorage = localStorage;
 const originalLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
 const SESSION_NOW = '2026-07-15T06:00:00.000Z';
+const ruyiTrace: RuyiStaffInstruction[] = [
+  { instructionId: 'instruction:inspect', sourceBlockId: 'inspect', opcode: 'inspect_weights' },
+  { instructionId: 'instruction:choose', sourceBlockId: 'choose', opcode: 'choose_ruyi_staff' },
+  { instructionId: 'instruction:shrink', sourceBlockId: 'shrink', opcode: 'shrink_ruyi_staff' },
+];
 let latestContext: ProgressContextValue | null = null;
 
 function installImmediateLocks() {
@@ -141,7 +149,7 @@ describe('ProgressContext persistence status', () => {
     await waitFor(() => expect(held).toHaveLength(1));
     await act(async () => { held.shift()!(); await first; });
 
-    expect(latestContext!.progress.sessions['w1-m1'].compileFailures).toBe(2);
+    expect(latestContext!.progress.sessions['w1-m1']?.compileFailures).toBe(2);
 
     await waitFor(() => expect(held).toHaveLength(1));
     await act(async () => { held.shift()!(); await second; });
@@ -408,6 +416,34 @@ describe('ProgressContext persistence status', () => {
       .toEqual(state.sessions['w1-m1']);
   });
 
+  it('coordinates a typed w1-m2 run and completion without counting session writes as attempts', async () => {
+    const unlocked = completeMission(createInitialProgress(), 'w1-m1', { stars: 2, hintsUsed: 0 });
+    installStorage({
+      [CURRENT_PROGRESS_KEY]: serializeProgress(unlocked),
+      [REVISION_PROGRESS_KEY]: '0',
+    });
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    await act(async () => {
+      await latestContext!.updateMissionSession('w1-m2', (session) => (
+        recordRun(session, runRuyiStaffBattle(ruyiTrace), ruyiTrace, SESSION_NOW)
+      ));
+    });
+
+    let stored = JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!);
+    expect(stored.sessions['w1-m2']).toMatchObject({ totalRuns: 1, runtimeFailures: 0 });
+    expect(stored.missions['w1-m2']).toBeUndefined();
+    expect(localStorage.getItem(REVISION_PROGRESS_KEY)).toBe('1');
+
+    await act(async () => {
+      await latestContext!.complete('w1-m2', { stars: 3, hintsUsed: 0 });
+    });
+    stored = JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!);
+    expect(stored.missions['w1-m2']).toMatchObject({ attempts: 1, stars: 3 });
+    expect(stored.sessions['w1-m2']).toMatchObject({ totalRuns: 1 });
+    expect(localStorage.getItem(REVISION_PROGRESS_KEY)).toBe('2');
+  });
+
   it('passes legacy workspace cleanup through the same coordinated session save', async () => {
     const legacyWorkspaceKey = 'xiyou-workspace-w1-m1';
     installStorage({ [legacyWorkspaceKey]: '{"legacy":true}' });
@@ -491,10 +527,15 @@ describe('ProgressContext persistence status', () => {
     const before = screen.getByTestId('state').textContent;
     let updaterCalled = false;
 
-    expect(() => latestContext!.updateMissionSession('unknown-mission', (session) => {
+    const updater = (session: never) => {
       updaterCalled = true;
       return session;
-    })).toThrow('任务编号无效');
+    };
+    expect(() => Reflect.apply(
+      latestContext!.updateMissionSession,
+      null,
+      ['unknown-mission', updater],
+    )).toThrow('任务编号无效');
     expect(updaterCalled).toBe(false);
     expect(screen.getByTestId('state').textContent).toBe(before);
     expect(localStorage.getItem(CURRENT_PROGRESS_KEY)).toBeNull();

@@ -1,6 +1,8 @@
 import { allMissions } from '../course/course';
 import type { DragonBlockType } from '../blockly/dragonPalaceBlocks';
+import type { RuyiBlockType } from '../blockly/ruyiStaffBlocks';
 import { runDragonPalaceBattle } from '../battle/dragonPalace';
+import { runRuyiStaffBattle } from '../battle/ruyiStaff';
 import type {
   BattleDiagnostic,
   BattleEvent,
@@ -9,12 +11,22 @@ import type {
   DragonPalaceInstruction,
   DragonPalaceOpcode,
   DragonPalaceState,
+  RuyiStaffBattleDiagnostic,
+  RuyiStaffBattleEvent,
+  RuyiStaffBattleRunResult,
+  RuyiStaffInstruction,
+  RuyiStaffOpcode,
+  RuyiStaffState,
 } from '../battle/types';
 import type { WorkspaceDraftV1 } from '../blockly/draft';
+import type { RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft';
 import { isValidParentAccessRecord } from './parentAccess';
 import type {
   MissionProgress,
   MissionSession,
+  MissionSessions,
+  DragonPalaceMissionSession,
+  RuyiStaffMissionSession,
   ProgressSettings,
   ProgressV1,
   ProgressV2,
@@ -49,13 +61,24 @@ export const createInitialProgress = (): ProgressV3 => ({
 });
 
 const missionIds = new Set(allMissions.map((mission) => mission.id));
-const blockTypes = new Set<DragonBlockType>([
+const dragonBlockTypes = new Set<DragonBlockType>([
   'xiyou_enter_palace', 'xiyou_request_weapon', 'xiyou_test_weapon',
 ]);
-const states = new Set<DragonPalaceState>([
+const dragonStates = new Set<DragonPalaceState>([
   'outside-palace', 'entered-palace', 'weapon-requested', 'weapon-tested',
 ]);
 const eventTypes = new Set<BattleEvent['type']>([
+  'run-started', 'instruction-accepted', 'instruction-rejected', 'state-changed', 'run-finished',
+]);
+const ruyiBlockTypes = new Set<RuyiBlockType>([
+  'xiyou_inspect_weights', 'xiyou_choose_sabre', 'xiyou_choose_halberd',
+  'xiyou_choose_ruyi_staff', 'xiyou_shrink_ruyi_staff',
+]);
+const ruyiStates = new Set<RuyiStaffState>([
+  'awaiting-inspection', 'weights-inspected', 'wrong-weapon-selected',
+  'ruyi-staff-selected', 'ruyi-staff-shrunk',
+]);
+const ruyiEventTypes = new Set<RuyiStaffBattleEvent['type']>([
   'run-started', 'instruction-accepted', 'instruction-rejected', 'state-changed', 'run-finished',
 ]);
 const hintTiers = new Set<MissionSession['usedHintTiers'][number]>(['observe', 'think', 'partial']);
@@ -152,12 +175,32 @@ function pin(value: unknown): string {
 }
 
 function state(value: unknown, field: string): DragonPalaceState {
-  if (typeof value !== 'string' || !states.has(value as DragonPalaceState)) invalid(`${field}状态无效`);
+  if (typeof value !== 'string' || !dragonStates.has(value as DragonPalaceState)) invalid(`${field}状态无效`);
   return value as DragonPalaceState;
 }
 
 function opcode(value: unknown, field: string): DragonPalaceOpcode {
   if (value !== 'enter_palace' && value !== 'request_weapon' && value !== 'test_weapon') {
+    invalid(`${field}操作码无效`);
+  }
+  return value;
+}
+
+function ruyiState(value: unknown, field: string): RuyiStaffState {
+  if (typeof value !== 'string' || !ruyiStates.has(value as RuyiStaffState)) {
+    invalid(`${field}状态无效`);
+  }
+  return value as RuyiStaffState;
+}
+
+function ruyiOpcode(value: unknown, field: string): RuyiStaffOpcode {
+  if (
+    value !== 'inspect_weights'
+    && value !== 'choose_sabre'
+    && value !== 'choose_halberd'
+    && value !== 'choose_ruyi_staff'
+    && value !== 'shrink_ruyi_staff'
+  ) {
     invalid(`${field}操作码无效`);
   }
   return value;
@@ -269,7 +312,7 @@ function workspace(value: unknown, field: string): WorkspaceDraftV1 {
       `${blockField}.id`,
       PROGRESS_SCHEMA_LIMITS.maxBlockOrSourceIdLength,
     );
-    if (typeof block.type !== 'string' || !blockTypes.has(block.type as DragonBlockType)) {
+    if (typeof block.type !== 'string' || !dragonBlockTypes.has(block.type as DragonBlockType)) {
       invalid(`${blockField}.type不是已知workspace积木`);
     }
     const nextId = block.nextId === null
@@ -282,6 +325,72 @@ function workspace(value: unknown, field: string): WorkspaceDraftV1 {
     return {
       id,
       type: block.type as DragonBlockType,
+      nextId,
+      x: coordinate(block.x, `${blockField}.x`),
+      y: coordinate(block.y, `${blockField}.y`),
+    };
+  });
+
+  const ids = new Set<string>();
+  for (const block of blocks) {
+    if (ids.has(block.id)) invalid(`${field}包含重复block id ${block.id}`);
+    ids.add(block.id);
+  }
+  const predecessors = new Set<string>();
+  const incomingEdges = new Map([...ids].map((id) => [id, 0]));
+  for (const block of blocks) {
+    if (block.nextId === null) continue;
+    if (!ids.has(block.nextId)) invalid(`${field}包含未知nextId ${block.nextId}`);
+    if (block.nextId === block.id) invalid(`${field}包含自环 ${block.id}`);
+    if (predecessors.has(block.nextId)) invalid(`${field}中的 ${block.nextId} 有多个前驱`);
+    predecessors.add(block.nextId);
+    incomingEdges.set(block.nextId, 1);
+  }
+  const nextById = new Map(blocks.map((block) => [block.id, block.nextId]));
+  const queue = blocks.filter((block) => incomingEdges.get(block.id) === 0).map((block) => block.id);
+  let visited = 0;
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+    visited += 1;
+    const next = nextById.get(current) ?? null;
+    if (next === null) continue;
+    incomingEdges.set(next, (incomingEdges.get(next) ?? 0) - 1);
+    if (incomingEdges.get(next) === 0) queue.push(next);
+  }
+  if (visited !== blocks.length) invalid(`${field}包含cycle`);
+  return { version: 1, blocks };
+}
+
+function ruyiWorkspace(value: unknown, field: string): RuyiWorkspaceDraftV1 {
+  const source = object(value, field);
+  exactKeys(source, field, ['version', 'blocks']);
+  if (source.version !== 1) invalid(`${field}.version必须是1`);
+  const blocks = boundedArray(
+    source.blocks,
+    `${field}.blocks`,
+    PROGRESS_SCHEMA_LIMITS.maxWorkspaceBlocks,
+  ).map((rawBlock, index) => {
+    const blockField = `${field}.blocks[${index}]`;
+    const block = object(rawBlock, blockField);
+    exactKeys(block, blockField, ['id', 'type', 'nextId', 'x', 'y']);
+    const id = nonEmptyBoundedString(
+      block.id,
+      `${blockField}.id`,
+      PROGRESS_SCHEMA_LIMITS.maxBlockOrSourceIdLength,
+    );
+    if (typeof block.type !== 'string' || !ruyiBlockTypes.has(block.type as RuyiBlockType)) {
+      invalid(`${blockField}.type不是已知workspace积木`);
+    }
+    const nextId = block.nextId === null
+      ? null
+      : nonEmptyBoundedString(
+        block.nextId,
+        `${blockField}.nextId`,
+        PROGRESS_SCHEMA_LIMITS.maxBlockOrSourceIdLength,
+      );
+    return {
+      id,
+      type: block.type as RuyiBlockType,
       nextId,
       x: coordinate(block.x, `${blockField}.x`),
       y: coordinate(block.y, `${blockField}.y`),
@@ -338,8 +447,8 @@ function instruction(value: unknown, field: string): DragonPalaceInstruction {
 }
 
 interface ParsedTrace {
-  instructions: BattleInstruction[];
-  provenance: ReadonlyMap<string, BattleInstruction>;
+  instructions: DragonPalaceInstruction[];
+  provenance: ReadonlyMap<string, DragonPalaceInstruction>;
 }
 
 function trace(value: unknown, field: string): ParsedTrace {
@@ -349,7 +458,52 @@ function trace(value: unknown, field: string): ParsedTrace {
     PROGRESS_SCHEMA_LIMITS.maxTraceInstructions,
   ).map((item, index) => instruction(item, `${field}[${index}]`));
   const sourceBlockIds = new Set<string>();
-  const provenance = new Map<string, BattleInstruction>();
+  const provenance = new Map<string, DragonPalaceInstruction>();
+  for (const item of instructions) {
+    if (sourceBlockIds.has(item.sourceBlockId)) {
+      invalid(`${field}包含重复sourceBlockId ${item.sourceBlockId}`);
+    }
+    if (provenance.has(item.instructionId)) {
+      invalid(`${field}包含重复instructionId ${item.instructionId}`);
+    }
+    sourceBlockIds.add(item.sourceBlockId);
+    provenance.set(item.instructionId, item);
+  }
+  return { instructions, provenance };
+}
+
+function ruyiInstruction(value: unknown, field: string): RuyiStaffInstruction {
+  const source = object(value, field);
+  exactKeys(source, field, ['instructionId', 'sourceBlockId', 'opcode']);
+  const sourceBlockId = nonEmptyBoundedString(
+    source.sourceBlockId,
+    `${field}.sourceBlockId`,
+    PROGRESS_SCHEMA_LIMITS.maxBlockOrSourceIdLength,
+  );
+  const instructionId = nonEmptyBoundedString(
+    source.instructionId,
+    `${field}.instructionId`,
+    PROGRESS_SCHEMA_LIMITS.maxInstructionIdLength,
+  );
+  if (instructionId !== `${INSTRUCTION_ID_PREFIX}${sourceBlockId}`) {
+    invalid(`${field}.instructionId必须由sourceBlockId派生`);
+  }
+  return { instructionId, sourceBlockId, opcode: ruyiOpcode(source.opcode, `${field}.opcode`) };
+}
+
+interface ParsedRuyiTrace {
+  instructions: RuyiStaffInstruction[];
+  provenance: ReadonlyMap<string, RuyiStaffInstruction>;
+}
+
+function ruyiTrace(value: unknown, field: string): ParsedRuyiTrace {
+  const instructions = boundedArray(
+    value,
+    field,
+    PROGRESS_SCHEMA_LIMITS.maxTraceInstructions,
+  ).map((item, index) => ruyiInstruction(item, `${field}[${index}]`));
+  const sourceBlockIds = new Set<string>();
+  const provenance = new Map<string, RuyiStaffInstruction>();
   for (const item of instructions) {
     if (sourceBlockIds.has(item.sourceBlockId)) {
       invalid(`${field}包含重复sourceBlockId ${item.sourceBlockId}`);
@@ -585,7 +739,245 @@ function runResult(value: unknown, field: string, lastTrace: ParsedTrace): Battl
   );
 }
 
-function session(value: unknown, field: string): MissionSession {
+function ruyiEvent(
+  value: unknown,
+  field: string,
+  provenance: ReadonlyMap<string, RuyiStaffInstruction>,
+): RuyiStaffBattleEvent {
+  const source = object(value, field);
+  exactKeys(source, field, ['type', 'state', 'instructionId', 'sourceBlockId', 'opcode', 'messageCode']);
+  if (typeof source.type !== 'string'
+    || !ruyiEventTypes.has(source.type as RuyiStaffBattleEvent['type'])) {
+    invalid(`${field}.type无效`);
+  }
+  const type = source.type as RuyiStaffBattleEvent['type'];
+  const parsedState = ruyiState(source.state, `${field}.state`);
+  const messageCode = nonEmptyBoundedString(
+    source.messageCode,
+    `${field}.messageCode`,
+    PROGRESS_SCHEMA_LIMITS.maxMessageCodeLength,
+  );
+  if (type === 'run-started' || type === 'run-finished') {
+    if (source.instructionId !== null || source.sourceBlockId !== null || source.opcode !== null) {
+      invalid(`${field}生命周期事件不得携带指令来源`);
+    }
+    return {
+      type,
+      state: parsedState,
+      instructionId: null,
+      sourceBlockId: null,
+      opcode: null,
+      messageCode,
+    };
+  }
+
+  const parsedInstruction = ruyiInstruction({
+    instructionId: source.instructionId,
+    sourceBlockId: source.sourceBlockId,
+    opcode: source.opcode,
+  }, field);
+  const traceInstruction = provenance.get(parsedInstruction.instructionId);
+  if (traceInstruction === undefined || !sameInstruction(parsedInstruction, traceInstruction)) {
+    invalid(`${field}的指令来源不在lastTrace中`);
+  }
+  return { type, state: parsedState, ...parsedInstruction, messageCode };
+}
+
+function ruyiDiagnostic(
+  value: unknown,
+  field: string,
+  provenance: ReadonlyMap<string, RuyiStaffInstruction>,
+  events: readonly RuyiStaffBattleEvent[],
+): RuyiStaffBattleDiagnostic {
+  const source = object(value, field);
+  if (source.type === 'instruction-rejected') {
+    exactKeys(source, field, [
+      'type', 'concept', 'state', 'instructionId', 'sourceBlockId', 'opcode', 'messageCode',
+    ]);
+    if (source.concept !== 'sequence-precondition' && source.concept !== 'wrong-weapon-selection') {
+      invalid(`${field}.concept无效`);
+    }
+    const parsedInstruction = ruyiInstruction({
+      instructionId: source.instructionId,
+      sourceBlockId: source.sourceBlockId,
+      opcode: source.opcode,
+    }, field);
+    const traceInstruction = provenance.get(parsedInstruction.instructionId);
+    if (traceInstruction === undefined || !sameInstruction(parsedInstruction, traceInstruction)) {
+      invalid(`${field}的指令来源不在lastTrace中`);
+    }
+    const parsed: RuyiStaffBattleDiagnostic = {
+      type: 'instruction-rejected',
+      concept: source.concept,
+      state: ruyiState(source.state, `${field}.state`),
+      ...parsedInstruction,
+      messageCode: nonEmptyBoundedString(
+        source.messageCode,
+        `${field}.messageCode`,
+        PROGRESS_SCHEMA_LIMITS.maxMessageCodeLength,
+      ),
+    };
+    const matchingEvent = events.some((item) => item.type === 'instruction-rejected'
+      && item.state === parsed.state
+      && item.messageCode === parsed.messageCode
+      && sameInstruction(parsed, item));
+    if (!matchingEvent) invalid(`${field}必须对应instruction-rejected事件`);
+    return parsed;
+  }
+
+  if (source.type === 'program-ended-incomplete') {
+    exactKeys(source, field, [
+      'type', 'concept', 'state', 'instructionId', 'sourceBlockId', 'opcode', 'messageCode',
+    ]);
+    if (source.concept !== 'completeness') invalid(`${field}.concept无效`);
+    if (source.instructionId !== null || source.opcode !== null) {
+      invalid(`${field}不完整诊断的instructionId/opcode必须为null`);
+    }
+    const sourceBlockId = source.sourceBlockId === null
+      ? null
+      : nonEmptyBoundedString(
+        source.sourceBlockId,
+        `${field}.sourceBlockId`,
+        PROGRESS_SCHEMA_LIMITS.maxBlockOrSourceIdLength,
+      );
+    const lastValidSource = [...events].reverse()
+      .find((item) => item.type === 'state-changed')?.sourceBlockId ?? null;
+    if (sourceBlockId !== lastValidSource) {
+      invalid(`${field}.sourceBlockId必须是最后有效指令来源或null`);
+    }
+    return {
+      type: 'program-ended-incomplete',
+      concept: 'completeness',
+      state: ruyiState(source.state, `${field}.state`),
+      instructionId: null,
+      sourceBlockId,
+      opcode: null,
+      messageCode: nonEmptyBoundedString(
+        source.messageCode,
+        `${field}.messageCode`,
+        PROGRESS_SCHEMA_LIMITS.maxMessageCodeLength,
+      ),
+    };
+  }
+  invalid(`${field}.type无效`);
+}
+
+function sameRuyiEvent(left: RuyiStaffBattleEvent, right: RuyiStaffBattleEvent): boolean {
+  return left.type === right.type
+    && left.state === right.state
+    && left.instructionId === right.instructionId
+    && left.sourceBlockId === right.sourceBlockId
+    && left.opcode === right.opcode
+    && left.messageCode === right.messageCode;
+}
+
+function sameRuyiDiagnostic(
+  left: RuyiStaffBattleDiagnostic | null,
+  right: RuyiStaffBattleDiagnostic | null,
+): boolean {
+  if (left === null || right === null) return left === right;
+  return left.type === right.type
+    && left.concept === right.concept
+    && left.state === right.state
+    && left.instructionId === right.instructionId
+    && left.sourceBlockId === right.sourceBlockId
+    && left.opcode === right.opcode
+    && left.messageCode === right.messageCode;
+}
+
+function sameRuyiRunResult(
+  left: RuyiStaffBattleRunResult,
+  right: RuyiStaffBattleRunResult,
+): boolean {
+  return left.completed === right.completed
+    && left.finalState === right.finalState
+    && left.events.length === right.events.length
+    && left.events.every((item, index) => sameRuyiEvent(item, right.events[index]))
+    && sameRuyiDiagnostic(left.diagnostic, right.diagnostic)
+    && left.penalty.livesLost === right.penalty.livesLost
+    && left.penalty.resourcesLost === right.penalty.resourcesLost
+    && left.penalty.starsLost === right.penalty.starsLost;
+}
+
+function verifyCanonicalRuyiRunResult(
+  parsed: RuyiStaffBattleRunResult,
+  field: string,
+  lastTrace: readonly RuyiStaffInstruction[],
+): RuyiStaffBattleRunResult {
+  const canonical = runRuyiStaffBattle(lastTrace);
+  if (!sameRuyiRunResult(parsed, canonical)) {
+    invalid(`${field}与lastTrace确定性运行结果不一致`);
+  }
+  return parsed;
+}
+
+function ruyiRunResult(
+  value: unknown,
+  field: string,
+  lastTrace: ParsedRuyiTrace,
+): RuyiStaffBattleRunResult | null {
+  if (value === null) return null;
+  const source = object(value, field);
+  exactKeys(source, field, ['completed', 'finalState', 'events', 'diagnostic', 'penalty']);
+  const events = boundedArray(
+    source.events,
+    `${field}.events`,
+    PROGRESS_SCHEMA_LIMITS.maxBattleEvents,
+  ).map((item, index) => (
+    ruyiEvent(item, `${field}.events[${index}]`, lastTrace.provenance)
+  ));
+  if (events.length < 2 || events[0].type !== 'run-started'
+    || events.at(-1)?.type !== 'run-finished') {
+    invalid(`${field}.events必须以run-started开始并以run-finished结束`);
+  }
+  if (events[0].state !== 'awaiting-inspection') {
+    invalid(`${field}.events起始状态必须是awaiting-inspection`);
+  }
+  const finalState = ruyiState(source.finalState, `${field}.finalState`);
+  if (events.at(-1)?.state !== finalState) invalid(`${field}.finalState必须对应结束事件`);
+  const parsedPenalty = penalty(source.penalty, `${field}.penalty`);
+
+  if (source.completed === true) {
+    if (finalState !== 'ruyi-staff-shrunk') {
+      invalid(`${field}完成运行必须到达ruyi-staff-shrunk`);
+    }
+    if (source.diagnostic !== null) invalid(`${field}完成运行的diagnostic必须为null`);
+    if (events.some((item) => item.type === 'instruction-rejected')) {
+      invalid(`${field}完成运行不得包含instruction-rejected`);
+    }
+    return verifyCanonicalRuyiRunResult({
+      completed: true,
+      finalState: 'ruyi-staff-shrunk',
+      events,
+      diagnostic: null,
+      penalty: parsedPenalty,
+    }, field, lastTrace.instructions);
+  }
+  if (source.completed !== false) invalid(`${field}.completed必须是布尔值`);
+  if (source.diagnostic === null) invalid(`${field}未完成运行必须包含diagnostic`);
+  const parsedDiagnostic = ruyiDiagnostic(
+    source.diagnostic,
+    `${field}.diagnostic`,
+    lastTrace.provenance,
+    events,
+  );
+  if (parsedDiagnostic.state !== finalState) {
+    invalid(`${field}.diagnostic.state必须等于finalState`);
+  }
+  if (parsedDiagnostic.type === 'program-ended-incomplete'
+    && events.some((item) => item.type === 'instruction-rejected')) {
+    invalid(`${field}不完整运行不得包含instruction-rejected`);
+  }
+  return verifyCanonicalRuyiRunResult({
+    completed: false,
+    finalState,
+    events,
+    diagnostic: parsedDiagnostic,
+    penalty: parsedPenalty,
+  }, field, lastTrace.instructions);
+}
+
+function dragonSession(value: unknown, field: string): DragonPalaceMissionSession {
   const source = object(value, field);
   exactKeys(source, field, [
     'workspace', 'lastTrace', 'lastRun', 'totalRuns', 'runtimeFailures', 'compileFailures',
@@ -621,12 +1013,54 @@ function session(value: unknown, field: string): MissionSession {
   };
 }
 
-function sessions(value: unknown): Record<string, MissionSession> {
+function ruyiSession(value: unknown, field: string): RuyiStaffMissionSession {
+  const source = object(value, field);
+  exactKeys(source, field, [
+    'workspace', 'lastTrace', 'lastRun', 'totalRuns', 'runtimeFailures', 'compileFailures',
+    'usedHintTiers', 'conceptFailures', 'lastRunAt', 'savedAt',
+  ]);
+  const lastTrace = ruyiTrace(source.lastTrace, `${field}.lastTrace`);
+  const tiers = array(source.usedHintTiers, `${field}.usedHintTiers`).map((item, index) => {
+    if (typeof item !== 'string' || !hintTiers.has(item as MissionSession['usedHintTiers'][number])) {
+      invalid(`${field}.usedHintTiers[${index}]提示层级无效`);
+    }
+    return item as MissionSession['usedHintTiers'][number];
+  });
+  if (new Set(tiers).size !== tiers.length) invalid(`${field}.usedHintTiers提示层级不得重复`);
+  const failures = object(source.conceptFailures, `${field}.conceptFailures`);
+  exactKeys(failures, `${field}.conceptFailures`, [
+    'programStructure', 'sequencePrecondition', 'completeness',
+  ]);
+  return {
+    workspace: ruyiWorkspace(source.workspace, `${field}.workspace`),
+    lastTrace: lastTrace.instructions,
+    lastRun: ruyiRunResult(source.lastRun, `${field}.lastRun`, lastTrace),
+    totalRuns: nonNegativeInteger(source.totalRuns, `${field}.totalRuns`),
+    runtimeFailures: nonNegativeInteger(source.runtimeFailures, `${field}.runtimeFailures`),
+    compileFailures: nonNegativeInteger(source.compileFailures, `${field}.compileFailures`),
+    usedHintTiers: tiers,
+    conceptFailures: {
+      programStructure: nonNegativeInteger(failures.programStructure, `${field}.conceptFailures.programStructure`),
+      sequencePrecondition: nonNegativeInteger(failures.sequencePrecondition, `${field}.conceptFailures.sequencePrecondition`),
+      completeness: nonNegativeInteger(failures.completeness, `${field}.conceptFailures.completeness`),
+    },
+    lastRunAt: nullableDate(source.lastRunAt, `${field}.lastRunAt`),
+    savedAt: date(source.savedAt, `${field}.savedAt`),
+  };
+}
+
+function sessions(value: unknown): MissionSessions {
   const source = object(value, 'sessions');
-  const result: Record<string, MissionSession> = {};
+  const result: MissionSessions = {};
   for (const [missionId, rawSession] of Object.entries(source)) {
     if (!missionIds.has(missionId)) invalid(`未知任务 ${missionId}`);
-    result[missionId] = session(rawSession, `sessions.${missionId}`);
+    if (missionId === 'w1-m1') {
+      result['w1-m1'] = dragonSession(rawSession, `sessions.${missionId}`);
+    } else if (missionId === 'w1-m2') {
+      result['w1-m2'] = ruyiSession(rawSession, `sessions.${missionId}`);
+    } else {
+      invalid(`任务 ${missionId} 尚不支持可执行会话`);
+    }
   }
   return result;
 }

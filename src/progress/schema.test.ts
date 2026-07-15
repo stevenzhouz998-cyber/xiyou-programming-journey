@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { runDragonPalaceBattle } from '../battle/dragonPalace';
+import { runRuyiStaffBattle } from '../battle/ruyiStaff';
+import type { RuyiStaffInstruction } from '../battle/types';
 import { createInitialProgress } from './progress';
 import { migrateProgress, parseProgress, PROGRESS_SCHEMA_LIMITS } from './schema';
-import type { MissionSession, ProgressV3 } from './types';
+import type {
+  DragonPalaceMissionSession,
+  ProgressV3,
+  RuyiStaffMissionSession,
+} from './types';
 
 const NOW = '2026-07-12T00:00:00.000Z';
 const {
@@ -45,7 +51,7 @@ const trace = [
   { instructionId: 'instruction:block-c', sourceBlockId: 'block-c', opcode: 'test_weapon' as const },
 ];
 
-const validSession = (): MissionSession => ({
+const validSession = (): DragonPalaceMissionSession => ({
   workspace: {
     version: 1 as const,
     blocks: [
@@ -64,10 +70,40 @@ const validSession = (): MissionSession => ({
   savedAt: NOW,
 });
 
-const validV3 = (): ProgressV3 => ({
+type ValidV3 = Omit<ProgressV3, 'sessions'> & {
+  sessions: { 'w1-m1': DragonPalaceMissionSession };
+};
+
+const validV3 = (): ValidV3 => ({
   ...validV2,
   version: 3 as const,
   sessions: { 'w1-m1': validSession() },
+});
+
+const ruyiTrace: RuyiStaffInstruction[] = [
+  { instructionId: 'instruction:inspect', sourceBlockId: 'inspect', opcode: 'inspect_weights' as const },
+  { instructionId: 'instruction:choose', sourceBlockId: 'choose', opcode: 'choose_ruyi_staff' as const },
+  { instructionId: 'instruction:shrink', sourceBlockId: 'shrink', opcode: 'shrink_ruyi_staff' as const },
+];
+
+const validRuyiSession = (): RuyiStaffMissionSession => ({
+  workspace: {
+    version: 1 as const,
+    blocks: [
+      { id: 'inspect', type: 'xiyou_inspect_weights' as const, nextId: 'choose', x: 10, y: 20 },
+      { id: 'choose', type: 'xiyou_choose_ruyi_staff' as const, nextId: 'shrink', x: 10, y: 60 },
+      { id: 'shrink', type: 'xiyou_shrink_ruyi_staff' as const, nextId: null, x: 10, y: 100 },
+    ],
+  },
+  lastTrace: structuredClone(ruyiTrace),
+  lastRun: runRuyiStaffBattle(ruyiTrace),
+  totalRuns: 1,
+  runtimeFailures: 0,
+  compileFailures: 0,
+  usedHintTiers: ['observe'] as Array<'observe' | 'think' | 'partial'>,
+  conceptFailures: { programStructure: 0, sequencePrecondition: 0, completeness: 0 },
+  lastRunAt: NOW,
+  savedAt: NOW,
 });
 
 describe('progress schema', () => {
@@ -75,6 +111,97 @@ describe('progress schema', () => {
     const progress = createInitialProgress();
     expect(progress).toMatchObject({ version: 3, schemaRevision: 1, sessions: {} });
     expect(parseProgress(JSON.stringify(progress))).toEqual(progress);
+  });
+
+  it('round-trips a valid w1-m2 draft, trace, and canonical ruyi staff run', () => {
+    const value = { ...validV3(), sessions: { 'w1-m2': validRuyiSession() } };
+
+    expect(parseProgress(JSON.stringify(value))).toEqual(value);
+  });
+
+  it('dispatches executable session parsing strictly by mission id', () => {
+    const dragonInRuyi = { ...validV3(), sessions: { 'w1-m2': validSession() } };
+    expect(() => migrateProgress(dragonInRuyi)).toThrow(/w1-m2.*(?:workspace|lastTrace)/);
+
+    const ruyiInDragon = { ...validV3(), sessions: { 'w1-m1': validRuyiSession() } };
+    expect(() => migrateProgress(ruyiInDragon)).toThrow(/w1-m1.*(?:workspace|lastTrace)/);
+
+    const configuredButUnimplemented = { ...validV3(), sessions: { 'w1-m3': validRuyiSession() } };
+    expect(() => migrateProgress(configuredButUnimplemented)).toThrow(/w1-m3.*会话/);
+  });
+
+  it('rejects a dragon block inside an otherwise valid w1-m2 draft', () => {
+    const session = validRuyiSession();
+    session.workspace.blocks[0].type = 'xiyou_enter_palace' as never;
+
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m2': session } }))
+      .toThrow(/w1-m2.*workspace.*type/);
+  });
+
+  it('rejects foreign ruyi opcodes, states, and forged event provenance', () => {
+    const foreignOpcode = validRuyiSession();
+    foreignOpcode.lastTrace[0].opcode = 'enter_palace' as never;
+    foreignOpcode.lastRun = null;
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m2': foreignOpcode } }))
+      .toThrow(/lastTrace.*操作码/);
+
+    const foreignState = validRuyiSession();
+    foreignState.lastRun!.events[0].state = 'outside-palace' as never;
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m2': foreignState } }))
+      .toThrow(/lastRun.*状态/);
+
+    const forgedSource = validRuyiSession();
+    const accepted = forgedSource.lastRun!.events.find((event) => event.type === 'instruction-accepted')!;
+    Object.assign(accepted, { instructionId: 'instruction:forged', sourceBlockId: 'forged' });
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m2': forgedSource } }))
+      .toThrow(/lastRun.*指令来源/);
+  });
+
+  it('rejects a noncanonical ruyi run and accepts the canonical wrong-weapon failure', () => {
+    const forged = validRuyiSession();
+    forged.lastRun!.events[1].messageCode = 'forged.ruyi-message';
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m2': forged } }))
+      .toThrow(/确定性运行结果不一致/);
+
+    const wrongWeaponTrace = [
+      ruyiTrace[0],
+      { instructionId: 'instruction:sabre', sourceBlockId: 'sabre', opcode: 'choose_sabre' as const },
+    ];
+    const wrongWeapon = validRuyiSession();
+    wrongWeapon.lastTrace = wrongWeaponTrace;
+    wrongWeapon.lastRun = runRuyiStaffBattle(wrongWeaponTrace);
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m2': wrongWeapon } }))
+      .not.toThrow();
+  });
+
+  it('applies strict ruyi session keys, id uniqueness, id bounds, and array bounds', () => {
+    const unknownKey = validRuyiSession();
+    Object.assign(unknownKey, { unexpected: true });
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m2': unknownKey } }))
+      .toThrow(/未知字段/);
+
+    const duplicateBlocks = validRuyiSession();
+    duplicateBlocks.workspace.blocks.push(structuredClone(duplicateBlocks.workspace.blocks[0]));
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m2': duplicateBlocks } }))
+      .toThrow(/重复block id/);
+
+    const oversizedId = validRuyiSession();
+    oversizedId.workspace.blocks[0].id = 'r'.repeat(MAX_BLOCK_OR_SOURCE_ID_LENGTH + 1);
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m2': oversizedId } }))
+      .toThrow(/id.*256个字符/);
+
+    const tooManyInstructions = validRuyiSession();
+    tooManyInstructions.lastTrace = Array.from(
+      { length: MAX_TRACE_INSTRUCTIONS + 1 },
+      (_, index) => ({
+        instructionId: `instruction:ruyi-${index}`,
+        sourceBlockId: `ruyi-${index}`,
+        opcode: 'inspect_weights' as const,
+      }),
+    );
+    tooManyInstructions.lastRun = null;
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m2': tooManyInstructions } }))
+      .toThrow(/lastTrace.*最多500项/);
   });
 
   it('migrates V1 to V3 without losing legacy mission or settings data', () => {
@@ -129,20 +256,22 @@ describe('progress schema', () => {
   it('returns a new deeply isolated V3 tree', () => {
     const input = validV3();
     const result = migrateProgress(input);
+    const resultSession = result.sessions['w1-m1'];
+    if (!resultSession) throw new Error('expected parsed w1-m1 session');
 
     expect(result).not.toBe(input);
     expect(result.sessions).not.toBe(input.sessions);
     expect(result.sessions['w1-m1']).not.toBe(input.sessions['w1-m1']);
-    expect(result.sessions['w1-m1'].workspace.blocks).not.toBe(input.sessions['w1-m1'].workspace.blocks);
-    expect(result.sessions['w1-m1'].lastTrace).not.toBe(input.sessions['w1-m1'].lastTrace);
-    expect(result.sessions['w1-m1'].lastRun).not.toBe(input.sessions['w1-m1'].lastRun);
+    expect(resultSession.workspace.blocks).not.toBe(input.sessions['w1-m1'].workspace.blocks);
+    expect(resultSession.lastTrace).not.toBe(input.sessions['w1-m1'].lastTrace);
+    expect(resultSession.lastRun).not.toBe(input.sessions['w1-m1'].lastRun);
 
     input.sessions['w1-m1'].workspace.blocks[0].id = 'mutated';
     input.sessions['w1-m1'].lastTrace[0].opcode = 'test_weapon';
     input.sessions['w1-m1'].lastRun!.events[0].messageCode = 'mutated';
-    expect(result.sessions['w1-m1'].workspace.blocks[0].id).toBe('draft-a');
-    expect(result.sessions['w1-m1'].lastTrace[0].opcode).toBe('enter_palace');
-    expect(result.sessions['w1-m1'].lastRun!.events[0].messageCode).toBe('dragon-palace.run-started');
+    expect(resultSession.workspace.blocks[0].id).toBe('draft-a');
+    expect(resultSession.lastTrace[0].opcode).toBe('enter_palace');
+    expect(resultSession.lastRun!.events[0].messageCode).toBe('dragon-palace.run-started');
   });
 
   it('rejects unsupported versions and malformed JSON with stable messages', () => {
@@ -288,12 +417,13 @@ describe('progress schema', () => {
   });
 
   it('rejects unknown missions and non-plain session maps', () => {
-    const unknown = validV3();
-    unknown.sessions = { unknown: validSession() };
+    const unknown = { ...validV3(), sessions: { unknown: validSession() } };
     expect(() => migrateProgress(unknown)).toThrow('未知任务 unknown');
 
-    const polluted = validV3();
-    polluted.sessions = Object.assign(Object.create(null), polluted.sessions);
+    const polluted = {
+      ...validV3(),
+      sessions: Object.assign(Object.create(null), validV3().sessions),
+    };
     expect(() => migrateProgress(polluted)).toThrow(/sessions必须是对象/);
   });
 
@@ -441,11 +571,11 @@ describe('progress schema', () => {
   });
 
   it.each([
-    ['missing event', (events: NonNullable<MissionSession['lastRun']>['events']) => { events.splice(1, 1); }],
-    ['reordered events', (events: NonNullable<MissionSession['lastRun']>['events']) => {
+    ['missing event', (events: NonNullable<DragonPalaceMissionSession['lastRun']>['events']) => { events.splice(1, 1); }],
+    ['reordered events', (events: NonNullable<DragonPalaceMissionSession['lastRun']>['events']) => {
       [events[1], events[2]] = [events[2], events[1]];
     }],
-    ['duplicate event', (events: NonNullable<MissionSession['lastRun']>['events']) => {
+    ['duplicate event', (events: NonNullable<DragonPalaceMissionSession['lastRun']>['events']) => {
       events.splice(1, 0, structuredClone(events[1]));
     }],
   ])('rejects a canonical run with %s', (_label, mutate) => {
@@ -529,7 +659,7 @@ describe('progress schema', () => {
 
     const parsed = parseProgress(JSON.stringify(value));
     expect(parsed).toEqual(value);
-    expect(parsed.sessions['w1-m1'].lastTrace[0].instructionId).toHaveLength(
+    expect(parsed.sessions['w1-m1']?.lastTrace[0].instructionId).toHaveLength(
       MAX_INSTRUCTION_ID_LENGTH,
     );
   });
@@ -565,7 +695,7 @@ describe('progress schema', () => {
     );
     boundary.sessions['w1-m1'].lastTrace = [];
     boundary.sessions['w1-m1'].lastRun = null;
-    expect(migrateProgress(boundary).sessions['w1-m1'].workspace.blocks).toHaveLength(MAX_WORKSPACE_BLOCKS);
+    expect(migrateProgress(boundary).sessions['w1-m1']?.workspace.blocks).toHaveLength(MAX_WORKSPACE_BLOCKS);
 
     const overLimit = validV3();
     const poison = { id: 'poison', type: 'xiyou_enter_palace' as const, nextId: null, x: 0, y: 0 };
@@ -589,7 +719,7 @@ describe('progress schema', () => {
     const boundary = validV3();
     boundary.sessions['w1-m1'].lastTrace = makeTrace(MAX_TRACE_INSTRUCTIONS);
     boundary.sessions['w1-m1'].lastRun = null;
-    expect(migrateProgress(boundary).sessions['w1-m1'].lastTrace).toHaveLength(MAX_TRACE_INSTRUCTIONS);
+    expect(migrateProgress(boundary).sessions['w1-m1']?.lastTrace).toHaveLength(MAX_TRACE_INSTRUCTIONS);
 
     const overLimit = validV3();
     overLimit.sessions['w1-m1'].lastTrace = makeTrace(MAX_TRACE_INSTRUCTIONS + 1);
@@ -639,7 +769,7 @@ describe('progress schema', () => {
     const value = validV3();
     value.sessions['w1-m1'].lastRun = null;
     const parsed = migrateProgress(value);
-    expect(parsed.sessions['w1-m1'].lastRun).toBeNull();
+    expect(parsed.sessions['w1-m1']?.lastRun).toBeNull();
     expect(parsed.sessions['w1-m1']).not.toBe(value.sessions['w1-m1']);
   });
 

@@ -1,6 +1,17 @@
-import type { BattleInstruction, BattleRunResult } from '../battle/types';
+import type {
+  BattleRunResult,
+  DragonPalaceInstruction,
+  RuyiStaffBattleRunResult,
+  RuyiStaffInstruction,
+} from '../battle/types';
 import type { WorkspaceDraftV1 } from '../blockly/draft';
-import type { MissionSession } from './types';
+import type { RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft';
+import type {
+  DragonPalaceMissionSession,
+  ExecutableMissionId,
+  MissionSession,
+  RuyiStaffMissionSession,
+} from './types';
 
 type HintTier = MissionSession['usedHintTiers'][number];
 
@@ -21,13 +32,29 @@ function increment(value: number): number {
   return value + 1;
 }
 
-function cloneSession(session: MissionSession): MissionSession {
+function cloneSession<TSession extends MissionSession>(session: TSession): TSession {
   return structuredClone(session);
 }
 
-export function createMissionSession(now: string): MissionSession {
+export function createMissionSession(now: string): DragonPalaceMissionSession;
+export function createMissionSession(
+  missionId: 'w1-m1',
+  now: string,
+): DragonPalaceMissionSession;
+export function createMissionSession(
+  missionId: 'w1-m2',
+  now: string,
+): RuyiStaffMissionSession;
+export function createMissionSession(
+  missionIdOrNow: ExecutableMissionId | string,
+  suppliedNow?: string,
+): MissionSession {
+  const now = suppliedNow ?? missionIdOrNow;
+  if (suppliedNow !== undefined && missionIdOrNow !== 'w1-m1' && missionIdOrNow !== 'w1-m2') {
+    throw new Error('任务编号无效');
+  }
   assertCanonicalIso(now);
-  return {
+  const session: DragonPalaceMissionSession = {
     workspace: { version: 1, blocks: [] },
     lastTrace: [],
     lastRun: null,
@@ -39,25 +66,35 @@ export function createMissionSession(now: string): MissionSession {
     lastRunAt: null,
     savedAt: now,
   };
+  return session;
 }
 
 export function updateWorkspaceDraft(
-  session: MissionSession,
+  session: DragonPalaceMissionSession,
   workspace: WorkspaceDraftV1,
+  now: string,
+): DragonPalaceMissionSession;
+export function updateWorkspaceDraft(
+  session: RuyiStaffMissionSession,
+  workspace: RuyiWorkspaceDraftV1,
+  now: string,
+): RuyiStaffMissionSession;
+export function updateWorkspaceDraft(
+  session: MissionSession,
+  workspace: WorkspaceDraftV1 | RuyiWorkspaceDraftV1,
   now: string,
 ): MissionSession {
   assertCanonicalIso(now);
   const next = cloneSession(session);
-  next.workspace = structuredClone(workspace);
-  next.savedAt = now;
+  Object.assign(next, { workspace: structuredClone(workspace), savedAt: now });
   return next;
 }
 
-export function recordCompileFailure(
-  session: MissionSession,
+export function recordCompileFailure<TSession extends MissionSession>(
+  session: TSession,
   concept: 'program-structure',
   now: string,
-): MissionSession {
+): TSession {
   assertCanonicalIso(now);
   const next = cloneSession(session);
   next.compileFailures = increment(next.compileFailures);
@@ -69,9 +106,21 @@ export function recordCompileFailure(
 }
 
 export function recordRun(
-  session: MissionSession,
+  session: DragonPalaceMissionSession,
   result: BattleRunResult,
-  trace: BattleInstruction[],
+  trace: DragonPalaceInstruction[],
+  now: string,
+): DragonPalaceMissionSession;
+export function recordRun(
+  session: RuyiStaffMissionSession,
+  result: RuyiStaffBattleRunResult,
+  trace: RuyiStaffInstruction[],
+  now: string,
+): RuyiStaffMissionSession;
+export function recordRun(
+  session: MissionSession,
+  result: BattleRunResult | RuyiStaffBattleRunResult,
+  trace: DragonPalaceInstruction[] | RuyiStaffInstruction[],
   now: string,
 ): MissionSession {
   assertCanonicalIso(now);
@@ -89,18 +138,20 @@ export function recordRun(
     }
   }
 
-  next.lastTrace = structuredClone(trace);
-  next.lastRun = structuredClone(result);
-  next.lastRunAt = now;
-  next.savedAt = now;
+  Object.assign(next, {
+    lastTrace: structuredClone(trace),
+    lastRun: structuredClone(result),
+    lastRunAt: now,
+    savedAt: now,
+  });
   return next;
 }
 
-export function recordHint(
-  session: MissionSession,
+export function recordHint<TSession extends MissionSession>(
+  session: TSession,
   tier: HintTier,
   now: string,
-): MissionSession {
+): TSession {
   assertCanonicalIso(now);
   const next = cloneSession(session);
   if (!next.usedHintTiers.includes(tier)) next.usedHintTiers.push(tier);
@@ -108,10 +159,24 @@ export function recordHint(
   return next;
 }
 
-export function getSessionSupport(session: MissionSession): string[] {
+export function getSessionSupport(session: DragonPalaceMissionSession): string[];
+export function getSessionSupport(
+  session: DragonPalaceMissionSession,
+  missionId: 'w1-m1',
+): string[];
+export function getSessionSupport(
+  session: RuyiStaffMissionSession,
+  missionId: 'w1-m2',
+): string[];
+export function getSessionSupport(
+  session: MissionSession,
+  missionId: ExecutableMissionId = 'w1-m1',
+): string[] {
   const support: string[] = [];
   if (session.conceptFailures.programStructure >= 2) support.push('程序结构');
-  if (session.conceptFailures.sequencePrecondition >= 2) support.push('顺序与前置条件');
+  if (session.conceptFailures.sequencePrecondition >= 2) {
+    support.push(missionId === 'w1-m2' ? '数值比较' : '顺序与前置条件');
+  }
   if (session.conceptFailures.completeness >= 2) support.push('完整性检查');
   if (new Set(session.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
   return support;

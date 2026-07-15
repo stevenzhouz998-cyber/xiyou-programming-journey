@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import { runDragonPalaceBattle } from '../battle/dragonPalace';
-import type { BattleInstruction } from '../battle/types';
+import { runRuyiStaffBattle } from '../battle/ruyiStaff';
+import type { DragonPalaceInstruction, RuyiStaffInstruction } from '../battle/types';
 import type { WorkspaceDraftV1 } from '../blockly/draft';
+import type { RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft';
+import type { DragonPalaceMissionSession, RuyiStaffMissionSession } from './types';
 import {
   createMissionSession,
   getSessionSupport,
@@ -14,21 +17,85 @@ import {
 const NOW = '2026-07-15T06:00:00.000Z';
 const LATER = '2026-07-15T06:05:00.000Z';
 
-const completeTrace: BattleInstruction[] = [
+const completeTrace: DragonPalaceInstruction[] = [
   { instructionId: 'instruction:enter', sourceBlockId: 'enter', opcode: 'enter_palace' },
   { instructionId: 'instruction:request', sourceBlockId: 'request', opcode: 'request_weapon' },
   { instructionId: 'instruction:test', sourceBlockId: 'test', opcode: 'test_weapon' },
 ];
 
-const rejectedTrace: BattleInstruction[] = [
+const rejectedTrace: DragonPalaceInstruction[] = [
   { instructionId: 'instruction:request-first', sourceBlockId: 'request-first', opcode: 'request_weapon' },
 ];
 
-const incompleteTrace: BattleInstruction[] = [
+const incompleteTrace: DragonPalaceInstruction[] = [
   { instructionId: 'instruction:enter-only', sourceBlockId: 'enter-only', opcode: 'enter_palace' },
 ];
 
+const ruyiTrace: RuyiStaffInstruction[] = [
+  { instructionId: 'instruction:inspect', sourceBlockId: 'inspect', opcode: 'inspect_weights' },
+  { instructionId: 'instruction:choose', sourceBlockId: 'choose', opcode: 'choose_ruyi_staff' },
+  { instructionId: 'instruction:shrink', sourceBlockId: 'shrink', opcode: 'shrink_ruyi_staff' },
+];
+
+const wrongWeaponTrace: RuyiStaffInstruction[] = [
+  ruyiTrace[0],
+  { instructionId: 'instruction:sabre', sourceBlockId: 'sabre', opcode: 'choose_sabre' },
+];
+
 describe('mission session rules', () => {
+  it('creates a mission-specific empty ruyi session without changing V3 JSON field names', () => {
+    const session = createMissionSession('w1-m2', NOW);
+    expectTypeOf(session).toEqualTypeOf<RuyiStaffMissionSession>();
+    expect(session).toEqual({
+      workspace: { version: 1, blocks: [] },
+      lastTrace: [],
+      lastRun: null,
+      totalRuns: 0,
+      runtimeFailures: 0,
+      compileFailures: 0,
+      usedHintTiers: [],
+      conceptFailures: { programStructure: 0, sequencePrecondition: 0, completeness: 0 },
+      lastRunAt: null,
+      savedAt: NOW,
+    });
+  });
+
+  it('stores a typed ruyi draft and canonical run with deep isolation', () => {
+    const draft: RuyiWorkspaceDraftV1 = {
+      version: 1,
+      blocks: [{ id: 'inspect', type: 'xiyou_inspect_weights', nextId: null, x: 1, y: 2 }],
+    };
+    const withDraft = updateWorkspaceDraft(createMissionSession('w1-m2', NOW), draft, NOW);
+    const result = runRuyiStaffBattle(ruyiTrace);
+    const recorded = recordRun(withDraft, result, ruyiTrace, LATER);
+
+    expectTypeOf(recorded).toEqualTypeOf<RuyiStaffMissionSession>();
+    expect(recorded).toMatchObject({ totalRuns: 1, runtimeFailures: 0, workspace: draft });
+    expect(recorded.lastTrace).toEqual(ruyiTrace);
+    expect(recorded.lastRun).toEqual(result);
+    draft.blocks[0].id = 'mutated';
+    result.events[0].messageCode = 'mutated';
+    expect(recorded.workspace.blocks[0].id).toBe('inspect');
+    expect(recorded.lastRun?.events[0].messageCode).toBe('ruyi-staff.run-started');
+  });
+
+  it('counts repeated wrong-weapon selections as runtime failures and numeric-comparison support', () => {
+    const first = recordRun(
+      createMissionSession('w1-m2', NOW),
+      runRuyiStaffBattle(wrongWeaponTrace),
+      wrongWeaponTrace,
+      NOW,
+    );
+    const second = recordRun(first, runRuyiStaffBattle(wrongWeaponTrace), wrongWeaponTrace, LATER);
+
+    expect(second).toMatchObject({
+      totalRuns: 2,
+      runtimeFailures: 2,
+      conceptFailures: { sequencePrecondition: 2 },
+    });
+    expect(getSessionSupport(second, 'w1-m2')).toContain('数值比较');
+    expect(getSessionSupport(second, 'w1-m2')).not.toContain('顺序与前置条件');
+  });
   it('creates the exact empty evidence baseline at the supplied canonical time', () => {
     expect(createMissionSession(NOW)).toEqual({
       workspace: { version: 1, blocks: [] },
@@ -194,27 +261,27 @@ describe('mission session rules', () => {
   });
 
   it.each([
-    ['compileFailures', (session: ReturnType<typeof createMissionSession>) => {
+    ['compileFailures', (session: DragonPalaceMissionSession) => {
       session.compileFailures = Number.MAX_SAFE_INTEGER;
       return () => recordCompileFailure(session, 'program-structure', LATER);
     }],
-    ['programStructure', (session: ReturnType<typeof createMissionSession>) => {
+    ['programStructure', (session: DragonPalaceMissionSession) => {
       session.conceptFailures.programStructure = Number.MAX_SAFE_INTEGER;
       return () => recordCompileFailure(session, 'program-structure', LATER);
     }],
-    ['totalRuns', (session: ReturnType<typeof createMissionSession>) => {
+    ['totalRuns', (session: DragonPalaceMissionSession) => {
       session.totalRuns = Number.MAX_SAFE_INTEGER;
       return () => recordRun(session, runDragonPalaceBattle(completeTrace), completeTrace, LATER);
     }],
-    ['runtimeFailures', (session: ReturnType<typeof createMissionSession>) => {
+    ['runtimeFailures', (session: DragonPalaceMissionSession) => {
       session.runtimeFailures = Number.MAX_SAFE_INTEGER;
       return () => recordRun(session, runDragonPalaceBattle(rejectedTrace), rejectedTrace, LATER);
     }],
-    ['sequencePrecondition', (session: ReturnType<typeof createMissionSession>) => {
+    ['sequencePrecondition', (session: DragonPalaceMissionSession) => {
       session.conceptFailures.sequencePrecondition = Number.MAX_SAFE_INTEGER;
       return () => recordRun(session, runDragonPalaceBattle(rejectedTrace), rejectedTrace, LATER);
     }],
-    ['completeness', (session: ReturnType<typeof createMissionSession>) => {
+    ['completeness', (session: DragonPalaceMissionSession) => {
       session.conceptFailures.completeness = Number.MAX_SAFE_INTEGER;
       return () => recordRun(session, runDragonPalaceBattle(incompleteTrace), incompleteTrace, LATER);
     }],

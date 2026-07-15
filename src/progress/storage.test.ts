@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { runRuyiStaffBattle } from '../battle/ruyiStaff';
+import type { RuyiStaffInstruction } from '../battle/types';
 import { createInitialProgress, serializeProgress } from './progress';
 import { PROGRESS_SCHEMA_LIMITS } from './schema';
 import {
@@ -105,6 +107,39 @@ function progressWithSession(name: string): ProgressV3 {
         compileFailures: 2,
         usedHintTiers: ['observe'],
         conceptFailures: { programStructure: 2, sequencePrecondition: 1, completeness: 0 },
+        lastRunAt: '2026-07-12T08:00:00.000Z',
+        savedAt: '2026-07-12T08:01:00.000Z',
+      },
+    },
+  };
+}
+
+const ruyiTrace: RuyiStaffInstruction[] = [
+  { instructionId: 'instruction:inspect', sourceBlockId: 'inspect', opcode: 'inspect_weights' },
+  { instructionId: 'instruction:choose', sourceBlockId: 'choose', opcode: 'choose_ruyi_staff' },
+  { instructionId: 'instruction:shrink', sourceBlockId: 'shrink', opcode: 'shrink_ruyi_staff' },
+];
+
+function progressWithRuyiSession(name: string): ProgressV3 {
+  return {
+    ...progress(name),
+    sessions: {
+      'w1-m2': {
+        workspace: {
+          version: 1,
+          blocks: [
+            { id: 'inspect', type: 'xiyou_inspect_weights', nextId: 'choose', x: 12, y: 34 },
+            { id: 'choose', type: 'xiyou_choose_ruyi_staff', nextId: 'shrink', x: 12, y: 68 },
+            { id: 'shrink', type: 'xiyou_shrink_ruyi_staff', nextId: null, x: 12, y: 102 },
+          ],
+        },
+        lastTrace: structuredClone(ruyiTrace),
+        lastRun: runRuyiStaffBattle(ruyiTrace),
+        totalRuns: 2,
+        runtimeFailures: 1,
+        compileFailures: 1,
+        usedHintTiers: ['observe'],
+        conceptFailures: { programStructure: 1, sequencePrecondition: 1, completeness: 0 },
         lastRunAt: '2026-07-12T08:00:00.000Z',
         savedAt: '2026-07-12T08:01:00.000Z',
       },
@@ -395,6 +430,29 @@ describe('progress storage transactions', () => {
       progress: { learnerName: '含会话快照', sessions: { 'w1-m1': { totalRuns: 4 } } },
     });
     expect(reopened.progress.sessions['w1-m1']).toEqual(recovered.progress.sessions['w1-m1']);
+  });
+
+  it('preserves damaged w1-m2 current bytes and reopens the exact snapshot session', () => {
+    const storage = new MemoryStorage();
+    const damagedBytes = '\u0000{damaged w1-m2 current bytes}\n';
+    const snapshot = progressWithRuyiSession('如意快照');
+    storage.setItem(CURRENT_PROGRESS_KEY, damagedBytes);
+    storage.setItem(SNAPSHOT_PROGRESS_KEY, serializeProgress(snapshot));
+
+    const recovered = loadAndRepair(storage);
+    expect(recovered).toMatchObject({
+      status: 'recovered-from-snapshot',
+      persistence: 'saved',
+      progress: { sessions: { 'w1-m2': { totalRuns: 2 } } },
+    });
+    expect(JSON.parse(recovered.corruptDownload!).current).toBe(damagedBytes);
+
+    const reopened = loadProgressTransaction(storage, clock);
+    expect(reopened.progress.sessions['w1-m2']).toEqual(snapshot.sessions['w1-m2']);
+    expect(reopened.progress.sessions['w1-m2']?.workspace.blocks.map((block) => block.id))
+      .toEqual(['inspect', 'choose', 'shrink']);
+    expect(reopened.progress.sessions['w1-m2']?.lastTrace).toEqual(ruyiTrace);
+    expect(reopened.progress.sessions['w1-m2']?.lastRun).toEqual(runRuyiStaffBattle(ruyiTrace));
   });
 
   it('preserves both corrupt sources and resets when snapshot is invalid', () => {

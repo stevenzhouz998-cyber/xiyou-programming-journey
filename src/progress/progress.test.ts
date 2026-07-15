@@ -7,7 +7,15 @@ import {
   isMissionUnlocked,
   serializeProgress,
 } from './progress';
-import { createMissionSession } from './session';
+import { runRuyiStaffBattle } from '../battle/ruyiStaff';
+import type { RuyiStaffInstruction } from '../battle/types';
+import { createMissionSession, recordRun } from './session';
+
+const NOW = '2026-07-15T06:00:00.000Z';
+const wrongWeaponTrace: RuyiStaffInstruction[] = [
+  { instructionId: 'instruction:inspect', sourceBlockId: 'inspect', opcode: 'inspect_weights' },
+  { instructionId: 'instruction:sabre', sourceBlockId: 'sabre', opcode: 'choose_sabre' },
+];
 
 describe('progress rules', () => {
   it('unlocks missions in order and requires the boss before the next week', () => {
@@ -104,6 +112,49 @@ describe('progress rules', () => {
       needsSupport: ['程序结构'],
     });
     expect(getWeeklyReport(progress, 2).needsSupport).toEqual([]);
+  });
+
+  it('aggregates both implemented week-one sessions and preserves mission-specific support wording', () => {
+    const progress = createInitialProgress();
+    progress.sessions['w1-m1'] = {
+      ...createMissionSession('w1-m1', NOW),
+      totalRuns: 3,
+      runtimeFailures: 2,
+      compileFailures: 1,
+      conceptFailures: { programStructure: 0, sequencePrecondition: 2, completeness: 0 },
+    };
+    let ruyi = createMissionSession('w1-m2', NOW);
+    ruyi = recordRun(ruyi, runRuyiStaffBattle(wrongWeaponTrace), wrongWeaponTrace, NOW);
+    ruyi = recordRun(ruyi, runRuyiStaffBattle(wrongWeaponTrace), wrongWeaponTrace, NOW);
+    progress.sessions['w1-m2'] = ruyi;
+
+    expect(getWeeklyReport(progress, 1)).toMatchObject({
+      sessionRuns: 5,
+      sessionAdjustments: 5,
+      needsSupport: ['顺序与前置条件', '数值比较'],
+    });
+    expect(getWeeklyReport(progress, 2)).toMatchObject({ sessionRuns: 0, sessionAdjustments: 0 });
+  });
+
+  it('persists exact w1-m2 session evidence, unlocks w1-m3 only on completion, and does not count replay as an attempt', () => {
+    let progress = completeMission(createInitialProgress(), 'w1-m1', { stars: 2, hintsUsed: 0 });
+    const session = recordRun(
+      createMissionSession('w1-m2', NOW),
+      runRuyiStaffBattle(wrongWeaponTrace),
+      wrongWeaponTrace,
+      NOW,
+    );
+    progress = { ...progress, sessions: { ...progress.sessions, 'w1-m2': session } };
+
+    expect(progress.missions['w1-m2']).toBeUndefined();
+    expect(isMissionUnlocked(progress, 'w1-m3')).toBe(false);
+    const roundTripped = importProgress(serializeProgress(progress));
+    expect(roundTripped.sessions['w1-m2']).toEqual(session);
+
+    const completed = completeMission(roundTripped, 'w1-m2', { stars: 3, hintsUsed: 1 });
+    expect(completed.missions['w1-m2']).toMatchObject({ attempts: 1 });
+    expect(completed.sessions['w1-m2']).toEqual(session);
+    expect(isMissionUnlocked(completed, 'w1-m3')).toBe(true);
   });
 
   it('round-trips valid exports and rejects corrupted data', () => {

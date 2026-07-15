@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BattleEvent, BattleInstruction } from '../battle/types'
+import type { BattleEvent, DragonPalaceInstruction } from '../battle/types'
 import { runDragonPalaceBattle } from '../battle/dragonPalace'
 import { ProgressProvider, useProgress } from '../context/ProgressContext'
 import { createInitialProgress, serializeProgress } from '../progress/progress'
@@ -227,7 +227,7 @@ describe('DragonPalaceExperience', () => {
         { id: 'saved-test', type: 'xiyou_test_weapon' as const, nextId: null, x: 0, y: 96 },
       ],
     }
-    const trace: BattleInstruction[] = draft.blocks.map((block) => ({
+    const trace: DragonPalaceInstruction[] = draft.blocks.map((block) => ({
       instructionId: `instruction:${block.id}`,
       sourceBlockId: block.id,
       opcode: block.type === 'xiyou_enter_palace'

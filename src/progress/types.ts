@@ -1,5 +1,11 @@
-import type { BattleInstruction, BattleRunResult } from '../battle/types';
+import type {
+  BattleRunResult,
+  DragonPalaceInstruction,
+  RuyiStaffBattleRunResult,
+  RuyiStaffInstruction,
+} from '../battle/types';
 import type { WorkspaceDraftV1 } from '../blockly/draft';
+import type { RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft';
 
 export interface MissionProgress {
   status: 'completed';
@@ -38,10 +44,10 @@ export interface ProgressV2 {
   savedAt: string;
 }
 
-export interface MissionSession {
-  workspace: WorkspaceDraftV1;
-  lastTrace: BattleInstruction[];
-  lastRun: BattleRunResult | null;
+interface MissionSessionData<TWorkspace, TInstruction, TRun> {
+  workspace: TWorkspace;
+  lastTrace: TInstruction[];
+  lastRun: TRun | null;
   totalRuns: number;
   runtimeFailures: number;
   compileFailures: number;
@@ -55,6 +61,27 @@ export interface MissionSession {
   savedAt: string;
 }
 
+export type DragonPalaceMissionSession = MissionSessionData<
+  WorkspaceDraftV1,
+  DragonPalaceInstruction,
+  BattleRunResult
+>;
+
+export type RuyiStaffMissionSession = MissionSessionData<
+  RuyiWorkspaceDraftV1,
+  RuyiStaffInstruction,
+  RuyiStaffBattleRunResult
+>;
+
+export interface MissionSessionById {
+  'w1-m1': DragonPalaceMissionSession;
+  'w1-m2': RuyiStaffMissionSession;
+}
+
+export type ExecutableMissionId = keyof MissionSessionById;
+export type MissionSession = MissionSessionById[ExecutableMissionId];
+export type MissionSessions = { [MissionId in ExecutableMissionId]?: MissionSessionById[MissionId] };
+
 export interface ProgressV3 {
   version: 3;
   schemaRevision: 1;
@@ -66,7 +93,7 @@ export interface ProgressV3 {
     lastRecoveredAt: string | null;
     source: 'snapshot' | 'initial' | null;
   };
-  sessions: Record<string, MissionSession>;
+  sessions: MissionSessions;
   savedAt: string;
 }
 
