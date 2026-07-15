@@ -19,8 +19,25 @@ interface SceneNodes {
   wukong: Phaser.GameObjects.Image
 }
 
-const WEAPON_CELL_WIDTH = 341
-const EFFECT_CELL_WIDTH = 341
+interface OwnedScene {
+  owner: symbol
+  scene: Phaser.Scene
+}
+
+interface OwnedNodes {
+  owner: symbol
+  nodes: SceneNodes
+}
+
+const SHEET_HEIGHT = 512
+const CELL_STARTS = [0, 341, 682] as const
+const CELL_WIDTHS = [341, 341, 342] as const
+const WEAPON_CELL_DISPLAY = { width: 132, height: 198 }
+const EFFECT_CELL_DISPLAY = { width: 150, height: 120 }
+const WEAPON_SHEET_DISPLAY = {
+  width: WEAPON_CELL_DISPLAY.width * 3,
+  height: WEAPON_CELL_DISPLAY.height,
+}
 
 const opcodeLabels: Record<BattleOpcode, string> = {
   enter_palace: '进入龙宫',
@@ -49,9 +66,7 @@ function rejectedMessage(event: Extract<BattleEvent, { type: 'instruction-reject
 
 function eventTranscript(event: BattleEvent): string {
   if (event.type === 'run-started') return '战斗开始'
-  if (event.type === 'instruction-accepted') {
-    return `${opcodeLabels[event.opcode]}指令已被接受`
-  }
+  if (event.type === 'instruction-accepted') return `${opcodeLabels[event.opcode]}指令已被接受`
   if (event.type === 'instruction-rejected') return rejectedMessage(event)
   if (event.type === 'state-changed') {
     if (event.state === 'entered-palace') return '悟空进入龙宫'
@@ -70,6 +85,25 @@ function stateX(state: DragonPalaceState, width: number): number {
   return width * 0.52
 }
 
+function showSheetCell(
+  image: Phaser.GameObjects.Image,
+  cell: 0 | 1 | 2,
+  display: { width: number; height: number },
+) {
+  const sourceWidth = CELL_WIDTHS[cell]
+  image
+    .setCrop(CELL_STARTS[cell], 0, sourceWidth, SHEET_HEIGHT)
+    .setScale(display.width / sourceWidth, display.height / SHEET_HEIGHT)
+    .setVisible(true)
+}
+
+function showWeaponSheet(image: Phaser.GameObjects.Image) {
+  image
+    .setCrop()
+    .setDisplaySize(WEAPON_SHEET_DISPLAY.width, WEAPON_SHEET_DISPLAY.height)
+    .setVisible(true)
+}
+
 export function GameScene({
   events,
   replayToken,
@@ -79,102 +113,116 @@ export function GameScene({
 }: GameSceneProps) {
   const reactId = useId()
   const id = `game-${reactId.replaceAll(':', '')}`
-  const gameRef = useRef<Phaser.Game | null>(null)
-  const sceneRef = useRef<Phaser.Scene | null>(null)
-  const nodesRef = useRef<SceneNodes | null>(null)
-  const mountedRef = useRef(false)
+  const ownerRef = useRef<symbol | null>(null)
+  const gameRef = useRef<{ owner: symbol; game: Phaser.Game } | null>(null)
+  const sceneRef = useRef<OwnedScene | null>(null)
+  const nodesRef = useRef<OwnedNodes | null>(null)
   const playbackGenerationRef = useRef(0)
+  const playbackActiveRef = useRef(false)
+  const requestIdRef = useRef(0)
+  const completedRequestRef = useRef<number | null>(null)
+  const previousReducedMotionRef = useRef(reducedMotion)
+  const eventsRef = useRef(events)
   const reducedMotionRef = useRef(reducedMotion)
   const mutedRef = useRef(muted)
   const onPlaybackCompleteRef = useRef(onPlaybackComplete)
-  const playCurrentEventsRef = useRef<() => void>(() => undefined)
+  const startPlaybackRef = useRef<() => void>(() => undefined)
+  const [sceneAttempt, setSceneAttempt] = useState(0)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [sceneState, setSceneState] = useState<DragonPalaceState>('outside-palace')
   const [transcript, setTranscript] = useState<readonly string[]>([])
 
+  eventsRef.current = events
   reducedMotionRef.current = reducedMotion
   mutedRef.current = muted
   onPlaybackCompleteRef.current = onPlaybackComplete
 
-  const resetScene = () => {
-    const scene = sceneRef.current
-    const nodes = nodesRef.current
-    if (!scene || !nodes) return
+  const currentOwnedScene = () => {
+    const currentOwner = ownerRef.current
+    const ownedScene = sceneRef.current
+    const ownedNodes = nodesRef.current
+    if (!currentOwner || ownedScene?.owner !== currentOwner || ownedNodes?.owner !== currentOwner) {
+      return null
+    }
+    return { owner: currentOwner, scene: ownedScene.scene, nodes: ownedNodes.nodes }
+  }
+
+  const resetScene = (owner: symbol, scene: Phaser.Scene, nodes: SceneNodes) => {
+    if (ownerRef.current !== owner) return
     const { width, height } = scene.scale
     nodes.wukong.setX(stateX('outside-palace', width)).setY(height * 0.69).setVisible(true)
     nodes.dragonKing.setX(width * 0.82).setY(height * 0.55).setVisible(true)
-    nodes.weapons.setX(width * 0.55).setY(height * 0.6).setVisible(false)
-    nodes.weapons.setCrop(0, 0, WEAPON_CELL_WIDTH, 512)
-    nodes.effects.setX(width * 0.55).setY(height * 0.45).setVisible(false)
-    nodes.effects.setCrop(0, 0, EFFECT_CELL_WIDTH, 512)
+    nodes.weapons
+      .setX(width * 0.55)
+      .setY(height * 0.6)
+      .setCrop()
+      .setDisplaySize(WEAPON_SHEET_DISPLAY.width, WEAPON_SHEET_DISPLAY.height)
+      .setVisible(false)
+    nodes.effects.setX(width * 0.55).setY(height * 0.45).setCrop().setVisible(false)
   }
 
-  const applyEvent = (event: BattleEvent) => {
-    const scene = sceneRef.current
-    const nodes = nodesRef.current
-    if (!scene || !nodes) return
+  const applyEvent = (owner: symbol, scene: Phaser.Scene, nodes: SceneNodes, event: BattleEvent) => {
+    if (ownerRef.current !== owner) return
 
-    if (event.type === 'run-started') resetScene()
+    if (event.type === 'run-started') resetScene(owner, scene, nodes)
     if (event.type === 'instruction-accepted') {
-      nodes.effects.setCrop(0, 0, EFFECT_CELL_WIDTH, 512).setVisible(true)
+      showSheetCell(nodes.effects, 0, EFFECT_CELL_DISPLAY)
     }
     if (event.type === 'state-changed') {
       nodes.wukong.setX(stateX(event.state, scene.scale.width))
       nodes.effects.setVisible(false)
-      if (event.state === 'weapon-requested') {
-        nodes.weapons.setCrop(0, 0, WEAPON_CELL_WIDTH, 512).setVisible(true)
-      }
+      if (event.state === 'weapon-requested') showWeaponSheet(nodes.weapons)
       if (event.state === 'weapon-tested') {
-        nodes.weapons.setCrop(WEAPON_CELL_WIDTH * 2, 0, 342, 512).setVisible(true)
+        showSheetCell(nodes.weapons, 2, WEAPON_CELL_DISPLAY)
       }
     }
     if (event.type === 'instruction-rejected') {
-      nodes.effects
-        .setCrop(EFFECT_CELL_WIDTH, 0, EFFECT_CELL_WIDTH, 512)
-        .setVisible(true)
+      showSheetCell(nodes.effects, 1, EFFECT_CELL_DISPLAY)
     }
     if (event.type === 'run-finished' && event.messageCode.endsWith('.completed')) {
-      nodes.effects
-        .setCrop(EFFECT_CELL_WIDTH * 2, 0, 342, 512)
-        .setVisible(true)
+      showSheetCell(nodes.effects, 2, EFFECT_CELL_DISPLAY)
     }
 
     setSceneState(event.state)
     setTranscript((messages) => [...messages, eventTranscript(event)])
   }
 
-  const playCurrentEvents = () => {
-    const scene = sceneRef.current
-    const nodes = nodesRef.current
-    if (!scene || !nodes) return
-
+  const startPlayback = () => {
+    const owned = currentOwnedScene()
+    if (!owned || loadError) return
+    const { owner, scene, nodes } = owned
     const generation = ++playbackGenerationRef.current
+    const requestId = requestIdRef.current
+    const requestedEvents = eventsRef.current
+    playbackActiveRef.current = true
     scene.tweens.killAll()
-    resetScene()
+    resetScene(owner, scene, nodes)
     setSceneState('outside-palace')
     setTranscript([])
 
-    let completed = false
     const complete = () => {
-      if (completed || generation !== playbackGenerationRef.current) return
-      completed = true
+      if (generation !== playbackGenerationRef.current || ownerRef.current !== owner) return
+      playbackActiveRef.current = false
+      if (completedRequestRef.current === requestId) return
+      completedRequestRef.current = requestId
       onPlaybackCompleteRef.current?.()
     }
 
-    if (events.length === 0) {
+    if (requestedEvents.length === 0) {
       complete()
       return
     }
 
     if (reducedMotionRef.current) {
-      for (const event of events) applyEvent(event)
+      for (const event of requestedEvents) applyEvent(owner, scene, nodes, event)
       complete()
       return
     }
 
     let eventIndex = 0
     const playNext = () => {
-      if (generation !== playbackGenerationRef.current) return
-      const event = events[eventIndex]
+      if (generation !== playbackGenerationRef.current || ownerRef.current !== owner) return
+      const event = requestedEvents[eventIndex]
       if (!event) {
         complete()
         return
@@ -186,8 +234,8 @@ export function GameScene({
         duration: event.type === 'state-changed' ? 360 : 140,
         ease: 'Sine.inOut',
         onComplete: () => {
-          if (generation !== playbackGenerationRef.current) return
-          applyEvent(event)
+          if (generation !== playbackGenerationRef.current || ownerRef.current !== owner) return
+          applyEvent(owner, scene, nodes, event)
           playNext()
         },
       })
@@ -195,18 +243,46 @@ export function GameScene({
     playNext()
   }
 
-  playCurrentEventsRef.current = playCurrentEvents
+  startPlaybackRef.current = startPlayback
 
   useEffect(() => {
-    playCurrentEventsRef.current()
+    requestIdRef.current += 1
+    completedRequestRef.current = null
+    startPlaybackRef.current()
   }, [events, replayToken])
 
   useEffect(() => {
+    const wasReduced = previousReducedMotionRef.current
+    previousReducedMotionRef.current = reducedMotion
+    if (!wasReduced && reducedMotion && playbackActiveRef.current) {
+      startPlaybackRef.current()
+    }
+  }, [reducedMotion])
+
+  useEffect(() => {
     if (navigator.userAgent.includes('jsdom')) return undefined
-    mountedRef.current = true
+
+    const owner = Symbol('dragon-palace-scene')
+    let cancelled = false
+    let failed = false
+    let localGame: Phaser.Game | null = null
+    ownerRef.current = owner
+
+    const ownsScene = () => !cancelled && !failed && ownerRef.current === owner
 
     class DragonPalaceScene extends Phaser.Scene {
       preload() {
+        if (!ownsScene()) return
+        this.load.once('loaderror', () => {
+          if (!ownsScene()) return
+          failed = true
+          playbackGenerationRef.current += 1
+          playbackActiveRef.current = false
+          if (sceneRef.current?.owner === owner) sceneRef.current = null
+          if (nodesRef.current?.owner === owner) nodesRef.current = null
+          setTranscript([])
+          setLoadError('龙宫场景资源加载失败，请重试。')
+        })
         this.load.image('background', assetUrl('/assets/dragon-palace/background.webp'))
         this.load.image('wukong', assetUrl('/assets/dragon-palace/wukong.webp'))
         this.load.image('dragonKing', assetUrl('/assets/dragon-palace/dragon-king.webp'))
@@ -215,7 +291,7 @@ export function GameScene({
       }
 
       create() {
-        if (!mountedRef.current) return
+        if (!ownsScene()) return
         const { width, height } = this.scale
         const background = this.add
           .image(width / 2, height / 2, 'background')
@@ -230,23 +306,22 @@ export function GameScene({
           .setOrigin(0.5, 0.5)
         const weapons = this.add
           .image(width * 0.55, height * 0.6, 'weapons')
-          .setDisplaySize(132, 198)
           .setOrigin(0.5, 0.5)
           .setVisible(false)
         const effects = this.add
           .image(width * 0.55, height * 0.45, 'effects')
-          .setDisplaySize(150, 120)
           .setOrigin(0.5, 0.5)
           .setVisible(false)
 
-        sceneRef.current = this
-        nodesRef.current = { background, dragonKing, effects, weapons, wukong }
+        if (!ownsScene()) return
+        sceneRef.current = { owner, scene: this }
+        nodesRef.current = { owner, nodes: { background, dragonKing, effects, weapons, wukong } }
         this.sound.mute = mutedRef.current
-        playCurrentEventsRef.current()
+        startPlaybackRef.current()
       }
     }
 
-    gameRef.current = new Phaser.Game({
+    localGame = new Phaser.Game({
       type: Phaser.AUTO,
       parent: id,
       width: 760,
@@ -255,32 +330,53 @@ export function GameScene({
       scene: DragonPalaceScene,
       render: { antialias: true, pixelArt: false },
     })
+    if (ownsScene()) gameRef.current = { owner, game: localGame }
 
     return () => {
-      mountedRef.current = false
-      playbackGenerationRef.current += 1
-      sceneRef.current?.tweens.killAll()
-      gameRef.current?.destroy(true)
-      gameRef.current = null
-      sceneRef.current = null
-      nodesRef.current = null
+      cancelled = true
+      if (ownerRef.current === owner) {
+        ownerRef.current = null
+        playbackGenerationRef.current += 1
+        playbackActiveRef.current = false
+      }
+      if (sceneRef.current?.owner === owner) sceneRef.current = null
+      if (nodesRef.current?.owner === owner) nodesRef.current = null
+      if (gameRef.current?.owner === owner) gameRef.current = null
+      localGame?.destroy(true)
     }
-  }, [id])
+  }, [id, sceneAttempt])
 
   useEffect(() => {
-    if (sceneRef.current) sceneRef.current.sound.mute = muted
+    const owned = currentOwnedScene()
+    if (owned) owned.scene.sound.mute = muted
   }, [muted])
+
+  const retryLoad = () => {
+    playbackGenerationRef.current += 1
+    playbackActiveRef.current = false
+    setLoadError(null)
+    setSceneState('outside-palace')
+    setTranscript([])
+    setSceneAttempt((attempt) => attempt + 1)
+  }
 
   return (
     <div className="game-scene-frame">
       <div
         id={id}
         className="game-scene"
+        style={{ backgroundImage: 'none', backgroundColor: '#e8e0cf' }}
         data-motion-mode={reducedMotion ? 'reduced' : 'standard'}
-        data-scene-state={sceneState}
+        data-scene-state={loadError ? undefined : sceneState}
         role="img"
         aria-label="龙宫试兵代码执行场景"
       />
+      {loadError ? (
+        <div className="game-scene-error" role="alert">
+          <p>{loadError}</p>
+          <button type="button" onClick={retryLoad}>重新加载龙宫场景</button>
+        </div>
+      ) : null}
       <p className="battle-transcript" role="status" aria-live="polite" aria-atomic="true">
         {transcript.join(' ')}
       </p>
