@@ -305,7 +305,9 @@ test('@staff-storage final completion stays unpublished until its exact CURRENT 
   await activate(page, '执行战斗指令')
 
   await expect(page.getByText('通关待保存：进度尚未安全写入这台电脑。')).toBeVisible({ timeout: 15_000 })
-  await expect(page.getByText('通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。')).toBeVisible()
+  const lockMessage = page.getByText('通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。')
+  await expect(lockMessage).toBeVisible()
+  await expect(lockMessage).toBeFocused()
   await expect(page.locator('.completion-save-status')).toHaveCount(1)
   await expect(page.getByRole('button', { name: '执行战斗指令' })).toBeDisabled()
   await expect(page.getByRole('button', { name: /^加入：/ })).toHaveCount(5)

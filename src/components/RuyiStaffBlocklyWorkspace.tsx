@@ -130,12 +130,22 @@ function setWorkspaceBlocksLocked(workspace: Blockly.Workspace, locked: boolean)
   }))
 }
 
+function isUsableWorkspaceFocusTarget(target: HTMLElement | null, workspaceRegion: HTMLElement) {
+  return target !== null
+    && target.isConnected
+    && workspaceRegion.contains(target)
+    && target.closest('[inert]') === null
+    && (!(target instanceof HTMLButtonElement) || !target.disabled)
+    && target.tabIndex >= 0
+}
+
 export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBlockId, onFocusHandled, saveRecoverySuperseded = false, locked = false }: Props) {
   const adapter = useContext(AdapterContext)
-  const hostRef = useRef<HTMLDivElement>(null); const lockMessageRef = useRef<HTMLParagraphElement>(null); const workspaceRef = useRef<Blockly.Workspace | null>(null)
+  const regionRef = useRef<HTMLElement>(null); const hostRef = useRef<HTMLDivElement>(null); const lockMessageRef = useRef<HTMLParagraphElement>(null); const workspaceRef = useRef<Blockly.Workspace | null>(null)
   const itemRefs = useRef(new Map<string, HTMLLIElement>()); const onDraftRef = useRef(onDraftChange); const handledRef = useRef(onFocusHandled)
   const lastDraftRef = useRef<string | null>(null); const lastPropRef = useRef<string | null>(null)
   const acceptedDraftRef = useRef<RuyiWorkspaceDraftV1>(structuredClone(draft)); const lockedRef = useRef(locked); const lockedRestoreTimerRef = useRef<number | null>(null)
+  const previousLockedRef = useRef(locked); const focusBeforeLockRef = useRef<HTMLElement | null>(null); const restoreFocusAfterUnlockRef = useRef(false); const focusRestoreTimerRef = useRef<number | null>(null)
   const mountedRef = useRef(false); const saveRequestRef = useRef<{ generation: number; bytes: string | null; status: 'idle' | 'pending' | 'saved' | 'unsaved' | 'conflict' }>({ generation: 0, bytes: null, status: 'idle' })
   const pendingDraftRef = useRef<RuyiWorkspaceDraftV1 | null>(null)
   const [ready, setReady] = useState(false); const [result, setResult] = useState<RuyiCompileResult>({ ok: false, trace: [], diagnostics: [{ code: 'empty-workspace', sourceBlockId: null, concept: 'program-structure' }] })
@@ -144,6 +154,17 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
   const [capacityMessage, setCapacityMessage] = useState<string | null>(null)
   const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'pending' | 'saved' | 'unsaved' | 'conflict'>('idle')
   onDraftRef.current = onDraftChange; handledRef.current = onFocusHandled; lockedRef.current = locked
+  if (locked !== previousLockedRef.current) {
+    const active = document.activeElement
+    if (locked) {
+      focusBeforeLockRef.current = active instanceof HTMLElement && regionRef.current?.contains(active) ? active : null
+      restoreFocusAfterUnlockRef.current = false
+    } else {
+      restoreFocusAfterUnlockRef.current = active === lockMessageRef.current
+        || (active instanceof HTMLElement && active.closest('.completion-save-status') !== null)
+    }
+    previousLockedRef.current = locked
+  }
 
   const persistDraft = (next: RuyiWorkspaceDraftV1) => {
     const bytes = JSON.stringify(next)
@@ -227,7 +248,7 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
     const fit = () => fitNarrowWorkspace(workspace)
     fit(); const fitFrame = window.requestAnimationFrame(fit); const fitAfterFlyout = window.setTimeout(fit, 50); window.addEventListener('resize', fit)
     workspace.addChangeListener(listener); setReady(true)
-    return () => { mountedRef.current = false; saveRequestRef.current.generation += 1; setReady(false); window.cancelAnimationFrame(fitFrame); window.clearTimeout(fitAfterFlyout); if (lockedRestoreTimerRef.current !== null) { window.clearTimeout(lockedRestoreTimerRef.current); lockedRestoreTimerRef.current = null }; window.removeEventListener('resize', fit); workspace.removeChangeListener(listener); workspace.dispose(); if (workspaceRef.current === workspace) workspaceRef.current = null; itemRefs.current.clear() }
+    return () => { mountedRef.current = false; saveRequestRef.current.generation += 1; setReady(false); window.cancelAnimationFrame(fitFrame); window.clearTimeout(fitAfterFlyout); if (lockedRestoreTimerRef.current !== null) { window.clearTimeout(lockedRestoreTimerRef.current); lockedRestoreTimerRef.current = null }; if (focusRestoreTimerRef.current !== null) { window.clearTimeout(focusRestoreTimerRef.current); focusRestoreTimerRef.current = null }; window.removeEventListener('resize', fit); workspace.removeChangeListener(listener); workspace.dispose(); if (workspaceRef.current === workspace) workspaceRef.current = null; itemRefs.current.clear() }
   }, [adapter])
 
   useEffect(() => {
@@ -244,9 +265,10 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
     const workspace = workspaceRef.current; const host = hostRef.current
     if (!ready || !workspace || !host) return
     if (locked) {
+      if (focusRestoreTimerRef.current !== null) { window.clearTimeout(focusRestoreTimerRef.current); focusRestoreTimerRef.current = null }
       setWorkspaceBlocksLocked(workspace, true)
       const active = document.activeElement
-      if (active === host || (active instanceof Node && host.contains(active))) lockMessageRef.current?.focus()
+      if (focusBeforeLockRef.current !== null || active === host || (active instanceof Node && host.contains(active))) lockMessageRef.current?.focus()
       return
     }
     if (lockedRestoreTimerRef.current !== null) {
@@ -254,6 +276,19 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
       restoreAcceptedDraft(workspace)
     }
     setWorkspaceBlocksLocked(workspace, false)
+    if (restoreFocusAfterUnlockRef.current && focusRestoreTimerRef.current === null) {
+      focusRestoreTimerRef.current = window.setTimeout(() => {
+        focusRestoreTimerRef.current = null
+        if (!mountedRef.current || lockedRef.current) return
+        const region = regionRef.current; if (!region) return
+        const preferred = focusBeforeLockRef.current
+        const fallback = region.querySelector<HTMLElement>('button:not(:disabled), .blockly-host:not([inert])')
+        const target = isUsableWorkspaceFocusTarget(preferred, region) ? preferred : fallback
+        if (target && isUsableWorkspaceFocusTarget(target, region)) target.focus()
+        focusBeforeLockRef.current = null
+        restoreFocusAfterUnlockRef.current = false
+      }, 0)
+    }
   }, [locked, ready])
 
   useEffect(() => {
@@ -286,7 +321,7 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
   const retryDraftSave = () => { if (pendingDraftRef.current) persistDraft(pendingDraftRef.current) }
   const atCapacity = blocks.length >= MAX_WORKSPACE_BLOCKS
 
-  return <section className="code-workspace ruyi-staff-workspace" aria-label="定海神针图形化编程工作台" onKeyDown={activateButtonOnEnter}>
+  return <section ref={regionRef} className="code-workspace ruyi-staff-workspace" aria-label="定海神针图形化编程工作台" onKeyDown={activateButtonOnEnter}>
     {locked ? <p ref={lockMessageRef} className="workspace-lock-message" role="status" tabIndex={-1}>通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。</p> : null}
     <div className="command-palette"><p className="eyebrow">指令匣 · 点击加入卷轴</p><div className="command-buttons">{ACTIONS.map(({ type, label }) => <button type="button" className="command-button" key={type} disabled={locked || atCapacity} onClick={() => mutate((workspace) => {
       if (workspace.getTopBlocks(false).length > 1) throw new Error('multiple chains')

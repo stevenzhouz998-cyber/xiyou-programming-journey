@@ -107,6 +107,59 @@ describe('RuyiStaffBlocklyWorkspace', () => {
     expect(onDraftChange).toHaveBeenCalledOnce()
   })
 
+  it.each([
+    ['add', () => screen.getByRole('button', { name: '加入：查看三件兵器重量' })],
+    ['move', () => screen.getAllByRole('button', { name: '上移：查看三件兵器重量' }).find((button) => !(button as HTMLButtonElement).disabled)!],
+    ['delete', () => screen.getAllByRole('button', { name: '删除：查看三件兵器重量' })[0]],
+    ['clear', () => screen.getByRole('button', { name: '清空并重新开始' })],
+    ['run', () => screen.getByRole('button', { name: '执行战斗指令' })],
+  ])('moves focus from the %s control to the child lock message and restores it after unlock', async (_name, targetControl) => {
+    const draft = chainDraft(3)
+    const workspace = new Blockly.Workspace()
+    const adapter = { create: () => workspace }
+    const renderWorkspace = (locked: boolean) => (
+      <RuyiStaffBlocklyWorkspaceAdapterProvider adapter={adapter}>
+        <RuyiStaffBlocklyWorkspace draft={draft} onDraftChange={() => ({ status: 'saved' })} onRun={() => undefined} focusBlockId={null} onFocusHandled={() => undefined} locked={locked} />
+      </RuyiStaffBlocklyWorkspaceAdapterProvider>
+    )
+    const view = render(renderWorkspace(false))
+    const originalControl = targetControl()
+    originalControl.focus()
+    expect(originalControl).toHaveFocus()
+
+    view.rerender(renderWorkspace(true))
+    const lockMessage = screen.getByText('通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。')
+    await waitFor(() => expect(lockMessage).toHaveFocus())
+
+    view.rerender(renderWorkspace(false))
+    await waitFor(() => expect(originalControl).toHaveFocus())
+    expect(originalControl).toBeEnabled()
+  })
+
+  it('restores focus to a safe enabled workspace control when an external incomplete draft removes the previous control', async () => {
+    const draft = chainDraft(3)
+    const externalDraft: RuyiWorkspaceDraftV1 = { version: 1, blocks: [{ id: 'external-only', type: 'xiyou_shrink_ruyi_staff', nextId: null, x: 0, y: 0 }] }
+    const workspace = new Blockly.Workspace()
+    const adapter = { create: () => workspace }
+    const renderWorkspace = (locked: boolean, nextDraft = draft) => (
+      <RuyiStaffBlocklyWorkspaceAdapterProvider adapter={adapter}>
+        <RuyiStaffBlocklyWorkspace draft={nextDraft} onDraftChange={() => ({ status: 'saved' })} onRun={() => undefined} focusBlockId={null} onFocusHandled={() => undefined} locked={locked} />
+      </RuyiStaffBlocklyWorkspaceAdapterProvider>
+    )
+    const view = render(renderWorkspace(false))
+    const removedControl = screen.getAllByRole('button', { name: '删除：查看三件兵器重量' })[0]
+    removedControl.focus()
+
+    view.rerender(renderWorkspace(true))
+    await waitFor(() => expect(screen.getByText('通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。')).toHaveFocus())
+
+    view.rerender(renderWorkspace(false, externalDraft))
+    const safeControl = screen.getByRole('button', { name: '加入：查看三件兵器重量' })
+    await waitFor(() => expect(safeControl).toHaveFocus())
+    expect(safeControl).toBeEnabled()
+    expect(document.activeElement).not.toBe(document.body)
+  })
+
   it('offers exactly five mission blocks and compiles the connected real workspace', () => {
     const { workspace, onRun } = setup()
     expect(screen.getAllByRole('button', { name: /^\u52a0\u5165\uff1a/ }).map((button) => button.textContent)).toEqual([

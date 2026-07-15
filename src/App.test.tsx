@@ -379,10 +379,13 @@ describe('西游编程记', () => {
       missions: { 'w1-m2': { status: 'completed' } },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '载入其他标签页版本' }));
+    const loadExternalVersion = screen.getByRole('button', { name: '载入其他标签页版本' });
+    loadExternalVersion.focus();
+    fireEvent.click(loadExternalVersion);
     await waitFor(() => expect(screen.queryByText(/通关待保存/)).not.toBeInTheDocument());
     expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '执行战斗指令' })).toBeEnabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: '加入：查看三件兵器重量' })).toHaveFocus());
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).not.toHaveProperty('missions.w1-m2');
   });
 
