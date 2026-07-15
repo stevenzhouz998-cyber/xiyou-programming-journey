@@ -4,7 +4,12 @@ import { runRuyiStaffBattle } from '../battle/ruyiStaff';
 import type { DragonPalaceInstruction, RuyiStaffInstruction } from '../battle/types';
 import type { WorkspaceDraftV1 } from '../blockly/draft';
 import type { RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft';
-import type { DragonPalaceMissionSession, RuyiStaffMissionSession } from './types';
+import type {
+  DragonPalaceMissionSession,
+  ExecutableMissionId,
+  MissionSession,
+  RuyiStaffMissionSession,
+} from './types';
 import {
   createMissionSession,
   getSessionSupport,
@@ -58,6 +63,52 @@ describe('mission session rules', () => {
       lastRunAt: null,
       savedAt: NOW,
     });
+  });
+
+  it('creates either mission from its id alone at the deterministic epoch with exact static types', () => {
+    const dragon = createMissionSession('w1-m1');
+    const ruyi = createMissionSession('w1-m2');
+    const createFromMissionId = (missionId: ExecutableMissionId) => (
+      createMissionSession(missionId)
+    );
+
+    expectTypeOf(dragon).toEqualTypeOf<DragonPalaceMissionSession>();
+    expectTypeOf(ruyi).toEqualTypeOf<RuyiStaffMissionSession>();
+    expectTypeOf(createFromMissionId).returns.toEqualTypeOf<MissionSession>();
+    expect(dragon.savedAt).toBe('1970-01-01T00:00:00.000Z');
+    expect(ruyi.savedAt).toBe('1970-01-01T00:00:00.000Z');
+    expect(dragon.workspace.blocks).toEqual([]);
+    expect(ruyi.workspace.blocks).toEqual([]);
+    expect(createFromMissionId('w1-m2').savedAt).toBe('1970-01-01T00:00:00.000Z');
+  });
+
+  it('keeps legacy timestamp-only and explicit mission-plus-time factory calls compatible', () => {
+    expect(createMissionSession(NOW).savedAt).toBe(NOW);
+    expect(createMissionSession('w1-m1', LATER).savedAt).toBe(LATER);
+    expect(createMissionSession('w1-m2', LATER).savedAt).toBe(LATER);
+  });
+
+  it('keeps mission drafts, traces, and runs statically isolated', () => {
+    const dragon = createMissionSession('w1-m1', NOW);
+    const ruyi = createMissionSession('w1-m2', NOW);
+    const dragonDraft: WorkspaceDraftV1 = { version: 1, blocks: [] };
+    const ruyiDraft: RuyiWorkspaceDraftV1 = { version: 1, blocks: [] };
+    const dragonResult = runDragonPalaceBattle(completeTrace);
+    const ruyiResult = runRuyiStaffBattle(ruyiTrace);
+
+    if (false) {
+      // @ts-expect-error Dragon sessions cannot accept a Ruyi workspace.
+      updateWorkspaceDraft(dragon, ruyiDraft, NOW);
+      // @ts-expect-error Ruyi sessions cannot accept a Dragon workspace.
+      updateWorkspaceDraft(ruyi, dragonDraft, NOW);
+      // @ts-expect-error Dragon sessions cannot store a Ruyi run and trace.
+      recordRun(dragon, ruyiResult, ruyiTrace, NOW);
+      // @ts-expect-error Ruyi sessions cannot store a Dragon run and trace.
+      recordRun(ruyi, dragonResult, completeTrace, NOW);
+    }
+
+    expect(dragon.workspace).toEqual(dragonDraft);
+    expect(ruyi.workspace).toEqual(ruyiDraft);
   });
 
   it('stores a typed ruyi draft and canonical run with deep isolation', () => {

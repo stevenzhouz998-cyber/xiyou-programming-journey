@@ -110,11 +110,20 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
     ...(dragonSession ? getSessionSupport(dragonSession, 'w1-m1') : []),
     ...(ruyiSession ? getSessionSupport(ruyiSession, 'w1-m2') : []),
   ];
-  const sessionRuns = (dragonSession?.totalRuns ?? 0) + (ruyiSession?.totalRuns ?? 0);
-  const sessionAdjustments = (dragonSession?.compileFailures ?? 0)
-    + (dragonSession?.runtimeFailures ?? 0)
-    + (ruyiSession?.compileFailures ?? 0)
-    + (ruyiSession?.runtimeFailures ?? 0);
+  const sessionRuns = safeCount(
+    dragonSession?.totalRuns ?? 0,
+    ruyiSession?.totalRuns ?? 0,
+  );
+  const sessionAdjustments = safeCount(
+    safeCount(
+      safeCount(
+        dragonSession?.compileFailures ?? 0,
+        dragonSession?.runtimeFailures ?? 0,
+      ),
+      ruyiSession?.compileFailures ?? 0,
+    ),
+    ruyiSession?.runtimeFailures ?? 0,
+  );
   return {
     week,
     completed: records.length,

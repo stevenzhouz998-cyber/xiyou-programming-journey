@@ -204,6 +204,65 @@ describe('progress schema', () => {
       .toThrow(/lastTrace.*最多500项/);
   });
 
+  it('keeps the ruyi workspace block boundary and rejects one block over it', () => {
+    const boundary = validRuyiSession();
+    boundary.workspace.blocks = Array.from(
+      { length: MAX_WORKSPACE_BLOCKS },
+      (_, index) => ({
+        id: `ruyi-block-${index}`,
+        type: 'xiyou_inspect_weights' as const,
+        nextId: null,
+        x: index,
+        y: 0,
+      }),
+    );
+    boundary.lastTrace = [];
+    boundary.lastRun = null;
+    const parsed = migrateProgress({ ...validV3(), sessions: { 'w1-m2': boundary } });
+    expect(parsed.sessions['w1-m2']?.workspace.blocks).toHaveLength(MAX_WORKSPACE_BLOCKS);
+
+    const overLimit = validRuyiSession();
+    overLimit.workspace.blocks = Array.from(
+      { length: MAX_WORKSPACE_BLOCKS + 1 },
+      (_, index) => ({
+        id: `ruyi-over-${index}`,
+        type: 'xiyou_inspect_weights' as const,
+        nextId: null,
+        x: index,
+        y: 0,
+      }),
+    );
+    overLimit.lastTrace = [];
+    overLimit.lastRun = null;
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m2': overLimit } }))
+      .toThrow(/w1-m2\.workspace\.blocks.*最多500项/);
+  });
+
+  it('applies the ruyi event boundary before canonical comparison and rejects one event over it', () => {
+    const boundary = validRuyiSession();
+    const canonical = boundary.lastRun!;
+    canonical.events = [
+      structuredClone(canonical.events[0]),
+      ...Array.from(
+        { length: MAX_BATTLE_EVENTS - 2 },
+        () => structuredClone(canonical.events[1]),
+      ),
+      structuredClone(canonical.events.at(-1)!),
+    ];
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m2': boundary } }))
+      .toThrow(/确定性运行结果不一致/);
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m2': boundary } }))
+      .not.toThrow(/events.*最多1002项/);
+
+    const overLimit = validRuyiSession();
+    overLimit.lastRun!.events = Array.from(
+      { length: MAX_BATTLE_EVENTS + 1 },
+      () => structuredClone(overLimit.lastRun!.events[0]),
+    );
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m2': overLimit } }))
+      .toThrow(/w1-m2\.lastRun\.events.*最多1002项/);
+  });
+
   it('migrates V1 to V3 without losing legacy mission or settings data', () => {
     expect(migrateProgress(validV1)).toEqual({
       ...validV1,

@@ -136,6 +136,36 @@ describe('progress rules', () => {
     expect(getWeeklyReport(progress, 2)).toMatchObject({ sessionRuns: 0, sessionAdjustments: 0 });
   });
 
+  it('fails closed when weekly session run aggregation exceeds the safe integer range', () => {
+    const progress = createInitialProgress();
+    progress.sessions['w1-m1'] = {
+      ...createMissionSession('w1-m1', NOW),
+      totalRuns: Number.MAX_SAFE_INTEGER,
+    };
+    progress.sessions['w1-m2'] = {
+      ...createMissionSession('w1-m2', NOW),
+    };
+
+    expect(getWeeklyReport(progress, 1).sessionRuns).toBe(Number.MAX_SAFE_INTEGER);
+    progress.sessions['w1-m2'].totalRuns = 1;
+    expect(() => getWeeklyReport(progress, 1)).toThrow('任务进度计数超出安全范围');
+  });
+
+  it('fails closed when weekly session adjustment aggregation exceeds the safe integer range', () => {
+    const progress = createInitialProgress();
+    progress.sessions['w1-m1'] = {
+      ...createMissionSession('w1-m1', NOW),
+      compileFailures: Number.MAX_SAFE_INTEGER,
+    };
+    progress.sessions['w1-m2'] = {
+      ...createMissionSession('w1-m2', NOW),
+    };
+
+    expect(getWeeklyReport(progress, 1).sessionAdjustments).toBe(Number.MAX_SAFE_INTEGER);
+    progress.sessions['w1-m2'].runtimeFailures = 1;
+    expect(() => getWeeklyReport(progress, 1)).toThrow('任务进度计数超出安全范围');
+  });
+
   it('persists exact w1-m2 session evidence, unlocks w1-m3 only on completion, and does not count replay as an attempt', () => {
     let progress = completeMission(createInitialProgress(), 'w1-m1', { stars: 2, hintsUsed: 0 });
     const session = recordRun(

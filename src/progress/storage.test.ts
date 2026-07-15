@@ -446,6 +446,8 @@ describe('progress storage transactions', () => {
       progress: { sessions: { 'w1-m2': { totalRuns: 2 } } },
     });
     expect(JSON.parse(recovered.corruptDownload!).current).toBe(damagedBytes);
+    expect(storage.getItem(CORRUPT_PROGRESS_KEY)).toBe(recovered.corruptDownload);
+    expect(JSON.parse(storage.getItem(CORRUPT_PROGRESS_KEY)!).current).toBe(damagedBytes);
 
     const reopened = loadProgressTransaction(storage, clock);
     expect(reopened.progress.sessions['w1-m2']).toEqual(snapshot.sessions['w1-m2']);

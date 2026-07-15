@@ -10,6 +10,7 @@ import type {
   DragonPalaceMissionSession,
   ExecutableMissionId,
   MissionSession,
+  MissionSessionById,
   RuyiStaffMissionSession,
 } from './types';
 
@@ -36,6 +37,9 @@ function cloneSession<TSession extends MissionSession>(session: TSession): TSess
   return structuredClone(session);
 }
 
+export function createMissionSession<TMissionId extends ExecutableMissionId>(
+  missionId: TMissionId,
+): MissionSessionById[TMissionId];
 export function createMissionSession(now: string): DragonPalaceMissionSession;
 export function createMissionSession(
   missionId: 'w1-m1',
@@ -49,7 +53,9 @@ export function createMissionSession(
   missionIdOrNow: ExecutableMissionId | string,
   suppliedNow?: string,
 ): MissionSession {
-  const now = suppliedNow ?? missionIdOrNow;
+  const missionIdOnly = suppliedNow === undefined
+    && (missionIdOrNow === 'w1-m1' || missionIdOrNow === 'w1-m2');
+  const now = suppliedNow ?? (missionIdOnly ? new Date(0).toISOString() : missionIdOrNow);
   if (suppliedNow !== undefined && missionIdOrNow !== 'w1-m1' && missionIdOrNow !== 'w1-m2') {
     throw new Error('任务编号无效');
   }
