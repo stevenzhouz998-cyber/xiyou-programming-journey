@@ -41,6 +41,14 @@ function installDynamicStorage(initial: Record<string, string>, failWrites = tru
   return controls;
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+type SaveCoordinator = typeof import('./progress/storageCoordinator').saveProgressCoordinated;
+
 async function acknowledgePrivacySuccessfully() {
   fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
   await waitFor(() => expect(screen.queryByRole('dialog', { name: '你的学习数据保存在这台设备' })).not.toBeInTheDocument());
@@ -215,6 +223,32 @@ describe('西游编程记', () => {
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
       missions: { 'w1-m2': { status: 'completed' } },
     });
+  });
+
+  it('shows only the local run-session retry in the full w1-m2 page and clears it after recovery', async () => {
+    const progress = completeMission(withParentAccess(createInitialProgress()), 'w1-m1', { stars: 3, hintsUsed: 0 });
+    progress.privacy.localDataNoticeSeen = true;
+    const storage = installDynamicStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(progress) }, true, 'session write failed');
+    window.location.hash = '#/mission/w1-m2';
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '加入：查看三件兵器重量' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：选择定海神针（13500斤）' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：缩小定海神针' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+
+    expect(await screen.findByRole('button', { name: '重试保存本关' })).toBeVisible();
+    await act(async () => { await import('./components/RecoveryNotice'); });
+    expect(screen.getAllByRole('button', { name: /重试保存/ })).toHaveLength(1);
+    expect(screen.queryByText('本次进度尚未保存')).not.toBeInTheDocument();
+
+    storage.failWrites = false;
+    fireEvent.click(screen.getByRole('button', { name: '重试保存本关' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: '重试保存本关' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: '重试保存' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '完成定海神针场景播放' }));
+    expect(await screen.findByRole('heading', { name: '闯关成功' })).toBeVisible();
+    expect(screen.queryByText(/尚未保存|待保存/)).not.toBeInTheDocument();
   });
 
   it('offers one final-conflict recovery group and safely loads an incomplete external w1-m2 progress', async () => {
@@ -575,6 +609,39 @@ describe('西游编程记', () => {
     expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '继续下一关' })).not.toBeInTheDocument();
     expect(audio).not.toHaveBeenCalled();
+  });
+
+  it('invalidates a pending final completion when its mission route unmounts', async () => {
+    const progress = { ...withParentAccess(createInitialProgress()), privacy: { localDataNoticeSeen: true } };
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    const pending = deferred<Awaited<ReturnType<SaveCoordinator>>>();
+    const save = vi.fn<SaveCoordinator>(async (next, expectedRevision) => {
+      if (next.missions['w1-m1']) return pending.promise;
+      return { status: 'saved', revision: expectedRevision + 1, progress: next };
+    });
+    const audio = vi.fn(function MockAudio() { return { play: vi.fn() }; });
+    vi.stubGlobal('Audio', audio);
+    window.location.hash = '#/mission/w1-m1';
+    render(<App loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('./progress/storageCoordinator'))} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：请求兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+    fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }));
+    await waitFor(() => expect(save.mock.calls.some(([next]) => Boolean(next.missions['w1-m1']))).toBe(true));
+    expect(screen.getByText('正在保存通关结果…')).toBeVisible();
+
+    fireEvent.click(screen.getAllByRole('button', { name: '成长地图' }).at(-1)!);
+    expect(await screen.findByRole('heading', { name: '西游编程记' })).toBeVisible();
+    await act(async () => pending.resolve({
+      status: 'saved', revision: 5,
+      progress: completeMission(progress, 'w1-m1', { stars: 3, hintsUsed: 0 }),
+    }));
+
+    expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
+    expect(audio).not.toHaveBeenCalledWith('/assets/audio/success.m4a');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('persists the first-use privacy acknowledgement', async () => {

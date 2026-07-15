@@ -109,15 +109,28 @@ function MissionPageContent({ reducedMotion, id }: { reducedMotion: boolean; id:
   const [stars, setStars] = useState(0);
   const [activeStep, setActiveStep] = useState(0);
   const successRef = useRef(false);
-  type CompletionSave = { stars: number; hintsUsed: number; status: 'pending' | 'unsaved' | 'conflict' };
+  const mountedRef = useRef(false);
+  const requestGenerationRef = useRef(0);
+  type CompletionSave = { requestId: number; stars: number; hintsUsed: number; status: 'pending' | 'unsaved' | 'conflict' };
   const completionSaveRef = useRef<CompletionSave | null>(null);
   const [completionSave, setCompletionSave] = useState<CompletionSave | null>(null);
-  useEffect(() => () => setCompletionPersistenceActive(false), [setCompletionPersistenceActive]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestGenerationRef.current += 1;
+      completionSaveRef.current = null;
+      setCompletionPersistenceActive(false);
+    };
+  }, [setCompletionPersistenceActive]);
   if (!mission) return <main className="not-found"><h1>这页经卷没有找到</h1><Link to="/">返回成长地图</Link></main>;
   if (!isMissionUnlocked(progress, mission.id)) return <main className="not-found"><LockKey size={40} /><h1>这一关还没有解锁</h1><Link to="/">先完成前一关</Link></main>;
 
+  const isCurrentRequest = (request: CompletionSave) => mountedRef.current
+    && requestGenerationRef.current === request.requestId
+    && completionSaveRef.current === request;
   const revealSuccess = (request: CompletionSave) => {
-    if (completionSaveRef.current !== request || successRef.current) return false;
+    if (!isCurrentRequest(request) || successRef.current) return false;
     completionSaveRef.current = null; setCompletionSave(null); successRef.current = true; setStars(request.stars); setSuccess(true);
     setCompletionPersistenceActive(false);
     playAudio(assetUrl(mission.isBoss ? '/assets/audio/boss.m4a' : '/assets/audio/success.m4a'), progress.settings.muted);
@@ -125,11 +138,11 @@ function MissionPageContent({ reducedMotion, id }: { reducedMotion: boolean; id:
   };
   const pass = async (earnedStars: number, completionHints = hintsUsed): Promise<boolean> => {
     if (successRef.current || completionSaveRef.current !== null) return false;
-    const request: CompletionSave = { stars: earnedStars, hintsUsed: completionHints, status: 'pending' };
+    const request: CompletionSave = { requestId: ++requestGenerationRef.current, stars: earnedStars, hintsUsed: completionHints, status: 'pending' };
     setCompletionPersistenceActive(true);
     completionSaveRef.current = request; setCompletionSave(request);
     const result = await complete(mission.id, { stars: earnedStars, hintsUsed: completionHints });
-    if (completionSaveRef.current !== request) return false;
+    if (!isCurrentRequest(request)) return false;
     if (result.status === 'saved' && result.progress.missions[mission.id]?.status === 'completed') return revealSuccess(request);
     const failed: CompletionSave = { ...request, status: result.status === 'saved' ? 'unsaved' : result.status };
     completionSaveRef.current = failed; setCompletionSave(failed);
@@ -138,10 +151,10 @@ function MissionPageContent({ reducedMotion, id }: { reducedMotion: boolean; id:
   const retryCompletionSave = async () => {
     const failed = completionSaveRef.current;
     if (!failed || failed.status !== 'unsaved') return;
-    const request: CompletionSave = { ...failed, status: 'pending' };
+    const request: CompletionSave = { ...failed, requestId: ++requestGenerationRef.current, status: 'pending' };
     completionSaveRef.current = request; setCompletionSave(request);
     const result = await retrySave();
-    if (completionSaveRef.current !== request) return;
+    if (!isCurrentRequest(request)) return;
     if (result.status === 'saved' && result.progress.missions[mission.id]?.status === 'completed') { revealSuccess(request); return; }
     const next: CompletionSave = { ...request, status: result.status === 'saved' ? 'unsaved' : result.status };
     completionSaveRef.current = next; setCompletionSave(next);
@@ -173,7 +186,7 @@ function MissionPageContent({ reducedMotion, id }: { reducedMotion: boolean; id:
     : mission.mode === 'python'
       ? { starterCode: mission.starterCode ?? '', expectedOutput: mission.expectedOutput ?? '', onPass: () => pass(hintsUsed === 0 ? 3 : hintsUsed === 1 ? 2 : 1) }
       : { commands: mission.expectedSequence, onRun: validate };
-  return <main className="mission-page"><div data-testid="mission-background" inert={success ? true : undefined} aria-hidden={success ? true : undefined}><header className="mission-header"><button className="back-button" type="button" onClick={() => navigate('/')}><ArrowLeft size={21} />成长地图</button><div><span>第{mission.week}周 · 第{mission.order}关{mission.isBoss ? ' · BOSS' : ''}</span><h1>{mission.title}</h1></div><div className="canon-badge"><BookOpenText size={20} /><span>{mission.canon.title}</span></div></header><div className="mission-layout"><aside className="story-column"><span className="eyebrow">原著故事层</span><h2>{mission.subtitle}</h2>{mission.storyBeats.map((item) => <article className="story-beat" key={item.title}><CheckCircle size={20} weight="fill" /><div><strong>{item.title}</strong><p>{item.summary}</p></div></article>)}<a className="canon-link" href={mission.canon.sourceUrl} target="_blank" rel="noreferrer">查看原著第{mission.canon.chapters.map(chapterLabel).join('、')}回</a><HintPanel hints={mission.hints} onUse={(tier) => { if (mission.id === 'w1-m1' || mission.id === 'w1-m2') { if (!progress.sessions[mission.id]?.usedHintTiers.includes(tier)) recordMissionHint(mission.id, tier); } else setHintsUsed((count) => count + 1); }} /></aside><section className="play-column"><div className="mission-objective"><span>今日任务</span><h2>{mission.objective}</h2><p>知识法宝：{mission.knowledge}</p></div>{mission.id === 'w1-m1' ? <DragonPalaceExperience reducedMotion={reducedMotion} muted={progress.settings.muted} onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)} /> : mission.id === 'w1-m2' ? <LazySectionBoundary label="定海神针任务"><Suspense fallback={<p className="mission-tools-loading" role="status">定海神针任务加载中，请稍候……</p>}><RuyiStaffExperience reducedMotion={reducedMotion} muted={progress.settings.muted} onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)} /></Suspense></LazySectionBoundary> : <MissionTools missionId={mission.id} mode={mission.mode} sceneProps={{ activeStep, reducedMotion }} toolProps={toolProps} />}{feedback && !success && <div className="feedback-message">{feedback}</div>}{completionSave ? <div className="completion-save-status" role={completionSave.status === 'pending' ? 'status' : 'alert'} aria-live={completionSave.status === 'pending' ? 'polite' : 'assertive'}><p>{completionSave.status === 'pending' ? '正在保存通关结果…' : completionSave.status === 'conflict' ? '通关待保存：其他标签页已经更新，请选择保留本页备份或载入其他标签页版本。' : '通关待保存：进度尚未安全写入这台电脑。'}</p>{completionSave.status === 'unsaved' && saveError ? <p>{saveError}</p> : null}{completionSave.status === 'unsaved' ? <button type="button" className="button button-primary" onClick={retryCompletionSave}>重试保存通关</button> : null}{completionSave.status === 'conflict' ? <><button type="button" onClick={downloadCompletionConflictBackup}>下载本页备份</button><button type="button" onClick={loadExternalCompletionProgress}>载入其他标签页版本</button></> : null}</div> : null}</section></div></div>{success && <SuccessDialog stars={stars} feedback={feedback} hasNext={Boolean(next)} onMap={() => navigate('/')} onNext={() => next && navigate(`/mission/${next.id}`)} />}</main>;
+  return <main className="mission-page"><div data-testid="mission-background" inert={success ? true : undefined} aria-hidden={success ? true : undefined}><header className="mission-header"><button className="back-button" type="button" onClick={() => navigate('/')}><ArrowLeft size={21} />成长地图</button><div><span>第{mission.week}周 · 第{mission.order}关{mission.isBoss ? ' · BOSS' : ''}</span><h1>{mission.title}</h1></div><div className="canon-badge"><BookOpenText size={20} /><span>{mission.canon.title}</span></div></header><div className="mission-layout"><aside className="story-column"><span className="eyebrow">原著故事层</span><h2>{mission.subtitle}</h2>{mission.storyBeats.map((item) => <article className="story-beat" key={item.title}><CheckCircle size={20} weight="fill" /><div><strong>{item.title}</strong><p>{item.summary}</p></div></article>)}<a className="canon-link" href={mission.canon.sourceUrl} target="_blank" rel="noreferrer">查看原著第{mission.canon.chapters.map(chapterLabel).join('、')}回</a><HintPanel hints={mission.hints} onUse={(tier) => { if (mission.id === 'w1-m1' || mission.id === 'w1-m2') { if (!progress.sessions[mission.id]?.usedHintTiers.includes(tier)) recordMissionHint(mission.id, tier); } else setHintsUsed((count) => count + 1); }} /></aside><section className="play-column"><div className="mission-objective"><span>今日任务</span><h2>{mission.objective}</h2><p>知识法宝：{mission.knowledge}</p></div>{mission.id === 'w1-m1' ? <DragonPalaceExperience reducedMotion={reducedMotion} muted={progress.settings.muted} onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)} /> : mission.id === 'w1-m2' ? <LazySectionBoundary label="定海神针任务"><Suspense fallback={<p className="mission-tools-loading" role="status">定海神针任务加载中，请稍候……</p>}><RuyiStaffExperience reducedMotion={reducedMotion} muted={progress.settings.muted} onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)} onSessionPersistenceActiveChange={setCompletionPersistenceActive} /></Suspense></LazySectionBoundary> : <MissionTools missionId={mission.id} mode={mission.mode} sceneProps={{ activeStep, reducedMotion }} toolProps={toolProps} />}{feedback && !success && <div className="feedback-message">{feedback}</div>}{completionSave ? <div className="completion-save-status" role={completionSave.status === 'pending' ? 'status' : 'alert'} aria-live={completionSave.status === 'pending' ? 'polite' : 'assertive'}><p>{completionSave.status === 'pending' ? '正在保存通关结果…' : completionSave.status === 'conflict' ? '通关待保存：其他标签页已经更新，请选择保留本页备份或载入其他标签页版本。' : '通关待保存：进度尚未安全写入这台电脑。'}</p>{completionSave.status === 'unsaved' && saveError ? <p>{saveError}</p> : null}{completionSave.status === 'unsaved' ? <button type="button" className="button button-primary" onClick={retryCompletionSave}>重试保存通关</button> : null}{completionSave.status === 'conflict' ? <><button type="button" onClick={downloadCompletionConflictBackup}>下载本页备份</button><button type="button" onClick={loadExternalCompletionProgress}>载入其他标签页版本</button></> : null}</div> : null}</section></div></div>{success && <SuccessDialog stars={stars} feedback={feedback} hasNext={Boolean(next)} onMap={() => navigate('/')} onNext={() => next && navigate(`/mission/${next.id}`)} />}</main>;
 }
 
 function MissionPage({ reducedMotion }: { reducedMotion: boolean }) {
@@ -234,4 +247,8 @@ function AppRoutes() {
   </div></GlobalModalIsolationContext.Provider></MissionCompletionPersistenceContext.Provider>;
 }
 
-export default function App() { return <HashRouter><ProgressProvider><AppRoutes /></ProgressProvider></HashRouter>; }
+interface AppProps {
+  loadSaveCoordinator?: () => Promise<typeof import('./progress/storageCoordinator')>;
+}
+
+export default function App({ loadSaveCoordinator }: AppProps = {}) { return <HashRouter><ProgressProvider loadSaveCoordinator={loadSaveCoordinator}><AppRoutes /></ProgressProvider></HashRouter>; }

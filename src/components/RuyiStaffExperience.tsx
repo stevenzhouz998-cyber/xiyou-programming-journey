@@ -25,6 +25,7 @@ interface Props {
   reducedMotion: boolean
   muted: boolean
   onComplete: (evidence: Evidence) => void | boolean | Promise<boolean>
+  onSessionPersistenceActiveChange?: (active: boolean) => void
   loaders?: RuyiStaffExperienceLoaders
   reloadPage?: () => void
 }
@@ -44,7 +45,7 @@ function activateButtonOnEnter(event: ReactKeyboardEvent<HTMLElement>) {
   event.target.click()
 }
 
-export function RuyiStaffExperience({ reducedMotion, muted, onComplete, loaders = defaultLoaders, reloadPage = reloadExperiencePage }: Props) {
+export function RuyiStaffExperience({ reducedMotion, muted, onComplete, onSessionPersistenceActiveChange = () => undefined, loaders = defaultLoaders, reloadPage = reloadExperiencePage }: Props) {
   const RuyiStaffScene = useMemo(() => lazy(loaders.scene), [loaders.scene])
   const RuyiStaffBlocklyWorkspace = useMemo(() => lazy(loaders.workspace), [loaders.workspace])
   const { progress, saveStatus, retrySave, updateMissionSession } = useProgress()
@@ -52,14 +53,15 @@ export function RuyiStaffExperience({ reducedMotion, muted, onComplete, loaders 
   const session = progress.sessions[MISSION_ID] ?? emptyRef.current
   const [playback, setPlayback] = useState(() => restored(session.lastRun)); const playbackRef = useRef(playback); const sequenceRef = useRef(0)
   const completedRequestsRef = useRef(new Set<number>()); const finishedPlaybackRef = useRef(new Set<number>()); const checkingSaveRef = useRef(new Set<number>()); const mountedRef = useRef(true)
+  const sessionDurableRef = useRef(new Map<number, CoordinatedSaveResult>())
   const completionHandedOffRequestRef = useRef<number | null>(null); const [completionHandedOffRequestId, setCompletionHandedOffRequestId] = useState<number | null>(null)
-  const completeRef = useRef(onComplete); const missionCompletedRef = useRef(Boolean(progress.missions[MISSION_ID]))
+  const completeRef = useRef(onComplete); const sessionPersistenceRef = useRef(onSessionPersistenceActiveChange); const missionCompletedRef = useRef(Boolean(progress.missions[MISSION_ID]))
   const regionRef = useRef<HTMLDivElement>(null); const [diagnostic, setDiagnostic] = useState<Diagnostic | null>(() => session.lastRun?.diagnostic ?? null)
   const [occurrenceId, setOccurrenceId] = useState(0); const [focusBlockId, setFocusBlockId] = useState<string | null>(null)
-  completeRef.current = onComplete; missionCompletedRef.current = Boolean(progress.missions[MISSION_ID])
+  completeRef.current = onComplete; sessionPersistenceRef.current = onSessionPersistenceActiveChange; missionCompletedRef.current = Boolean(progress.missions[MISSION_ID])
   useEffect(() => {
     mountedRef.current = true
-    return () => { mountedRef.current = false }
+    return () => { mountedRef.current = false; sessionPersistenceRef.current(false) }
   }, [])
   const replace = (next: Playback) => { playbackRef.current = next; setPlayback(next) }
   const invalidate = () => { if (playbackRef.current.eligible) playbackRef.current = { ...playbackRef.current, eligible: false } }
@@ -72,26 +74,37 @@ export function RuyiStaffExperience({ reducedMotion, muted, onComplete, loaders 
       return
     }
     const result = runRuyiStaffBattle(compiled.trace); const snapshot = structuredClone(result); const now = new Date().toISOString(); const tiers = [...session.usedHintTiers]
+    sessionPersistenceRef.current(true)
     const sessionSave = updateMissionSession(MISSION_ID, (current) => recordRun(current, result, compiled.trace, now))
     const next: Playback = { requestId: ++sequenceRef.current, origin: 'run', events: snapshot.events, result: snapshot, eligible: result.completed && !missionCompletedRef.current, evidence: result.completed ? evidence(tiers) : null, runAt: now, sessionSave }
-    replace(next); setDiagnostic(result.diagnostic)
+    replace(next); setDiagnostic(result.diagnostic); checkSessionSave(next.requestId, sessionSave)
   }
-  const releaseCompletion = (requestId: number, saved: CoordinatedSaveResult) => {
+  const maybeReleaseCompletion = (requestId: number) => {
     const current = playbackRef.current
-    if (!mountedRef.current || saved.status !== 'saved' || current.requestId !== requestId || current.origin !== 'run' || !current.eligible || current.result?.completed !== true || !current.evidence || !current.runAt || saved.progress.sessions[MISSION_ID]?.lastRunAt !== current.runAt || !finishedPlaybackRef.current.has(requestId) || missionCompletedRef.current || completedRequestsRef.current.has(requestId)) return
+    const saved = sessionDurableRef.current.get(requestId)
+    if (!mountedRef.current || !saved || saved.status !== 'saved' || current.requestId !== requestId || current.origin !== 'run' || !current.eligible || current.result?.completed !== true || !current.evidence || !current.runAt || saved.progress.sessions[MISSION_ID]?.lastRunAt !== current.runAt || !finishedPlaybackRef.current.has(requestId) || missionCompletedRef.current || completedRequestsRef.current.has(requestId)) return
     completedRequestsRef.current.add(requestId); completionHandedOffRequestRef.current = requestId; setCompletionHandedOffRequestId(requestId); playbackRef.current = { ...current, eligible: false }
+    sessionPersistenceRef.current(false)
     void completeRef.current(current.evidence)
+  }
+  const recordSessionSave = (requestId: number, saved: CoordinatedSaveResult) => {
+    const current = playbackRef.current
+    if (!mountedRef.current || completedRequestsRef.current.has(requestId) || saved.status !== 'saved' || current.requestId !== requestId || current.origin !== 'run' || !current.runAt || saved.progress.sessions[MISSION_ID]?.lastRunAt !== current.runAt) return
+    sessionDurableRef.current.set(requestId, saved)
+    if (!current.eligible || current.result?.completed !== true) sessionPersistenceRef.current(false)
+    maybeReleaseCompletion(requestId)
   }
   const checkSessionSave = (requestId: number, pending: Promise<CoordinatedSaveResult>) => {
     if (checkingSaveRef.current.has(requestId)) return
     checkingSaveRef.current.add(requestId)
-    void pending.then((saved) => releaseCompletion(requestId, saved)).finally(() => checkingSaveRef.current.delete(requestId))
+    void pending.then((saved) => recordSessionSave(requestId, saved)).finally(() => checkingSaveRef.current.delete(requestId))
   }
   const playbackComplete = (requestId: number) => {
     const current = playbackRef.current
     if (current.requestId !== requestId || current.origin !== 'run' || !current.eligible || current.result?.completed !== true || !current.evidence || missionCompletedRef.current || completedRequestsRef.current.has(requestId)) return
     finishedPlaybackRef.current.add(requestId)
-    if (current.sessionSave) checkSessionSave(requestId, current.sessionSave)
+    maybeReleaseCompletion(requestId)
+    if (current.sessionSave && !sessionDurableRef.current.has(requestId)) checkSessionSave(requestId, current.sessionSave)
   }
   const replay = () => {
     const result = session.lastRun ?? playbackRef.current.result; if (!result) return; const snapshot = structuredClone(result)
@@ -102,7 +115,7 @@ export function RuyiStaffExperience({ reducedMotion, muted, onComplete, loaders 
     if (current.origin !== 'run' || current.sessionSave === null || completionHandedOffRequestRef.current === current.requestId) return
     const requestId = current.requestId
     const saved = await retrySave()
-    releaseCompletion(requestId, saved)
+    recordSessionSave(requestId, saved)
   }
   const focusWorkspace = () => regionRef.current?.querySelector<HTMLElement>('[aria-label="Blockly 积木编辑区"]')?.focus()
   const sessionRetryActive = playback.origin === 'run' && playback.sessionSave !== null && completionHandedOffRequestId !== playback.requestId

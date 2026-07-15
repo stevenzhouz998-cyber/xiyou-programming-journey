@@ -182,6 +182,23 @@ describe('RuyiStaffExperience', () => {
     expect(screen.queryByText('本关尚未保存，请重试。')).not.toBeInTheDocument()
   })
 
+  it('latches a durable retry that finishes before playback and releases exactly once afterward', async () => {
+    const save = vi.fn<SaveCoordinator>()
+      .mockImplementationOnce(async (progress) => ({ status: 'unsaved', progress, error: 'session disk failure' }))
+      .mockImplementationOnce(async (progress) => ({ status: 'saved', revision: 1, progress }))
+    const onComplete = renderControlledExperience(save)
+    fireEvent.click(await screen.findByRole('button', { name: '运行受控成功程序' }))
+    expect(await screen.findByRole('button', { name: '重试保存本关' })).toBeVisible()
+
+    fireEvent.click(screen.getByRole('button', { name: '重试保存本关' }))
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2))
+    expect(onComplete).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '完成受控播放' }))
+    fireEvent.click(screen.getByRole('button', { name: '完成受控播放' }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce())
+  })
+
   it('never lets an older saved run release completion for the current request', async () => {
     const first = deferred<CoordinatedSaveResult>()
     const second = deferred<CoordinatedSaveResult>()
