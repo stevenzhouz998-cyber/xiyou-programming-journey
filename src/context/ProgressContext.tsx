@@ -66,7 +66,7 @@ export interface ProgressContextValue {
   importProgressFile: (raw: string) => Promise<CoordinatedImportResult>;
   clearProgress: () => Promise<CoordinatedClearResult>;
   createBackup: () => ProgressBackup;
-  reloadExternalProgress: () => void;
+  reloadExternalProgress: () => ProgressV3 | null;
 }
 
 const ProgressContext = createContext<ProgressContextValue | null>(null);
@@ -276,7 +276,7 @@ export function ProgressProvider({
       setSaveStatus('unsaved');
       setSaveError(loaded.error);
       setSaveRetryable(false);
-      return;
+      return null;
     }
     progressRef.current = loaded.progress;
     setProgress(loaded.progress);
@@ -292,6 +292,7 @@ export function ProgressProvider({
       setSaveStatus('pending');
       void enqueue(() => runLoadRepair(loaded.repair!));
     }
+    return loaded.progress;
   };
 
   useEffect(() => {
