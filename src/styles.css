@@ -309,6 +309,7 @@ progress { width: 100%; accent-color: var(--jade); }
   .block-program-actions { justify-content: flex-start; }
   .code-workspace, .python-workspace, .ai-lab { padding: 12px; min-width: 0; overflow: hidden; }
   .blockly-host, .code-editor, .cm-editor { max-width: 100%; overflow-x: hidden; overflow-y: auto; }
+  .ruyi-staff-workspace .blockly-host { height: 176px; }
   .ruyi-weight-list { grid-template-columns: 1fr; text-align: left; }
   .command-palette, .workspace-actions, .success-actions, .parent-heading, .data-tools, .clear-progress-card > div { align-items: stretch; flex-direction: column; }
   .command-buttons { justify-content: flex-start; }

@@ -51,6 +51,7 @@ describe('commercial responsive shell', () => {
     localStorage.clear();
     const view = render(<div style={{ width: '320px' }}><ProgressProvider><RuyiStaffExperience reducedMotion muted onComplete={() => undefined} /></ProgressProvider></div>);
     await screen.findByRole('button', { name: '执行战斗指令' }, { timeout: 5000 });
+    await screen.findByRole('img', { name: '龙宫定海神针代码执行场景' }, { timeout: 5000 });
     const experience = view.container.querySelector<HTMLElement>('.ruyi-staff-experience')!;
     const scene = experience.querySelector<HTMLElement>('.ruyi-staff-scene-frame')!;
     const controls = experience.querySelector<HTMLElement>('.dragon-palace-scene-controls')!;

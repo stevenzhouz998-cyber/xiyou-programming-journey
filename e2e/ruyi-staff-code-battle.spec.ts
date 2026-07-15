@@ -68,6 +68,42 @@ async function expectNoOverflow(page: Page) {
   }))).toEqual({ document: 0, body: 0 })
 }
 
+async function expectNarrowWorkspaceUsable(page: Page) {
+  await page.locator('.ruyi-staff-workspace .blockly-host').scrollIntoViewIfNeeded()
+  const geometry = await page.locator('.ruyi-staff-workspace').evaluate((root, currentKey) => {
+    const host = root.querySelector<HTMLElement>('.blockly-host')!.getBoundingClientRect()
+    const progress = JSON.parse(localStorage.getItem(currentKey)!)
+    const targetIds = new Set<string>(progress.sessions['w1-m2'].workspace.blocks.map((block: { id: string }) => block.id))
+    const blocks = [...root.querySelectorAll<SVGGraphicsElement>('.blocklyDraggable[data-id]')].filter((block) => targetIds.has(block.dataset.id!)).map((block) => {
+      const rect = block.getBoundingClientRect()
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height }
+    })
+    return {
+      host: { left: host.left, right: host.right, top: host.top, bottom: host.bottom },
+      blocks,
+    }
+  }, CURRENT_KEY)
+  expect(geometry.blocks).toHaveLength(3)
+  for (const block of geometry.blocks) {
+    expect(block.width).toBeGreaterThan(0)
+    expect(block.height).toBeGreaterThan(0)
+    expect(block.left).toBeGreaterThanOrEqual(geometry.host.left - 1)
+    expect(block.right).toBeLessThanOrEqual(geometry.host.right + 1)
+    expect(block.top).toBeGreaterThanOrEqual(geometry.host.top - 1)
+    expect(block.bottom).toBeLessThanOrEqual(geometry.host.bottom + 1)
+  }
+  const controls = page.locator('.ruyi-staff-workspace button:visible')
+  for (let index = 0; index < await controls.count(); index += 1) {
+    const control = controls.nth(index)
+    await control.scrollIntoViewIfNeeded()
+    expect(await control.evaluate((button) => {
+      const rect = button.getBoundingClientRect()
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+      return hit === button || button.contains(hit)
+    })).toBe(true)
+  }
+}
+
 async function wrongThenCorrect(page: Page, keyboard = false) {
   await add(page, '查看三件兵器重量', keyboard)
   await add(page, '选择方天画戟（7200斤）', keyboard)
@@ -118,6 +154,7 @@ test('@staff-full visible wrong choice is corrected in the same Blockly workspac
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeHidden()
   await expect(page.locator('.ruyi-staff-scene-frame .game-scene')).toHaveAttribute('data-scene-state', 'ruyi-staff-shrunk', { timeout: 15_000 })
   expect(await readEvidence(page)).toEqual(before)
+  if ((page.viewportSize()?.width ?? 0) <= 390) await expectNarrowWorkspaceUsable(page)
   await capture(page, testInfo)
   await page.getByRole('button', { name: '成长地图' }).first().click()
   await expect(page.getByRole('button', { name: '四海披挂' })).toBeEnabled()

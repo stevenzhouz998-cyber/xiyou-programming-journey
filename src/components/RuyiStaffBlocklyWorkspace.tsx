@@ -51,8 +51,33 @@ function withoutEvents<T>(operation: () => T): T {
 }
 type Selectable = Blockly.Block & { select(): void }
 type Centerable = Blockly.Workspace & { centerOnBlock(id: string): void }
+type FlyoutWorkspace = Blockly.Workspace & { getFlyout(): { autoClose: boolean; setAutoClose?(autoClose: boolean): void; hide(): void } | null }
+type SvgWorkspace = Blockly.Workspace & { getParentSvg(): SVGElement; resizeContents(): void; zoomToFit(): void; scrollX: number; scrollY: number; translate(x: number, y: number): void }
 function canSelect(block: Blockly.Block): block is Selectable { return typeof (block as unknown as Partial<Selectable>).select === 'function' }
 function canCenter(workspace: Blockly.Workspace): workspace is Centerable { return typeof (workspace as Partial<Centerable>).centerOnBlock === 'function' }
+function canHideFlyout(workspace: Blockly.Workspace): workspace is FlyoutWorkspace { return typeof (workspace as Partial<FlyoutWorkspace>).getFlyout === 'function' }
+function canResizeSvg(workspace: Blockly.Workspace): workspace is SvgWorkspace { return typeof (workspace as Partial<SvgWorkspace>).getParentSvg === 'function' }
+
+function fitNarrowWorkspace(workspace: Blockly.Workspace) {
+  if (typeof window.matchMedia !== 'function' || !window.matchMedia('(max-width: 600px)').matches) return
+  if (canHideFlyout(workspace)) {
+    const flyout = workspace.getFlyout()
+    if (flyout) { if (flyout.setAutoClose) flyout.setAutoClose(true); else flyout.autoClose = true; flyout.hide() }
+  }
+  const topBlock = workspace.getTopBlocks(false)[0]
+  if (topBlock) {
+    const position = topBlock.getRelativeToSurfaceXY()
+    withoutEvents(() => topBlock.moveBy(12 - position.x, 10 - position.y))
+  }
+  if (canResizeSvg(workspace)) {
+    Blockly.svgResize(workspace as Blockly.WorkspaceSvg)
+    workspace.resizeContents()
+    if (workspace.getTopBlocks(false).length > 0) workspace.zoomToFit()
+    workspace.scrollX = 0
+    workspace.scrollY = 0
+    workspace.translate(0, 0)
+  }
+}
 
 function activateButtonOnEnter(event: ReactKeyboardEvent<HTMLElement>) {
   if (event.key !== 'Enter' || !(event.target instanceof HTMLButtonElement) || event.target.disabled) return
@@ -133,16 +158,20 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
     withoutEvents(() => loadRuyiWorkspaceDraft(workspace, draft)); lastDraftRef.current = JSON.stringify(draft); lastPropRef.current = JSON.stringify(draft)
     refresh(false)
     const listener = (event: Blockly.Events.Abstract) => { if (!event.isUiEvent) refresh(true) }
+    const fit = () => fitNarrowWorkspace(workspace)
+    fit(); const fitFrame = window.requestAnimationFrame(fit); const fitAfterFlyout = window.setTimeout(fit, 50); window.addEventListener('resize', fit)
     workspace.addChangeListener(listener); setReady(true)
-    return () => { mountedRef.current = false; saveRequestRef.current.generation += 1; setReady(false); workspace.removeChangeListener(listener); workspace.dispose(); if (workspaceRef.current === workspace) workspaceRef.current = null; itemRefs.current.clear() }
+    return () => { mountedRef.current = false; saveRequestRef.current.generation += 1; setReady(false); window.cancelAnimationFrame(fitFrame); window.clearTimeout(fitAfterFlyout); window.removeEventListener('resize', fit); workspace.removeChangeListener(listener); workspace.dispose(); if (workspaceRef.current === workspace) workspaceRef.current = null; itemRefs.current.clear() }
   }, [adapter])
 
   useEffect(() => {
     const workspace = workspaceRef.current; if (!ready || !workspace) return
     const incoming = JSON.stringify(draft); if (incoming === lastPropRef.current) return
     if (incoming === lastDraftRef.current) { lastPropRef.current = incoming; return }
-    try { withoutEvents(() => loadRuyiWorkspaceDraft(workspace, draft)); lastDraftRef.current = incoming; lastPropRef.current = incoming; refresh(false); setWorkspaceError(null) }
+    let fitFrame = 0
+    try { withoutEvents(() => loadRuyiWorkspaceDraft(workspace, draft)); lastDraftRef.current = incoming; lastPropRef.current = incoming; refresh(false); fitNarrowWorkspace(workspace); fitFrame = window.requestAnimationFrame(() => fitNarrowWorkspace(workspace)); setWorkspaceError(null) }
     catch { setWorkspaceError('传入的积木草稿无法安全恢复，当前工作区保持不变。') }
+    return () => { if (fitFrame) window.cancelAnimationFrame(fitFrame) }
   }, [draft, ready])
 
   useEffect(() => {
@@ -155,7 +184,7 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
 
   const mutate = (operation: (workspace: Blockly.Workspace) => void) => {
     const workspace = workspaceRef.current; if (!workspace) return
-    try { operation(workspace); refresh(true) } catch { setWorkspaceError('当前积木结构需要先在编辑区连接成一条指令链。'); setResult(compileRuyiStaffWorkspace(workspace)) }
+    try { operation(workspace); refresh(true); fitNarrowWorkspace(workspace) } catch { setWorkspaceError('当前积木结构需要先在编辑区连接成一条指令链。'); setResult(compileRuyiStaffWorkspace(workspace)) }
   }
   const run = () => { const workspace = workspaceRef.current; if (!workspace) return; const compiled = compileRuyiStaffWorkspace(workspace); setResult(compiled); onRun(compiled) }
 
