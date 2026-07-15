@@ -6,19 +6,6 @@ const CURRENT_KEY = 'xiyou-programming-progress-v3'
 const SNAPSHOT_KEY = 'xiyou-programming-progress-snapshot-v3'
 const COLD_BYTES_LIMIT = 2.5 * 1024 * 1024
 const updateEvidence = process.env.XIYOU_UPDATE_EVIDENCE === '1'
-const fullRecoveryProjects = new Set([
-  'desktop-chromium-1440x1024',
-  'desktop-firefox-1440x1024',
-  'tablet-webkit-768x1024',
-])
-const keyboardProjects = new Set([
-  'desktop-chromium-1440x1024',
-  'desktop-firefox-1440x1024',
-])
-const parityProjects = new Set([
-  'mobile-chromium-390x844',
-  'tablet-webkit-768x1024',
-])
 
 type SessionEvidence = {
   blockIds: string[]
@@ -113,7 +100,7 @@ async function captureSuccessfulState(page: Page, testInfo: TestInfo) {
   await page.screenshot({ path: target, fullPage: true, animations: 'disabled' })
 }
 
-test('real Blockly wrong program is corrected through visible controls, persists, unlocks, and reaches the PIN report', async ({ page }, testInfo) => {
+test('@full real Blockly wrong program is corrected through visible controls, persists, unlocks, and reaches the PIN report', async ({ page }, testInfo) => {
   test.setTimeout(90_000)
   await openFirstMission(page)
   await buildWrongThenCorrect(page)
@@ -136,7 +123,8 @@ test('real Blockly wrong program is corrected through visible controls, persists
   await page.getByRole('button', { name: '家长周报' }).click()
   await expect(page.getByText(/运行 2 次 · 调整 1 次/)).toBeHidden()
   await page.getByLabel('家长 PIN').fill('2580')
-  await page.getByLabel('家长 PIN').press('Enter')
+  await expect(page.getByLabel('家长 PIN')).toHaveValue('2580')
+  await page.getByRole('button', { name: '进入周报' }).click()
   await expect(page.getByText('运行 2 次 · 调整 1 次')).toBeVisible()
   const exportStarted = page.waitForEvent('download')
   await page.getByRole('button', { name: '导出进度' }).click()
@@ -150,12 +138,15 @@ test('real Blockly wrong program is corrected through visible controls, persists
   expect(await readSessionEvidence(page)).toEqual(beforeRefresh)
 })
 
-test('a real Blockly edit stays visible when storage fails and the visible retry persists it', async ({ page }, testInfo) => {
-  if (testInfo.project.name !== 'desktop-chromium-1440x1024') {
-    await openFirstMission(page)
-    await expect(page.locator('.blockly-host')).toBeVisible()
-    return
-  }
+test('@narrow real Blockly wrong program reaches success without horizontal overflow', async ({ page }, testInfo) => {
+  test.setTimeout(90_000)
+  await openFirstMission(page)
+  await buildWrongThenCorrect(page)
+  await expectNoHorizontalOverflow(page)
+  await captureSuccessfulState(page, testInfo)
+})
+
+test('@storage a real Blockly edit stays visible when storage fails and the visible retry persists it', async ({ page }) => {
   await page.addInitScript((currentKey) => {
     const nativeSetItem = Storage.prototype.setItem
     ;(window as Window & { __xiyouFailCurrentWrites?: boolean }).__xiyouFailCurrentWrites = false
@@ -178,12 +169,7 @@ test('a real Blockly edit stays visible when storage fails and the visible retry
   expect((await readSessionEvidence(page)).blockIds).toHaveLength(1)
 })
 
-test('keyboard-only visible controls edit the real Blockly workspace and complete the mission', async ({ page }, testInfo) => {
-  if (!keyboardProjects.has(testInfo.project.name)) {
-    await openFirstMission(page)
-    await expect(page.locator('.blockly-host')).toBeVisible()
-    return
-  }
+test('@keyboard keyboard-only visible controls edit the real Blockly workspace and complete the mission', async ({ page }) => {
   test.setTimeout(90_000)
   await openFirstMission(page)
   await buildWrongThenCorrect(page, true)
@@ -191,12 +177,7 @@ test('keyboard-only visible controls edit the real Blockly workspace and complet
   expect(evidence.trace.map((item) => item.opcode)).toEqual(['enter_palace', 'request_weapon', 'test_weapon'])
 })
 
-test('reduced motion and mute replay the same persisted event sequence and final state', async ({ page }, testInfo) => {
-  if (!parityProjects.has(testInfo.project.name)) {
-    await openFirstMission(page)
-    await expect(page.getByRole('button', { name: '关闭声音' })).toBeVisible()
-    return
-  }
+test('@parity reduced motion and mute replay the same persisted event sequence and final state', async ({ page }) => {
   test.setTimeout(90_000)
   await openFirstMission(page)
   await add(page, '进入龙宫')
@@ -245,13 +226,7 @@ function recoverySnapshot() {
   }
 }
 
-test('corrupt V3 Blockly bytes are preserved, downloaded, recovered with stable IDs, and executable again', async ({ page }, testInfo) => {
-  if (!fullRecoveryProjects.has(testInfo.project.name)) {
-    await openFirstMission(page)
-    await expect(page.locator('.blockly-host')).toBeVisible()
-    return
-  }
-  test.setTimeout(90_000)
+function corruptRecoveryFixture() {
   const snapshot = recoverySnapshot()
   const corrupt = JSON.stringify({
     ...snapshot,
@@ -262,6 +237,10 @@ test('corrupt V3 Blockly bytes are preserved, downloaded, recovered with stable 
       },
     },
   })
+  return { snapshot, corrupt }
+}
+
+async function openRecoveredCorruptDraft(page: Page, snapshot: ReturnType<typeof recoverySnapshot>, corrupt: string) {
   await page.addInitScript(({ currentKey, snapshotKey, corruptRaw, snapshotRaw }) => {
     localStorage.setItem(currentKey, corruptRaw)
     localStorage.setItem(snapshotKey, snapshotRaw)
@@ -271,17 +250,26 @@ test('corrupt V3 Blockly bytes are preserved, downloaded, recovered with stable 
   await expect(page.locator('.block-program-list li')).toHaveCount(1)
   await expect(page.locator('.block-program-list li')).toContainText('进入龙宫')
   expect((await readSessionEvidence(page)).blockIds).toEqual(['recovered-enter'])
+}
+
+async function completeRecoveredDraft(page: Page) {
   await add(page, '请求兵器')
   await add(page, '试用兵器')
   await page.getByRole('button', { name: '执行战斗指令' }).click()
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 15_000 })
   expect((await readSessionEvidence(page)).trace[0].sourceBlockId).toBe('recovered-enter')
+}
 
-  if (testInfo.project.name !== 'desktop-chromium-1440x1024') return
+test('@corrupt-full corrupt V3 Blockly bytes are preserved, downloaded, recovered with stable IDs, and executable again', async ({ page }) => {
+  test.setTimeout(90_000)
+  const { snapshot, corrupt } = corruptRecoveryFixture()
+  await openRecoveredCorruptDraft(page, snapshot, corrupt)
+  await completeRecoveredDraft(page)
 
   await page.getByRole('button', { name: '回成长地图' }).click()
   await page.getByRole('button', { name: '家长周报' }).click()
   await page.getByLabel('家长 PIN').fill('2580')
+  await expect(page.getByLabel('家长 PIN')).toHaveValue('2580')
   await page.getByRole('button', { name: '进入周报' }).click()
   await expect(page.getByRole('button', { name: '下载损坏原文' })).toBeVisible()
   const downloadStarted = page.waitForEvent('download')
@@ -293,7 +281,14 @@ test('corrupt V3 Blockly bytes are preserved, downloaded, recovered with stable 
   expect(JSON.parse(envelope).current).toBe(corrupt)
 })
 
-test('cold w1-m1 response bodies stay within the fixed 2.5 MiB budget with cache disabled', async ({ page }, testInfo) => {
+test('@corrupt-smoke corrupt V3 Blockly bytes recover with stable IDs and execute again', async ({ page }) => {
+  test.setTimeout(90_000)
+  const { snapshot, corrupt } = corruptRecoveryFixture()
+  await openRecoveredCorruptDraft(page, snapshot, corrupt)
+  await completeRecoveredDraft(page)
+})
+
+test('@cold cold w1-m1 response bodies stay within the fixed 2.5 MiB budget with cache disabled', async ({ page }, testInfo) => {
   test.setTimeout(90_000)
   await page.route('**/*', async (route) => {
     const headers = { ...route.request().headers(), 'cache-control': 'no-cache', pragma: 'no-cache' }
@@ -302,7 +297,7 @@ test('cold w1-m1 response bodies stay within the fixed 2.5 MiB budget with cache
   const bodies: Array<Promise<{ url: string; bytes: number }>> = []
   page.on('response', (response) => {
     const url = new URL(response.url())
-    if (!['http:', 'https:'].includes(url.protocol) || url.origin !== 'http://127.0.0.1:4173' || response.status() >= 300) return
+    if (!['http:', 'https:'].includes(url.protocol) || response.status() < 200 || response.status() >= 300) return
     bodies.push(response.body().then((body) => ({ url: response.url(), bytes: body.byteLength })))
   })
   await page.goto('./#/mission/w1-m1')

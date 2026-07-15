@@ -109,7 +109,7 @@ async function captureScreenshot(page: Page, testInfo: TestInfo, filename: strin
   await page.screenshot({ path: target, fullPage: true, animations: 'disabled' });
 }
 
-test('home has healthy navigation, assets, responsive layout, and evidence screenshot', async ({ page }, testInfo) => {
+test('@legacy home has healthy navigation, assets, responsive layout, and evidence screenshot', async ({ page }, testInfo) => {
   await acknowledge(page);
   await expect(page.getByRole('heading', { name: '西游编程记', level: 1 })).toBeVisible();
   await expect(page.getByRole('navigation').getByRole('button', { name: /家长周报/ })).toBeVisible();
@@ -123,7 +123,7 @@ test('home has healthy navigation, assets, responsive layout, and evidence scree
   }
 });
 
-test('320px home, first mission and parent PIN never overflow', async ({ page }) => {
+test('@legacy 320px home, first mission and parent PIN never overflow', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 844 });
   await acknowledge(page);
   await expectNoPageOverflow(page);
@@ -135,7 +135,7 @@ test('320px home, first mission and parent PIN never overflow', async ({ page })
   await expectNoPageOverflow(page);
 });
 
-test('child failure, real Blockly success, persistence, export and strict imports', async ({ page }, testInfo) => {
+test('@legacy child failure, real Blockly success, persistence, export and strict imports', async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   await acknowledge(page);
   await page.getByRole('button', { name: /(开始第一关|继续今日闯关)/ }).click();
@@ -176,7 +176,7 @@ test('child failure, real Blockly success, persistence, export and strict import
   expect(await page.evaluate(key => localStorage.getItem(key), currentKey)).toBe(before);
 });
 
-test('snapshot recovery preserves corrupt source and exposes download', async ({ page }) => {
+test('@legacy snapshot recovery preserves corrupt source and exposes download', async ({ page }) => {
   await page.goto('./');
   await page.evaluate(({ currentKey, snapshotKey, snapshot }) => { localStorage.setItem(currentKey, '{bad'); localStorage.setItem(snapshotKey, JSON.stringify(snapshot)); }, { currentKey, snapshotKey, snapshot: v3(true) });
   await page.reload();
@@ -207,7 +207,7 @@ test('snapshot recovery preserves corrupt source and exposes download', async ({
   expect(await page.evaluate(key => localStorage.getItem(key), corruptKey)).toBe(envelope);
 });
 
-test('keyboard-only PIN, hint and clear cancellation preserve focus isolation', async ({ page }) => {
+test('@legacy keyboard-only PIN, hint and clear cancellation preserve focus isolation', async ({ page }) => {
   await page.goto('./');
   await expect(page.getByRole('button', { name: '我知道了' })).toBeFocused();
   await page.keyboard.press('Enter');
@@ -230,7 +230,7 @@ test('keyboard-only PIN, hint and clear cancellation preserve focus isolation', 
   await expect(page.getByRole('button', { name: '清空学习数据' })).toBeFocused();
 });
 
-test('parent backup-and-clear resets to initial V3 and reopens privacy with focus', async ({ page }) => {
+test('@legacy parent backup-and-clear resets to initial V3 and reopens privacy with focus', async ({ page }) => {
   await acknowledge(page);
   await page.goto('/xiyou-programming-journey/#/parent');
   await expect(page.getByRole('heading', { name: '家长周报', level: 1 })).toBeFocused();
@@ -246,7 +246,7 @@ test('parent backup-and-clear resets to initial V3 and reopens privacy with focu
   expect(stored.version).toBe(3); expect(stored.missions).toEqual({}); expect(stored.sessions).toEqual({}); expect(stored.privacy.localDataNoticeSeen).toBe(false);
 });
 
-test('unlocked Python and AI tools load real editors without page overflow', async ({ page, browserName }) => {
+test('@legacy unlocked Python and AI tools load real editors without page overflow', async ({ page, browserName }) => {
   const missions: Record<string, object> = {};
   for (let week = 1; week <= 5; week++) for (let mission = 1; mission <= 5; mission++) missions[`w${week}-m${mission}`] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: '2026-07-12T00:00:00.000Z' };
   missions['w6-m1'] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: '2026-07-12T00:00:00.000Z' };
@@ -283,7 +283,7 @@ test('unlocked Python and AI tools load real editors without page overflow', asy
   await expectNoPageOverflow(page);
 });
 
-test('lazy tool failure is visible quickly and reload recovers', async ({ page, browserName }) => {
+test('@legacy lazy tool failure is visible quickly and reload recovers', async ({ page, browserName }) => {
   let fail = true; let failedAt = 0; let target503Url: string | null = null;
   healthPhase = 'lazy-target-503';
   await page.route('**/assets/BlocklyWorkspace-*.js', async route => {
@@ -339,7 +339,7 @@ test('lazy tool failure is visible quickly and reload recovers', async ({ page, 
   await recoveredPage.close();
 });
 
-test('persistent reduced motion and mute settings reach visible controls and real scene branch', async ({ page }) => {
+test('@legacy persistent reduced motion and mute settings reach visible controls and real scene branch', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await acknowledge(page);
   await expect(page.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'true');
@@ -364,7 +364,7 @@ test('persistent reduced motion and mute settings reach visible controls and rea
   }
 });
 
-test('GitHub Pages base path, not-found behavior, and transfer budget', async ({ page }) => {
+test('@legacy GitHub Pages base path, not-found behavior, and transfer budget', async ({ page }) => {
   const responses: { url: string; status: number }[] = [];
   const responseBodies: Promise<{ url: string; bytes?: number; required: boolean; error?: string }>[] = [];
   page.on('response', response => responses.push({ url: response.url(), status: response.status() }));
