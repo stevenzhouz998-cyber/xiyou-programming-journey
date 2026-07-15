@@ -92,6 +92,7 @@ interface ProgressProviderProps {
 
 type FailedSaveResult = Extract<CoordinatedSaveResult, { status: 'unsaved' | 'conflict' }>;
 interface UnpublishedTransaction {
+  id: number;
   draft: ProgressV3;
   generation: number;
   failure: FailedSaveResult | null;
@@ -111,6 +112,7 @@ export function ProgressProvider({
   const conflictRef = useRef(false);
   const pendingRepairRef = useRef(initialLoad.repair);
   const pendingUnpublishedRef = useRef<UnpublishedTransaction | null>(null);
+  const unpublishedTransactionSequenceRef = useRef(0);
   const queueRef = useRef<Promise<unknown>>(Promise.resolve());
   const [loadState, setLoadState] = useState<LoadState>(() => loadStateFrom(initialLoad));
   const setLoadPersistence = (persistence: LoadState['persistence']) => {
@@ -173,11 +175,13 @@ export function ProgressProvider({
     publishDraft: boolean,
     retryable = true,
     unpublishedGeneration: number | null = null,
+    unpublishedTransactionId: number | null = null,
   ) => {
     if (result.status === 'saved') {
       if (unpublishedGeneration !== null) {
         const transaction = pendingUnpublishedRef.current;
-        if (!transaction || transaction.generation !== unpublishedGeneration) {
+        if (!transaction || transaction.id !== unpublishedTransactionId) return result;
+        if (transaction.generation !== unpublishedGeneration) {
           publishRevision(result.revision);
           setLoadPersistence('saved');
           return result;
@@ -195,7 +199,7 @@ export function ProgressProvider({
     else {
       if (unpublishedGeneration !== null) {
         const transaction = pendingUnpublishedRef.current;
-        if (transaction && transaction.generation >= unpublishedGeneration && !transaction.failure) {
+        if (transaction && transaction.id === unpublishedTransactionId && transaction.generation >= unpublishedGeneration && !transaction.failure) {
           transaction.failure = result;
         }
       }
@@ -231,8 +235,12 @@ export function ProgressProvider({
     const existingTransaction = pendingUnpublishedRef.current;
     const holdUntilSaved = retainUnpublished || existingTransaction !== null;
     const unpublishedGeneration = holdUntilSaved ? (existingTransaction?.generation ?? 0) + 1 : null;
+    const unpublishedTransactionId = holdUntilSaved
+      ? existingTransaction?.id ?? ++unpublishedTransactionSequenceRef.current
+      : null;
     if (unpublishedGeneration !== null) {
       pendingUnpublishedRef.current = {
+        id: unpublishedTransactionId!,
         draft: next,
         generation: unpublishedGeneration,
         failure: existingTransaction?.failure ?? null,
@@ -255,13 +263,17 @@ export function ProgressProvider({
     setSaveRetryable(retryable);
     return enqueue(async () => {
       if (unpublishedGeneration !== null) {
-        const failure = pendingUnpublishedRef.current?.failure;
+        const transaction = pendingUnpublishedRef.current;
+        if (!transaction || transaction.id !== unpublishedTransactionId) {
+          return { status: 'saved', revision: revisionRef.current, progress: progressRef.current };
+        }
+        const failure = transaction.failure;
         if (failure) return failure;
       }
       let result: CoordinatedSaveResult;
       try { result = await saveCoordinated(next, revisionRef.current, options); }
       catch (error) { result = normalizeSaveFailure(error, next); }
-      return markResult(result, next, publishDraft, retryable, unpublishedGeneration);
+      return markResult(result, next, publishDraft, retryable, unpublishedGeneration, unpublishedTransactionId);
     }, 'unsaved', retryable);
   };
 
@@ -418,6 +430,12 @@ export function ProgressProvider({
       });
     },
     commitParentAccess: (parentPin) => {
+      const unpublished = pendingUnpublishedRef.current;
+      if (unpublished) return Promise.resolve({
+        status: 'unsaved',
+        progress: unpublished.draft,
+        error: '通关结果仍在等待保存，请先在任务页完成恢复，再修改家长访问凭据。',
+      });
       const next = {
         ...progressRef.current,
         settings: { ...progressRef.current.settings, parentPin },
@@ -456,10 +474,11 @@ export function ProgressProvider({
         const transaction = pendingUnpublishedRef.current;
         const draft = transaction?.draft ?? progressRef.current;
         const generation = transaction?.generation ?? null;
+        const transactionId = transaction?.id ?? null;
         let result: CoordinatedSaveResult;
         try { result = await saveCoordinated(draft, revisionRef.current); }
         catch (error) { result = normalizeSaveFailure(error, draft); }
-        return markResult(result, draft, transaction === null, true, generation);
+        return markResult(result, draft, transaction === null, true, generation, transactionId);
       });
     },
     importProgressFile: (raw) => {
@@ -469,7 +488,11 @@ export function ProgressProvider({
       return enqueue(async () => {
         const { importProgressCoordinated } = await loadParentCoordinator();
         const result = await importProgressCoordinated(raw, revisionRef.current);
-        if (result.status === 'saved') publishSaved(result.progress, result.revision);
+        if (result.status === 'saved') {
+          pendingUnpublishedRef.current = null;
+          pendingRepairRef.current = null;
+          publishSaved(result.progress, result.revision);
+        }
         else {
           conflictRef.current = result.status === 'conflict';
           setSaveStatus(result.status === 'conflict' ? 'conflict' : 'unsaved');
@@ -486,7 +509,11 @@ export function ProgressProvider({
       return enqueue(async () => {
         const { clearProgressCoordinated } = await loadParentCoordinator();
         const result = await clearProgressCoordinated(revisionRef.current);
-        if (result.status === 'cleared') publishSaved(result.progress, result.revision);
+        if (result.status === 'cleared') {
+          pendingUnpublishedRef.current = null;
+          pendingRepairRef.current = null;
+          publishSaved(result.progress, result.revision);
+        }
         else {
           conflictRef.current = result.status === 'conflict';
           setSaveStatus(result.status === 'conflict' ? 'conflict' : 'unsaved');

@@ -14,6 +14,7 @@ interface Props {
   focusBlockId: string | null
   onFocusHandled: () => void
   saveRecoverySuperseded?: boolean
+  locked?: boolean
 }
 
 export interface RuyiStaffBlocklyWorkspaceAdapter { create(host: HTMLDivElement): Blockly.Workspace }
@@ -121,7 +122,7 @@ function rebuild(workspace: Blockly.Workspace, blocks: Blockly.Block[]) {
   renderWorkspaceTopBlocks(workspace)
 }
 
-export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBlockId, onFocusHandled, saveRecoverySuperseded = false }: Props) {
+export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBlockId, onFocusHandled, saveRecoverySuperseded = false, locked = false }: Props) {
   const adapter = useContext(AdapterContext)
   const hostRef = useRef<HTMLDivElement>(null); const workspaceRef = useRef<Blockly.Workspace | null>(null)
   const itemRefs = useRef(new Map<string, HTMLLIElement>()); const onDraftRef = useRef(onDraftChange); const handledRef = useRef(onFocusHandled)
@@ -227,10 +228,12 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
   }, [saveRecoverySuperseded])
 
   const mutate = (operation: (workspace: Blockly.Workspace) => void) => {
+    if (locked) return
     const workspace = workspaceRef.current; if (!workspace) return
     try { operation(workspace); refresh(true); fitNarrowWorkspace(workspace) } catch { setWorkspaceError('当前积木结构需要先在编辑区连接成一条指令链。'); setResult(compileRuyiStaffWorkspace(workspace)) }
   }
   const run = () => {
+    if (locked) return
     const workspace = workspaceRef.current; if (!workspace) return
     const compiled = compileRuyiStaffWorkspace(workspace); setResult(compiled)
     try { onRun(compiled); setWorkspaceError(null) }
@@ -240,23 +243,24 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
   const atCapacity = blocks.length >= MAX_WORKSPACE_BLOCKS
 
   return <section className="code-workspace ruyi-staff-workspace" aria-label="定海神针图形化编程工作台" onKeyDown={activateButtonOnEnter}>
-    <div className="command-palette"><p className="eyebrow">指令匣 · 点击加入卷轴</p><div className="command-buttons">{ACTIONS.map(({ type, label }) => <button type="button" className="command-button" key={type} disabled={atCapacity} onClick={() => mutate((workspace) => {
+    {locked ? <p className="workspace-lock-message" role="status">通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。</p> : null}
+    <div className="command-palette"><p className="eyebrow">指令匣 · 点击加入卷轴</p><div className="command-buttons">{ACTIONS.map(({ type, label }) => <button type="button" className="command-button" key={type} disabled={locked || atCapacity} onClick={() => mutate((workspace) => {
       if (workspace.getTopBlocks(false).length > 1) throw new Error('multiple chains')
       const chain = orderedBlocks(workspace); const block = workspace.newBlock(type); initializeWorkspaceBlock(block)
       const tail = chain.at(-1); if (tail) tail.nextConnection?.connect(block.previousConnection!); rebuild(workspace, [...chain, block])
     })}>{`\u52a0\u5165\uff1a${label}`}</button>)}</div>{capacityMessage || atCapacity ? <p role="status">{capacityMessage ?? '指令卷轴已经装满500块积木。先删除一些积木，才能继续加入。'}</p> : null}</div>
-    <div ref={hostRef} className="blockly-host" aria-label="Blockly 积木编辑区" tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); run() } }} />
+    <div ref={hostRef} className={`blockly-host${locked ? ' blockly-host-locked' : ''}`} aria-label="Blockly 积木编辑区" aria-disabled={locked || undefined} tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); run() } }} />
     <div className="command-scroll"><span className="eyebrow">当前指令卷轴</span>
       {!result.ok ? <p role="status">{issue(result)}</p> : null}
       {blocks.length > 0 ? <ol className="block-program-list" aria-label={result.ok ? '已连接的指令顺序' : '工作区积木（尚未形成唯一顺序）'}>{blocks.map((block, index) => <li key={block.id} tabIndex={-1} ref={(node) => { if (node) itemRefs.current.set(block.id, node); else itemRefs.current.delete(block.id) }}><span>{block.label}</span><span className="block-program-actions">
-        <button type="button" aria-label={`\u4e0a\u79fb\uff1a${block.label}`} disabled={!result.ok || index === 0} onClick={() => mutate((workspace) => { const chain = orderedBlocks(workspace); const current = chain.findIndex((item) => item.id === block.id); [chain[current - 1], chain[current]] = [chain[current], chain[current - 1]]; rebuild(workspace, chain) })}>上移</button>
-        <button type="button" aria-label={`\u4e0b\u79fb\uff1a${block.label}`} disabled={!result.ok || index === blocks.length - 1} onClick={() => mutate((workspace) => { const chain = orderedBlocks(workspace); const current = chain.findIndex((item) => item.id === block.id); [chain[current + 1], chain[current]] = [chain[current], chain[current + 1]]; rebuild(workspace, chain) })}>下移</button>
-        <button type="button" aria-label={`\u5220\u9664\uff1a${block.label}`} onClick={() => mutate((workspace) => { const chain = orderedBlocks(workspace); const target = workspace.getBlockById(block.id); target?.previousConnection?.isConnected() && target.previousConnection.disconnect(); target?.nextConnection?.isConnected() && target.nextConnection.disconnect(); target?.dispose(false); rebuild(workspace, chain.filter((item) => item.id !== block.id)) })}>删除</button>
+        <button type="button" aria-label={`\u4e0a\u79fb\uff1a${block.label}`} disabled={locked || !result.ok || index === 0} onClick={() => mutate((workspace) => { const chain = orderedBlocks(workspace); const current = chain.findIndex((item) => item.id === block.id); [chain[current - 1], chain[current]] = [chain[current], chain[current - 1]]; rebuild(workspace, chain) })}>上移</button>
+        <button type="button" aria-label={`\u4e0b\u79fb\uff1a${block.label}`} disabled={locked || !result.ok || index === blocks.length - 1} onClick={() => mutate((workspace) => { const chain = orderedBlocks(workspace); const current = chain.findIndex((item) => item.id === block.id); [chain[current + 1], chain[current]] = [chain[current], chain[current + 1]]; rebuild(workspace, chain) })}>下移</button>
+        <button type="button" aria-label={`\u5220\u9664\uff1a${block.label}`} disabled={locked} onClick={() => mutate((workspace) => { const chain = orderedBlocks(workspace); const target = workspace.getBlockById(block.id); target?.previousConnection?.isConnected() && target.previousConnection.disconnect(); target?.nextConnection?.isConnected() && target.nextConnection.disconnect(); target?.dispose(false); rebuild(workspace, chain.filter((item) => item.id !== block.id)) })}>删除</button>
       </span></li>)}</ol> : null}
     </div>
     {workspaceError ? <p role="alert">{workspaceError}</p> : null}
-    {draftSaveStatus === 'unsaved' ? <div role="alert"><p>这次积木更改还没有保存。</p><button type="button" onClick={retryDraftSave}>重试保存积木</button></div> : null}
-    {draftSaveStatus === 'conflict' ? <p role="alert">其他标签页已经更新，这次积木更改暂停保存。</p> : null}
-    <div className="workspace-actions"><button type="button" className="button button-ghost" onClick={() => mutate((workspace) => workspace.clear())}><ArrowsCounterClockwise size={20} />清空并重新开始</button><button type="button" className="button button-primary" onClick={run}><Play size={20} weight="fill" />执行战斗指令</button></div>
+    {!locked && draftSaveStatus === 'unsaved' ? <div role="alert"><p>这次积木更改还没有保存。</p><button type="button" onClick={retryDraftSave}>重试保存积木</button></div> : null}
+    {!locked && draftSaveStatus === 'conflict' ? <p role="alert">其他标签页已经更新，这次积木更改暂停保存。</p> : null}
+    <div className="workspace-actions"><button type="button" className="button button-ghost" disabled={locked} onClick={() => mutate((workspace) => workspace.clear())}><ArrowsCounterClockwise size={20} />清空并重新开始</button><button type="button" className="button button-primary" disabled={locked} onClick={run}><Play size={20} weight="fill" />执行战斗指令</button></div>
   </section>
 }

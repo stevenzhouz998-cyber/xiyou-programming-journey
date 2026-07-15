@@ -552,6 +552,71 @@ describe('ProgressContext persistence status', () => {
     });
   });
 
+  it('rejects a parent access mutation while final completion is held without changing its candidate or recovery state', async () => {
+    const initial = createInitialProgress();
+    installStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(initial) });
+    const saveProgressCoordinated = vi.fn<typeof import('../progress/storageCoordinator').saveProgressCoordinated>()
+      .mockImplementationOnce(async (progress) => ({ status: 'unsaved', progress, error: 'final completion failed' }))
+      .mockImplementation(async (progress) => ({ status: 'saved', revision: 1, progress }));
+    render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated } as unknown as typeof import('../progress/storageCoordinator'))}><Probe /></ProgressProvider>);
+
+    await act(async () => { await latestContext!.complete('w1-m1', { stars: 3, hintsUsed: 0 }); });
+    let parentResult!: Awaited<ReturnType<ProgressContextValue['commitParentAccess']>>;
+    await act(async () => { parentResult = await latestContext!.commitParentAccess('new-parent-access'); });
+
+    expect(parentResult).toMatchObject({ status: 'unsaved', error: expect.stringContaining('通关结果') });
+    expect(saveProgressCoordinated).toHaveBeenCalledOnce();
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      parentPin: 'unset', missions: {}, saveStatus: 'unsaved', saveError: 'final completion failed', saveRetryable: true,
+    });
+    expect(JSON.parse(latestContext!.createBackup().contents)).toMatchObject({
+      settings: { parentPin: 'unset' }, missions: { 'w1-m1': { status: 'completed' } },
+    });
+
+    await act(async () => { await latestContext!.retrySave(); });
+    expect(saveProgressCoordinated).toHaveBeenCalledTimes(2);
+    expect(saveProgressCoordinated.mock.calls[1][0]).toMatchObject({
+      settings: { parentPin: 'unset' }, missions: { 'w1-m1': { status: 'completed' } },
+    });
+  });
+
+  it('atomically discards a held completion after a successful explicit import and never retries the old candidate', async () => {
+    const initial = { ...createInitialProgress(), learnerName: '旧状态' };
+    installStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(initial) });
+    const saveProgressCoordinated = vi.fn<typeof import('../progress/storageCoordinator').saveProgressCoordinated>()
+      .mockImplementationOnce(async (progress) => ({ status: 'unsaved', progress, error: 'final completion failed' }))
+      .mockImplementation(async (progress, expectedRevision) => ({ status: 'saved', revision: expectedRevision + 1, progress }));
+    render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated } as unknown as typeof import('../progress/storageCoordinator'))}><Probe /></ProgressProvider>);
+    await act(async () => { await latestContext!.complete('w1-m1', { stars: 3, hintsUsed: 0 }); });
+
+    const imported = { ...createInitialProgress(), learnerName: '导入替换状态' };
+    await act(async () => { await latestContext!.importProgressFile(serializeProgress(imported)); });
+
+    expect(latestContext!.progress).toMatchObject({ learnerName: '导入替换状态', missions: {} });
+    expect(JSON.parse(latestContext!.createBackup().contents)).toMatchObject({ learnerName: '导入替换状态', missions: {} });
+    await act(async () => { await latestContext!.retrySave(); });
+    expect(saveProgressCoordinated.mock.calls.at(-1)?.[0]).toMatchObject({ learnerName: '导入替换状态', missions: {} });
+    expect(latestContext!.progress.missions['w1-m1']).toBeUndefined();
+  });
+
+  it('atomically discards a held completion after a successful explicit clear and never retries the old candidate', async () => {
+    const initial = { ...createInitialProgress(), learnerName: '准备清空' };
+    installStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(initial) });
+    const saveProgressCoordinated = vi.fn<typeof import('../progress/storageCoordinator').saveProgressCoordinated>()
+      .mockImplementationOnce(async (progress) => ({ status: 'unsaved', progress, error: 'final completion failed' }))
+      .mockImplementation(async (progress, expectedRevision) => ({ status: 'saved', revision: expectedRevision + 1, progress }));
+    render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated } as unknown as typeof import('../progress/storageCoordinator'))}><Probe /></ProgressProvider>);
+    await act(async () => { await latestContext!.complete('w1-m1', { stars: 3, hintsUsed: 0 }); });
+
+    await act(async () => { await latestContext!.clearProgress(); });
+
+    expect(latestContext!.progress).toMatchObject({ learnerName: '小行者', missions: {} });
+    expect(JSON.parse(latestContext!.createBackup().contents)).toMatchObject({ learnerName: '小行者', missions: {} });
+    await act(async () => { await latestContext!.retrySave(); });
+    expect(saveProgressCoordinated.mock.calls.at(-1)?.[0]).toMatchObject({ learnerName: '小行者', missions: {} });
+    expect(latestContext!.progress.missions['w1-m1']).toBeUndefined();
+  });
+
   it('passes legacy workspace cleanup through the same coordinated session save', async () => {
     const legacyWorkspaceKey = 'xiyou-workspace-w1-m1';
     installStorage({ [legacyWorkspaceKey]: '{"legacy":true}' });

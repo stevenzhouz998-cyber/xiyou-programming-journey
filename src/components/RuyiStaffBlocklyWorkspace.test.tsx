@@ -21,7 +21,7 @@ function chainDraft(count: number): RuyiWorkspaceDraftV1 {
 type DraftSaveResult = { status: 'saved' | 'unsaved' | 'conflict' }
 type DraftSaver = (draft: RuyiWorkspaceDraftV1) => DraftSaveResult | Promise<DraftSaveResult>
 
-function setup(draft = EMPTY, onDraftChange: DraftSaver = vi.fn(() => ({ status: 'saved' as const }))) {
+function setup(draft = EMPTY, onDraftChange: DraftSaver = vi.fn(() => ({ status: 'saved' as const })), locked = false) {
   const workspace = new Blockly.Workspace()
   const onRun = vi.fn<(result: RuyiCompileResult) => void>()
   const view = render(
@@ -32,6 +32,7 @@ function setup(draft = EMPTY, onDraftChange: DraftSaver = vi.fn(() => ({ status:
         onRun={onRun}
         focusBlockId={null}
         onFocusHandled={() => undefined}
+        locked={locked}
       />
     </RuyiStaffBlocklyWorkspaceAdapterProvider>,
   )
@@ -39,6 +40,25 @@ function setup(draft = EMPTY, onDraftChange: DraftSaver = vi.fn(() => ({ status:
 }
 
 describe('RuyiStaffBlocklyWorkspace', () => {
+  it('locks every mutation and run control behind one child-readable final-save message', () => {
+    const onDraftChange = vi.fn(() => ({ status: 'saved' as const }))
+    const { workspace, onRun } = setup(chainDraft(3), onDraftChange, true)
+
+    expect(screen.getByText('通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。')).toBeVisible()
+    expect(screen.getAllByRole('button', { name: /^加入：/ }).every((button) => button.hasAttribute('disabled'))).toBe(true)
+    expect(screen.getAllByRole('button', { name: /^(上移|下移|删除)：/ }).every((button) => button.hasAttribute('disabled'))).toBe(true)
+    expect(screen.getByRole('button', { name: '清空并重新开始' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '执行战斗指令' })).toBeDisabled()
+    expect(screen.getByLabelText('Blockly 积木编辑区')).toHaveAttribute('aria-disabled', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: '加入：查看三件兵器重量' }))
+    fireEvent.click(screen.getAllByRole('button', { name: '删除：查看三件兵器重量' })[0])
+    fireEvent.keyDown(screen.getByLabelText('Blockly 积木编辑区'), { key: 'Enter' })
+    expect(workspace.getAllBlocks(false)).toHaveLength(3)
+    expect(onDraftChange).not.toHaveBeenCalled()
+    expect(onRun).not.toHaveBeenCalled()
+  })
+
   it('offers exactly five mission blocks and compiles the connected real workspace', () => {
     const { workspace, onRun } = setup()
     expect(screen.getAllByRole('button', { name: /^\u52a0\u5165\uff1a/ }).map((button) => button.textContent)).toEqual([

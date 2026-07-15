@@ -225,6 +225,12 @@ describe('西游编程记', () => {
     expect(screen.queryByRole('button', { name: '重试保存本关' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /重试保存/ })).toHaveLength(1);
     expect(screen.getByRole('button', { name: '重试保存通关' })).toBeVisible();
+    expect(document.querySelectorAll('.completion-save-status')).toHaveLength(1);
+    expect(screen.getByText('通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。')).toBeVisible();
+    expect(screen.getAllByRole('button', { name: /^加入：/ }).every((button) => button.hasAttribute('disabled'))).toBe(true);
+    expect(screen.getAllByRole('button', { name: /^(上移|下移|删除)：/ }).every((button) => button.hasAttribute('disabled'))).toBe(true);
+    expect(screen.getByRole('button', { name: '清空并重新开始' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '执行战斗指令' })).toBeDisabled();
     expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
     expect(audio).not.toHaveBeenCalledWith('/assets/audio/success.m4a');
     expect(screen.getByText('1/30 关 · 3 星')).toBeVisible();
@@ -237,6 +243,36 @@ describe('西游编程记', () => {
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
       missions: { 'w1-m2': { status: 'completed' } },
     });
+  });
+
+  it('locks the w1-m2 workspace while the App-owned final completion write is pending', async () => {
+    const progress = completeMission(withParentAccess(createInitialProgress()), 'w1-m1', { stars: 3, hintsUsed: 0 });
+    progress.privacy.localDataNoticeSeen = true;
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    const pendingCompletion = deferred<Awaited<ReturnType<SaveCoordinator>>>();
+    let completionDraft: Parameters<SaveCoordinator>[0] | null = null;
+    const save = vi.fn<SaveCoordinator>(async (next, expectedRevision) => {
+      if (next.missions['w1-m2']) { completionDraft = next; return pendingCompletion.promise; }
+      return { status: 'saved', revision: expectedRevision + 1, progress: next };
+    });
+    window.location.hash = '#/mission/w1-m2';
+    render(<App loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('./progress/storageCoordinator'))} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '加入：查看三件兵器重量' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：选择定海神针（13500斤）' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：缩小定海神针' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+    fireEvent.click(screen.getByRole('button', { name: '完成定海神针场景播放' }));
+
+    expect(await screen.findByText('正在保存通关结果…')).toBeVisible();
+    expect(document.querySelectorAll('.completion-save-status')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: '执行战斗指令' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: /^加入：/ }).every((button) => button.hasAttribute('disabled'))).toBe(true);
+    expect(screen.queryByRole('button', { name: /重试保存/ })).not.toBeInTheDocument();
+
+    await waitFor(() => expect(completionDraft).not.toBeNull());
+    await act(async () => pendingCompletion.resolve({ status: 'saved', revision: 5, progress: completionDraft! }));
+    expect(await screen.findByRole('heading', { name: '闯关成功' })).toBeVisible();
   });
 
   it('shows only the local run-session retry in the full w1-m2 page and clears it after recovery', async () => {
@@ -326,6 +362,8 @@ describe('西游编程记', () => {
     expect(screen.getAllByRole('alert')).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: '下载本页备份' })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: '载入其他标签页版本' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: '执行战斗指令' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: /^加入：/ }).every((button) => button.hasAttribute('disabled'))).toBe(true);
     expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '下载本页备份' }));

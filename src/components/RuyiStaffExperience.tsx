@@ -25,6 +25,7 @@ interface Evidence { stars: 1 | 2 | 3; hintsUsed: number }
 interface Props {
   reducedMotion: boolean
   muted: boolean
+  locked?: boolean
   onComplete: (evidence: Evidence) => void | boolean | Promise<boolean>
   onSessionPersistenceActiveChange?: (active: boolean) => void
   loaders?: RuyiStaffExperienceLoaders
@@ -59,7 +60,7 @@ function activateButtonOnEnter(event: ReactKeyboardEvent<HTMLElement>) {
   event.target.click()
 }
 
-export function RuyiStaffExperience({ reducedMotion, muted, onComplete, onSessionPersistenceActiveChange = () => undefined, loaders = defaultLoaders, reloadPage = reloadExperiencePage }: Props) {
+export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onComplete, onSessionPersistenceActiveChange = () => undefined, loaders = defaultLoaders, reloadPage = reloadExperiencePage }: Props) {
   const RuyiStaffScene = useMemo(() => lazy(loaders.scene), [loaders.scene])
   const RuyiStaffBlocklyWorkspace = useMemo(() => lazy(loaders.workspace), [loaders.workspace])
   const { progress, saveStatus, retrySave, updateMissionSession } = useProgress()
@@ -160,7 +161,7 @@ export function RuyiStaffExperience({ reducedMotion, muted, onComplete, onSessio
   const sessionRetryActive = playback.origin === 'run' && playback.sessionSave !== null && completionHandedOffRequestId !== playback.requestId
   return <div className="ruyi-staff-experience" onKeyDown={activateButtonOnEnter}>
     <div className="ruyi-staff-scene-region"><ToolErrorBoundary label="定海神针场景" reloadPage={reloadPage}><Suspense fallback={<p role="status">龙宫场景加载中，请稍候……</p>}><RuyiStaffScene events={playback.events} replayToken={playback.requestId} reducedMotion={reducedMotion} muted={muted} onPlaybackComplete={() => playbackComplete(playback.requestId)} /></Suspense></ToolErrorBoundary><div className="dragon-palace-scene-controls"><button type="button" className="button button-ghost" disabled={!session.lastRun && !playback.result} onClick={replay}>重播最近一次</button></div></div>
-    <div className="ruyi-staff-program-region" ref={regionRef}><ToolErrorBoundary label="定海神针编程工作台" reloadPage={reloadPage}><Suspense fallback={<p role="status">编程工作台加载中，请稍候……</p>}><RuyiStaffBlocklyWorkspace draft={session.workspace} onDraftChange={saveDraft} onRun={run} focusBlockId={focusBlockId} onFocusHandled={() => setFocusBlockId(null)} saveRecoverySuperseded={sessionRetryActive} /></Suspense></ToolErrorBoundary></div>
+    <div className="ruyi-staff-program-region" ref={regionRef}><ToolErrorBoundary label="定海神针编程工作台" reloadPage={reloadPage}><Suspense fallback={<p role="status">编程工作台加载中，请稍候……</p>}><RuyiStaffBlocklyWorkspace draft={session.workspace} onDraftChange={saveDraft} onRun={run} focusBlockId={focusBlockId} onFocusHandled={() => setFocusBlockId(null)} saveRecoverySuperseded={sessionRetryActive} locked={locked} /></Suspense></ToolErrorBoundary></div>
     <div className="ruyi-staff-feedback-region"><RuyiStaffFeedback diagnostic={diagnostic} occurrenceId={occurrenceId} onFocusBlock={setFocusBlockId} onFocusWorkspace={focusWorkspace} />
       {sessionRetryActive && saveStatus === 'unsaved' ? <div className="unsaved-session" role="status"><p>本关尚未保存，请重试。</p><button type="button" onClick={retrySessionSave}>重试保存本关</button></div> : null}
     </div>
