@@ -42,6 +42,7 @@ export interface ProgressContextValue {
   ) => SaveResult;
   replaceProgress: (progress: ProgressV3) => SaveResult;
   updateSettings: (settings: Partial<ProgressV3['settings']>) => SaveResult;
+  commitParentAccess: (parentPin: string) => SaveResult;
   acknowledgePrivacy: () => SaveResult;
   retrySave: () => SaveResult;
   importProgressFile: (raw: string) => ImportResult;
@@ -115,6 +116,23 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     return result;
   };
 
+  const commitParentAccess = (parentPin: string) => {
+    const next: ProgressV3 = {
+      ...progressRef.current,
+      settings: { ...progressRef.current.settings, parentPin },
+      savedAt: new Date().toISOString(),
+    };
+    const result = saveProgressTransaction(next);
+    if (result.status === 'saved') {
+      progressRef.current = next;
+      setProgress(next);
+      setSaveStatus('saved');
+      setSaveError(null);
+      setLoadPersistence('saved');
+    }
+    return result;
+  };
+
   const importProgressFile = (raw: string) => {
     const result = importProgressTransaction(raw);
     if (result.status === 'saved') {
@@ -166,6 +184,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       settings: { ...progressRef.current.settings, ...settings },
       savedAt: new Date().toISOString(),
     }),
+    commitParentAccess,
     acknowledgePrivacy,
     retrySave,
     importProgressFile,

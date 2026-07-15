@@ -9,7 +9,7 @@
 
 The primary child path uses the visible, real Blockly workspace. It creates an intentionally wrong `请求兵器 → 进入龙宫 → 试用兵器` program, runs it, verifies the outside-palace rejection and focused problem block, then visibly moves, deletes, and adds blocks to produce `进入龙宫 → 请求兵器 → 试用兵器`. The browser then verifies the completed event transcript, stable source block IDs, persisted trace and counters after refresh, the next mission unlock, PIN-gated parent aggregate, V3 export, and visible file import.
 
-No successful gameplay state is injected with `page.evaluate`. Browser-side evaluation is limited to read-only evidence, a storage-failure fixture switch, and deliberately corrupt local-storage input installed before the first application load. Every success assertion is reached through visible Blockly and application controls.
+No successful gameplay state is injected with `page.evaluate`. Browser-side evaluation is limited to read-only evidence, a storage-failure fixture switch, and deliberately corrupt local-storage input installed before the first application load. Every `w1-m1` success assertion is reached through visible Blockly and application controls; the explicitly non-Blockly `w1-m2` compatibility evidence is reached through its one visible command sequence and application controls.
 
 Additional matrix coverage includes:
 
@@ -20,8 +20,8 @@ Additional matrix coverage includes:
 - byte-preserving corrupt-envelope download behind the parent PIN in desktop Chromium;
 - project-level tag filters assign only the specialized scenarios each browser truly executes; grep-excluded tests are not reported as passes or skips;
 - legacy commercial-foundation regression coverage, including focus, responsive layout, parent data tools, Python/AI loading, base path, and visible lazy-module recovery.
-- the first non-specialized Blockly mission (`w1-m2`) visibly adds an incorrect sequence, runs it, moves and deletes commands, rebuilds the correct sequence, completes, and returns to a map showing 2/30 progress without injecting completion state;
-- all five projects execute the same visible parent-credential lifecycle: reject the former public default, reject mismatched confirmation, prove a pre-confirmation reload leaves setup or the old change/recovery credentials intact, retry an intentional storage failure without losing the displayed recovery code, rotate PIN and recovery credentials, reject the old credentials, and finish with keyboard login plus focus checks. Only the explicit recovery acknowledgement transaction stores SHA-256 digests; raw PIN and recovery values are cleared from the component. This remains a local browser UI gate rather than account-level security.
+- the first non-specialized compatibility mission (`w1-m2`) uses one visible React command sequence as its only run input: it visibly adds an incorrect sequence, runs it, moves and deletes commands, rebuilds the correct sequence, completes, and returns to a map showing 2/30 progress without injecting completion state. It is explicitly labelled as a non-Blockly compatibility tool, renders no Blockly host or SVG canvas, and is not level-content complete;
+- all five projects execute the same visible parent-credential lifecycle: reject the former public default, reject mismatched confirmation, prove a pre-confirmation reload leaves setup or the old change/recovery credentials intact, then deliberately fail storage during setup, change, and recovery. Each failure keeps the same recovery code, navigation away and back still rejects the proposed credential and accepts the old credential, and only a later successful acknowledgement rotates the stored SHA-256 digests. Raw PIN and recovery values are cleared from the component. This remains a local browser UI gate rather than account-level security.
 
 ## Real scenario matrix
 
@@ -50,13 +50,13 @@ The cold-load scenario blocks service workers, sends `Cache-Control: no-store` p
 
 | Project | Measured bytes | Limit | Headroom |
 | --- | ---: | ---: | ---: |
-| desktop-chromium-1440x1024 | 2,587,024 | 2,621,440 | 34,416 |
-| desktop-firefox-1440x1024 | 2,587,024 | 2,621,440 | 34,416 |
-| tablet-webkit-768x1024 | 2,587,024 | 2,621,440 | 34,416 |
-| mobile-chromium-390x844 | 2,587,024 | 2,621,440 | 34,416 |
-| narrow-chromium-320x844 | 2,587,024 | 2,621,440 | 34,416 |
+| desktop-chromium-1440x1024 | 2,584,053 | 2,621,440 | 37,387 |
+| desktop-firefox-1440x1024 | 2,584,053 | 2,621,440 | 37,387 |
+| tablet-webkit-768x1024 | 2,584,053 | 2,621,440 | 37,387 |
+| mobile-chromium-390x844 | 2,584,053 | 2,621,440 | 37,387 |
+| narrow-chromium-320x844 | 2,584,053 | 2,621,440 | 37,387 |
 
-The remaining **34,416 B is only about 1.3% headroom** and the first-load path depends on the external `static.blockly.com` sprite. A small upstream size or delivery change can make this gate fail or make a child's first load heavier. This risk is not resolved: follow-up work should continue reducing the local bundle or localize an approved UI sprite only after its source and license are verified.
+The remaining **37,387 B is only about 1.4% headroom** and the first-load path depends on the external `static.blockly.com` sprite. A small upstream size or delivery change can make this gate fail or make a child's first load heavier. This risk is not resolved: follow-up work should continue reducing the local bundle or localize an approved UI sprite only after its source and license are verified.
 
 The five approved Dragon Palace rasters total **257,674 B / 1,310,720 B**. They retain their generated compositions and original dimensions. Sharp 0.35.3 performed only technical WebP re-encoding with `quality: 30`, `alphaQuality: 75`, `effort: 6`, and `smartSubsample: true`; the manifest records the resulting hashes.
 
@@ -86,7 +86,7 @@ The gate failed before it passed:
 1. Budget tests first observed missing fixed exports (`undefined` versus 2,621,440), then passed after the constants were implemented and shared with the asset checker.
 2. The first Chromium mission run passed gameplay but measured **3,419,279 B**, 797,839 B over budget. Production imports were narrowed to Blockly core plus Chinese messages, Phaser was routed to its official minified ESM distribution, and the unrelated global map background stopped loading on w1-m1. That reduced the measured load to 2,845,820 B, still over budget; technical WebP re-encoding then brought it under the fixed limit without redrawing assets.
 3. The first five-project Dragon Palace run was 28/30: WebKit browser-internal `blob:` responses were double-counted, and Firefox was incorrectly required to perform the Chromium-only exact download branch. Filtering to HTTP(S) network bodies and retaining the required Firefox/WebKit recovery smoke made the focused rerun 4/4 green.
-4. The first full regression run stopped on an old fake-button E2E path. The legacy test was upgraded to visible real Blockly and V3 storage assertions.
+4. The first full regression run stopped on an old fake-button E2E path. The primary `w1-m1` test was upgraded to visible real Blockly and V3 storage assertions; the later `w1-m2` compatibility path is separately identified below and is not represented as Blockly.
 5. That upgrade exposed two product regressions: non-Dragon-Palace routes passed legacy scene props to the event-driven Dragon Palace scene, and w1-m1 no longer exposed a visible recovery action when a lazy chunk returned 503. Restoring an isolated legacy scene and applying the visible error boundary to Dragon Palace scene/workspace made the focused regressions 2/2 and the Chromium legacy suite 10/10.
 6. Specification review then rejected the 80-test result because conditional project branches allowed weaker smoke actions to pass under storage, keyboard, parity, and corruption titles. A contract check against commit `d8f63fa` failed on the first forbidden project-return signature; the same check passed after project-level tag filtering removed all four conditional branches. The resulting honest matrix lists 68 tests rather than inflating the count.
 7. The same review found that cold-load collection filtered out non-local origins. After removing that bypass, the test captured Blockly's real external 1,775-byte sprite response and the measured total rose from 2,579,572 B to 2,581,347 B while staying within the unchanged limit.
@@ -95,10 +95,12 @@ The gate failed before it passed:
 10. The cold gate previously duplicated its 2.5 MiB constant and could ignore non-2xx responses or request failures. Source-contract tests failed before `budget-limits.mjs`, service-worker blocking, no-store headers, and fail-closed response collection were added; the browser gate remains under the unchanged limit with only 39,961 B headroom.
 11. The former mute check muted only after success and replayed persisted events. It was replaced with two visible, fresh progress runs: observable play/request evidence exists only for the unmuted run, while the pre-execution muted run produces identical gameplay evidence and no new audio activity.
 12. Runtime screenshots initially exposed black WebGL compositor tiles during full-page stitching. The existing desktop Chromium project now uses its visible page at 768×1024, waits for rejected/incomplete playback to settle (including a visible replay for the three-weapon frame), and records a single 768×1024 viewport. All three replacement frames were inspected clean; defective images were not accepted and no extra browser project was retained.
-13. Restoring the non-specialized Blockly compatibility tool first imported Blockly's full package and pushed the cold route to **2,699,134 B**, over the unchanged limit. Narrowing that compatibility import to Blockly core plus Chinese messages reduced its shared editor chunk to 703,617 B and the measured route to **2,585,568 B** without weakening the gate.
+13. An earlier attempt to restore the non-specialized compatibility tool imported Blockly's full package and pushed the cold route to **2,699,134 B**, over the unchanged limit. Narrowing that import reduced the measured route, but quality review later rejected the entire dual-track canvas because its visible React list and hidden Blockly state could diverge.
 14. The former public default parent PIN is migrated to an unset state and is never accepted. The first follow-up implementation added first-use setup, hashed verification, legacy custom-PIN migration, PIN rotation, and recovery reset.
 15. Specification review then rejected that implementation because it wrote the new hash before the family acknowledged saving the one-time recovery code, reused the login PIN in the change form, and lacked a complete browser lifecycle. Six focused unit tests failed first on early writes, visible secret fields, and abandoned-change semantics. The fixed two-phase flow keeps the new record and raw recovery code only in component pending state, commits on explicit acknowledgement, retains the pending code on storage failure, focuses the failure, and clears all secret state after success or mode changes. The visible five-project lifecycle passed 5/5, the full matrix remained exactly 69, and the inspected parent screenshot contains empty password fields and no secret text.
 16. The final specification pass found the recovery-heading focus assertion could race React's effect timing and that repeating the retired public digits in an error would disclose them again. The assertion now waits for focus to settle, the interface and documentation use only a generic retired-default description, three consecutive 411-test unit runs passed, and the unchanged five-project credential lifecycle passed 5/5.
+17. Quality review then found that the generic optimistic settings update could expose a proposed parent credential in React state after a failed write. A dedicated saved-only parent-access commit now writes storage first and changes the ref, rendered state, and persistence flags only after success. Focused context tests prove failure leaves the old in-memory and stored credential intact through retry and unrelated rerender; the expanded five-project browser lifecycle proves the same boundary after navigating away and back for setup, change, and recovery.
+18. The same review removed the misleading legacy Blockly dual track. `w1-m2` now has one visible React sequence as the sole run input, an honest compatibility label, and no Blockly import, host, or SVG canvas. Unit and five-project browser tests still prove add, reorder, delete, reset, wrong-run, and corrected-run behavior, but the completion boundary remains a compatibility interaction shell rather than a completed level. The first full rerun exposed one Firefox history-navigation automation action that reported a successful fill while its trace showed the input still empty; a value-confirmed fill helper hardened only those post-history actions without relaxing any credential assertion, and the five-project lifecycle then passed 5/5.
 
 ## Commands and results
 
@@ -125,10 +127,10 @@ git status --short --branch
 
 The fresh results were:
 
-- `npm test`: 27 Vitest files / 411 tests, 18 bundle-script tests, and 26 asset tests passed;
+- `npm test`: 27 Vitest files / 413 tests, 18 bundle-script tests, and 26 asset tests passed;
 - `npm run typecheck`: exit 0;
 - `npm run verify:assets`: 5 files, 257,674 B / 1,310,720 B, all `visual-qa-passed`;
-- `npm run verify:bundle`: entry static JS 107.8 KiB gzip, conservative homepage 417.6 KiB, Phaser 1,168.4 KiB raw, and GameScene closure 1,513.9 KiB raw, all inside their gates;
+- `npm run verify:bundle`: entry static JS 107.8 KiB gzip, conservative homepage 417.6 KiB, Phaser 1,168.4 KiB raw, and GameScene closure 1,514.1 KiB raw, all inside their gates;
 - `npx playwright test --list`: exactly 69 tests across five projects: desktop Chromium 16, tablet WebKit 14, mobile Chromium 13, desktop Firefox 14, and narrow Chromium 12;
 - specialized matrix: 19/19 passed across the same five projects;
 - `npm run test:e2e`: 69/69 passed across the five configured projects with zero skips;

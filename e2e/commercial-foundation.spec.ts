@@ -1,4 +1,4 @@
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -120,6 +120,31 @@ async function captureScreenshot(page: Page, testInfo: TestInfo, filename: strin
   await page.screenshot({ path: target, fullPage: true, animations: 'disabled' });
 }
 
+async function setParentSaveFailure(page: Page, fail: boolean) {
+  await page.evaluate(({ key, failWrites }) => {
+    const target = window as typeof window & {
+      __parentSaveFailure?: boolean;
+      __parentNativeSetItem?: Storage['setItem'];
+    };
+    if (!target.__parentNativeSetItem) {
+      target.__parentNativeSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (storageKey, value) {
+        if (storageKey === key && target.__parentSaveFailure) throw new Error('intentional parent setting failure');
+        return target.__parentNativeSetItem!.call(this, storageKey, value);
+      };
+    }
+    target.__parentSaveFailure = failWrites;
+  }, { key: currentKey, failWrites: fail });
+}
+
+async function fillAfterHistoryNavigation(locator: Locator, value: string) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await locator.fill(value);
+    if (await locator.inputValue() === value) return;
+  }
+  await expect(locator).toHaveValue(value);
+}
+
 test('@legacy home has healthy navigation, assets, responsive layout, and evidence screenshot', async ({ page }, testInfo) => {
   await acknowledge(page);
   await expect(page.getByRole('heading', { name: '西游编程记', level: 1 })).toBeVisible();
@@ -167,16 +192,22 @@ test('@legacy child failure, real Blockly success, persistence, export and stric
   await page.getByRole('button', { name: '继续下一关' }).click();
   await expect(page).toHaveURL(/#\/mission\/w1-m2$/);
   await expect(page.getByRole('heading', { name: '定海神针', level: 1 })).toBeVisible();
-  await expect(page.locator('.blockly-host')).toBeVisible();
+  const legacyBuilder = page.getByRole('region', { name: '旧版指令序列兼容工具' });
+  await expect(legacyBuilder).toBeVisible();
+  await expect(legacyBuilder.getByText('旧版指令序列兼容工具（非正式 Blockly，未完成关卡升级）')).toBeVisible();
+  await expect(legacyBuilder.locator('.blockly-host')).toHaveCount(0);
+  await expect(legacyBuilder.locator('svg')).toHaveCount(0);
   await page.getByRole('button', { name: '选择最重' }).click();
   await page.getByRole('button', { name: '查看重量' }).click();
   await page.getByRole('button', { name: '缩小金箍棒' }).click();
-  await page.getByRole('button', { name: '运行指令' }).click();
+  await expect(legacyBuilder.locator('.command-scroll li span')).toHaveText(['选择最重', '查看重量', '缩小金箍棒']);
+  await page.getByRole('button', { name: '运行兼容指令' }).click();
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeHidden();
   await page.getByRole('button', { name: '上移：查看重量' }).click();
   await page.getByRole('button', { name: '删除：缩小金箍棒' }).click();
   await page.getByRole('button', { name: '缩小金箍棒' }).click();
-  await page.getByRole('button', { name: '运行指令' }).click();
+  await expect(legacyBuilder.locator('.command-scroll li span')).toHaveText(['查看重量', '选择最重', '缩小金箍棒']);
+  await page.getByRole('button', { name: '运行兼容指令' }).click();
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible();
   await page.getByRole('button', { name: '回成长地图' }).click();
   await page.reload();
@@ -268,16 +299,8 @@ test('@legacy transactional parent PIN lifecycle, keyboard controls, and clear c
   await page.getByLabel('确认家长 PIN').fill('4826');
   await page.getByRole('button', { name: '创建家长 PIN' }).click();
   const recoveryOutput = page.locator('output[aria-label="一次性恢复码"]');
-  const initialRecovery = (await recoveryOutput.textContent())!;
-  await page.evaluate(key => {
-    const state = { fail: true };
-    (window as typeof window & { __parentSaveState?: { fail: boolean } }).__parentSaveState = state;
-    const nativeSetItem = Storage.prototype.setItem;
-    Storage.prototype.setItem = function (storageKey, value) {
-      if (storageKey === key && state.fail) throw new Error('intentional parent setting failure');
-      return nativeSetItem.call(this, storageKey, value);
-    };
-  }, currentKey);
+  let initialRecovery = (await recoveryOutput.textContent())!;
+  await setParentSaveFailure(page, true);
   await page.getByLabel('我已安全保存恢复码').check();
   await page.getByRole('button', { name: '确认已保存并进入' }).click();
   const commitAlert = page.getByText(/^新 PIN 尚未保存/);
@@ -285,7 +308,20 @@ test('@legacy transactional parent PIN lifecycle, keyboard controls, and clear c
   await expect(commitAlert).toContainText('新 PIN 尚未保存');
   await expect(recoveryOutput).toHaveText(initialRecovery);
   expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).settings.parentPin, currentKey)).toBe('unset');
-  await page.evaluate(() => { (window as typeof window & { __parentSaveState?: { fail: boolean } }).__parentSaveState!.fail = false; });
+  await page.getByRole('navigation').getByRole('button', { name: '成长地图' }).click();
+  await expect(page.getByRole('heading', { name: '西游编程记', level: 1 })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: '创建家长 PIN' })).toBeVisible();
+  await expect(page.getByLabel('家长 PIN', { exact: true })).toHaveCount(0);
+  await fillAfterHistoryNavigation(page.getByLabel('设置 4 位家长 PIN'), '4826');
+  await fillAfterHistoryNavigation(page.getByLabel('确认家长 PIN'), '4826');
+  await page.getByRole('button', { name: '创建家长 PIN' }).click();
+  initialRecovery = (await recoveryOutput.textContent())!;
+  await page.getByLabel('我已安全保存恢复码').check();
+  await page.getByRole('button', { name: '确认已保存并进入' }).click();
+  await expect(commitAlert).toBeFocused();
+  await expect(recoveryOutput).toHaveText(initialRecovery);
+  await setParentSaveFailure(page, false);
   await page.getByRole('button', { name: '确认已保存并进入' }).click();
   await expect(page.getByText('学习数据仅保存在这台电脑')).toBeVisible();
 
@@ -313,8 +349,27 @@ test('@legacy transactional parent PIN lifecycle, keyboard controls, and clear c
   await page.getByLabel('新 PIN', { exact: true }).fill('7319');
   await page.getByLabel('确认新 PIN').fill('7319');
   await page.getByRole('button', { name: '修改 PIN 并轮换恢复码' }).click();
-  const rotatedRecovery = (await recoveryOutput.textContent())!;
+  let rotatedRecovery = (await recoveryOutput.textContent())!;
+  await setParentSaveFailure(page, true);
   await page.getByLabel('我已安全保存恢复码').check();
+  await page.getByRole('button', { name: '确认已保存并进入' }).click();
+  await expect(commitAlert).toBeFocused();
+  await expect(recoveryOutput).toHaveText(rotatedRecovery);
+  await page.getByRole('navigation').getByRole('button', { name: '成长地图' }).click();
+  await expect(page.getByRole('heading', { name: '西游编程记', level: 1 })).toBeVisible();
+  await page.goBack();
+  await fillAfterHistoryNavigation(page.getByLabel('家长 PIN'), '7319');
+  await page.getByRole('button', { name: '进入周报' }).click();
+  await expect(page.getByRole('alert')).toContainText('PIN 不正确');
+  await fillAfterHistoryNavigation(page.getByLabel('家长 PIN'), '4826');
+  await page.getByRole('button', { name: '进入周报' }).click();
+  await page.getByLabel('当前 PIN').fill('4826');
+  await page.getByLabel('新 PIN', { exact: true }).fill('7319');
+  await page.getByLabel('确认新 PIN').fill('7319');
+  await page.getByRole('button', { name: '修改 PIN 并轮换恢复码' }).click();
+  rotatedRecovery = (await recoveryOutput.textContent())!;
+  await page.getByLabel('我已安全保存恢复码').check();
+  await setParentSaveFailure(page, false);
   await page.getByRole('button', { name: '确认已保存并进入' }).click();
   await page.getByRole('button', { name: '退出家长周报' }).click();
   await page.getByLabel('家长 PIN').fill('4826');
@@ -345,7 +400,28 @@ test('@legacy transactional parent PIN lifecycle, keyboard controls, and clear c
   await page.getByLabel('新的 4 位 PIN').fill('8642');
   await page.getByLabel('确认新的 PIN').fill('8642');
   await page.getByRole('button', { name: '验证并重设' }).click();
+  const recoveryAfterReset = (await recoveryOutput.textContent())!;
+  await setParentSaveFailure(page, true);
   await page.getByLabel('我已安全保存恢复码').check();
+  await page.getByRole('button', { name: '确认已保存并进入' }).click();
+  await expect(commitAlert).toBeFocused();
+  await expect(recoveryOutput).toHaveText(recoveryAfterReset);
+  await page.getByRole('navigation').getByRole('button', { name: '成长地图' }).click();
+  await expect(page.getByRole('heading', { name: '西游编程记', level: 1 })).toBeVisible();
+  await page.goBack();
+  await fillAfterHistoryNavigation(page.getByLabel('家长 PIN'), '8642');
+  await page.getByRole('button', { name: '进入周报' }).click();
+  await expect(page.getByRole('alert')).toContainText('PIN 不正确');
+  await fillAfterHistoryNavigation(page.getByLabel('家长 PIN'), '7319');
+  await page.getByRole('button', { name: '进入周报' }).click();
+  await page.getByRole('button', { name: '退出家长周报' }).click();
+  await page.getByRole('button', { name: '忘记 PIN，使用恢复码' }).click();
+  await page.getByLabel('恢复码').fill(rotatedRecovery);
+  await page.getByLabel('新的 4 位 PIN').fill('8642');
+  await page.getByLabel('确认新的 PIN').fill('8642');
+  await page.getByRole('button', { name: '验证并重设' }).click();
+  await page.getByLabel('我已安全保存恢复码').check();
+  await setParentSaveFailure(page, false);
   await page.getByRole('button', { name: '确认已保存并进入' }).click();
   await page.getByRole('button', { name: '退出家长周报' }).click();
   await page.getByRole('button', { name: '忘记 PIN，使用恢复码' }).click();

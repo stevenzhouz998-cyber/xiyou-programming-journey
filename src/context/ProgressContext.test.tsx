@@ -51,6 +51,7 @@ function Probe() {
       corruptError: state.corruptError,
       saveStatus: state.saveStatus,
       saveError: state.saveError,
+      parentPin: state.progress.settings.parentPin,
       sessions: state.progress.sessions,
       progressSavedAt: state.progress.savedAt,
     })}</output>
@@ -160,6 +161,34 @@ describe('ProgressContext persistence status', () => {
     render(<ProgressProvider><Probe /></ProgressProvider>);
     fireEvent.click(screen.getByRole('button', { name: '清空' }));
     expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ learnerName: '保留我' });
+  });
+
+  it('publishes a parent credential only after the dedicated durable transaction succeeds', () => {
+    const initial = createInitialProgress();
+    initial.settings.parentPin = '4826';
+    const storage = installStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(initial) });
+    storage.failKeys.add(CURRENT_PROGRESS_KEY);
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    let failed: ReturnType<ProgressContextValue['commitParentAccess']> | undefined;
+    act(() => { failed = latestContext!.commitParentAccess('7319'); });
+    expect(failed).toMatchObject({ status: 'unsaved' });
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      parentPin: '4826', saveStatus: 'idle', saveError: null,
+    });
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).settings.parentPin).toBe('4826');
+
+    storage.failKeys.clear();
+    fireEvent.click(screen.getByRole('button', { name: '重试保存' }));
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).settings.parentPin).toBe('4826');
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ parentPin: '4826' });
+
+    let saved: ReturnType<ProgressContextValue['commitParentAccess']> | undefined;
+    act(() => { saved = latestContext!.commitParentAccess('7319'); });
+    expect(saved).toMatchObject({ status: 'saved' });
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ parentPin: '7319', saveStatus: 'saved' });
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).settings.parentPin).toBe('7319');
   });
 
   it('creates a missing mission session and commits an updater result through V3 storage', () => {
