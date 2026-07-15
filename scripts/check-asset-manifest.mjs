@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { readFile, readdir, stat } from 'node:fs/promises';
-import { dirname, isAbsolute, join, posix, relative, resolve, win32 } from 'node:path';
+import { constants } from 'node:fs';
+import { lstat, open, readFile, readdir, realpath } from 'node:fs/promises';
+import { dirname, isAbsolute, join, posix, relative, resolve, sep, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const MAX_RASTER_BYTES = 512 * 1024;
@@ -55,12 +56,17 @@ function isDivider(cells) {
 
 export function parseAssetManifest(markdown) {
   const lines = markdown.split(/\r?\n/);
-  const headerIndex = lines.findIndex((line) => splitMarkdownRow(line)[0] === 'Asset ID');
-  if (headerIndex < 0) throw new Error('Asset manifest: exact nine-column shipping asset table is missing.');
-  const columns = splitMarkdownRow(lines[headerIndex]);
-  if (columns.length !== EXPECTED_COLUMNS.length || columns.some((column, index) => column !== EXPECTED_COLUMNS[index])) {
+  const assetHeaderIndexes = lines
+    .map((line, index) => ({ cells: splitMarkdownRow(line), index }))
+    .filter(({ cells }) => cells[0] === 'Asset ID');
+  const exactHeaderIndexes = assetHeaderIndexes
+    .filter(({ cells }) => cells.length === EXPECTED_COLUMNS.length && cells.every((column, index) => column === EXPECTED_COLUMNS[index]))
+    .map(({ index }) => index);
+  if (exactHeaderIndexes.length === 0) {
     throw new Error(`Asset manifest: exact nine-column header required: ${EXPECTED_COLUMNS.join(' | ')}.`);
   }
+  if (exactHeaderIndexes.length !== 1) throw new Error('Asset manifest: exactly one exact shipping asset table is required; duplicate shipping asset table found.');
+  const [headerIndex] = exactHeaderIndexes;
   const divider = splitMarkdownRow(lines[headerIndex + 1] ?? '');
   if (divider.length !== EXPECTED_COLUMNS.length || !isDivider(divider)) throw new Error('Asset manifest: exact nine-column divider is missing.');
 
@@ -207,28 +213,50 @@ export function verifyAssetManifest({ manifestRows, publicFiles, promptRecords, 
 }
 
 export function readWebpDimensions(buffer) {
-  if (buffer.length < 20 || buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WEBP') {
+  if (buffer.length < 12 || buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WEBP') {
     throw new Error('Asset manifest: invalid WebP container.');
   }
+  const declaredSize = buffer.readUInt32LE(4);
+  if (declaredSize !== buffer.length - 8) throw new Error('Asset manifest: WebP RIFF declared size does not match the complete file; trailing or missing bytes are forbidden.');
+
+  let canvasDimensions;
+  let pixelDimensions;
   let offset = 12;
-  while (offset + 8 <= buffer.length) {
+  while (offset < buffer.length) {
+    if (offset + 8 > buffer.length) throw new Error('Asset manifest: truncated WebP chunk header.');
     const type = buffer.toString('ascii', offset, offset + 4);
     const size = buffer.readUInt32LE(offset + 4);
     const data = offset + 8;
-    if (data + size > buffer.length) throw new Error('Asset manifest: truncated WebP chunk.');
-    if (type === 'VP8X' && size >= 10) {
-      return { width: buffer.readUIntLE(data + 4, 3) + 1, height: buffer.readUIntLE(data + 7, 3) + 1 };
+    const dataEnd = data + size;
+    const paddedEnd = dataEnd + (size % 2);
+    if (dataEnd > buffer.length || paddedEnd > buffer.length) throw new Error('Asset manifest: truncated WebP chunk or padding.');
+
+    if (type === 'VP8X') {
+      if (size !== 10) throw new Error('Asset manifest: invalid VP8X chunk length.');
+      canvasDimensions = { width: buffer.readUIntLE(data + 4, 3) + 1, height: buffer.readUIntLE(data + 7, 3) + 1 };
     }
-    if (type === 'VP8 ' && size >= 10 && buffer[data + 3] === 0x9d && buffer[data + 4] === 0x01 && buffer[data + 5] === 0x2a) {
-      return { width: buffer.readUInt16LE(data + 6) & 0x3fff, height: buffer.readUInt16LE(data + 8) & 0x3fff };
+    if (type === 'VP8 ') {
+      if (size < 10 || buffer[data + 3] !== 0x9d || buffer[data + 4] !== 0x01 || buffer[data + 5] !== 0x2a) {
+        throw new Error('Asset manifest: invalid VP8 pixel payload.');
+      }
+      if (pixelDimensions) throw new Error('Asset manifest: duplicate WebP pixel payload.');
+      pixelDimensions = { width: buffer.readUInt16LE(data + 6) & 0x3fff, height: buffer.readUInt16LE(data + 8) & 0x3fff };
     }
-    if (type === 'VP8L' && size >= 5 && buffer[data] === 0x2f) {
+    if (type === 'VP8L') {
+      if (size < 5 || buffer[data] !== 0x2f) throw new Error('Asset manifest: invalid VP8L pixel payload.');
+      if (pixelDimensions) throw new Error('Asset manifest: duplicate WebP pixel payload.');
       const bits = buffer.readUInt32LE(data + 1);
-      return { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 };
+      pixelDimensions = { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 };
     }
-    offset = data + size + (size % 2);
+    offset = paddedEnd;
   }
-  throw new Error('Asset manifest: WebP dimensions are missing.');
+  if (!pixelDimensions || pixelDimensions.width === 0 || pixelDimensions.height === 0) {
+    throw new Error('Asset manifest: WebP pixel payload dimensions are missing.');
+  }
+  if (canvasDimensions && (canvasDimensions.width !== pixelDimensions.width || canvasDimensions.height !== pixelDimensions.height)) {
+    throw new Error('Asset manifest: VP8X canvas and pixel payload dimension mismatch.');
+  }
+  return pixelDimensions;
 }
 
 async function listFiles(root, relativeRoot = '') {
@@ -236,10 +264,48 @@ async function listFiles(root, relativeRoot = '') {
   const files = [];
   for (const entry of entries) {
     const path = join(relativeRoot, entry.name);
+    if (entry.isSymbolicLink()) throw new Error(`Asset manifest: symbolic link is forbidden in shipping assets: ${path}.`);
     if (entry.isDirectory()) files.push(...await listFiles(root, path));
-    else files.push(path.replaceAll('\\', '/'));
+    else if (entry.isFile()) files.push(path.replaceAll('\\', '/'));
+    else throw new Error(`Asset manifest: shipping asset entry must be a regular file: ${path}.`);
   }
   return files;
+}
+
+export async function collectAssetFiles(assetRoot) {
+  const rootInfo = await lstat(assetRoot);
+  if (rootInfo.isSymbolicLink() || !rootInfo.isDirectory()) throw new Error('Asset manifest: asset root must be a real directory, not a symbolic link.');
+  const resolvedRoot = await realpath(assetRoot);
+  const publicFiles = [];
+  for (const relativePath of await listFiles(assetRoot)) {
+    const absolutePath = resolve(assetRoot, relativePath);
+    const within = relative(assetRoot, absolutePath);
+    if (within.startsWith('..') || isAbsolute(within)) throw new Error(`Asset manifest: unsafe public file ${relativePath}.`);
+    const entryInfo = await lstat(absolutePath);
+    if (entryInfo.isSymbolicLink() || !entryInfo.isFile()) throw new Error(`Asset manifest: shipping asset must be a regular file, not a symbolic link: ${relativePath}.`);
+    const resolvedPath = await realpath(absolutePath);
+    const resolvedWithin = relative(resolvedRoot, resolvedPath);
+    if (resolvedWithin === '..' || resolvedWithin.startsWith(`..${sep}`) || isAbsolute(resolvedWithin)) {
+      throw new Error(`Asset manifest: resolved public file escapes the asset root: ${relativePath}.`);
+    }
+
+    let handle;
+    try {
+      handle = await open(absolutePath, constants.O_RDONLY | constants.O_NOFOLLOW);
+      const fileInfo = await handle.stat();
+      if (!fileInfo.isFile()) throw new Error(`Asset manifest: shipping asset must be a regular file: ${relativePath}.`);
+      const bytes = await handle.readFile();
+      publicFiles.push({
+        path: posix.join('assets/dragon-palace', relativePath),
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+        bytes: bytes.length,
+        ...readWebpDimensions(bytes),
+      });
+    } finally {
+      await handle?.close();
+    }
+  }
+  return publicFiles;
 }
 
 async function main() {
@@ -247,19 +313,7 @@ async function main() {
   const manifestPath = join(root, 'docs', 'assets', 'asset-manifest.md');
   const assetRoot = join(root, 'public', 'assets', 'dragon-palace');
   const { manifestRows, promptRecords } = parseAssetManifest(await readFile(manifestPath, 'utf8'));
-  const publicFiles = [];
-  for (const relativePath of await listFiles(assetRoot)) {
-    const absolutePath = resolve(assetRoot, relativePath);
-    const within = relative(assetRoot, absolutePath);
-    if (within.startsWith('..') || isAbsolute(within)) throw new Error(`Asset manifest: unsafe public file ${relativePath}.`);
-    const bytes = await readFile(absolutePath);
-    publicFiles.push({
-      path: posix.join('assets/dragon-palace', relativePath),
-      sha256: createHash('sha256').update(bytes).digest('hex'),
-      bytes: (await stat(absolutePath)).size,
-      ...readWebpDimensions(bytes),
-    });
-  }
+  const publicFiles = await collectAssetFiles(assetRoot);
   const mode = process.argv.includes('--require-visual-qa') ? 'verify' : 'check';
   const result = verifyAssetManifest({ manifestRows, publicFiles, promptRecords, mode });
   console.log(`Dragon Palace assets: ${result.assetCount} files, ${result.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
