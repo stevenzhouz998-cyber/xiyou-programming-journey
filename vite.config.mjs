@@ -27,6 +27,14 @@ export default defineConfig({
           if (id.includes('/node_modules/phaser/')) return 'phaser';
           if (id.includes('/node_modules/blockly/')) return 'blockly-editor';
           if (id.includes('/node_modules/@codemirror/')) return 'codemirror-editor';
+          if (id.includes('/node_modules/@phosphor-icons/react/dist/lib/')) return 'phosphor-core';
+          if (/\/node_modules\/(?:react|react-dom|react-router|react-router-dom|scheduler)\//.test(id)) return 'app-vendor';
+          const source = id.replaceAll('\\', '/');
+          if (source.includes('/src/battle/')
+            || source.endsWith('/src/context/ProgressContext.tsx')
+            || /\/src\/progress\/(?:progress|schema|session|storage|types)\.ts$/.test(source)
+            || source.endsWith('/src/utils/assets.ts')
+            || source.endsWith('/src/components/ToolErrorBoundary.tsx')) return 'app-core';
         },
       },
     },

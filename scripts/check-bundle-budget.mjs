@@ -10,6 +10,7 @@ import {
 } from './budget-limits.mjs';
 export {
   DRAGON_PALACE_COLD_BYTES,
+  RUYI_STAFF_COLD_BYTES,
   DRAGON_PALACE_MEDIA_BYTES,
   ENTRY_GZIP_LIMIT,
   GAME_SCENE_RAW_LIMIT,
@@ -18,7 +19,8 @@ export {
   SINGLE_RASTER_BYTES,
 } from './budget-limits.mjs';
 
-const MODE_ROOTS = ['src/components/BlocklyWorkspace.tsx', 'src/components/PythonEditor.tsx', 'src/components/AiLab.tsx', 'src/components/GameScene.tsx'];
+const MODE_ROOTS = ['src/components/BlocklyWorkspace.tsx', 'src/components/RuyiStaffBlocklyWorkspace.tsx', 'src/components/PythonEditor.tsx', 'src/components/AiLab.tsx', 'src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx'];
+const SCENE_ROOTS = new Set(['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx']);
 const isPhaserSource = (key, chunk) => chunk.name === 'phaser' || /node_modules[\\/]phaser(?:[\\/]|$)/i.test(`${key} ${chunk.src ?? ''}`);
 const assertSafeFile = (file) => {
   const normalized = normalize(file);
@@ -78,14 +80,14 @@ export function analyzeManifest(manifest, gzipSizes, rawSizes = {}) {
     if (!manifest[root]) continue;
     const keys = collectRuntimeClosure(manifest, root);
     const phaser = [...keys].some((key) => isPhaserSource(key, manifest[key]));
-    if (root !== 'src/components/GameScene.tsx' && phaser) throw new Error(`Bundle budget: ${root.split('/').at(-1).replace('.tsx', '')} closure contains Phaser.`);
+    if (!SCENE_ROOTS.has(root) && phaser) throw new Error(`Bundle budget: ${root.split('/').at(-1).replace('.tsx', '')} closure contains Phaser.`);
     const files = [...new Set([...keys].map((key) => manifest[key].file).filter((file) => file?.endsWith('.js')))];
     closures[root] = { files, rawBytes: files.reduce((sum, file) => sum + (rawSizes[file] ?? 0), 0), gzipBytes: files.reduce((sum, file) => sum + (gzipSizes[file] ?? 0), 0) };
-    if (root === 'src/components/GameScene.tsx') {
+    if (SCENE_ROOTS.has(root)) {
       if (!phaser) throw new Error('Bundle budget: 无法识别Phaser预算对象。GameScene运行闭包必须包含manifest name=phaser或node_modules/phaser来源。');
       const oversizedPhaser = [...keys].find((key) => isPhaserSource(key, manifest[key]) && (rawSizes[manifest[key].file] ?? 0) > PHASER_RAW_LIMIT);
       if (oversizedPhaser) throw new Error(`Bundle budget: approved dynamic Phaser chunk exceeds 1600 KiB raw (${manifest[oversizedPhaser].file}).`);
-      if (closures[root].rawBytes > GAME_SCENE_RAW_LIMIT) throw new Error('Bundle budget: GameScene closure exceeds 1900 KiB raw.');
+      if (closures[root].rawBytes > GAME_SCENE_RAW_LIMIT) throw new Error(`Bundle budget: ${root.split('/').at(-1).replace('.tsx', '')} closure exceeds 1900 KiB raw.`);
     }
   }
   const dynamic = Object.entries(manifest).filter(([key, chunk]) => !visited.has(key) && chunk.file?.endsWith('.js'));

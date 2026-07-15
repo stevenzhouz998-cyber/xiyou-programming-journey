@@ -12,8 +12,22 @@ const base = {
 
 test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
   assert.equal(bundleBudget.DRAGON_PALACE_COLD_BYTES, 2.5 * 1024 * 1024);
+  assert.equal(bundleBudget.RUYI_STAFF_COLD_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.DRAGON_PALACE_MEDIA_BYTES, 1.25 * 1024 * 1024);
   assert.equal(bundleBudget.SINGLE_RASTER_BYTES, 512 * 1024);
+});
+
+test('keeps both formal Phaser scene roots bounded and browser cold gates shared', () => {
+  const budgetSource = readFileSync(new URL('./budget-limits.mjs', import.meta.url), 'utf8');
+  const bundleSource = readFileSync(new URL('./check-bundle-budget.mjs', import.meta.url), 'utf8');
+  const staffE2eSource = readFileSync(new URL('../e2e/ruyi-staff-code-battle.spec.ts', import.meta.url), 'utf8');
+  assert.match(budgetSource, /RUYI_STAFF_COLD_BYTES\s*=\s*2\.5\s*\*\s*1024\s*\*\s*1024/);
+  assert.match(bundleSource, /src\/components\/RuyiStaffScene\.tsx/);
+  assert.match(staffE2eSource, /from '\.\.\/scripts\/budget-limits\.mjs'/);
+  assert.match(staffE2eSource, /'cache-control':\s*'no-store'/);
+  assert.match(staffE2eSource, /page\.on\('requestfailed'/);
+  assert.match(staffE2eSource, /const status = response\.status\(\)/);
+  assert.doesNotMatch(staffE2eSource, /url\.origin\s*!==/);
 });
 
 test('keeps Dragon Palace budgets in one shared module', () => {
@@ -55,6 +69,12 @@ test('fails when Phaser appears in the static closure', () => {
 test('allows Phaser as a bounded dynamic chunk', () => {
   const manifest = { ...base, 'src/components/GameScene.tsx': { file: 'assets/scene.js', isDynamicEntry: true, imports: ['phaser-runtime.js'] }, 'phaser-runtime.js': { file: 'assets/phaser.js', name: 'phaser', imports: [] } };
   assert.equal(analyzeManifest(manifest, { 'assets/main.js': 1, 'assets/vendor.js': 1, 'assets/scene.js': 1, 'assets/phaser.js': 100 }, { 'assets/scene.js': 1, 'assets/phaser.js': 1000 }).entryGzipBytes, 2);
+});
+
+test('allows a separately bounded RuyiStaffScene Phaser closure', () => {
+  const manifest = { ...base, 'src/components/RuyiStaffScene.tsx': { file: 'assets/staff-scene.js', isDynamicEntry: true, imports: ['phaser-runtime.js'] }, 'phaser-runtime.js': { file: 'assets/phaser.js', name: 'phaser', imports: [] } };
+  const result = analyzeManifest(manifest, { 'assets/main.js': 1, 'assets/vendor.js': 1, 'assets/staff-scene.js': 1, 'assets/phaser.js': 100 }, { 'assets/staff-scene.js': 1, 'assets/phaser.js': 1000 });
+  assert.equal(result.closures['src/components/RuyiStaffScene.tsx'].rawBytes, 1001);
 });
 
 test('deduplicates shared static imports', () => {

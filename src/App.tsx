@@ -1,14 +1,18 @@
 import { createContext, lazy, Suspense, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { HashRouter, Link, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, BookOpenText, CheckCircle, Lightning, LockKey, MapTrifold, Medal, SpeakerHigh, SpeakerSlash, UsersThree } from '@phosphor-icons/react';
+import { Lightning } from '@phosphor-icons/react/dist/icons/Lightning';
+import { LockKey } from '@phosphor-icons/react/dist/icons/LockKey';
+import { MapTrifold } from '@phosphor-icons/react/dist/icons/MapTrifold';
+import { Medal } from '@phosphor-icons/react/dist/icons/Medal';
+import { SpeakerHigh } from '@phosphor-icons/react/dist/icons/SpeakerHigh';
+import { SpeakerSlash } from '@phosphor-icons/react/dist/icons/SpeakerSlash';
+import { UsersThree } from '@phosphor-icons/react/dist/icons/UsersThree';
 import { course, allMissions, getMission } from './course/course';
 import { ProgressProvider, useProgress } from './context/ProgressContext';
 import { getWeeklyReport, isMissionUnlocked } from './progress/progress';
 import { validateSequence } from './engine/validation';
-import { MissionTools } from './components/MissionTools';
 import { PrivacyPanel } from './components/PrivacyPanel';
-import { DragonPalaceExperience } from './components/DragonPalaceExperience';
 import { LazySectionBoundary } from './components/LazySectionBoundary';
 import { assetUrl } from './utils/assets';
 import { downloadTextFile } from './utils/download';
@@ -16,9 +20,14 @@ import './styles.css';
 
 const GlobalModalIsolationContext = createContext<(open: boolean) => void>(() => undefined);
 const MissionCompletionPersistenceContext = createContext<(active: boolean) => void>(() => undefined);
+const ArrowLeft = lazy(() => import('@phosphor-icons/react/dist/icons/ArrowLeft').then((module) => ({ default: module.ArrowLeft })));
+const BookOpenText = lazy(() => import('@phosphor-icons/react/dist/icons/BookOpenText').then((module) => ({ default: module.BookOpenText })));
+const CheckCircle = lazy(() => import('@phosphor-icons/react/dist/icons/CheckCircle').then((module) => ({ default: module.CheckCircle })));
 const ParentAccessGate = lazy(() => import('./components/ParentAccessGate').then((module) => ({ default: module.ParentAccessGate })));
 const ParentDataTools = lazy(() => import('./components/ParentDataTools').then((module) => ({ default: module.ParentDataTools })));
 const RecoveryNotice = lazy(() => import('./components/RecoveryNotice').then((module) => ({ default: module.RecoveryNotice })));
+const DragonPalaceExperience = lazy(() => import('./components/DragonPalaceExperience').then((module) => ({ default: module.DragonPalaceExperience })));
+const MissionTools = lazy(() => import('./components/MissionTools').then((module) => ({ default: module.MissionTools })));
 const RuyiStaffExperience = lazy(() => import('./components/RuyiStaffExperience').then((module) => ({ default: module.RuyiStaffExperience })));
 
 function RouteFocus({ blocked }: { blocked: boolean }) {
@@ -241,7 +250,7 @@ function AppRoutes() {
     <div data-testid="app-background" inert={privacyOpen || globalModalOpen ? true : undefined} aria-hidden={privacyOpen || globalModalOpen ? true : undefined}>
       <Header reducedMotion={effectiveReducedMotion} />
       <RouteFocus blocked={privacyOpen || globalModalOpen} />
-      <Routes><Route path="/" element={<HomePage />} /><Route path="/mission/:id" element={<MissionPage reducedMotion={effectiveReducedMotion} />} /><Route path="/parent" element={<ParentPage />} /><Route path="*" element={<HomePage />} /></Routes>
+      <LazySectionBoundary label="页面内容"><Suspense fallback={<main className="mission-tools-loading" role="status">页面内容加载中，请稍候……</main>}><Routes><Route path="/" element={<HomePage />} /><Route path="/mission/:id" element={<MissionPage reducedMotion={effectiveReducedMotion} />} /><Route path="/parent" element={<ParentPage />} /><Route path="*" element={<HomePage />} /></Routes></Suspense></LazySectionBoundary>
     </div>
     <PrivacyPanel acknowledged={progress.privacy.localDataNoticeSeen} onAcknowledge={acknowledgePrivacy} />
   </div></GlobalModalIsolationContext.Provider></MissionCompletionPersistenceContext.Provider>;

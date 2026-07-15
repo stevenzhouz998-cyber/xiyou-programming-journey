@@ -6,7 +6,7 @@ import type { RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft'
 import { useProgress } from '../context/ProgressContext'
 import { createMissionSession, recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/session'
 import type { CoordinatedSaveResult } from '../progress/storageCoordinator'
-import { ToolErrorBoundary } from './MissionTools'
+import { ToolErrorBoundary } from './ToolErrorBoundary'
 import { RuyiStaffFeedback } from './RuyiStaffFeedback'
 
 export interface RuyiStaffExperienceLoaders {

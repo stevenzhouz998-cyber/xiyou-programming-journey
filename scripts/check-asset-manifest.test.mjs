@@ -193,6 +193,17 @@ test('fully decodes all five shipping WebP files at their expected dimensions', 
   }
 });
 
+test('traces every approved Dragon Palace raster to real w1-m1 and w1-m2 scene slots', async () => {
+  const manifestPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'assets', 'asset-manifest.md');
+  const parsed = parseAssetManifest(await readFile(manifestPath, 'utf8'));
+  assert.equal(parsed.manifestRows.length, 5);
+  for (const manifestRow of parsed.manifestRows) {
+    assert.match(manifestRow.screenSlots, /\bw1-m1\b/, manifestRow.assetId);
+    assert.match(manifestRow.screenSlots, /\bw1-m2\b/, manifestRow.assetId);
+    assert.equal(manifestRow.qaStatus, 'visual-qa-passed');
+  }
+});
+
 test('rejects truncated WebP chunks, RIFF size mismatches, and trailing junk', () => {
   const truncatedChunk = Buffer.alloc(12 + 8 + 3);
   truncatedChunk.write('RIFF', 0, 4, 'ascii');

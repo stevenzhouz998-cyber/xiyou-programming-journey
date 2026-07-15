@@ -88,7 +88,8 @@ h1, h2, .brand strong { font-family: 'Songti SC', 'STSong', serif; }
 .mission-dots button.boss { border-radius: 8px; color: white; background: var(--cinnabar); border-color: var(--cinnabar); }
 .mission-dots button:disabled { cursor: not-allowed; background: #d8d1c2; color: #77736a; border-color: #b8b0a2; }
 
-.mission-page { min-height: calc(100vh - 70px); background-image: url('/assets/world-map.jpg'); background-size: cover; background-position: center; padding-bottom: 22px; }
+.mission-page { min-height: calc(100vh - 70px); background: #e9e0ca; padding-bottom: 22px; }
+.mission-page:has(.legacy-mission-tools) { background-image: url('/assets/world-map.jpg'); background-size: cover; background-position: center; }
 .mission-page:has(.dragon-palace-experience), .mission-page:has(.ruyi-staff-experience) { background-image: none; }
 .mission-header { min-height: 78px; display: grid; grid-template-columns: 190px 1fr minmax(330px, auto); align-items: center; padding: 9px 34px; background: rgba(247,240,223,.93); border-bottom: 1px solid var(--line); }
 .mission-header h1 { margin: 2px 0 0; font-size: 27px; }

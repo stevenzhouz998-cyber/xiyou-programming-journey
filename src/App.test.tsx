@@ -111,7 +111,7 @@ describe('西游编程记', () => {
     render(<App />);
     await acknowledgePrivacySuccessfully();
     fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
-    expect(screen.getByRole('heading', { name: '龙宫求兵' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '龙宫求兵' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /查看原著第三回/ })).toHaveAttribute('href', expect.stringContaining('wikisource.org'));
     expect(screen.getByRole('button', { name: '观察提示' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '思路提示' })).toBeInTheDocument();
@@ -122,7 +122,7 @@ describe('西游编程记', () => {
     render(<App />);
     await acknowledgePrivacySuccessfully();
     fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
-    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }));
+    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }, { timeout: 5000 }));
     fireEvent.click(screen.getByRole('button', { name: '加入：请求兵器' }));
     fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }));
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
@@ -168,6 +168,18 @@ describe('西游编程记', () => {
     await waitFor(() => expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
       sessions: { 'w1-m2': { usedHintTiers: ['observe'] } },
     }));
+  });
+
+  it('keeps the legacy mission background wrapper only after the two formal Blockly missions', async () => {
+    let progress = withParentAccess(createInitialProgress());
+    progress.privacy.localDataNoticeSeen = true;
+    progress = completeMission(progress, 'w1-m1', { stars: 3, hintsUsed: 0 });
+    progress = completeMission(progress, 'w1-m2', { stars: 3, hintsUsed: 0 });
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    window.location.hash = '#/mission/w1-m3';
+    const { container } = render(<App />);
+    expect(await screen.findByRole('heading', { name: '四海披挂', level: 1 })).toBeVisible();
+    expect(container.querySelector('.legacy-mission-tools')).toHaveAttribute('data-mission-id', 'w1-m3');
   });
 
   it('passes w1-m2 through the same delayed scene-completion and success-audio path', async () => {

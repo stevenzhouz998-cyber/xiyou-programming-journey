@@ -3,5 +3,6 @@ export const PHASER_RAW_LIMIT = 1600 * 1024;
 export const GAME_SCENE_RAW_LIMIT = 1900 * 1024;
 export const HOME_TOTAL_LIMIT = 650 * 1024;
 export const DRAGON_PALACE_COLD_BYTES = 2.5 * 1024 * 1024;
+export const RUYI_STAFF_COLD_BYTES = 2.5 * 1024 * 1024;
 export const DRAGON_PALACE_MEDIA_BYTES = 1.25 * 1024 * 1024;
 export const SINGLE_RASTER_BYTES = 512 * 1024;

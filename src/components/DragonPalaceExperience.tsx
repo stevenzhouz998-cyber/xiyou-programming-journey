@@ -11,7 +11,7 @@ import {
   updateWorkspaceDraft,
 } from '../progress/session'
 import { BattleFeedback } from './BattleFeedback'
-import { ToolErrorBoundary } from './MissionTools'
+import { ToolErrorBoundary } from './ToolErrorBoundary'
 
 const GameScene = lazy(() => import('./GameScene').then((module) => ({ default: module.GameScene })))
 const BlocklyWorkspace = lazy(() => import('./BlocklyWorkspace').then((module) => ({ default: module.BlocklyWorkspace })))

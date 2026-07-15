@@ -9,6 +9,7 @@ let healthPhase = 'normal';
 let healthOwnerUrl: string | null = null;
 const blocklyWorkspaceChunk = /\/assets\/BlocklyWorkspace-[^/]+\.js(?:\?.*)?$/;
 const appEntryChunk = /\/assets\/index-[^/]+\.js(?:\?.*)?$/;
+const appVendorChunk = /\/assets\/app-vendor-[^/]+\.js(?:\?.*)?$/;
 type BrowserName = 'chromium' | 'firefox' | 'webkit';
 const updateEvidence = process.env.XIYOU_UPDATE_EVIDENCE === '1';
 const pyodideDirectory = 'https://cdn.jsdelivr.net/pyodide/v314.0.2/full/';
@@ -27,7 +28,7 @@ const isAllowedLazyFailure = (event: HealthEvent, target503Url: string | null, b
   if (event.url === target503Url && event.detail === 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)') return true;
   const dynamicImportFailure = `Failed to fetch dynamically imported module: ${target503Url}`;
   return event.detail === dynamicImportFailure || event.detail === `TypeError: ${dynamicImportFailure}`
-    || (appEntryChunk.test(event.url) && ((browserName === 'webkit' && event.detail === 'TypeError: Importing a module script failed.')
+    || ((appEntryChunk.test(event.url) || appVendorChunk.test(event.url)) && ((browserName === 'webkit' && event.detail === 'TypeError: Importing a module script failed.')
       || (browserName === 'firefox' && event.detail === 'Error')));
 };
 const expectedFontNavigationAbort = (event: HealthEvent) => event.kind === 'requestfailed'
@@ -159,6 +160,19 @@ test('@legacy home has healthy navigation, assets, responsive layout, and eviden
   }
 });
 
+test('@legacy w1-m3 keeps its world-map backdrop after w1-m1 and w1-m2 become formal', async ({ page }) => {
+  const fixture = v3(false);
+  fixture.missions = {
+    'w1-m1': { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: '2026-07-12T00:00:00.000Z' },
+    'w1-m2': { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: '2026-07-13T00:00:00.000Z' },
+  };
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), { key: currentKey, value: fixture });
+  await page.goto('./#/mission/w1-m3');
+  await expect(page.getByRole('heading', { name: '四海披挂', level: 1 })).toBeVisible();
+  await expect(page.locator('.legacy-mission-tools')).toHaveAttribute('data-mission-id', 'w1-m3');
+  await expect(page.locator('.mission-page')).toHaveCSS('background-image', /world-map\.jpg/);
+});
+
 test('@legacy 320px home, first mission and parent PIN never overflow', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 844 });
   await acknowledge(page);
@@ -192,26 +206,11 @@ test('@legacy child failure, real Blockly success, persistence, export and stric
   await page.getByRole('button', { name: '继续下一关' }).click();
   await expect(page).toHaveURL(/#\/mission\/w1-m2$/);
   await expect(page.getByRole('heading', { name: '定海神针', level: 1 })).toBeVisible();
-  const legacyBuilder = page.getByRole('region', { name: '旧版指令序列兼容工具' });
-  await expect(legacyBuilder).toBeVisible();
-  await expect(legacyBuilder.getByText('旧版指令序列兼容工具（非正式 Blockly，未完成关卡升级）')).toBeVisible();
-  await expect(legacyBuilder.locator('.blockly-host')).toHaveCount(0);
-  await expect(legacyBuilder.locator('svg')).toHaveCount(0);
-  await page.getByRole('button', { name: '选择最重' }).click();
-  await page.getByRole('button', { name: '查看重量' }).click();
-  await page.getByRole('button', { name: '缩小金箍棒' }).click();
-  await expect(legacyBuilder.locator('.command-scroll li span')).toHaveText(['选择最重', '查看重量', '缩小金箍棒']);
-  await page.getByRole('button', { name: '运行兼容指令' }).click();
-  await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeHidden();
-  await page.getByRole('button', { name: '上移：查看重量' }).click();
-  await page.getByRole('button', { name: '删除：缩小金箍棒' }).click();
-  await page.getByRole('button', { name: '缩小金箍棒' }).click();
-  await expect(legacyBuilder.locator('.command-scroll li span')).toHaveText(['查看重量', '选择最重', '缩小金箍棒']);
-  await page.getByRole('button', { name: '运行兼容指令' }).click();
-  await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible();
-  await page.getByRole('button', { name: '回成长地图' }).click();
+  await expect(page.getByRole('region', { name: '定海神针图形化编程工作台' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '旧版指令序列兼容工具' })).toHaveCount(0);
+  await page.getByRole('button', { name: '成长地图' }).first().click();
   await page.reload();
-  await expect(page.getByText('2/30 关已完成')).toBeVisible();
+  await expect(page.getByText('1/30 关已完成')).toBeVisible();
   await page.goto('/xiyou-programming-journey/#/parent');
   await expect(page.getByRole('heading', { name: '家长周报', level: 1 })).toBeFocused();
   await page.getByLabel('家长 PIN').fill('4826');
