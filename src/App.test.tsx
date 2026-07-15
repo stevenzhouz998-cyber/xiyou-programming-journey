@@ -251,6 +251,38 @@ describe('西游编程记', () => {
     expect(screen.queryByText(/尚未保存|待保存/)).not.toBeInTheDocument();
   });
 
+  it('hands a w1-m2 run-session conflict to exactly one global recovery group', async () => {
+    const progress = completeMission(withParentAccess(createInitialProgress()), 'w1-m1', { stars: 3, hintsUsed: 0 });
+    progress.privacy.localDataNoticeSeen = true;
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    const save = vi.fn<SaveCoordinator>(async (next, expectedRevision) => {
+      if (next.sessions['w1-m2']?.lastRun?.completed && !next.missions['w1-m2']) return {
+        status: 'conflict', progress: next, expectedRevision, actualRevision: expectedRevision + 1, error: 'session conflict',
+      };
+      return { status: 'saved', revision: expectedRevision + 1, progress: next };
+    });
+    window.location.hash = '#/mission/w1-m2';
+    render(<App loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('./progress/storageCoordinator'))} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '加入：查看三件兵器重量' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：选择定海神针（13500斤）' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：缩小定海神针' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+
+    expect(await screen.findByRole('button', { name: '下载本页备份' })).toBeVisible();
+    expect(screen.getAllByRole('button', { name: '下载本页备份' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: '载入其他标签页版本' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: '重试保存本关' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/本关存档与其他标签页冲突|按顶部提示/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: '载入其他标签页版本' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: '载入其他标签页版本' })).not.toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: '定海神针' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '执行战斗指令' })).toBeEnabled();
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).not.toHaveProperty('missions.w1-m2');
+  });
+
   it('offers one final-conflict recovery group and safely loads an incomplete external w1-m2 progress', async () => {
     const progress = completeMission(withParentAccess(createInitialProgress()), 'w1-m1', { stars: 3, hintsUsed: 0 });
     progress.privacy.localDataNoticeSeen = true;
