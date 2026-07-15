@@ -36,6 +36,13 @@ test('requires the browser cold gate to fail closed for every HTTP response', ()
   assert.doesNotMatch(e2eSource, /url\.origin\s*!==/);
 });
 
+test('keeps the browser matrix at the five approved projects', () => {
+  const configSource = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
+  assert.equal([...configSource.matchAll(/\bname:\s*'/g)].length, 5);
+  assert.doesNotMatch(configSource, /visual-chromium/);
+  assert.match(configSource, /desktop-chromium-1440x1024'[\s\S]*?grep:\s*\/.*@visual/);
+});
+
 test('fails an entry static closure over 180 KiB gzip', () => {
   assert.throws(() => analyzeManifest(base, { 'assets/main.js': 100 * 1024, 'assets/vendor.js': 81 * 1024 }), /180 KiB/);
 });

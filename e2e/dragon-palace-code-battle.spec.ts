@@ -136,7 +136,8 @@ async function captureRuntimeState(page: Page, filename: string) {
   if (!updateEvidence) return
   const target = path.resolve('docs/verification/screenshots', filename)
   fs.mkdirSync(path.dirname(target), { recursive: true })
-  await page.screenshot({ path: target, fullPage: true, animations: 'disabled' })
+  await page.locator('.game-scene').scrollIntoViewIfNeeded()
+  await page.screenshot({ path: target, fullPage: false, animations: 'disabled' })
 }
 
 async function installMediaObserver(page: Page) {
@@ -298,6 +299,7 @@ test('@parity reduced motion and pre-execution mute preserve the same event sequ
 
 test('@visual visible Blockly programs expose accepted, blocked, and three-weapon Phaser sheet states', async ({ page }) => {
   test.setTimeout(90_000)
+  await page.setViewportSize({ width: 768, height: 1024 })
   await openFirstMission(page)
   await expectUndistortedScene(page)
 
@@ -321,6 +323,12 @@ test('@visual visible Blockly programs expose accepted, blocked, and three-weapo
   await expect(page.locator('.game-scene')).toHaveAttribute('data-scene-state', 'weapon-requested', { timeout: 15_000 })
   await expect(page.locator('.game-scene')).toHaveAttribute('data-weapon-display', 'all')
   await expect(page.locator('.battle-transcript')).toContainText('龙王展示三件兵器')
+  await expect(page.locator('.battle-transcript')).toContainText('战斗结束：程序还缺少后续指令')
+  await page.getByRole('button', { name: '重播最近一次' }).click()
+  await expect(page.locator('.game-scene')).toHaveAttribute('data-weapon-display', 'hidden')
+  await expect(page.locator('.game-scene')).toHaveAttribute('data-weapon-display', 'all')
+  await expect(page.locator('.battle-transcript')).toContainText('战斗结束：程序还缺少后续指令')
+  await page.waitForTimeout(500)
   await captureRuntimeState(page, 'dragon-palace-runtime-weapons-all-768.png')
 })
 

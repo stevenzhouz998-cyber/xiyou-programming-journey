@@ -22,18 +22,13 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop-chromium-1440x1024',
-      grep: /@legacy|@full|@storage|@keyboard|@corrupt-full|@cold/,
+      grep: /@legacy|@full|@storage|@keyboard|@visual|@corrupt-full|@cold/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 1024 } },
     },
     {
       name: 'tablet-webkit-768x1024',
       grep: /@legacy|@full|@parity|@corrupt-smoke|@cold/,
       use: { browserName: 'webkit', viewport: { width: 768, height: 1024 } },
-    },
-    {
-      name: 'visual-chromium-768x1024',
-      grep: /@visual/,
-      use: { ...devices['Desktop Chrome'], viewport: { width: 768, height: 1024 } },
     },
     {
       name: 'mobile-chromium-390x844',
