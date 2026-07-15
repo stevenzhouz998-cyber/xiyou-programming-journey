@@ -26,7 +26,7 @@ const validV1 = {
   version: 1 as const,
   learnerName: '小行者',
   missions: { 'w1-m1': validMission },
-  settings: { muted: true, reducedMotion: true, parentPin: '2580' },
+  settings: { muted: true, reducedMotion: true, parentPin: '4826' },
   savedAt: NOW,
 };
 
@@ -91,6 +91,11 @@ describe('progress schema', () => {
 
   it('migrates V2 to V3 without losing V2 fields', () => {
     expect(migrateProgress(validV2)).toEqual({ ...validV2, version: 3, sessions: {} });
+  });
+
+  it('retires the public legacy default during migration', () => {
+    const migrated = migrateProgress({ ...validV2, settings: { ...validV2.settings, parentPin: '2580' } });
+    expect(migrated.settings.parentPin).toBe('unset');
   });
 
   it('strictly parses valid completed, incomplete, and rejected session runs', () => {

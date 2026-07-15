@@ -72,11 +72,12 @@ test.afterEach(() => {
 const currentKey = 'xiyou-programming-progress-v3';
 const snapshotKey = 'xiyou-programming-progress-snapshot-v3';
 const corruptKey = 'xiyou-programming-progress-corrupt-v3';
+const TEST_PARENT_ACCESS = 'access-v1:cf7667b114bf7a735116fc8439f0d17f3213159c48b22be56376521fbbc5cbb1:678bd461a82e086d3332d9c0f72cfae199f75eab78fba024dd8d28acd1702e27';
 
 const v1 = (completed = false) => ({
   version: 1, learnerName: '小行者',
   missions: completed ? { 'w1-m1': { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: '2026-07-12T00:00:00.000Z' } } : {},
-  settings: { muted: true, reducedMotion: false, parentPin: '2580' }, savedAt: '2026-07-12T00:00:00.000Z',
+  settings: { muted: true, reducedMotion: false, parentPin: TEST_PARENT_ACCESS }, savedAt: '2026-07-12T00:00:00.000Z',
 });
 const v2 = (completed = false, privacySeen = true) => ({
   ...v1(completed), version: 2, schemaRevision: 1,
@@ -95,6 +96,16 @@ async function acknowledge(page: Page) {
     await page.getByRole('button', { name: '我知道了' }).click();
     await expect(dialog).toBeHidden();
   }
+  const changed = await page.evaluate(({ key, access }) => {
+    const raw = localStorage.getItem(key);
+    if (!raw) return false;
+    const progress = JSON.parse(raw);
+    if (progress.settings.parentPin !== 'unset') return false;
+    progress.settings.parentPin = access;
+    localStorage.setItem(key, JSON.stringify(progress));
+    return true;
+  }, { key: currentKey, access: TEST_PARENT_ACCESS });
+  if (changed) await page.reload();
 }
 
 async function expectNoPageOverflow(page: Page) {
@@ -153,12 +164,26 @@ test('@legacy child failure, real Blockly success, persistence, export and stric
   await page.getByRole('button', { name: '执行战斗指令' }).click();
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible();
   if (testInfo.project.name === 'desktop-chromium-1440x1024') await captureScreenshot(page, testInfo, 'foundation-mission-1440.png');
+  await page.getByRole('button', { name: '继续下一关' }).click();
+  await expect(page).toHaveURL(/#\/mission\/w1-m2$/);
+  await expect(page.getByRole('heading', { name: '定海神针', level: 1 })).toBeVisible();
+  await expect(page.locator('.blockly-host')).toBeVisible();
+  await page.getByRole('button', { name: '选择最重' }).click();
+  await page.getByRole('button', { name: '查看重量' }).click();
+  await page.getByRole('button', { name: '缩小金箍棒' }).click();
+  await page.getByRole('button', { name: '运行指令' }).click();
+  await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeHidden();
+  await page.getByRole('button', { name: '上移：查看重量' }).click();
+  await page.getByRole('button', { name: '删除：缩小金箍棒' }).click();
+  await page.getByRole('button', { name: '缩小金箍棒' }).click();
+  await page.getByRole('button', { name: '运行指令' }).click();
+  await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible();
   await page.getByRole('button', { name: '回成长地图' }).click();
   await page.reload();
-  await expect(page.getByText('1/30 关已完成')).toBeVisible();
+  await expect(page.getByText('2/30 关已完成')).toBeVisible();
   await page.goto('/xiyou-programming-journey/#/parent');
   await expect(page.getByRole('heading', { name: '家长周报', level: 1 })).toBeFocused();
-  await page.getByLabel('家长 PIN').fill('2580');
+  await page.getByLabel('家长 PIN').fill('4826');
   await page.getByLabel('家长 PIN').press('Enter');
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: '导出进度' }).click();
@@ -196,7 +221,7 @@ test('@legacy snapshot recovery preserves corrupt source and exposes download', 
   expect(await page.evaluate(key => localStorage.getItem(key), corruptKey)).toBe(envelope);
   await page.goto('/xiyou-programming-journey/#/parent');
   await expect(page.getByRole('heading', { name: '家长周报', level: 1 })).toBeFocused();
-  await page.getByLabel('家长 PIN').fill('2580');
+  await page.getByLabel('家长 PIN').fill('4826');
   await page.getByLabel('家长 PIN').press('Enter');
   const downloaded = page.waitForEvent('download');
   await page.getByRole('button', { name: '下载损坏原文' }).click();
@@ -211,6 +236,12 @@ test('@legacy keyboard-only PIN, hint and clear cancellation preserve focus isol
   await page.goto('./');
   await expect(page.getByRole('button', { name: '我知道了' })).toBeFocused();
   await page.keyboard.press('Enter');
+  await page.evaluate(({ key, access }) => {
+    const progress = JSON.parse(localStorage.getItem(key)!);
+    progress.settings.parentPin = access;
+    localStorage.setItem(key, JSON.stringify(progress));
+  }, { key: currentKey, access: TEST_PARENT_ACCESS });
+  await page.reload();
   await page.getByRole('button', { name: /(开始第一关|继续今日闯关)/ }).focus();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/#\/mission\/w1-m1$/);
@@ -221,8 +252,8 @@ test('@legacy keyboard-only PIN, hint and clear cancellation preserve focus isol
   await page.goto('/xiyou-programming-journey/#/parent');
   await expect(page.getByRole('heading', { name: '家长周报', level: 1 })).toBeFocused();
   await page.getByLabel('家长 PIN').focus();
-  for (const key of ['2', '5', '8', '0']) await page.keyboard.press(key);
-  await expect(page.getByLabel('家长 PIN')).toHaveValue('2580');
+  for (const key of ['4', '8', '2', '6']) await page.keyboard.press(key);
+  await expect(page.getByLabel('家长 PIN')).toHaveValue('4826');
   await page.keyboard.press('Enter');
   await page.getByRole('button', { name: '清空学习数据' }).focus(); await page.keyboard.press('Enter');
   await expect(page.getByTestId('parent-data-background')).toHaveAttribute('inert', '');
@@ -234,7 +265,7 @@ test('@legacy parent backup-and-clear resets to initial V3 and reopens privacy w
   await acknowledge(page);
   await page.goto('/xiyou-programming-journey/#/parent');
   await expect(page.getByRole('heading', { name: '家长周报', level: 1 })).toBeFocused();
-  await page.getByLabel('家长 PIN').fill('2580');
+  await page.getByLabel('家长 PIN').fill('4826');
   await page.getByLabel('家长 PIN').press('Enter');
   await page.getByRole('button', { name: '清空学习数据' }).click();
   await page.getByLabel('输入“清空”以确认').fill('清空');
@@ -253,7 +284,7 @@ test('@legacy unlocked Python and AI tools load real editors without page overfl
   await acknowledge(page);
   await page.goto('/xiyou-programming-journey/#/parent');
   await expect(page.getByRole('heading', { name: '家长周报', level: 1 })).toBeFocused();
-  await page.getByLabel('家长 PIN').fill('2580');
+  await page.getByLabel('家长 PIN').fill('4826');
   await page.getByLabel('家长 PIN').press('Enter');
   await expect(page.getByRole('button', { name: '导入进度' })).toBeVisible();
   const chooser = page.waitForEvent('filechooser');

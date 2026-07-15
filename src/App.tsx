@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, lazy, Suspense, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { HashRouter, Link, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, BookOpenText, CheckCircle, Lightning, LockKey, MapTrifold, Medal, SpeakerHigh, SpeakerSlash, UsersThree } from '@phosphor-icons/react';
@@ -16,6 +16,7 @@ import { downloadTextFile } from './utils/download';
 import './styles.css';
 
 const GlobalModalIsolationContext = createContext<(open: boolean) => void>(() => undefined);
+const ParentAccessGate = lazy(() => import('./components/ParentAccessGate').then((module) => ({ default: module.ParentAccessGate })));
 
 function RouteFocus({ blocked }: { blocked: boolean }) {
   const location = useLocation();
@@ -133,18 +134,8 @@ function MissionPage({ reducedMotion }: { reducedMotion: boolean }) {
 function ParentPage() {
   const data = useProgress();
   const { progress } = data;
-  const [pin, setPin] = useState('');
-  const [allowed, setAllowed] = useState(false);
-  const [error, setError] = useState('');
   const [dataDialogOpen, setDataDialogOpen] = useState(false);
-  const submitPin = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (pin === progress.settings.parentPin) setAllowed(true);
-    else setError('PIN 不正确，请再检查一次。');
-  };
-  if (!allowed) return <main className="parent-gate"><form className="gate-card" onSubmit={submitPin}><img src={assetUrl("/assets/mentor.png")} alt="家长入口导师" /><span className="eyebrow">仅供家长查看</span><h1>家长周报</h1><p>请输入本机家长 PIN。默认 PIN 为 2580，可在后续设置中修改。</p><label htmlFor="parent-pin">家长 PIN</label><input id="parent-pin" aria-label="家长 PIN" inputMode="numeric" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value)} />{error && <p className="form-error">{error}</p>}<button type="submit" className="button button-primary">进入周报</button><Link to="/">返回孩子的成长地图</Link></form></main>;
-
-  return <main className="parent-page"><div data-testid="parent-data-background" inert={dataDialogOpen ? true : undefined} aria-hidden={dataDialogOpen ? true : undefined}><div className="parent-heading"><div><span className="eyebrow">本地学习档案</span><h1>家长周报</h1><p>学习数据仅保存在这台电脑</p></div><Link className="button button-ghost" to="/">返回成长地图</Link></div><section className="report-summary"><article><strong>{Object.keys(progress.missions).length}</strong><span>已完成关卡</span></article><article><strong>{Object.values(progress.missions).reduce((sum, item) => sum + item.stars, 0)}</strong><span>累计星数</span></article><article><strong>{Object.values(progress.missions).reduce((sum, item) => sum + item.hintsUsed, 0)}</strong><span>使用提示</span></article></section><section className="weekly-reports">{course.weeks.map((week) => { const report = getWeeklyReport(progress, week.week); const dragonSession = week.week === 1 ? progress.sessions['w1-m1'] : undefined; return <article className="weekly-report" key={week.id}><div><span>第{'一二三四五六'[week.week - 1]}周</span><h2>{week.title}</h2><p>{week.theme}</p>{dragonSession ? <p className="mission-session-summary">运行 {dragonSession.totalRuns} 次 · 调整 {dragonSession.compileFailures + dragonSession.runtimeFailures} 次</p> : null}</div><div className="report-progress"><strong>{report.completed}/5</strong><span>完成 · {report.stars} 星 · {report.hintsUsed} 次提示</span><progress value={report.completed} max={5} /></div><div><span className="eyebrow">需要留意</span><p>{report.needsSupport.length ? [...new Set(report.needsSupport)].join('、') : report.completed ? '本周暂未出现明显卡点' : '尚未开始本周学习'}</p></div></article>; })}</section><ParentDataTools progress={progress} loadStatus={data.loadStatus} loadPersistence={data.loadPersistence} saveStatus={data.saveStatus} corruptDownload={data.corruptDownload} corruptError={data.corruptError} onImport={data.importProgressFile} onClear={data.clearProgress} onCreateBackup={data.createBackup} onDownload={downloadTextFile} onDialogOpenChange={setDataDialogOpen} /></div></main>;
+  return <Suspense fallback={<main className="parent-gate" role="status">家长入口加载中，请稍候……</main>}><ParentAccessGate record={progress.settings.parentPin} saveRecord={(record) => data.updateSettings({ parentPin: record }).status === 'saved'}><main className="parent-page"><div data-testid="parent-data-background" inert={dataDialogOpen ? true : undefined} aria-hidden={dataDialogOpen ? true : undefined}><div className="parent-heading"><div><span className="eyebrow">本地学习档案</span><h1>家长周报</h1><p>学习数据仅保存在这台电脑</p></div><Link className="button button-ghost" to="/">返回成长地图</Link></div><section className="report-summary"><article><strong>{Object.keys(progress.missions).length}</strong><span>已完成关卡</span></article><article><strong>{Object.values(progress.missions).reduce((sum, item) => sum + item.stars, 0)}</strong><span>累计星数</span></article><article><strong>{Object.values(progress.missions).reduce((sum, item) => sum + item.hintsUsed, 0)}</strong><span>使用提示</span></article></section><section className="weekly-reports">{course.weeks.map((week) => { const report = getWeeklyReport(progress, week.week); const dragonSession = week.week === 1 ? progress.sessions['w1-m1'] : undefined; return <article className="weekly-report" key={week.id}><div><span>第{'一二三四五六'[week.week - 1]}周</span><h2>{week.title}</h2><p>{week.theme}</p>{dragonSession ? <p className="mission-session-summary">运行 {dragonSession.totalRuns} 次 · 调整 {dragonSession.compileFailures + dragonSession.runtimeFailures} 次</p> : null}</div><div className="report-progress"><strong>{report.completed}/5</strong><span>完成 · {report.stars} 星 · {report.hintsUsed} 次提示</span><progress value={report.completed} max={5} /></div><div><span className="eyebrow">需要留意</span><p>{report.needsSupport.length ? [...new Set(report.needsSupport)].join('、') : report.completed ? '本周暂未出现明显卡点' : '尚未开始本周学习'}</p></div></article>; })}</section><ParentDataTools progress={progress} loadStatus={data.loadStatus} loadPersistence={data.loadPersistence} saveStatus={data.saveStatus} corruptDownload={data.corruptDownload} corruptError={data.corruptError} onImport={data.importProgressFile} onClear={data.clearProgress} onCreateBackup={data.createBackup} onDownload={downloadTextFile} onDialogOpenChange={setDataDialogOpen} /></div></main></ParentAccessGate></Suspense>;
 }
 
 function AppRoutes() {

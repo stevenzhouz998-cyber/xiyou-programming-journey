@@ -20,6 +20,8 @@ Additional matrix coverage includes:
 - byte-preserving corrupt-envelope download behind the parent PIN in desktop Chromium;
 - project-level tag filters assign only the specialized scenarios each browser truly executes; grep-excluded tests are not reported as passes or skips;
 - legacy commercial-foundation regression coverage, including focus, responsive layout, parent data tools, Python/AI loading, base path, and visible lazy-module recovery.
+- the first non-specialized Blockly mission (`w1-m2`) visibly adds an incorrect sequence, runs it, moves and deletes commands, rebuilds the correct sequence, completes, and returns to a map showing 2/30 progress without injecting completion state;
+- first-use parent access creates a private PIN plus one-time recovery code, rejects the former public `2580` default, stores only SHA-256 digests, and supports verified PIN change and recovery-code reset. This remains a local browser UI gate rather than account-level security.
 
 ## Real scenario matrix
 
@@ -48,13 +50,13 @@ The cold-load scenario blocks service workers, sends `Cache-Control: no-store` p
 
 | Project | Measured bytes | Limit | Headroom |
 | --- | ---: | ---: | ---: |
-| desktop-chromium-1440x1024 | 2,581,479 | 2,621,440 | 39,961 |
-| desktop-firefox-1440x1024 | 2,581,479 | 2,621,440 | 39,961 |
-| tablet-webkit-768x1024 | 2,581,479 | 2,621,440 | 39,961 |
-| mobile-chromium-390x844 | 2,581,479 | 2,621,440 | 39,961 |
-| narrow-chromium-320x844 | 2,581,479 | 2,621,440 | 39,961 |
+| desktop-chromium-1440x1024 | 2,585,568 | 2,621,440 | 35,872 |
+| desktop-firefox-1440x1024 | 2,585,568 | 2,621,440 | 35,872 |
+| tablet-webkit-768x1024 | 2,585,568 | 2,621,440 | 35,872 |
+| mobile-chromium-390x844 | 2,585,568 | 2,621,440 | 35,872 |
+| narrow-chromium-320x844 | 2,585,568 | 2,621,440 | 35,872 |
 
-The remaining **39,961 B is only about 1.5% headroom** and the first-load path depends on the external `static.blockly.com` sprite. A small upstream size or delivery change can make this gate fail or make a child's first load heavier. This risk is not resolved: follow-up work should continue reducing the local bundle or localize an approved UI sprite only after its source and license are verified.
+The remaining **35,872 B is only about 1.4% headroom** and the first-load path depends on the external `static.blockly.com` sprite. A small upstream size or delivery change can make this gate fail or make a child's first load heavier. This risk is not resolved: follow-up work should continue reducing the local bundle or localize an approved UI sprite only after its source and license are verified.
 
 The five approved Dragon Palace rasters total **257,674 B / 1,310,720 B**. They retain their generated compositions and original dimensions. Sharp 0.35.3 performed only technical WebP re-encoding with `quality: 30`, `alphaQuality: 75`, `effort: 6`, and `smartSubsample: true`; the manifest records the resulting hashes.
 
@@ -92,6 +94,8 @@ The gate failed before it passed:
 10. The cold gate previously duplicated its 2.5 MiB constant and could ignore non-2xx responses or request failures. Source-contract tests failed before `budget-limits.mjs`, service-worker blocking, no-store headers, and fail-closed response collection were added; the browser gate remains under the unchanged limit with only 39,961 B headroom.
 11. The former mute check muted only after success and replayed persisted events. It was replaced with two visible, fresh progress runs: observable play/request evidence exists only for the unmuted run, while the pre-execution muted run produces identical gameplay evidence and no new audio activity.
 12. Runtime screenshots initially exposed black WebGL compositor tiles during full-page stitching. The existing desktop Chromium project now uses its visible page at 768×1024, waits for rejected/incomplete playback to settle (including a visible replay for the three-weapon frame), and records a single 768×1024 viewport. All three replacement frames were inspected clean; defective images were not accepted and no extra browser project was retained.
+13. Restoring the non-specialized Blockly compatibility tool first imported Blockly's full package and pushed the cold route to **2,699,134 B**, over the unchanged limit. Narrowing that compatibility import to Blockly core plus Chinese messages reduced its shared editor chunk to 703,617 B and the measured route to **2,585,568 B** without weakening the gate.
+14. The former public `2580` parent PIN is migrated to an unset state and is never accepted. New unit and browser paths cover first-use setup, one-time recovery-code acknowledgement, hashed verification, legacy custom-PIN migration, PIN rotation, recovery reset, and failed-storage behavior.
 
 ## Commands and results
 
@@ -109,8 +113,8 @@ npm run typecheck
 npm run verify:assets
 npm run verify:bundle
 npx playwright test --list
-npm run test:e2e -- --grep-invert @legacy
 npm run test:e2e
+npm audit --registry=https://registry.npmjs.org
 git diff --check
 rg -n "emoji|placeholder|TO""DO|TB""D|xiyou-workspace-|useState<string\[\]>" src public docs/assets scripts e2e
 git status --short --branch
@@ -118,13 +122,14 @@ git status --short --branch
 
 The fresh results were:
 
-- `npm test`: 24 Vitest files / 400 tests, 18 bundle-script tests, and 26 asset tests passed;
+- `npm test`: 27 Vitest files / 410 tests, 18 bundle-script tests, and 26 asset tests passed;
 - `npm run typecheck`: exit 0;
 - `npm run verify:assets`: 5 files, 257,674 B / 1,310,720 B, all `visual-qa-passed`;
-- `npm run verify:bundle`: entry static JS 107.4 KiB gzip, conservative homepage 415.8 KiB, Phaser 1,168.4 KiB raw, and GameScene closure 1,513.0 KiB raw, all inside their gates;
+- `npm run verify:bundle`: entry static JS 107.8 KiB gzip, conservative homepage 416.2 KiB, Phaser 1,168.4 KiB raw, and GameScene closure 1,513.9 KiB raw, all inside their gates;
 - `npx playwright test --list`: exactly 69 tests across five projects: desktop Chromium 16, tablet WebKit 14, mobile Chromium 13, desktop Firefox 14, and narrow Chromium 12;
 - specialized matrix: 19/19 passed across the same five projects;
 - `npm run test:e2e`: 69/69 passed across the five configured projects with zero skips;
+- official npm registry audit: zero known vulnerabilities after pinning Vite 6.4.3 and Playwright 1.55.1;
 - `git diff --check`: no errors;
 - `git status --short --branch`: clean after commit.
 
@@ -141,7 +146,9 @@ The scan findings do not turn the existing AI mode into a completed system; Pyth
 
 `w1-m1 龙宫试兵：One-level playable`
 
-`其余 29 关、Python、AI、成长奖励、装备、神兽、完整战斗系统与公开部署：not complete`
+`w1-m2 compatibility path：browser-verified interaction shell; not level-content complete`
+
+`其余 29 关（包括仍缺少完整关卡证据的 w1-m2）、Python、AI、成长奖励、装备、神兽、完整战斗系统与公开部署：not complete`
 
 `整站：not complete`
 

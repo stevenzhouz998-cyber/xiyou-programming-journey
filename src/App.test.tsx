@@ -11,6 +11,12 @@ vi.mock('./components/GameScene', () => ({
 }));
 
 const originalStorage = localStorage;
+const TEST_PARENT_ACCESS = 'access-v1:cf7667b114bf7a735116fc8439f0d17f3213159c48b22be56376521fbbc5cbb1:678bd461a82e086d3332d9c0f72cfae199f75eab78fba024dd8d28acd1702e27';
+
+function withParentAccess<T extends ReturnType<typeof createInitialProgress>>(progress: T): T {
+  progress.settings.parentPin = TEST_PARENT_ACCESS;
+  return progress;
+}
 
 function installDynamicStorage(initial: Record<string, string>, failWrites = true, failMessage = 'storage disabled') {
   const values = new Map(Object.entries(initial));
@@ -36,6 +42,7 @@ describe('西游编程记', () => {
     Object.defineProperty(globalThis, 'localStorage', { value: originalStorage, configurable: true });
     Object.defineProperty(window, 'localStorage', { value: originalStorage, configurable: true });
     localStorage.clear();
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(withParentAccess(createInitialProgress())));
     window.history.pushState({}, '', '/');
     window.location.hash = '#/';
     Object.defineProperty(window, 'matchMedia', { configurable: true, value: vi.fn(() => ({
@@ -179,18 +186,18 @@ describe('西游编程记', () => {
     await waitFor(() => expect(homeHeading).toHaveFocus());
   });
 
-  it('protects the parent report with the local PIN', () => {
+  it('protects the parent report with the local PIN', async () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
     fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
-    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '2580' } });
+    fireEvent.change(await screen.findByLabelText('家长 PIN'), { target: { value: '4826' } });
     fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
     expect(screen.getByRole('heading', { name: '家长周报' })).toBeInTheDocument();
-    expect(screen.getByText('学习数据仅保存在这台电脑')).toBeInTheDocument();
+    expect(await screen.findByText('学习数据仅保存在这台电脑')).toBeInTheDocument();
   });
 
-  it('shows only aggregate Dragon Palace attempts and support behind the parent PIN', () => {
-    const progress = createInitialProgress();
+  it('shows only aggregate Dragon Palace attempts and support behind the parent PIN', async () => {
+    const progress = withParentAccess(createInitialProgress());
     progress.privacy.localDataNoticeSeen = true;
     progress.sessions['w1-m1'] = {
       ...createMissionSession('2026-07-15T06:00:00.000Z'),
@@ -206,45 +213,46 @@ describe('西游编程记', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
     expect(screen.queryByText('运行 3 次 · 调整 2 次')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '2580' } });
+    fireEvent.change(await screen.findByLabelText('家长 PIN'), { target: { value: '4826' } });
     fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
 
-    expect(screen.getByText('运行 3 次 · 调整 2 次')).toBeVisible();
+    expect(await screen.findByText('运行 3 次 · 调整 2 次')).toBeVisible();
     expect(screen.getByText('程序结构')).toBeVisible();
     expect(screen.queryByText('private-block')).not.toBeInTheDocument();
     expect(screen.queryByText('xiyou_enter_palace')).not.toBeInTheDocument();
   });
 
-  it('submits the parent PIN through the form keyboard path', () => {
+  it('submits the parent PIN through the form keyboard path', async () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
     fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
-    const input = screen.getByLabelText('家长 PIN');
-    fireEvent.change(input, { target: { value: '2580' } });
+    const input = await screen.findByLabelText('家长 PIN');
+    fireEvent.change(input, { target: { value: '4826' } });
     const form = input.closest('form');
     expect(form).not.toBeNull();
     fireEvent.submit(form!);
-    expect(screen.getByText('学习数据仅保存在这台电脑')).toBeInTheDocument();
+    expect(await screen.findByText('学习数据仅保存在这台电脑')).toBeInTheDocument();
   });
 
-  it('keeps data operations protected after a wrong PIN', () => {
+  it('keeps data operations protected after a wrong PIN', async () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
     fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
-    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '0000' } });
+    fireEvent.change(await screen.findByLabelText('家长 PIN'), { target: { value: '0000' } });
     fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
-    expect(screen.getByText('PIN 不正确，请再检查一次。')).toBeInTheDocument();
+    expect(await screen.findByText('PIN 不正确，请再检查一次。')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '清空学习数据' })).not.toBeInTheDocument();
   });
 
   it('isolates the entire parent page while the clear dialog is open', async () => {
     const frames: FrameRequestCallback[] = [];
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.push(callback); return frames.length; });
-    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({ ...createInitialProgress(), privacy: { localDataNoticeSeen: true } }));
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({ ...withParentAccess(createInitialProgress()), privacy: { localDataNoticeSeen: true } }));
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
-    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '2580' } });
+    fireEvent.change(await screen.findByLabelText('家长 PIN'), { target: { value: '4826' } });
     fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
+    await screen.findByRole('button', { name: '清空学习数据' });
     const opener = screen.getByRole('button', { name: '清空学习数据' });
     fireEvent.click(opener);
     const background = screen.getByTestId('parent-data-background');
@@ -264,14 +272,15 @@ describe('西游编程记', () => {
   });
 
   it('focuses the privacy acknowledgement after a successful backed-up clear', async () => {
-    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({ ...createInitialProgress(), learnerName: '旧进度', privacy: { localDataNoticeSeen: true } }));
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({ ...withParentAccess(createInitialProgress()), learnerName: '旧进度', privacy: { localDataNoticeSeen: true } }));
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:backup');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
-    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '2580' } });
+    fireEvent.change(await screen.findByLabelText('家长 PIN'), { target: { value: '4826' } });
     fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
+    await screen.findByRole('button', { name: '清空学习数据' });
     fireEvent.click(screen.getByRole('button', { name: '清空学习数据' }));
     fireEvent.change(screen.getByLabelText('输入“清空”以确认'), { target: { value: '清空' } });
     fireEvent.click(screen.getByRole('button', { name: '备份并清空' }));
@@ -283,7 +292,7 @@ describe('西游编程记', () => {
   it('shows snapshot recovery below the header on every route', () => {
     localStorage.setItem(CURRENT_PROGRESS_KEY, '{bad');
     localStorage.setItem(SNAPSHOT_PROGRESS_KEY, serializeProgress({
-      ...createInitialProgress(), privacy: { localDataNoticeSeen: true },
+      ...withParentAccess(createInitialProgress()), privacy: { localDataNoticeSeen: true },
     }));
     window.location.hash = '#/mission/w1-m1';
     render(<App />);
@@ -291,28 +300,28 @@ describe('西游编程记', () => {
     expect(screen.getByRole('heading', { name: '龙宫求兵' })).toBeInTheDocument();
   });
 
-  it('keeps parent recovery details available after a recovered save is reopened', () => {
+  it('keeps parent recovery details available after a recovered save is reopened', async () => {
     const recovered = {
-      ...createInitialProgress(), privacy: { localDataNoticeSeen: true },
+      ...withParentAccess(createInitialProgress()), privacy: { localDataNoticeSeen: true },
       recovery: { lastRecoveredAt: '2026-07-12T08:09:10.000Z', source: 'snapshot' as const },
     };
     const envelope = JSON.stringify({
-      current: '{bad', snapshot: serializeProgress(createInitialProgress()), capturedAt: '2026-07-12T08:09:10.000Z',
+      current: '{bad', snapshot: serializeProgress(withParentAccess(createInitialProgress())), capturedAt: '2026-07-12T08:09:10.000Z',
     });
     localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(recovered));
     localStorage.setItem(CORRUPT_PROGRESS_KEY, envelope);
     window.location.hash = '#/parent';
     render(<App />);
 
-    expect(screen.getByRole('status')).toHaveTextContent('有一份存档信息需要家长查看');
-    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '2580' } });
+    expect(screen.getByText('有一份存档信息需要家长查看')).toBeVisible();
+    fireEvent.change(await screen.findByLabelText('家长 PIN'), { target: { value: '4826' } });
     fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
-    expect(screen.getByRole('button', { name: '下载损坏原文' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '下载损坏原文' })).toBeInTheDocument();
   });
 
   it('retries the real unsaved mission state until it is durably stored', async () => {
     const saved = serializeProgress({
-      ...createInitialProgress(), privacy: { localDataNoticeSeen: true },
+      ...withParentAccess(createInitialProgress()), privacy: { localDataNoticeSeen: true },
     });
     const storage = installDynamicStorage({ [CURRENT_PROGRESS_KEY]: saved }, true, '磁盘错误 A');
     render(<App />);
@@ -366,13 +375,14 @@ describe('西游编程记', () => {
   });
 
   it('keeps current React progress unchanged when imported persistence fails', async () => {
-    const current = { ...createInitialProgress(), learnerName: '旧进度', privacy: { localDataNoticeSeen: true } };
+    const current = { ...withParentAccess(createInitialProgress()), learnerName: '旧进度', privacy: { localDataNoticeSeen: true } };
     const storage = installDynamicStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(current) }, true, '导入写盘失败');
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
-    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '2580' } });
+    fireEvent.change(await screen.findByLabelText('家长 PIN'), { target: { value: '4826' } });
     fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
-    const imported = { ...createInitialProgress(), learnerName: '导入会话', privacy: { localDataNoticeSeen: true } };
+    await screen.findByLabelText('选择进度文件');
+    const imported = { ...withParentAccess(createInitialProgress()), learnerName: '导入会话', privacy: { localDataNoticeSeen: true } };
     fireEvent.change(screen.getByLabelText('选择进度文件'), {
       target: { files: [new File([serializeProgress(imported)], 'progress.json', { type: 'application/json' })] },
     });
@@ -391,7 +401,7 @@ describe('西游编程记', () => {
       addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
     })) });
     localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({
-      ...createInitialProgress(), privacy: { localDataNoticeSeen: true },
+      ...withParentAccess(createInitialProgress()), privacy: { localDataNoticeSeen: true },
     }));
     const first = render(<App />);
     expect(screen.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'true');
@@ -413,7 +423,7 @@ describe('西游编程记', () => {
     };
     Object.defineProperty(window, 'matchMedia', { configurable: true, value: vi.fn(() => media) });
     localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({
-      ...createInitialProgress(), privacy: { localDataNoticeSeen: true },
+      ...withParentAccess(createInitialProgress()), privacy: { localDataNoticeSeen: true },
     }));
     const view = render(<App />);
     expect(screen.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'false');
@@ -432,7 +442,7 @@ describe('西游编程记', () => {
       removeListener,
       dispatchEvent: vi.fn(),
     })) });
-    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({ ...createInitialProgress(), privacy: { localDataNoticeSeen: true } }));
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({ ...withParentAccess(createInitialProgress()), privacy: { localDataNoticeSeen: true } }));
     const view = render(<App />);
     act(() => change?.({ matches: true }));
     expect(screen.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'true');
@@ -442,7 +452,7 @@ describe('西游编程记', () => {
 
   it('falls back safely when matchMedia is unavailable', () => {
     Object.defineProperty(window, 'matchMedia', { configurable: true, value: undefined });
-    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({ ...createInitialProgress(), privacy: { localDataNoticeSeen: true } }));
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({ ...withParentAccess(createInitialProgress()), privacy: { localDataNoticeSeen: true } }));
     render(<App />);
     expect(screen.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'false');
   });

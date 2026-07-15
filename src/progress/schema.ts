@@ -10,6 +10,7 @@ import type {
   DragonPalaceState,
 } from '../battle/types';
 import type { WorkspaceDraftV1 } from '../blockly/draft';
+import { isValidParentAccessRecord } from './parentAccess';
 import type {
   MissionProgress,
   MissionSession,
@@ -39,7 +40,7 @@ export const createInitialProgress = (): ProgressV3 => ({
   schemaRevision: 1,
   learnerName: '小行者',
   missions: {},
-  settings: { muted: false, reducedMotion: false, reducedMotionOverride: false, parentPin: '2580' },
+  settings: { muted: false, reducedMotion: false, reducedMotionOverride: false, parentPin: 'unset' },
   privacy: { localDataNoticeSeen: false },
   recovery: { lastRecoveredAt: null, source: null },
   sessions: {},
@@ -146,8 +147,8 @@ function coordinate(value: unknown, field: string): number {
 
 function pin(value: unknown): string {
   const result = string(value, 'settings.parentPin');
-  if (!/^\d{4,6}$/.test(result)) invalid('settings.parentPin必须是4至6位数字');
-  return result;
+  if (!isValidParentAccessRecord(result)) invalid('settings.parentPin不是有效的家长访问记录');
+  return result === '2580' ? 'unset' : result;
 }
 
 function state(value: unknown, field: string): DragonPalaceState {

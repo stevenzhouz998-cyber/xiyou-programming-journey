@@ -6,6 +6,7 @@ import { DRAGON_PALACE_COLD_BYTES } from '../scripts/budget-limits.mjs'
 const CURRENT_KEY = 'xiyou-programming-progress-v3'
 const SNAPSHOT_KEY = 'xiyou-programming-progress-snapshot-v3'
 const updateEvidence = process.env.XIYOU_UPDATE_EVIDENCE === '1'
+const TEST_PARENT_ACCESS = 'access-v1:cf7667b114bf7a735116fc8439f0d17f3213159c48b22be56376521fbbc5cbb1:678bd461a82e086d3332d9c0f72cfae199f75eab78fba024dd8d28acd1702e27'
 
 type SessionEvidence = {
   blockIds: string[]
@@ -19,6 +20,16 @@ async function acknowledge(page: Page) {
   await page.goto('./')
   const dialog = page.getByRole('dialog', { name: '你的学习数据保存在这台设备' })
   if (await dialog.isVisible()) await page.getByRole('button', { name: '我知道了' }).click()
+  const changed = await page.evaluate(({ key, access }) => {
+    const raw = localStorage.getItem(key)
+    if (!raw) return false
+    const progress = JSON.parse(raw)
+    if (progress.settings.parentPin !== 'unset') return false
+    progress.settings.parentPin = access
+    localStorage.setItem(key, JSON.stringify(progress))
+    return true
+  }, { key: CURRENT_KEY, access: TEST_PARENT_ACCESS })
+  if (changed) await page.reload()
 }
 
 async function openFirstMission(page: Page) {
@@ -86,8 +97,8 @@ async function readSessionEvidence(page: Page): Promise<SessionEvidence> {
 async function enterParentReport(page: Page) {
   const input = page.getByLabel('家长 PIN')
   await input.click()
-  await input.pressSequentially('2580')
-  await expect(input).toHaveValue('2580')
+  await input.pressSequentially('4826')
+  await expect(input).toHaveValue('4826')
   await page.getByRole('button', { name: '进入周报' }).click()
 }
 
@@ -338,7 +349,7 @@ function recoverySnapshot() {
     schemaRevision: 1,
     learnerName: '恢复小行者',
     missions: {},
-    settings: { muted: true, reducedMotion: true, reducedMotionOverride: true, parentPin: '2580' },
+    settings: { muted: true, reducedMotion: true, reducedMotionOverride: true, parentPin: TEST_PARENT_ACCESS },
     privacy: { localDataNoticeSeen: true },
     recovery: { lastRecoveredAt: null, source: null },
     sessions: {

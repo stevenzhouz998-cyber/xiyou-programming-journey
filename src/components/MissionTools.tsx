@@ -12,7 +12,7 @@ export type MissionToolLoaders = {
 
 const defaultLoaders: MissionToolLoaders = {
   scene: () => import('./LegacyGameScene').then((module) => ({ default: module.LegacyGameScene })),
-  blockly: () => import('./BlocklyWorkspace').then((module) => ({ default: module.BlocklyWorkspace })),
+  blockly: () => import('./LegacyBlocklyWorkspace').then((module) => ({ default: module.LegacyBlocklyWorkspace })),
   python: () => import('./PythonEditor').then((module) => ({ default: module.PythonEditor })),
   'ai-lab': () => import('./AiLab').then((module) => ({ default: module.AiLab })),
 };
