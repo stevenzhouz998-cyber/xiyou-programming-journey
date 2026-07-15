@@ -9,6 +9,15 @@ import {
 } from './RuyiStaffBlocklyWorkspace'
 
 const EMPTY: RuyiWorkspaceDraftV1 = { version: 1, blocks: [] }
+function chainDraft(count: number): RuyiWorkspaceDraftV1 {
+  return { version: 1, blocks: Array.from({ length: count }, (_, index) => ({
+    id: `block-${index}`,
+    type: 'xiyou_inspect_weights' as const,
+    nextId: index + 1 < count ? `block-${index + 1}` : null,
+    x: 0,
+    y: index * 48,
+  })) }
+}
 type DraftSaveResult = { status: 'saved' | 'unsaved' | 'conflict' }
 type DraftSaver = (draft: RuyiWorkspaceDraftV1) => DraftSaveResult | Promise<DraftSaveResult>
 
@@ -192,5 +201,74 @@ describe('RuyiStaffBlocklyWorkspace', () => {
       expect.objectContaining({ opcode: 'inspect_weights' }),
       expect.objectContaining({ opcode: 'shrink_ruyi_staff' }),
     ] })
+  })
+
+  it('allows block 500, then disables every add button with a child-readable capacity message', async () => {
+    const { workspace } = setup(chainDraft(499))
+    const addButtons = screen.getAllByRole('button', { name: /^加入：/ })
+    expect(addButtons.every((button) => !button.hasAttribute('disabled'))).toBe(true)
+
+    fireEvent.click(addButtons[0])
+
+    await waitFor(() => expect(workspace.getAllBlocks(false)).toHaveLength(500))
+    expect(screen.getAllByRole('button', { name: /^加入：/ }).every((button) => button.hasAttribute('disabled'))).toBe(true)
+    expect(screen.getByText('指令卷轴已经装满500块积木。先删除一些积木，才能继续加入。')).toBeVisible()
+  })
+
+  it('keeps a 500-block draft movable, deletable and runnable while preventing block 501', async () => {
+    const { workspace, onRun } = setup(chainDraft(500))
+    const addButton = screen.getByRole('button', { name: '加入：查看三件兵器重量' })
+    expect(addButton).toBeDisabled()
+    fireEvent.click(addButton)
+    expect(workspace.getAllBlocks(false)).toHaveLength(500)
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^上移：/ })[1])
+    fireEvent.click(screen.getAllByRole('button', { name: /^删除：/ })[0])
+    await waitFor(() => expect(workspace.getAllBlocks(false)).toHaveLength(499))
+    expect(addButton).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }))
+    expect(onRun).toHaveBeenCalledWith(expect.objectContaining({ ok: true }))
+  })
+
+  it('rolls back an out-of-band 501st Blockly block before draft persistence', async () => {
+    const onDraftChange = vi.fn(() => ({ status: 'saved' as const }))
+    const { workspace } = setup(chainDraft(500), onDraftChange)
+    onDraftChange.mockClear()
+
+    act(() => { workspace.newBlock('xiyou_inspect_weights', 'overflow-501') })
+
+    await waitFor(() => expect(workspace.getAllBlocks(false)).toHaveLength(500))
+    expect(workspace.getBlockById('overflow-501')).toBeNull()
+    expect(onDraftChange).not.toHaveBeenCalled()
+    expect(screen.getByText('指令卷轴最多放500块积木，刚加入的积木没有保存。')).toBeVisible()
+  })
+
+  it('turns a synchronous draft persistence throw into one visible retry that can recover', async () => {
+    const onDraftChange = vi.fn()
+      .mockImplementationOnce(() => { throw new Error('synchronous persistence failure') })
+      .mockReturnValueOnce({ status: 'saved' as const })
+    setup(EMPTY, onDraftChange)
+
+    fireEvent.click(screen.getByRole('button', { name: '加入：查看三件兵器重量' }))
+
+    expect(await screen.findByText('这次积木更改还没有保存。')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '重试保存积木' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: '重试保存积木' })).not.toBeInTheDocument())
+    expect(onDraftChange).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a synchronous run handoff error visible instead of interrupting the workspace', () => {
+    const workspace = new Blockly.Workspace()
+    const onRun = vi.fn(() => { throw new Error('run persistence handoff failed') })
+    render(
+      <RuyiStaffBlocklyWorkspaceAdapterProvider adapter={{ create: () => workspace }}>
+        <RuyiStaffBlocklyWorkspace draft={chainDraft(1)} onDraftChange={() => ({ status: 'saved' })} onRun={onRun} focusBlockId={null} onFocusHandled={() => undefined} />
+      </RuyiStaffBlocklyWorkspaceAdapterProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }))
+
+    expect(screen.getByText('运行结果还没有交给任务保存，请再执行一次。')).toBeVisible()
+    expect(workspace.getAllBlocks(false)).toHaveLength(1)
   })
 })

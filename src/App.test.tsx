@@ -227,6 +227,8 @@ describe('西游编程记', () => {
     expect(screen.getByRole('button', { name: '重试保存通关' })).toBeVisible();
     expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
     expect(audio).not.toHaveBeenCalledWith('/assets/audio/success.m4a');
+    expect(screen.getByText('1/30 关 · 3 星')).toBeVisible();
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).not.toHaveProperty('missions.w1-m2');
 
     storage.failWrites = false;
     fireEvent.click(screen.getByRole('button', { name: '重试保存通关' }));
@@ -314,6 +316,7 @@ describe('西游编程记', () => {
       sessions: { 'w1-m2': { lastRun: { completed: true } } },
     }));
     localStorage.setItem(REVISION_PROGRESS_KEY, String(Number(localStorage.getItem(REVISION_PROGRESS_KEY)) + 1));
+    window.dispatchEvent(new StorageEvent('storage', { key: REVISION_PROGRESS_KEY }));
     fireEvent.click(screen.getByRole('button', { name: '完成定海神针场景播放' }));
 
     expect(await screen.findByText(/通关待保存/)).toBeVisible();
@@ -362,7 +365,7 @@ describe('西游编程记', () => {
     await waitFor(() => expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
       sessions: { 'w1-m2': { lastRun: { completed: true } } },
     }));
-    const external = completeMission(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!), 'w1-m2', { stars: 3, hintsUsed: 0 });
+    const external = completeMission(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!), 'w1-m2', { stars: 1, hintsUsed: 2 });
     localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(external));
     localStorage.setItem(REVISION_PROGRESS_KEY, String(Number(localStorage.getItem(REVISION_PROGRESS_KEY)) + 1));
     fireEvent.click(screen.getByRole('button', { name: '完成定海神针场景播放' }));
@@ -370,6 +373,8 @@ describe('西游编程记', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '载入其他标签页版本' }));
     expect(await screen.findByRole('heading', { name: '闯关成功' })).toBeVisible();
+    expect(screen.getByLabelText('1颗星')).toBeVisible();
+    expect(screen.queryByLabelText('3颗星')).not.toBeInTheDocument();
     expect(audio).toHaveBeenCalledTimes(1);
     expect(audio).toHaveBeenCalledWith('/assets/audio/success.m4a');
   });

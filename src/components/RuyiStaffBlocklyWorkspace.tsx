@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useRef, useState, type KeyboardEv
 import { initializeWorkspaceBlock, renderWorkspaceTopBlocks, RUYI_BLOCK_OPCODE, registerRuyiStaffBlocks, type RuyiBlockType } from '../blockly/ruyiStaffBlocks'
 import { compileRuyiStaffWorkspace, type RuyiCompileResult } from '../blockly/ruyiStaffCompiler'
 import { loadRuyiWorkspaceDraft, saveRuyiWorkspaceDraft, type RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft'
+import { PROGRESS_SCHEMA_LIMITS } from '../progress/schema'
 
 interface Props {
   draft: RuyiWorkspaceDraftV1
@@ -12,6 +13,7 @@ interface Props {
   onRun: (result: RuyiCompileResult) => void
   focusBlockId: string | null
   onFocusHandled: () => void
+  saveRecoverySuperseded?: boolean
 }
 
 export interface RuyiStaffBlocklyWorkspaceAdapter { create(host: HTMLDivElement): Blockly.Workspace }
@@ -25,6 +27,7 @@ const ACTIONS: ReadonlyArray<{ type: RuyiBlockType; label: string }> = [
 ]
 const LABEL_BY_TYPE = Object.fromEntries(ACTIONS.map(({ type, label }) => [type, label])) as Record<RuyiBlockType, string>
 const LABEL_BY_OPCODE = Object.fromEntries(ACTIONS.map(({ type, label }) => [RUYI_BLOCK_OPCODE[type], label])) as Record<(typeof RUYI_BLOCK_OPCODE)[RuyiBlockType], string>
+const MAX_WORKSPACE_BLOCKS = PROGRESS_SCHEMA_LIMITS.maxWorkspaceBlocks
 
 Blockly.setLocale(zhHans as unknown as Record<string, string>)
 const THEME = Blockly.Theme.defineTheme('xiyou-ruyi-staff', {
@@ -118,37 +121,51 @@ function rebuild(workspace: Blockly.Workspace, blocks: Blockly.Block[]) {
   renderWorkspaceTopBlocks(workspace)
 }
 
-export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBlockId, onFocusHandled }: Props) {
+export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBlockId, onFocusHandled, saveRecoverySuperseded = false }: Props) {
   const adapter = useContext(AdapterContext)
   const hostRef = useRef<HTMLDivElement>(null); const workspaceRef = useRef<Blockly.Workspace | null>(null)
   const itemRefs = useRef(new Map<string, HTMLLIElement>()); const onDraftRef = useRef(onDraftChange); const handledRef = useRef(onFocusHandled)
   const lastDraftRef = useRef<string | null>(null); const lastPropRef = useRef<string | null>(null)
   const mountedRef = useRef(false); const saveRequestRef = useRef<{ generation: number; bytes: string | null; status: 'idle' | 'pending' | 'saved' | 'unsaved' | 'conflict' }>({ generation: 0, bytes: null, status: 'idle' })
+  const pendingDraftRef = useRef<RuyiWorkspaceDraftV1 | null>(null)
   const [ready, setReady] = useState(false); const [result, setResult] = useState<RuyiCompileResult>({ ok: false, trace: [], diagnostics: [{ code: 'empty-workspace', sourceBlockId: null, concept: 'program-structure' }] })
   const [blocks, setBlocks] = useState<Array<{ id: string; label: string }>>([])
   const [workspaceError, setWorkspaceError] = useState<string | null>(null)
+  const [capacityMessage, setCapacityMessage] = useState<string | null>(null)
+  const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'pending' | 'saved' | 'unsaved' | 'conflict'>('idle')
   onDraftRef.current = onDraftChange; handledRef.current = onFocusHandled
+
+  const persistDraft = (next: RuyiWorkspaceDraftV1) => {
+    const bytes = JSON.stringify(next)
+    const generation = saveRequestRef.current.generation + 1
+    pendingDraftRef.current = next
+    saveRequestRef.current = { generation, bytes, status: 'pending' }
+    setDraftSaveStatus('pending')
+    const settle = (status: 'saved' | 'unsaved' | 'conflict') => {
+      if (!mountedRef.current || saveRequestRef.current.generation !== generation || saveRequestRef.current.bytes !== bytes) return
+      saveRequestRef.current = { generation, bytes, status }
+      setDraftSaveStatus(status)
+      if (status === 'saved') pendingDraftRef.current = null
+    }
+    try {
+      const pending = onDraftRef.current(next)
+      void Promise.resolve(pending).then((value) => settle(value.status), () => settle('unsaved'))
+    } catch { settle('unsaved') }
+  }
 
   const refresh = (persist: boolean) => {
     const workspace = workspaceRef.current; if (!workspace) return
     const compiled = compileRuyiStaffWorkspace(workspace); setResult(compiled)
-    setBlocks(orderedBlocks(workspace).map((block) => ({ id: block.id, label: LABEL_BY_TYPE[block.type as RuyiBlockType] ?? '无法识别的积木' })))
+    const ordered = orderedBlocks(workspace)
+    setBlocks(ordered.map((block) => ({ id: block.id, label: LABEL_BY_TYPE[block.type as RuyiBlockType] ?? '无法识别的积木' })))
+    if (ordered.length < MAX_WORKSPACE_BLOCKS) setCapacityMessage(null)
     if (!persist) return
     let next: RuyiWorkspaceDraftV1
     try { next = saveRuyiWorkspaceDraft(workspace) } catch { setWorkspaceError('当前积木结构无法安全保存，原草稿保持不变。'); return }
     const bytes = JSON.stringify(next); if (bytes === lastDraftRef.current) return
     lastDraftRef.current = bytes
-    const generation = saveRequestRef.current.generation + 1
-    saveRequestRef.current = { generation, bytes, status: 'pending' }
-    const settle = (status: 'saved' | 'unsaved' | 'conflict') => {
-      if (!mountedRef.current || saveRequestRef.current.generation !== generation || saveRequestRef.current.bytes !== bytes) return
-      saveRequestRef.current = { generation, bytes, status }
-    }
-    try {
-      const pending = onDraftRef.current(next)
-      void Promise.resolve(pending).then((value) => settle(value.status), () => settle('unsaved'))
-      setWorkspaceError(null)
-    } catch { settle('unsaved') }
+    persistDraft(next)
+    setWorkspaceError(null)
   }
 
   useEffect(() => {
@@ -157,7 +174,23 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
     registerRuyiStaffBlocks(); const workspace = adapter.create(host); workspaceRef.current = workspace
     withoutEvents(() => loadRuyiWorkspaceDraft(workspace, draft)); lastDraftRef.current = JSON.stringify(draft); lastPropRef.current = JSON.stringify(draft)
     refresh(false)
-    const listener = (event: Blockly.Events.Abstract) => { if (!event.isUiEvent) refresh(true) }
+    const listener = (event: Blockly.Events.Abstract) => {
+      if (event.isUiEvent) return
+      const allBlocks = workspace.getAllBlocks(false)
+      if (allBlocks.length > MAX_WORKSPACE_BLOCKS) {
+        const createdIds = 'ids' in event && Array.isArray(event.ids) ? event.ids as string[] : []
+        withoutEvents(() => {
+          const overflow = allBlocks.length - MAX_WORKSPACE_BLOCKS
+          const created = createdIds.map((id) => workspace.getBlockById(id)).filter((block): block is Blockly.Block => block !== null)
+          const targets = created.length >= overflow ? created.slice(-overflow) : orderedBlocks(workspace).slice(MAX_WORKSPACE_BLOCKS)
+          targets.forEach((block) => block.dispose(false))
+        })
+        setCapacityMessage('指令卷轴最多放500块积木，刚加入的积木没有保存。')
+        refresh(false)
+        return
+      }
+      refresh(true)
+    }
     const fit = () => fitNarrowWorkspace(workspace)
     fit(); const fitFrame = window.requestAnimationFrame(fit); const fitAfterFlyout = window.setTimeout(fit, 50); window.addEventListener('resize', fit)
     workspace.addChangeListener(listener); setReady(true)
@@ -182,28 +215,44 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
     handledRef.current()
   }, [focusBlockId, ready])
 
+  useEffect(() => {
+    if (!saveRecoverySuperseded) return
+    saveRequestRef.current.generation += 1
+    pendingDraftRef.current = null
+    setDraftSaveStatus('idle')
+  }, [saveRecoverySuperseded])
+
   const mutate = (operation: (workspace: Blockly.Workspace) => void) => {
     const workspace = workspaceRef.current; if (!workspace) return
     try { operation(workspace); refresh(true); fitNarrowWorkspace(workspace) } catch { setWorkspaceError('当前积木结构需要先在编辑区连接成一条指令链。'); setResult(compileRuyiStaffWorkspace(workspace)) }
   }
-  const run = () => { const workspace = workspaceRef.current; if (!workspace) return; const compiled = compileRuyiStaffWorkspace(workspace); setResult(compiled); onRun(compiled) }
+  const run = () => {
+    const workspace = workspaceRef.current; if (!workspace) return
+    const compiled = compileRuyiStaffWorkspace(workspace); setResult(compiled)
+    try { onRun(compiled); setWorkspaceError(null) }
+    catch { setWorkspaceError('运行结果还没有交给任务保存，请再执行一次。') }
+  }
+  const retryDraftSave = () => { if (pendingDraftRef.current) persistDraft(pendingDraftRef.current) }
+  const atCapacity = blocks.length >= MAX_WORKSPACE_BLOCKS
 
   return <section className="code-workspace ruyi-staff-workspace" aria-label="定海神针图形化编程工作台" onKeyDown={activateButtonOnEnter}>
-    <div className="command-palette"><p className="eyebrow">指令匣 · 点击加入卷轴</p><div className="command-buttons">{ACTIONS.map(({ type, label }) => <button type="button" className="command-button" key={type} onClick={() => mutate((workspace) => {
+    <div className="command-palette"><p className="eyebrow">指令匣 · 点击加入卷轴</p><div className="command-buttons">{ACTIONS.map(({ type, label }) => <button type="button" className="command-button" key={type} disabled={atCapacity} onClick={() => mutate((workspace) => {
       if (workspace.getTopBlocks(false).length > 1) throw new Error('multiple chains')
       const chain = orderedBlocks(workspace); const block = workspace.newBlock(type); initializeWorkspaceBlock(block)
       const tail = chain.at(-1); if (tail) tail.nextConnection?.connect(block.previousConnection!); rebuild(workspace, [...chain, block])
-    })}>{`\u52a0\u5165\uff1a${label}`}</button>)}</div></div>
+    })}>{`\u52a0\u5165\uff1a${label}`}</button>)}</div>{capacityMessage || atCapacity ? <p role="status">{capacityMessage ?? '指令卷轴已经装满500块积木。先删除一些积木，才能继续加入。'}</p> : null}</div>
     <div ref={hostRef} className="blockly-host" aria-label="Blockly 积木编辑区" tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); run() } }} />
     <div className="command-scroll"><span className="eyebrow">当前指令卷轴</span>
       {!result.ok ? <p role="status">{issue(result)}</p> : null}
       {blocks.length > 0 ? <ol className="block-program-list" aria-label={result.ok ? '已连接的指令顺序' : '工作区积木（尚未形成唯一顺序）'}>{blocks.map((block, index) => <li key={block.id} tabIndex={-1} ref={(node) => { if (node) itemRefs.current.set(block.id, node); else itemRefs.current.delete(block.id) }}><span>{block.label}</span><span className="block-program-actions">
         <button type="button" aria-label={`\u4e0a\u79fb\uff1a${block.label}`} disabled={!result.ok || index === 0} onClick={() => mutate((workspace) => { const chain = orderedBlocks(workspace); const current = chain.findIndex((item) => item.id === block.id); [chain[current - 1], chain[current]] = [chain[current], chain[current - 1]]; rebuild(workspace, chain) })}>上移</button>
         <button type="button" aria-label={`\u4e0b\u79fb\uff1a${block.label}`} disabled={!result.ok || index === blocks.length - 1} onClick={() => mutate((workspace) => { const chain = orderedBlocks(workspace); const current = chain.findIndex((item) => item.id === block.id); [chain[current + 1], chain[current]] = [chain[current], chain[current + 1]]; rebuild(workspace, chain) })}>下移</button>
-        <button type="button" aria-label={`\u5220\u9664\uff1a${block.label}`} onClick={() => mutate((workspace) => { const chain = orderedBlocks(workspace); const target = workspace.getBlockById(block.id); rebuild(workspace, chain.filter((item) => item.id !== block.id)); target?.dispose(false) })}>删除</button>
+        <button type="button" aria-label={`\u5220\u9664\uff1a${block.label}`} onClick={() => mutate((workspace) => { const chain = orderedBlocks(workspace); const target = workspace.getBlockById(block.id); target?.previousConnection?.isConnected() && target.previousConnection.disconnect(); target?.nextConnection?.isConnected() && target.nextConnection.disconnect(); target?.dispose(false); rebuild(workspace, chain.filter((item) => item.id !== block.id)) })}>删除</button>
       </span></li>)}</ol> : null}
     </div>
     {workspaceError ? <p role="alert">{workspaceError}</p> : null}
+    {draftSaveStatus === 'unsaved' ? <div role="alert"><p>这次积木更改还没有保存。</p><button type="button" onClick={retryDraftSave}>重试保存积木</button></div> : null}
+    {draftSaveStatus === 'conflict' ? <p role="alert">其他标签页已经更新，这次积木更改暂停保存。</p> : null}
     <div className="workspace-actions"><button type="button" className="button button-ghost" onClick={() => mutate((workspace) => workspace.clear())}><ArrowsCounterClockwise size={20} />清空并重新开始</button><button type="button" className="button button-primary" onClick={run}><Play size={20} weight="fill" />执行战斗指令</button></div>
   </section>
 }

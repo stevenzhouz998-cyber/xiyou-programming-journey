@@ -2,9 +2,11 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StrictMode, type ComponentType } from 'react'
 import type { RuyiStaffBattleEvent, RuyiStaffInstruction } from '../battle/types'
+import { runRuyiStaffBattle } from '../battle/ruyiStaff'
 import type { RuyiCompileResult } from '../blockly/ruyiStaffCompiler'
 import { ProgressProvider, useProgress } from '../context/ProgressContext'
 import { createInitialProgress, serializeProgress } from '../progress/progress'
+import { createMissionSession, recordRun } from '../progress/session'
 import { CURRENT_PROGRESS_KEY } from '../progress/storage'
 import type { CoordinatedSaveResult } from '../progress/storageCoordinator'
 import { RuyiStaffExperience } from './RuyiStaffExperience'
@@ -21,6 +23,10 @@ function HintButtons() {
   const { recordMissionHint } = useProgress()
   return <><button onClick={() => recordMissionHint('w1-m2', 'observe')}>观察</button><button onClick={() => recordMissionHint('w1-m2', 'think')}>思路</button></>
 }
+function ExternalReloadButton() {
+  const { reloadExternalProgress } = useProgress()
+  return <button type="button" onClick={reloadExternalProgress}>载入测试外部会话</button>
+}
 function renderExperience(onComplete = vi.fn()) {
   render(<ProgressProvider><RuyiStaffExperience reducedMotion={false} muted={false} onComplete={onComplete} /><HintButtons /></ProgressProvider>)
   return onComplete
@@ -34,8 +40,8 @@ const successfulTrace: RuyiStaffInstruction[] = [
   { instructionId: 'instruction:shrink', sourceBlockId: 'shrink', opcode: 'shrink_ruyi_staff' },
 ]
 const successfulCompile: RuyiCompileResult = { ok: true, trace: successfulTrace }
-function ControlledScene({ replayToken, onPlaybackComplete }: { replayToken: number; onPlaybackComplete?: () => void }) {
-  return <section aria-label="受控定海神针场景" data-replay-token={replayToken}><button type="button" onClick={onPlaybackComplete}>完成受控播放</button></section>
+function ControlledScene({ events, replayToken, onPlaybackComplete }: { events: RuyiStaffBattleEvent[]; replayToken: number; onPlaybackComplete?: () => void }) {
+  return <section aria-label="受控定海神针场景" data-replay-token={replayToken}><output data-testid="controlled-events">{JSON.stringify(events)}</output><button type="button" onClick={onPlaybackComplete}>完成受控播放</button></section>
 }
 function ControlledWorkspace({ onRun }: { onRun: (result: RuyiCompileResult) => void }) {
   return <button type="button" onClick={() => onRun(successfulCompile)}>运行受控成功程序</button>
@@ -245,6 +251,78 @@ describe('RuyiStaffExperience', () => {
     act(() => callbacks.get(token())?.())
     expect(onComplete).not.toHaveBeenCalled()
     expect(stored().sessions['w1-m2'].totalRuns).toBe(1)
+  })
+
+  it.each([
+    {
+      name: 'empty',
+      trace: [] as RuyiStaffInstruction[],
+      expectedEvent: '[]',
+      expectedFeedback: null,
+      hasReplay: false,
+    },
+    {
+      name: 'error',
+      trace: [
+        { instructionId: 'instruction:external-inspect', sourceBlockId: 'external-inspect', opcode: 'inspect_weights' },
+        { instructionId: 'instruction:external-halberd', sourceBlockId: 'external-halberd', opcode: 'choose_halberd' },
+      ] as RuyiStaffInstruction[],
+      expectedEvent: 'external-halberd',
+      expectedFeedback: '7200斤比13500斤轻，方天画戟不是最重的兵器。',
+      hasReplay: true,
+    },
+    {
+      name: 'different trace',
+      trace: [
+        { instructionId: 'instruction:external-inspect', sourceBlockId: 'external-inspect', opcode: 'inspect_weights' },
+        { instructionId: 'instruction:external-staff', sourceBlockId: 'external-staff', opcode: 'choose_ruyi_staff' },
+        { instructionId: 'instruction:external-shrink', sourceBlockId: 'external-shrink', opcode: 'shrink_ruyi_staff' },
+      ] as RuyiStaffInstruction[],
+      expectedEvent: 'external-shrink',
+      expectedFeedback: null,
+      hasReplay: true,
+    },
+  ])('atomically restores $name playback and feedback after an external session reload', async ({ trace, expectedEvent, expectedFeedback, hasReplay }) => {
+    const initial = createInitialProgress(); initial.privacy.localDataNoticeSeen = true
+    initial.sessions['w1-m2'] = recordRun(createMissionSession('w1-m2', '2026-07-16T00:00:00.000Z'), runRuyiStaffBattle(successfulTrace), successfulTrace, '2026-07-16T00:00:00.000Z')
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(initial))
+    render(<ProgressProvider><RuyiStaffExperience reducedMotion muted onComplete={() => undefined} /><ExternalReloadButton /></ProgressProvider>)
+    await screen.findByLabelText('测试定海神针场景')
+    expect(screen.getByTestId('ruyi-events')).toHaveTextContent('instruction:shrink')
+
+    const external = createInitialProgress(); external.privacy.localDataNoticeSeen = true
+    external.sessions['w1-m2'] = trace.length === 0
+      ? createMissionSession('w1-m2', '2026-07-16T01:00:00.000Z')
+      : recordRun(createMissionSession('w1-m2', '2026-07-16T01:00:00.000Z'), runRuyiStaffBattle(trace), trace, '2026-07-16T01:00:00.000Z')
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(external))
+    fireEvent.click(screen.getByRole('button', { name: '载入测试外部会话' }))
+
+    await waitFor(() => expect(screen.getByTestId('ruyi-events').textContent).toContain(expectedEvent))
+    expect(screen.getByRole('button', { name: '重播最近一次' })).toHaveProperty('disabled', !hasReplay)
+    if (expectedFeedback === null) {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    } else {
+      expect(screen.getByText(expectedFeedback)).toBeVisible()
+    }
+  })
+
+  it('does not let an external reload interrupt a current local run while its save is pending', async () => {
+    const pending = deferred<CoordinatedSaveResult>()
+    const save = vi.fn<SaveCoordinator>(() => pending.promise)
+    render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('../progress/storageCoordinator'))}>
+      <RuyiStaffExperience reducedMotion muted onComplete={() => undefined} loaders={controlledLoaders} />
+      <ExternalReloadButton />
+    </ProgressProvider>)
+    fireEvent.click(await screen.findByRole('button', { name: '运行受控成功程序' }))
+    const currentToken = screen.getByLabelText('受控定海神针场景').getAttribute('data-replay-token')
+    expect(screen.getByTestId('controlled-events')).toHaveTextContent('instruction:shrink')
+
+    const external = createInitialProgress(); external.privacy.localDataNoticeSeen = true
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(external))
+    fireEvent.click(screen.getByRole('button', { name: '载入测试外部会话' }))
+
+    expect(screen.getByLabelText('受控定海神针场景')).toHaveAttribute('data-replay-token', currentToken)
+    expect(screen.getByTestId('controlled-events')).toHaveTextContent('instruction:shrink')
   })
 
   it('isolates a rejected scene lazy chunk, keeps story and workspace visible, and reloads explicitly', async () => {

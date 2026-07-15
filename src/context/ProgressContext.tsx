@@ -103,6 +103,7 @@ export function ProgressProvider({
   const revisionRef = useRef(initialLoad.revision);
   const conflictRef = useRef(false);
   const pendingRepairRef = useRef(initialLoad.repair);
+  const pendingUnpublishedRef = useRef<ProgressV3 | null>(null);
   const queueRef = useRef<Promise<unknown>>(Promise.resolve());
   const [loadState, setLoadState] = useState<LoadState>(() => loadStateFrom(initialLoad));
   const setLoadPersistence = (persistence: LoadState['persistence']) => {
@@ -166,6 +167,7 @@ export function ProgressProvider({
     retryable = true,
   ) => {
     if (result.status === 'saved') {
+      if (pendingUnpublishedRef.current === draft) pendingUnpublishedRef.current = null;
       if (!publishDraft || progressRef.current === draft) publishSaved(result.progress, result.revision);
       else {
         // A newer child edit is already visible. The older durable save may
@@ -194,7 +196,9 @@ export function ProgressProvider({
     publishDraft = true,
     options: ProgressWriteOptions = {},
     retryable = true,
+    retainUnpublished = false,
   ): Promise<CoordinatedSaveResult> => {
+    if (retainUnpublished) pendingUnpublishedRef.current = next;
     const blocked = currentConflict(next);
     if (blocked) return Promise.resolve(blocked);
     if (publishDraft) {
@@ -279,6 +283,7 @@ export function ProgressProvider({
       return null;
     }
     progressRef.current = loaded.progress;
+    pendingUnpublishedRef.current = null;
     setProgress(loaded.progress);
     revisionRef.current = loaded.revision;
     setRevision(loaded.revision);
@@ -335,7 +340,7 @@ export function ProgressProvider({
     saveStatus,
     saveError,
     saveRetryable,
-    complete: (missionId, input) => commit(completeMission(progressRef.current, missionId, input)),
+    complete: (missionId, input) => commit(completeMission(progressRef.current, missionId, input), false, {}, true, true),
     updateMissionSession,
     recordMissionHint: (missionId, tier) => {
       const now = new Date().toISOString();
@@ -393,8 +398,14 @@ export function ProgressProvider({
         const draft = progressRef.current;
         return markResult(await saveCoordinated(draft, revisionRef.current), draft, true);
       });
-      const draft = progressRef.current;
-      return enqueue(async () => markResult(await saveCoordinated(draft, revisionRef.current), draft, true));
+      const draft = pendingUnpublishedRef.current ?? progressRef.current;
+      const publishDraft = pendingUnpublishedRef.current === null;
+      return enqueue(async () => markResult(
+        await saveCoordinated(draft, revisionRef.current),
+        draft,
+        publishDraft,
+        true,
+      ));
     },
     importProgressFile: (raw) => {
       if (conflictRef.current) return Promise.resolve(currentConflict() as CoordinatedImportResult);
@@ -430,7 +441,7 @@ export function ProgressProvider({
         return result;
       }, 'unchanged', false);
     },
-    createBackup: () => createProgressBackup(progressRef.current),
+    createBackup: () => createProgressBackup(pendingUnpublishedRef.current ?? progressRef.current),
     reloadExternalProgress,
   }), [
     loadState,

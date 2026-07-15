@@ -138,9 +138,9 @@ function MissionPageContent({ reducedMotion, id }: { reducedMotion: boolean; id:
   const isCurrentRequest = (request: CompletionSave) => mountedRef.current
     && requestGenerationRef.current === request.requestId
     && completionSaveRef.current === request;
-  const revealSuccess = (request: CompletionSave) => {
+  const revealSuccess = (request: CompletionSave, persistedStars: number) => {
     if (!isCurrentRequest(request) || successRef.current) return false;
-    completionSaveRef.current = null; setCompletionSave(null); successRef.current = true; setStars(request.stars); setSuccess(true);
+    completionSaveRef.current = null; setCompletionSave(null); successRef.current = true; setStars(persistedStars); setSuccess(true);
     setCompletionPersistenceActive(false);
     playAudio(assetUrl(mission.isBoss ? '/assets/audio/boss.m4a' : '/assets/audio/success.m4a'), progress.settings.muted);
     return true;
@@ -152,7 +152,7 @@ function MissionPageContent({ reducedMotion, id }: { reducedMotion: boolean; id:
     completionSaveRef.current = request; setCompletionSave(request);
     const result = await complete(mission.id, { stars: earnedStars, hintsUsed: completionHints });
     if (!isCurrentRequest(request)) return false;
-    if (result.status === 'saved' && result.progress.missions[mission.id]?.status === 'completed') return revealSuccess(request);
+    if (result.status === 'saved' && result.progress.missions[mission.id]?.status === 'completed') return revealSuccess(request, result.progress.missions[mission.id].stars);
     const failed: CompletionSave = { ...request, status: result.status === 'saved' ? 'unsaved' : result.status };
     completionSaveRef.current = failed; setCompletionSave(failed);
     return false;
@@ -164,7 +164,7 @@ function MissionPageContent({ reducedMotion, id }: { reducedMotion: boolean; id:
     completionSaveRef.current = request; setCompletionSave(request);
     const result = await retrySave();
     if (!isCurrentRequest(request)) return;
-    if (result.status === 'saved' && result.progress.missions[mission.id]?.status === 'completed') { revealSuccess(request); return; }
+    if (result.status === 'saved' && result.progress.missions[mission.id]?.status === 'completed') { revealSuccess(request, result.progress.missions[mission.id].stars); return; }
     const next: CompletionSave = { ...request, status: result.status === 'saved' ? 'unsaved' : result.status };
     completionSaveRef.current = next; setCompletionSave(next);
   };
@@ -177,7 +177,7 @@ function MissionPageContent({ reducedMotion, id }: { reducedMotion: boolean; id:
     if (!request || request.status !== 'conflict') return;
     const loaded = reloadExternalProgress();
     if (loaded === null) return;
-    if (loaded.missions[mission.id]?.status === 'completed') { revealSuccess(request); return; }
+    if (loaded.missions[mission.id]?.status === 'completed') { revealSuccess(request, loaded.missions[mission.id].stars); return; }
     completionSaveRef.current = null;
     setCompletionSave(null);
     setCompletionPersistenceActive(false);
