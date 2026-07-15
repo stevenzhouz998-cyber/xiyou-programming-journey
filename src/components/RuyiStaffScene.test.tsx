@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { runRuyiStaffBattle } from '../battle/ruyiStaff'
 import type { RuyiStaffInstruction, RuyiStaffOpcode } from '../battle/types'
@@ -65,7 +65,16 @@ it('loads exactly the five approved Dragon Palace rasters and exposes exact weig
     ['weapons', '/assets/dragon-palace/weapons.webp'],
     ['effects', '/assets/dragon-palace/effects.webp'],
   ])
-  expect(screen.getByRole('list', { name: '\u4e09\u4ef6\u5175\u5668\u91cd\u91cf' })).toHaveTextContent('\u5927\u634d\u5200 3600\u65a4\u65b9\u5929\u753b\u621f 7200\u65a4\u5b9a\u6d77\u795e\u9488 13500\u65a4')
+  const weights = screen.getByLabelText('\u4e09\u4ef6\u5175\u5668\u91cd\u91cf')
+  expect(weights.tagName).toBe('DL')
+  expect([...weights.children].map((group) => [
+    within(group as HTMLElement).getByRole('term').textContent,
+    within(group as HTMLElement).getByRole('definition').textContent,
+  ])).toEqual([
+    ['\u5927\u634d\u5200', '3600\u65a4'],
+    ['\u65b9\u5929\u753b\u621f', '7200\u65a4'],
+    ['\u5b9a\u6d77\u795e\u9488', '13500\u65a4'],
+  ])
 })
 
 it('shows the selected wrong weapon and blocked effect from real events', () => {

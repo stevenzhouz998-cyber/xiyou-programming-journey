@@ -125,7 +125,10 @@ h1, h2, .brand strong { font-family: 'Songti SC', 'STSong', serif; }
 .ruyi-staff-scene-region { grid-column: 1; min-width: 0; border-right: 1px solid var(--line); }
 .ruyi-staff-program-region { grid-column: 2; min-width: 0; }
 .ruyi-staff-feedback-region { grid-column: 1 / -1; min-width: 0; padding: 0 22px 18px; }
-.ruyi-weight-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 9px 12px; list-style: none; color: var(--ink-muted); background: var(--paper-light); border-top: 1px solid var(--line); font-size: 13px; text-align: center; }
+.ruyi-weight-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 9px 12px; color: var(--ink-muted); background: var(--paper-light); border-top: 1px solid var(--line); font-size: 13px; text-align: center; }
+.ruyi-weight-list > div { min-width: 0; }
+.ruyi-weight-list dt { font-weight: 700; }
+.ruyi-weight-list dd { margin: 2px 0 0; }
 .battle-transcript { min-height: 48px; margin: 0; padding: 10px 14px; color: var(--ink-muted); background: var(--paper-light); border-top: 1px solid var(--line); line-height: 1.55; }
 .block-program-list { display: grid !important; gap: 8px !important; margin: 8px 0 0 !important; padding: 0 !important; list-style: none; }
 .block-program-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px; border: 1px solid rgba(47,115,91,.2); border-radius: 8px; background: rgba(255,255,255,.42); }
@@ -153,6 +156,8 @@ h1, h2, .brand strong { font-family: 'Songti SC', 'STSong', serif; }
 .button-primary { color: white; background: var(--cinnabar); border: 1px solid var(--cinnabar-deep); box-shadow: 0 4px 0 var(--cinnabar-deep); }
 .button-ghost { color: var(--jade-deep); background: rgba(255,255,255,.48); border: 1px solid rgba(47,115,91,.35); }
 .feedback-message { margin: 0 24px 24px; padding: 13px 16px; border-left: 4px solid var(--gold); background: #f6e7c6; color: #5d492c; }
+.completion-save-status { margin: 14px 22px 18px; padding: 13px 15px; border-left: 4px solid var(--gold); border-radius: 10px; background: #fff0d8; color: #5d3c16; }
+.completion-save-status p { margin: 0 0 10px; }
 
 .python-workspace .eyebrow { display: block; margin-bottom: 10px; }
 .code-editor { min-height: 230px; background: #1f2824; color: #f4ead6; border-radius: 12px; overflow: hidden; border: 1px solid #101713; }

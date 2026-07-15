@@ -129,7 +129,7 @@ export function RuyiStaffScene({ events, replayToken, reducedMotion, muted, onPl
 
   return <div className="game-scene-frame ruyi-staff-scene-frame">
     <div id={id} className="game-scene" style={{ backgroundImage: 'none', backgroundColor: '#e8e0cf' }} role="img" aria-label="龙宫定海神针代码执行场景" data-motion-mode={reducedMotion ? 'reduced' : 'standard'} data-scene-state={loadError ? undefined : state} data-selected-weapon={loadError ? undefined : selected} data-effect-cell={loadError ? undefined : effect} />
-    <ul className="ruyi-weight-list" aria-label="三件兵器重量"><li>大捍刀 3600斤</li><li>方天画戟 7200斤</li><li>定海神针 13500斤</li></ul>
+    <dl className="ruyi-weight-list" aria-label="三件兵器重量"><div><dt>大捍刀</dt><dd>3600斤</dd></div><div><dt>方天画戟</dt><dd>7200斤</dd></div><div><dt>定海神针</dt><dd>13500斤</dd></div></dl>
     {loadError ? <div className="game-scene-error" role="alert"><p>{loadError}</p><button type="button" onClick={retry}>重新加载龙宫场景</button></div> : null}
     <p className="battle-transcript" role="status" aria-live="polite" aria-atomic="true">{messages.join(' ')}</p>
   </div>

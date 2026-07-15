@@ -98,36 +98,43 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
   const hostRef = useRef<HTMLDivElement>(null); const workspaceRef = useRef<Blockly.Workspace | null>(null)
   const itemRefs = useRef(new Map<string, HTMLLIElement>()); const onDraftRef = useRef(onDraftChange); const handledRef = useRef(onFocusHandled)
   const lastDraftRef = useRef<string | null>(null); const lastPropRef = useRef<string | null>(null)
+  const mountedRef = useRef(false); const saveRequestRef = useRef<{ generation: number; bytes: string | null; status: 'idle' | 'pending' | 'saved' | 'unsaved' | 'conflict' }>({ generation: 0, bytes: null, status: 'idle' })
   const [ready, setReady] = useState(false); const [result, setResult] = useState<RuyiCompileResult>({ ok: false, trace: [], diagnostics: [{ code: 'empty-workspace', sourceBlockId: null, concept: 'program-structure' }] })
-  const [blocks, setBlocks] = useState<Array<{ id: string; label: string }>>([]); const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'unsaved'>('idle')
+  const [blocks, setBlocks] = useState<Array<{ id: string; label: string }>>([])
   const [workspaceError, setWorkspaceError] = useState<string | null>(null)
   onDraftRef.current = onDraftChange; handledRef.current = onFocusHandled
 
-  const refresh = (persist: boolean, force = false) => {
+  const refresh = (persist: boolean) => {
     const workspace = workspaceRef.current; if (!workspace) return
     const compiled = compileRuyiStaffWorkspace(workspace); setResult(compiled)
     setBlocks(orderedBlocks(workspace).map((block) => ({ id: block.id, label: LABEL_BY_TYPE[block.type as RuyiBlockType] ?? '无法识别的积木' })))
     if (!persist) return
     let next: RuyiWorkspaceDraftV1
     try { next = saveRuyiWorkspaceDraft(workspace) } catch { setWorkspaceError('当前积木结构无法安全保存，原草稿保持不变。'); return }
-    const bytes = JSON.stringify(next); if (!force && bytes === lastDraftRef.current) return
+    const bytes = JSON.stringify(next); if (bytes === lastDraftRef.current) return
     lastDraftRef.current = bytes
+    const generation = saveRequestRef.current.generation + 1
+    saveRequestRef.current = { generation, bytes, status: 'pending' }
+    const settle = (status: 'saved' | 'unsaved' | 'conflict') => {
+      if (!mountedRef.current || saveRequestRef.current.generation !== generation || saveRequestRef.current.bytes !== bytes) return
+      saveRequestRef.current = { generation, bytes, status }
+    }
     try {
       const pending = onDraftRef.current(next)
-      const done = (value: { status: 'saved' | 'unsaved' | 'conflict' }) => setSaveStatus(value.status === 'saved' ? 'saved' : 'unsaved')
-      if (pending instanceof Promise) void pending.then(done, () => setSaveStatus('unsaved')); else done(pending)
+      void Promise.resolve(pending).then((value) => settle(value.status), () => settle('unsaved'))
       setWorkspaceError(null)
-    } catch { setSaveStatus('unsaved') }
+    } catch { settle('unsaved') }
   }
 
   useEffect(() => {
     const host = hostRef.current; if (!host) return
+    mountedRef.current = true
     registerRuyiStaffBlocks(); const workspace = adapter.create(host); workspaceRef.current = workspace
     withoutEvents(() => loadRuyiWorkspaceDraft(workspace, draft)); lastDraftRef.current = JSON.stringify(draft); lastPropRef.current = JSON.stringify(draft)
     refresh(false)
     const listener = (event: Blockly.Events.Abstract) => { if (!event.isUiEvent) refresh(true) }
     workspace.addChangeListener(listener); setReady(true)
-    return () => { setReady(false); workspace.removeChangeListener(listener); workspace.dispose(); if (workspaceRef.current === workspace) workspaceRef.current = null; itemRefs.current.clear() }
+    return () => { mountedRef.current = false; saveRequestRef.current.generation += 1; setReady(false); workspace.removeChangeListener(listener); workspace.dispose(); if (workspaceRef.current === workspace) workspaceRef.current = null; itemRefs.current.clear() }
   }, [adapter])
 
   useEffect(() => {
@@ -167,7 +174,6 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
         <button type="button" aria-label={`\u5220\u9664\uff1a${block.label}`} onClick={() => mutate((workspace) => { const chain = orderedBlocks(workspace); const target = workspace.getBlockById(block.id); rebuild(workspace, chain.filter((item) => item.id !== block.id)); target?.dispose(false) })}>删除</button>
       </span></li>)}</ol> : null}
     </div>
-    {saveStatus === 'unsaved' ? <div className="unsaved-session" role="status"><p>尚未保存，请稍后重试。</p><button type="button" onClick={() => refresh(true, true)}>重试保存</button></div> : null}
     {workspaceError ? <p role="alert">{workspaceError}</p> : null}
     <div className="workspace-actions"><button type="button" className="button button-ghost" onClick={() => mutate((workspace) => workspace.clear())}><ArrowsCounterClockwise size={20} />清空并重新开始</button><button type="button" className="button button-primary" onClick={run}><Play size={20} weight="fill" />执行战斗指令</button></div>
   </section>

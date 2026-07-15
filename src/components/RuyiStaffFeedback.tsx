@@ -45,8 +45,9 @@ export function RuyiStaffFeedback({ diagnostic, occurrenceId, onFocusBlock, onFo
   const ref = useRef<HTMLElement>(null); const visible = diagnostic !== null
   useEffect(() => { if (visible) ref.current?.focus() }, [visible, occurrenceId])
   if (!diagnostic) return null
+  const sourceBlockId = diagnostic.sourceBlockId
   return <section ref={ref} className="battle-feedback" role="alert" tabIndex={-1}>
     <p>{copy(diagnostic)}</p>
-    {diagnostic.sourceBlockId !== null ? <button type="button" onClick={() => onFocusBlock(diagnostic.sourceBlockId!)}>回到问题积木</button> : <button type="button" onClick={onFocusWorkspace}>回到编程工作台</button>}
+    {sourceBlockId !== null ? <button type="button" onClick={() => onFocusBlock(sourceBlockId)}>回到问题积木</button> : <button type="button" onClick={onFocusWorkspace}>回到编程工作台</button>}
   </section>
 }

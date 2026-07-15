@@ -9,11 +9,13 @@ import {
 } from './RuyiStaffBlocklyWorkspace'
 
 const EMPTY: RuyiWorkspaceDraftV1 = { version: 1, blocks: [] }
+type DraftSaveResult = { status: 'saved' | 'unsaved' | 'conflict' }
+type DraftSaver = (draft: RuyiWorkspaceDraftV1) => DraftSaveResult | Promise<DraftSaveResult>
 
-function setup(draft = EMPTY, onDraftChange = vi.fn(() => ({ status: 'saved' as const }))) {
+function setup(draft = EMPTY, onDraftChange: DraftSaver = vi.fn(() => ({ status: 'saved' as const }))) {
   const workspace = new Blockly.Workspace()
   const onRun = vi.fn<(result: RuyiCompileResult) => void>()
-  render(
+  const view = render(
     <RuyiStaffBlocklyWorkspaceAdapterProvider adapter={{ create: () => workspace }}>
       <RuyiStaffBlocklyWorkspace
         draft={draft}
@@ -24,7 +26,7 @@ function setup(draft = EMPTY, onDraftChange = vi.fn(() => ({ status: 'saved' as 
       />
     </RuyiStaffBlocklyWorkspaceAdapterProvider>,
   )
-  return { workspace, onRun, onDraftChange }
+  return { workspace, onRun, onDraftChange, view }
 }
 
 describe('RuyiStaffBlocklyWorkspace', () => {
@@ -92,18 +94,34 @@ describe('RuyiStaffBlocklyWorkspace', () => {
     expect(focused).toHaveBeenCalledOnce()
   })
 
-  it('keeps a visible edit after a failed save and retries the identical draft', async () => {
+  it('keeps one global save authority when two draft saves settle newest-first', async () => {
+    let resolveFirst!: (value: { status: 'unsaved' }) => void
+    let resolveSecond!: (value: { status: 'saved' }) => void
+    const first = new Promise<{ status: 'unsaved' }>((resolve) => { resolveFirst = resolve })
+    const second = new Promise<{ status: 'saved' }>((resolve) => { resolveSecond = resolve })
     const onDraftChange = vi.fn()
-      .mockReturnValueOnce({ status: 'unsaved' as const })
-      .mockReturnValueOnce({ status: 'saved' as const })
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(second)
     const { workspace } = setup(EMPTY, onDraftChange)
     fireEvent.click(screen.getByRole('button', { name: '\u52a0\u5165\uff1a\u67e5\u770b\u4e09\u4ef6\u5175\u5668\u91cd\u91cf' }))
-    expect(screen.getByText(/\u5c1a\u672a\u4fdd\u5b58/)).toBeVisible()
-    expect(workspace.getAllBlocks(false)).toHaveLength(1)
-    const failedDraft = onDraftChange.mock.calls[0][0]
-    fireEvent.click(screen.getByRole('button', { name: '\u91cd\u8bd5\u4fdd\u5b58' }))
-    await waitFor(() => expect(onDraftChange).toHaveBeenCalledTimes(2))
-    expect(onDraftChange.mock.calls[1][0]).toEqual(failedDraft)
+    fireEvent.click(screen.getByRole('button', { name: '\u52a0\u5165\uff1a\u9009\u62e9\u5b9a\u6d77\u795e\u9488\uff0813500\u65a4\uff09' }))
+    expect(onDraftChange).toHaveBeenCalledTimes(2)
+    await act(async () => resolveSecond({ status: 'saved' }))
+    await act(async () => resolveFirst({ status: 'unsaved' }))
+    expect(workspace.getAllBlocks(false)).toHaveLength(2)
+    expect(screen.queryByText(/\u5c1a\u672a\u4fdd\u5b58/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '\u91cd\u8bd5\u4fdd\u5b58' })).not.toBeInTheDocument()
+  })
+
+  it('ignores a pending draft result after the workspace unmounts', async () => {
+    let resolveSave!: (value: { status: 'unsaved' }) => void
+    const pending = new Promise<{ status: 'unsaved' }>((resolve) => { resolveSave = resolve })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const { view } = setup(EMPTY, () => pending)
+    fireEvent.click(screen.getByRole('button', { name: '\u52a0\u5165\uff1a\u67e5\u770b\u4e09\u4ef6\u5175\u5668\u91cd\u91cf' }))
+    view.unmount()
+    await act(async () => resolveSave({ status: 'unsaved' }))
+    expect(consoleError).not.toHaveBeenCalledWith(expect.stringMatching(/unmounted|state update/i))
   })
 
   it('shows and focuses a real disconnected block diagnostic', () => {

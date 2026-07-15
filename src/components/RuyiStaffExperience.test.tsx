@@ -1,10 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ComponentType } from 'react'
-import type { RuyiStaffBattleEvent } from '../battle/types'
+import { StrictMode, type ComponentType } from 'react'
+import type { RuyiStaffBattleEvent, RuyiStaffInstruction } from '../battle/types'
+import type { RuyiCompileResult } from '../blockly/ruyiStaffCompiler'
 import { ProgressProvider, useProgress } from '../context/ProgressContext'
 import { createInitialProgress, serializeProgress } from '../progress/progress'
 import { CURRENT_PROGRESS_KEY } from '../progress/storage'
+import type { CoordinatedSaveResult } from '../progress/storageCoordinator'
 import { RuyiStaffExperience } from './RuyiStaffExperience'
 
 const callbacks = vi.hoisted(() => new Map<number, () => void>())
@@ -25,6 +27,35 @@ function renderExperience(onComplete = vi.fn()) {
 }
 function stored() { return JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY) ?? '{}') }
 function token() { return Number(screen.getByLabelText('\u6d4b\u8bd5\u5b9a\u6d77\u795e\u9488\u573a\u666f').getAttribute('data-replay-token')) }
+
+const successfulTrace: RuyiStaffInstruction[] = [
+  { instructionId: 'instruction:inspect', sourceBlockId: 'inspect', opcode: 'inspect_weights' },
+  { instructionId: 'instruction:staff', sourceBlockId: 'staff', opcode: 'choose_ruyi_staff' },
+  { instructionId: 'instruction:shrink', sourceBlockId: 'shrink', opcode: 'shrink_ruyi_staff' },
+]
+const successfulCompile: RuyiCompileResult = { ok: true, trace: successfulTrace }
+function ControlledScene({ replayToken, onPlaybackComplete }: { replayToken: number; onPlaybackComplete?: () => void }) {
+  return <section aria-label="受控定海神针场景" data-replay-token={replayToken}><button type="button" onClick={onPlaybackComplete}>完成受控播放</button></section>
+}
+function ControlledWorkspace({ onRun }: { onRun: (result: RuyiCompileResult) => void }) {
+  return <button type="button" onClick={() => onRun(successfulCompile)}>运行受控成功程序</button>
+}
+const controlledLoaders: TestLoaders = {
+  scene: () => Promise.resolve({ default: ControlledScene }),
+  workspace: () => Promise.resolve({ default: ControlledWorkspace }),
+}
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => { resolve = done })
+  return { promise, resolve }
+}
+type SaveCoordinator = typeof import('../progress/storageCoordinator').saveProgressCoordinated
+function renderControlledExperience(saveProgressCoordinated: SaveCoordinator, onComplete = vi.fn()) {
+  render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated } as unknown as typeof import('../progress/storageCoordinator'))}>
+    <RuyiStaffExperience reducedMotion muted onComplete={onComplete} loaders={controlledLoaders} />
+  </ProgressProvider>)
+  return onComplete
+}
 
 type TestLoaders = {
   scene: () => Promise<{ default: ComponentType<any> }>
@@ -80,7 +111,7 @@ describe('RuyiStaffExperience', () => {
     expect(successRequest).toBeGreaterThan(wrongRequest)
     expect(onComplete).not.toHaveBeenCalled()
     act(() => callbacks.get(successRequest)?.())
-    expect(onComplete).toHaveBeenCalledOnce()
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce())
     await waitFor(() => expect(stored().sessions['w1-m2']).toMatchObject({ totalRuns: 2, runtimeFailures: 1, lastRun: { completed: true } }))
   })
 
@@ -95,8 +126,80 @@ describe('RuyiStaffExperience', () => {
     const request = token()
     expect(onComplete).not.toHaveBeenCalled()
     act(() => { callbacks.get(request)?.(); callbacks.get(request)?.() })
-    expect(onComplete).toHaveBeenCalledOnce()
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce())
     expect(onComplete).toHaveBeenCalledWith({ stars: 2, hintsUsed: 1 })
+  })
+
+  it('waits for the matching run session write before requesting final completion', async () => {
+    const pending = deferred<CoordinatedSaveResult>()
+    const save = vi.fn<SaveCoordinator>(() => pending.promise)
+    const onComplete = renderControlledExperience(save)
+    fireEvent.click(await screen.findByRole('button', { name: '运行受控成功程序' }))
+    fireEvent.click(screen.getByRole('button', { name: '完成受控播放' }))
+    expect(onComplete).not.toHaveBeenCalled()
+    await waitFor(() => expect(save).toHaveBeenCalledOnce())
+    const savedProgress = save.mock.calls[0][0]
+    await act(async () => pending.resolve({ status: 'saved', revision: 1, progress: savedProgress }))
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce())
+  })
+
+  it('releases a durably saved current run under the production StrictMode effect cycle', async () => {
+    const save = vi.fn<SaveCoordinator>(async (progress) => ({ status: 'saved', revision: 1, progress }))
+    const onComplete = vi.fn()
+    render(<StrictMode><ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('../progress/storageCoordinator'))}>
+      <RuyiStaffExperience reducedMotion muted onComplete={onComplete} loaders={controlledLoaders} />
+    </ProgressProvider></StrictMode>)
+    fireEvent.click(await screen.findByRole('button', { name: '运行受控成功程序' }))
+    fireEvent.click(screen.getByRole('button', { name: '完成受控播放' }))
+    await waitFor(() => expect(save).toHaveBeenCalledOnce())
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce())
+  })
+
+  it.each(['unsaved', 'conflict'] as const)('does not request final completion when the run session is %s', async (status) => {
+    const save = vi.fn<SaveCoordinator>(async (progress, expectedRevision) => status === 'unsaved'
+      ? { status, progress, error: 'session disk failure' }
+      : { status, progress, expectedRevision, actualRevision: expectedRevision + 1, error: 'session conflict' })
+    const onComplete = renderControlledExperience(save)
+    fireEvent.click(await screen.findByRole('button', { name: '运行受控成功程序' }))
+    fireEvent.click(screen.getByRole('button', { name: '完成受控播放' }))
+    await waitFor(() => expect(save).toHaveBeenCalledOnce())
+    await act(async () => undefined)
+    expect(onComplete).not.toHaveBeenCalled()
+  })
+
+  it('requests final completion only after retry durably stores the same run session', async () => {
+    const save = vi.fn<SaveCoordinator>()
+      .mockImplementationOnce(async (progress) => ({ status: 'unsaved', progress, error: 'session disk failure' }))
+      .mockImplementationOnce(async (progress) => ({ status: 'saved', revision: 1, progress }))
+    const onComplete = renderControlledExperience(save)
+    fireEvent.click(await screen.findByRole('button', { name: '运行受控成功程序' }))
+    fireEvent.click(screen.getByRole('button', { name: '完成受控播放' }))
+    expect(await screen.findByText('本关尚未保存，请重试。')).toBeVisible()
+    expect(onComplete).not.toHaveBeenCalled()
+    expect(screen.getAllByText('本关尚未保存，请重试。')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: '重试保存本关' }))
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce())
+    expect(screen.queryByText('本关尚未保存，请重试。')).not.toBeInTheDocument()
+  })
+
+  it('never lets an older saved run release completion for the current request', async () => {
+    const first = deferred<CoordinatedSaveResult>()
+    const second = deferred<CoordinatedSaveResult>()
+    const save = vi.fn<SaveCoordinator>()
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise)
+    const onComplete = renderControlledExperience(save)
+    const runButton = await screen.findByRole('button', { name: '运行受控成功程序' })
+    fireEvent.click(runButton)
+    fireEvent.click(screen.getByRole('button', { name: '完成受控播放' }))
+    fireEvent.click(runButton)
+    fireEvent.click(screen.getByRole('button', { name: '完成受控播放' }))
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    await act(async () => first.resolve({ status: 'saved', revision: 1, progress: save.mock.calls[0][0] }))
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2))
+    expect(onComplete).not.toHaveBeenCalled()
+    await act(async () => second.resolve({ status: 'saved', revision: 2, progress: save.mock.calls[1][0] }))
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce())
   })
 
   it('restores and replays a saved success without completion or a new attempt', async () => {

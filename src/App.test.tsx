@@ -120,7 +120,7 @@ describe('西游编程记', () => {
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
     expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }));
-    expect(screen.getByRole('heading', { name: '闯关成功' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '闯关成功' })).toBeInTheDocument();
   });
 
   it('records each stable hint tier once and bases stars on distinct tiers', async () => {
@@ -139,7 +139,7 @@ describe('西游编程记', () => {
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
     fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }));
 
-    expect(screen.getByLabelText('1颗星')).toBeVisible();
+    expect(await screen.findByLabelText('1颗星')).toBeVisible();
     await waitFor(() => expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
       missions: { 'w1-m1': { hintsUsed: 2, stars: 1 } },
       sessions: { 'w1-m1': { usedHintTiers: ['observe', 'think'] } },
@@ -178,7 +178,7 @@ describe('西游编程记', () => {
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
     expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '完成定海神针场景播放' }));
-    expect(screen.getByRole('heading', { name: '闯关成功' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: '闯关成功' })).toBeVisible();
     expect(audio).toHaveBeenCalledWith('/assets/audio/success.m4a');
   });
 
@@ -196,7 +196,7 @@ describe('西游编程记', () => {
     fireEvent.click(screen.getByRole('button', { name: '加入：缩小定海神针' }));
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
     fireEvent.click(screen.getByRole('button', { name: '完成定海神针场景播放' }));
-    expect(screen.getByRole('heading', { name: '闯关成功' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: '闯关成功' })).toBeVisible();
     expect(audio).not.toHaveBeenCalled();
   });
 
@@ -237,8 +237,8 @@ describe('西游编程记', () => {
     fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }));
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
     fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }));
-    const dialog = screen.getByRole('dialog', { name: '闯关成功' });
-    expect(screen.getByTestId('app-background')).toHaveAttribute('inert');
+    const dialog = await screen.findByRole('dialog', { name: '闯关成功' });
+    await waitFor(() => expect(screen.getByTestId('app-background')).toHaveAttribute('inert'));
     expect(screen.getByTestId('mission-background')).toHaveAttribute('inert');
     expect(dialog.closest('[inert]')).toBeNull();
     const next = screen.getByRole('button', { name: '继续下一关' });
@@ -262,7 +262,7 @@ describe('西游编程记', () => {
     fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }));
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
     fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }));
-    fireEvent.keyDown(screen.getByRole('dialog', { name: '闯关成功' }), { key: 'Escape' });
+    fireEvent.keyDown(await screen.findByRole('dialog', { name: '闯关成功' }), { key: 'Escape' });
     const homeHeading = screen.getByRole('heading', { name: '西游编程记' });
     await waitFor(() => expect(homeHeading).toHaveFocus());
   });
@@ -413,11 +413,13 @@ describe('西游编程记', () => {
     expect(await screen.findByRole('button', { name: '下载损坏原文' })).toBeInTheDocument();
   });
 
-  it('retries the real unsaved mission state until it is durably stored', async () => {
+  it('keeps w1-m1 in a clear completion-pending state until the final completion save succeeds', async () => {
     const saved = serializeProgress({
       ...withParentAccess(createInitialProgress()), privacy: { localDataNoticeSeen: true },
     });
     const storage = installDynamicStorage({ [CURRENT_PROGRESS_KEY]: saved }, true, '磁盘错误 A');
+    const audio = vi.fn(function MockAudio() { return { play: vi.fn() }; });
+    vi.stubGlobal('Audio', audio);
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
     fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }));
@@ -425,18 +427,40 @@ describe('西游编程记', () => {
     fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }));
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
     fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }));
-    expect(screen.getByRole('heading', { name: '闯关成功' })).toBeInTheDocument();
+    expect(await screen.findByText(/通关待保存/)).toBeVisible();
+    expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '继续下一关' })).not.toBeInTheDocument();
+    expect(audio).not.toHaveBeenCalledWith('/assets/audio/success.m4a');
     await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(1));
     expect(screen.getByRole('alert')).toHaveTextContent('磁盘错误 A');
-    storage.failMessage = '磁盘错误 B';
-    fireEvent.click(screen.getByRole('button', { name: '重试保存' }));
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('磁盘错误 B'));
     storage.failWrites = false;
-    fireEvent.click(screen.getByRole('button', { name: '重试保存' }));
-    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '重试保存通关' }));
+    expect(await screen.findByRole('heading', { name: '闯关成功' })).toBeVisible();
+    expect(audio).toHaveBeenCalledWith('/assets/audio/success.m4a');
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
       missions: { 'w1-m1': { status: 'completed' } },
     });
+  });
+
+  it('does not show or announce w1-m1 success when final completion hits a CAS conflict', async () => {
+    const progress = { ...withParentAccess(createInitialProgress()), privacy: { localDataNoticeSeen: true } };
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    localStorage.setItem(REVISION_PROGRESS_KEY, '0');
+    const audio = vi.fn(function MockAudio() { return { play: vi.fn() }; });
+    vi.stubGlobal('Audio', audio);
+    window.location.hash = '#/mission/w1-m1';
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：请求兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(REVISION_PROGRESS_KEY) ?? '0')).toBeGreaterThan(0));
+    localStorage.setItem(REVISION_PROGRESS_KEY, String(Number(localStorage.getItem(REVISION_PROGRESS_KEY)) + 1));
+    fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }));
+    expect(await screen.findByText(/通关待保存/)).toBeVisible();
+    expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '继续下一关' })).not.toBeInTheDocument();
+    expect(audio).not.toHaveBeenCalled();
   });
 
   it('persists the first-use privacy acknowledgement', async () => {
