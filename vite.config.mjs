@@ -1,8 +1,14 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
 
 export default defineConfig({
   base: "/xiyou-programming-journey/",
+  resolve: {
+    alias: [
+      { find: /^phaser$/, replacement: fileURLToPath(new URL("./node_modules/phaser/dist/phaser.esm.min.js", import.meta.url)) },
+    ],
+  },
   optimizeDeps: {
     include: ["react", "react-dom/client"],
   },

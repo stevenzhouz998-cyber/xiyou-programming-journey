@@ -1,4 +1,4 @@
-import type { Block, Workspace } from 'blockly'
+import type { Block, Workspace } from 'blockly/core'
 import type { BattleInstruction } from '../battle/types'
 import { DRAGON_BLOCK_OPCODE, isDragonBlockType } from './dragonPalaceBlocks'
 

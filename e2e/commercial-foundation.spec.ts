@@ -69,9 +69,9 @@ test.afterEach(() => {
   expect(healthEvents.filter(event => !allowHealth(event)), 'unexpected browser health events').toEqual([]);
 });
 
-const currentKey = 'xiyou-programming-progress-v2';
-const snapshotKey = 'xiyou-programming-progress-snapshot-v2';
-const corruptKey = 'xiyou-programming-progress-corrupt-v2';
+const currentKey = 'xiyou-programming-progress-v3';
+const snapshotKey = 'xiyou-programming-progress-snapshot-v3';
+const corruptKey = 'xiyou-programming-progress-corrupt-v3';
 
 const v1 = (completed = false) => ({
   version: 1, learnerName: '小行者',
@@ -82,6 +82,9 @@ const v2 = (completed = false, privacySeen = true) => ({
   ...v1(completed), version: 2, schemaRevision: 1,
   settings: { ...v1(completed).settings, reducedMotionOverride: false },
   privacy: { localDataNoticeSeen: privacySeen }, recovery: { lastRecoveredAt: null, source: null },
+});
+const v3 = (completed = false, privacySeen = true) => ({
+  ...v2(completed, privacySeen), version: 3, sessions: {},
 });
 
 async function acknowledge(page: Page) {
@@ -136,16 +139,18 @@ test('child failure, real Blockly success, persistence, export and strict import
   test.setTimeout(60_000);
   await acknowledge(page);
   await page.getByRole('button', { name: /(开始第一关|继续今日闯关)/ }).click();
-  const commands = page.locator('.command-button');
-  await expect(commands.first()).toBeVisible({ timeout: 3000 });
-  await commands.first().click();
-  await page.getByRole('button', { name: '运行指令' }).click();
-  await expect(page.locator('.feedback-message')).toBeVisible();
+  await expect(page.locator('.blockly-host')).toBeVisible({ timeout: 3000 });
+  await page.getByRole('button', { name: '加入：请求兵器' }).click();
+  await page.getByRole('button', { name: '加入：进入龙宫' }).click();
+  await page.getByRole('button', { name: '加入：试用兵器' }).click();
+  await page.getByRole('button', { name: '执行战斗指令' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: '悟空还在龙宫外' })).toBeVisible();
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeHidden();
-  await page.getByRole('button', { name: '重新排列' }).click();
-  const count = await commands.count();
-  for (let index = count - 1; index >= 0; index--) await commands.nth(index).click();
-  await page.getByRole('button', { name: '运行指令' }).click();
+  await page.getByRole('button', { name: '回到问题积木' }).click();
+  await page.getByRole('button', { name: '上移：进入龙宫' }).click();
+  await page.getByRole('button', { name: '删除：试用兵器' }).click();
+  await page.getByRole('button', { name: '加入：试用兵器' }).click();
+  await page.getByRole('button', { name: '执行战斗指令' }).click();
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible();
   if (testInfo.project.name === 'desktop-chromium-1440x1024') await captureScreenshot(page, testInfo, 'foundation-mission-1440.png');
   await page.getByRole('button', { name: '回成长地图' }).click();
@@ -163,7 +168,7 @@ test('child failure, real Blockly success, persistence, export and strict import
   await page.getByRole('button', { name: '导入进度' }).focus();
   await page.keyboard.press('Enter');
   await (await fileChooser).setFiles({ name: 'v1.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(v1(true))) });
-  await expect(page.getByText('导入成功：已将 V1 迁移为 V2。')).toBeVisible();
+  await expect(page.getByText('导入成功：已将 V1 升级为 V3。')).toBeVisible();
   const before = await page.evaluate(key => localStorage.getItem(key), currentKey);
   const input = page.getByLabel('选择进度文件');
   await input.setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{bad') });
@@ -173,7 +178,7 @@ test('child failure, real Blockly success, persistence, export and strict import
 
 test('snapshot recovery preserves corrupt source and exposes download', async ({ page }) => {
   await page.goto('./');
-  await page.evaluate(({ currentKey, snapshotKey, snapshot }) => { localStorage.setItem(currentKey, '{bad'); localStorage.setItem(snapshotKey, JSON.stringify(snapshot)); }, { currentKey, snapshotKey, snapshot: v2(true) });
+  await page.evaluate(({ currentKey, snapshotKey, snapshot }) => { localStorage.setItem(currentKey, '{bad'); localStorage.setItem(snapshotKey, JSON.stringify(snapshot)); }, { currentKey, snapshotKey, snapshot: v3(true) });
   await page.reload();
   await expect(page.getByText(/(snapshot|快照|恢复)/i).first()).toBeVisible();
   const close = page.getByRole('button', { name: '关闭进度提示' });
@@ -225,7 +230,7 @@ test('keyboard-only PIN, hint and clear cancellation preserve focus isolation', 
   await expect(page.getByRole('button', { name: '清空学习数据' })).toBeFocused();
 });
 
-test('parent backup-and-clear resets to initial V2 and reopens privacy with focus', async ({ page }) => {
+test('parent backup-and-clear resets to initial V3 and reopens privacy with focus', async ({ page }) => {
   await acknowledge(page);
   await page.goto('/xiyou-programming-journey/#/parent');
   await expect(page.getByRole('heading', { name: '家长周报', level: 1 })).toBeFocused();
@@ -238,7 +243,7 @@ test('parent backup-and-clear resets to initial V2 and reopens privacy with focu
   await downloaded;
   await expect(page.getByRole('button', { name: '我知道了' })).toBeFocused();
   const stored = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), currentKey);
-  expect(stored.version).toBe(2); expect(stored.missions).toEqual({}); expect(stored.privacy.localDataNoticeSeen).toBe(false);
+  expect(stored.version).toBe(3); expect(stored.missions).toEqual({}); expect(stored.sessions).toEqual({}); expect(stored.privacy.localDataNoticeSeen).toBe(false);
 });
 
 test('unlocked Python and AI tools load real editors without page overflow', async ({ page, browserName }) => {
@@ -255,7 +260,7 @@ test('unlocked Python and AI tools load real editors without page overflow', asy
   await page.getByRole('button', { name: '导入进度' }).focus();
   await page.keyboard.press('Enter');
   await (await chooser).setFiles({ name: 'mode-fixture-v2.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...v2(), missions })) });
-  await expect(page.getByText('导入成功：来源版本 V2。')).toBeVisible();
+  await expect(page.getByText('导入成功：已将 V2 升级为 V3。')).toBeVisible();
   await page.goto('/xiyou-programming-journey/#/mission/w4-m2');
   const pythonPageUrl = page.url();
   healthPhase = 'python-runtime';

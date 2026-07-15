@@ -1,4 +1,4 @@
-import type { Block, Workspace } from 'blockly'
+import type { Block, Workspace } from 'blockly/core'
 import {
   initializeWorkspaceBlock,
   isDragonBlockType,

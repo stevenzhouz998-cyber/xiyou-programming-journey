@@ -7,6 +7,9 @@ export const ENTRY_GZIP_LIMIT = 180 * 1024;
 export const PHASER_RAW_LIMIT = 1600 * 1024;
 export const GAME_SCENE_RAW_LIMIT = 1900 * 1024;
 export const HOME_TOTAL_LIMIT = 650 * 1024;
+export const DRAGON_PALACE_COLD_BYTES = 2.5 * 1024 * 1024;
+export const DRAGON_PALACE_MEDIA_BYTES = 1.25 * 1024 * 1024;
+export const SINGLE_RASTER_BYTES = 512 * 1024;
 
 const MODE_ROOTS = ['src/components/BlocklyWorkspace.tsx', 'src/components/PythonEditor.tsx', 'src/components/AiLab.tsx', 'src/components/GameScene.tsx'];
 const isPhaserSource = (key, chunk) => chunk.name === 'phaser' || /node_modules[\\/]phaser(?:[\\/]|$)/i.test(`${key} ${chunk.src ?? ''}`);

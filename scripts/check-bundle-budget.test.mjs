@@ -1,11 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeManifest, assertNoSourceVisualAssets } from './check-bundle-budget.mjs';
+import * as bundleBudget from './check-bundle-budget.mjs';
+
+const { analyzeManifest, assertNoSourceVisualAssets } = bundleBudget;
 
 const base = {
   'src/main.tsx': { file: 'assets/main.js', isEntry: true, imports: ['vendor.js'] },
   'vendor.js': { file: 'assets/vendor.js', imports: [] },
 };
+
+test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
+  assert.equal(bundleBudget.DRAGON_PALACE_COLD_BYTES, 2.5 * 1024 * 1024);
+  assert.equal(bundleBudget.DRAGON_PALACE_MEDIA_BYTES, 1.25 * 1024 * 1024);
+  assert.equal(bundleBudget.SINGLE_RASTER_BYTES, 512 * 1024);
+});
 
 test('fails an entry static closure over 180 KiB gzip', () => {
   assert.throws(() => analyzeManifest(base, { 'assets/main.js': 100 * 1024, 'assets/vendor.js': 81 * 1024 }), /180 KiB/);

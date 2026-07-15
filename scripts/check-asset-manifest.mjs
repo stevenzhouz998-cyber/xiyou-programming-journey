@@ -4,9 +4,10 @@ import { lstat, open, readFile, readdir, realpath } from 'node:fs/promises';
 import { dirname, isAbsolute, join, posix, relative, resolve, sep, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import { DRAGON_PALACE_MEDIA_BYTES, SINGLE_RASTER_BYTES } from './check-bundle-budget.mjs';
 
-export const MAX_RASTER_BYTES = 512 * 1024;
-export const MAX_MISSION_MEDIA_BYTES = Math.floor(1.25 * 1024 * 1024);
+export const MAX_RASTER_BYTES = SINGLE_RASTER_BYTES;
+export const MAX_MISSION_MEDIA_BYTES = DRAGON_PALACE_MEDIA_BYTES;
 export const REQUIRED_TOOL = 'OpenAI built-in image_gen';
 export const REQUIRED_PROVENANCE = 'generated in-project with built-in image_gen; provenance verified';
 export const REQUIRED_ART_DIRECTION = 'commercial children’s learning game, refined Chinese ink-and-color illustration, Journey to the West Dragon Palace, warm jade/cinnabar/gold palette, readable silhouettes, no text, no logo, no emoji, no UI frame.';

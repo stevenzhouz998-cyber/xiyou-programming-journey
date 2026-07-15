@@ -72,7 +72,7 @@ vi.mock('phaser', () => {
       else scene.create()
     }
   }
-  return { default: { AUTO: 0, Scene, Game } }
+  return { AUTO: 0, Scene, Game, default: { AUTO: 0, Scene, Game } }
 })
 
 import { GameScene } from './GameScene'

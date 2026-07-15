@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import Phaser from 'phaser'
+import * as Phaser from 'phaser'
 import type { BattleEvent, BattleOpcode, DragonPalaceState } from '../battle/types'
 import { assetUrl } from '../utils/assets'
 

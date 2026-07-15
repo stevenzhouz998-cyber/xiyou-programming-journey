@@ -1,4 +1,5 @@
-import * as Blockly from 'blockly'
+import * as Blockly from 'blockly/core'
+import * as zhHans from 'blockly/msg/zh-hans'
 import {
   createContext,
   useContext,
@@ -55,6 +56,8 @@ const LEGACY_ACTION_LABELS = {
   '请求兵器': 'xiyou_request_weapon',
   '试用兵器': 'xiyou_test_weapon',
 } as const satisfies Record<string, DragonBlockType>
+
+Blockly.setLocale(zhHans as unknown as Record<string, string>)
 
 const XIYOU_THEME = Blockly.Theme.defineTheme('xiyou-dragon-palace', {
   name: 'xiyou-dragon-palace',

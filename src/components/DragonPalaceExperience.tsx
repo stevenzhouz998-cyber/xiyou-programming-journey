@@ -11,6 +11,7 @@ import {
   updateWorkspaceDraft,
 } from '../progress/session'
 import { BattleFeedback } from './BattleFeedback'
+import { ToolErrorBoundary } from './MissionTools'
 
 const GameScene = lazy(() => import('./GameScene').then((module) => ({ default: module.GameScene })))
 const BlocklyWorkspace = lazy(() => import('./BlocklyWorkspace').then((module) => ({ default: module.BlocklyWorkspace })))
@@ -183,18 +184,26 @@ export function DragonPalaceExperience({ reducedMotion, muted, onComplete }: Pro
       ?.focus()
   }
 
+  const reloadPage = () => {
+    const url = new URL(window.location.href)
+    url.searchParams.set('tool-retry', String(Date.now()))
+    window.location.replace(url.toString())
+  }
+
   return (
     <div className="dragon-palace-experience">
       <div className="dragon-palace-scene-region">
-        <Suspense fallback={<p role="status">龙宫场景加载中，请稍候……</p>}>
-          <GameScene
-            events={playbackRequest.events}
-            replayToken={playbackRequest.requestId}
-            reducedMotion={reducedMotion}
-            muted={muted}
-            onPlaybackComplete={() => playbackComplete(playbackRequest.requestId)}
-          />
-        </Suspense>
+        <ToolErrorBoundary label="龙宫场景" reloadPage={reloadPage}>
+          <Suspense fallback={<p role="status">龙宫场景加载中，请稍候……</p>}>
+            <GameScene
+              events={playbackRequest.events}
+              replayToken={playbackRequest.requestId}
+              reducedMotion={reducedMotion}
+              muted={muted}
+              onPlaybackComplete={() => playbackComplete(playbackRequest.requestId)}
+            />
+          </Suspense>
+        </ToolErrorBoundary>
         <div className="dragon-palace-scene-controls">
           <button
             type="button"
@@ -208,16 +217,18 @@ export function DragonPalaceExperience({ reducedMotion, muted, onComplete }: Pro
       </div>
 
       <div className="dragon-palace-program-region" ref={workspaceRegionRef}>
-        <Suspense fallback={<p role="status">编程工作台加载中，请稍候……</p>}>
-          <BlocklyWorkspace
-            missionId={MISSION_ID}
-            draft={session.workspace}
-            onDraftChange={saveDraft}
-            onRun={run}
-            focusBlockId={focusBlockId}
-            onFocusHandled={() => setFocusBlockId(null)}
-          />
-        </Suspense>
+        <ToolErrorBoundary label="任务工具" reloadPage={reloadPage}>
+          <Suspense fallback={<p role="status">编程工作台加载中，请稍候……</p>}>
+            <BlocklyWorkspace
+              missionId={MISSION_ID}
+              draft={session.workspace}
+              onDraftChange={saveDraft}
+              onRun={run}
+              focusBlockId={focusBlockId}
+              onFocusHandled={() => setFocusBlockId(null)}
+            />
+          </Suspense>
+        </ToolErrorBoundary>
       </div>
 
       <div className="dragon-palace-feedback-region">

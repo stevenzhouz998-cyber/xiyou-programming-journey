@@ -1,4 +1,4 @@
-import * as Blockly from 'blockly'
+import * as Blockly from 'blockly/core'
 import type { BattleOpcode } from '../battle/types'
 
 export const DRAGON_BLOCK_OPCODE = {

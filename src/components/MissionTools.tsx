@@ -11,13 +11,13 @@ export type MissionToolLoaders = {
 };
 
 const defaultLoaders: MissionToolLoaders = {
-  scene: () => import('./GameScene').then((module) => ({ default: module.GameScene })),
+  scene: () => import('./LegacyGameScene').then((module) => ({ default: module.LegacyGameScene })),
   blockly: () => import('./BlocklyWorkspace').then((module) => ({ default: module.BlocklyWorkspace })),
   python: () => import('./PythonEditor').then((module) => ({ default: module.PythonEditor })),
   'ai-lab': () => import('./AiLab').then((module) => ({ default: module.AiLab })),
 };
 
-class ToolErrorBoundary extends Component<{ children: ReactNode; reloadPage: () => void; label: string }, { failed: boolean }> {
+export class ToolErrorBoundary extends Component<{ children: ReactNode; reloadPage: () => void; label: string }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
   componentDidCatch(_error: Error, _info: ErrorInfo) { /* Visible recovery is rendered below. */ }
