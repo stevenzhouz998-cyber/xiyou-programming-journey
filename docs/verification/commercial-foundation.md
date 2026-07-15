@@ -2,13 +2,15 @@
 
 ## Current verified evidence — 2026-07-15
 
-- Evidence scope: the Git commit containing this document, based on `439814b`.
+- Tested implementation commit: `37c470b`; the commit containing this document is evidence-only and does not change product behavior.
 - Runner: Playwright 1.55.1 against a local release-like Vite 6.4.3 preview, with no HTTP compression.
 - Browser projects: desktop Chromium 1440×1024, tablet WebKit 768×1024, touch Chromium 390×844, desktop Firefox 1440×1024, and narrow touch Chromium 320×844.
-- Result: 74/74 Playwright scenarios passed with no skipped project in 4.2 minutes.
-- Non-browser gates: 436/436 Vitest tests, 18/18 bundle-script tests, 26/26 asset-manifest tests, TypeScript `--noEmit`, and `git diff --check` passed.
+- Result: 76/76 Playwright scenarios passed with no skipped project in 4.3 minutes.
+- Non-browser gates: 442/442 Vitest tests, 18/18 bundle-script tests, 26/26 asset-manifest tests, TypeScript `--noEmit`, and `git diff --check` passed.
 
-The audited application paths for progress save, import, destructive clear, load repair, and legacy Blockly-workspace cleanup now use the same persisted monotonic revision contract. When `navigator.locks` is available, each transaction runs under the same named Web Lock; the fallback is an in-process Promise queue. A stale tab is rejected before mutation, keeps its draft in memory, and exposes explicit backup and rebase actions. Generic retry cannot overwrite a conflict.
+The audited application paths for progress save, import, destructive clear, load repair, and legacy Blockly-workspace cleanup now use the same persisted monotonic revision contract. When `navigator.locks` is available, each transaction runs under the same named Web Lock. When it is missing or its request rejects, writes fail closed as `unsaved`/`unchanged`; the application never reports an unsafe fallback write as saved. A stale tab is rejected before mutation, keeps its draft in memory, and exposes explicit backup and rebase actions. Generic retry cannot overwrite a conflict.
+
+Dynamic storage-chunk and lock-request rejection leave `pending`, expose the error, and preserve sensitive state until its owning flow succeeds. Parent credentials, privacy acknowledgement, import, and clear do not offer a misleading generic retry. Direct CAS conflict renders backup/rebase recovery even when no `storage` event arrives. Two independent Chromium pages with Web Locks disabled both reported unsaved while revision and stored settings remained unchanged.
 
 Legacy Blockly migration no longer deletes `xiyou-workspace-*` from the component after a separate save. The V3 current/snapshot write, legacy-key deletion and read-back, and revision increment are one coordinated transaction. A cleanup failure rolls the V3 write and legacy bytes back, and a concurrent clear using the same expected revision loses with an explicit conflict. Deterministic tests cover both cases. The product-code scan found no direct `localStorage.setItem`, `localStorage.removeItem`, or `localStorage.clear` call outside the storage transaction modules.
 
@@ -24,16 +26,16 @@ npm run test:e2e -- --reporter=list
 git diff --check
 ```
 
-- Homepage entry static JS: 106.1 KiB gzip / 180 KiB budget.
-- Conservative homepage total: 415.9 KiB / 650 KiB budget.
+- Homepage entry static JS: 106.3 KiB gzip / 180 KiB budget.
+- Conservative homepage total: 416.1 KiB / 650 KiB budget.
 - Approved lazy Phaser chunk: 1,168.4 KiB raw / 1,600 KiB ceiling.
-- GameScene closure: 1,505.9 KiB raw / 431.3 KiB gzip.
-- Blockly workspace closure: 1,042.0 KiB raw / 302.7 KiB gzip.
-- Python editor closure: 696.3 KiB raw / 230.3 KiB gzip.
-- AI lab closure: 337.0 KiB raw / 109.4 KiB gzip.
-- Real cold Dragon Palace response bodies: 2,575,876 B, below the fixed 2.5 MiB budget.
+- GameScene closure: 1,505.8 KiB raw / 431.4 KiB gzip.
+- Blockly workspace closure: 1,041.8 KiB raw / 302.8 KiB gzip.
+- Python editor closure: 696.1 KiB raw / 230.4 KiB gzip.
+- AI lab closure: 336.9 KiB raw / 109.5 KiB gzip.
+- Real cold Dragon Palace response bodies: 2,575,749 B, below the fixed 2.5 MiB budget.
 
-The browser matrix covers privacy acknowledgement, real Blockly failure/correction/battle/persistence, parent PIN/export, V1/V2 migration, malformed import rollback, snapshot and corrupt-source recovery, backup-before-clear, keyboard/focus paths, reduced motion, mute controls, lazy-chunk failure/recovery, 320 px overflow, touch targets, GitHub Pages base paths, console/page/request health, cross-tab conflict/rebase, simultaneous-writer serialization, and prevention of stale revival after clear.
+The browser matrix covers privacy acknowledgement, real Blockly failure/correction/battle/persistence, parent PIN/export, V1/V2 migration, malformed import rollback, snapshot and corrupt-source recovery, backup-before-clear, keyboard/focus paths, reduced motion, mute controls, lazy-chunk failure/recovery, 320 px overflow, touch targets, GitHub Pages base paths, console/page/request health, cross-tab conflict/rebase, simultaneous-writer serialization, no-lock fail-closed behavior, CAS conflict without a storage event, and prevention of stale revival after clear.
 
 ### Current completion boundary
 

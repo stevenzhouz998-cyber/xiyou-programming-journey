@@ -1,9 +1,10 @@
 # Dragon Palace code battle browser verification
 
 - Date: 2026-07-15 (Asia/Shanghai)
+- Tested implementation commit: `37c470b`; the commit containing this document is evidence-only.
 - Runner: Playwright against the local production Vite preview, with five configured projects and one worker
 - Projects: Chromium 1440×1024, Firefox 1440×1024, WebKit 768×1024, touch Chromium 390×844, and touch Chromium 320×844
-- Full result: **74/74 passed; zero skipped tests and zero skipped projects**
+- Full result: **76/76 passed; zero skipped tests and zero skipped projects**
 
 ## What the real-browser path proves
 
@@ -22,7 +23,7 @@ Additional matrix coverage includes:
 - legacy commercial-foundation regression coverage, including focus, responsive layout, parent data tools, Python/AI loading, base path, and visible lazy-module recovery.
 - the first non-specialized compatibility mission (`w1-m2`) uses one visible React command sequence as its only run input: it visibly adds an incorrect sequence, runs it, moves and deletes commands, rebuilds the correct sequence, completes, and returns to a map showing 2/30 progress without injecting completion state. It is explicitly labelled as a non-Blockly compatibility tool, renders no Blockly host or SVG canvas, and is not level-content complete;
 - all five projects execute the same visible parent-credential lifecycle: reject the former public default, reject mismatched confirmation, prove a pre-confirmation reload leaves setup or the old change/recovery credentials intact, then deliberately fail storage during setup, change, and recovery. Each failure keeps the same recovery code, navigation away and back still rejects the proposed credential and accepts the old credential, and only a later successful acknowledgement rotates the stored SHA-256 digests. Raw PIN and recovery values are cleared from the component. This remains a local browser UI gate rather than account-level security.
-- desktop Chromium opens two real tabs at the same revision and verifies the browser's Web Lock API, one winner for simultaneous writes, a zero-write stale conflict, draft backup, explicit rebase, and a post-clear stale write that cannot revive old mission, credential, or session data; Firefox and WebKit pass the sequential two-tab conflict/clear smoke path.
+- desktop Chromium opens two real tabs at the same revision and verifies the browser's Web Lock API, one winner for simultaneous writes, a zero-write stale conflict, draft backup, explicit rebase, and a post-clear stale write that cannot revive old mission, credential, or session data; Firefox and WebKit pass the sequential two-tab conflict/clear smoke path. Two additional Chromium paths prove both pages fail closed when Web Locks are disabled and that direct CAS conflict exposes recovery when the stale page receives no `storage` event.
 
 ## Real scenario matrix
 
@@ -30,12 +31,12 @@ All five projects run the ten `@legacy` commercial-foundation tests plus assigne
 
 | Project | Assigned Dragon Palace tags | Legacy | Dragon Palace | Total |
 | --- | --- | ---: | ---: | ---: |
-| desktop-chromium-1440x1024 | `@full @storage @keyboard @visual @corrupt-full @cold` | 10 | 8 | 18 |
+| desktop-chromium-1440x1024 | `@full @storage @keyboard @visual @corrupt-full @cold` | 10 | 10 | 20 |
 | tablet-webkit-768x1024 | `@full @parity @corrupt-smoke @cold` | 10 | 5 | 15 |
 | mobile-chromium-390x844 | `@full @parity @cold` | 10 | 4 | 14 |
 | desktop-firefox-1440x1024 | `@full @keyboard @corrupt-smoke @cold` | 10 | 5 | 15 |
 | narrow-chromium-320x844 | `@narrow @cold` | 10 | 2 | 12 |
-| **Total** |  | **50** | **24** | **74** |
+| **Total** |  | **50** | **26** | **76** |
 
 `@full` is the complete visible wrong-program, correction, success, refresh, unlock, PIN, export, and import path. `@narrow` is a real visible wrong-program-to-success path plus horizontal-overflow verification. `@visual` creates three real Blockly programs and captures the accepted-effect, blocked-effect, and full three-weapon Phaser states. The other tags execute the behavior named in each tag.
 
@@ -51,13 +52,13 @@ The cold-load scenario blocks service workers, sends `Cache-Control: no-store` p
 
 | Project | Measured bytes | Limit | Headroom |
 | --- | ---: | ---: | ---: |
-| desktop-chromium-1440x1024 | 2,584,053 | 2,621,440 | 37,387 |
-| desktop-firefox-1440x1024 | 2,584,053 | 2,621,440 | 37,387 |
-| tablet-webkit-768x1024 | 2,584,053 | 2,621,440 | 37,387 |
-| mobile-chromium-390x844 | 2,584,053 | 2,621,440 | 37,387 |
-| narrow-chromium-320x844 | 2,584,053 | 2,621,440 | 37,387 |
+| desktop-chromium-1440x1024 | 2,575,749 | 2,621,440 | 45,691 |
+| desktop-firefox-1440x1024 | 2,575,749 | 2,621,440 | 45,691 |
+| tablet-webkit-768x1024 | 2,575,749 | 2,621,440 | 45,691 |
+| mobile-chromium-390x844 | 2,575,749 | 2,621,440 | 45,691 |
+| narrow-chromium-320x844 | 2,575,749 | 2,621,440 | 45,691 |
 
-The remaining **37,387 B is only about 1.4% headroom** and the first-load path depends on the external `static.blockly.com` sprite. A small upstream size or delivery change can make this gate fail or make a child's first load heavier. This risk is not resolved: follow-up work should continue reducing the local bundle or localize an approved UI sprite only after its source and license are verified.
+The remaining **45,691 B is only about 1.7% headroom** and the first-load path depends on the external `static.blockly.com` sprite. A small upstream size or delivery change can make this gate fail or make a child's first load heavier. This risk is not resolved: follow-up work should continue reducing the local bundle or localize an approved UI sprite only after its source and license are verified.
 
 The five approved Dragon Palace rasters total **257,674 B / 1,310,720 B**. They retain their generated compositions and original dimensions. Sharp 0.35.3 performed only technical WebP re-encoding with `quality: 30`, `alphaQuality: 75`, `effort: 6`, and `smartSubsample: true`; the manifest records the resulting hashes.
 
@@ -102,6 +103,9 @@ The gate failed before it passed:
 16. The final specification pass found the recovery-heading focus assertion could race React's effect timing and that repeating the retired public digits in an error would disclose them again. The assertion now waits for focus to settle, the interface and documentation use only a generic retired-default description, three consecutive 411-test unit runs passed, and the unchanged five-project credential lifecycle passed 5/5.
 17. Quality review then found that the generic optimistic settings update could expose a proposed parent credential in React state after a failed write. A dedicated saved-only parent-access commit now writes storage first and changes the ref, rendered state, and persistence flags only after success. Focused context tests prove failure leaves the old in-memory and stored credential intact through retry and unrelated rerender; the expanded five-project browser lifecycle proves the same boundary after navigating away and back for setup, change, and recovery.
 18. The same review removed the misleading legacy Blockly dual track. `w1-m2` now has one visible React sequence as the sole run input, an honest compatibility label, and no Blockly import, host, or SVG canvas. Unit and five-project browser tests still prove add, reorder, delete, reset, wrong-run, and corrected-run behavior, but the completion boundary remains a compatibility interaction shell rather than a completed level. The first full rerun exposed one Firefox history-navigation automation action that reported a successful fill while its trace showed the input still empty; a value-confirmed fill helper hardened only those post-history actions without relaxing any credential assertion, and the five-project lifecycle then passed 5/5.
+19. Final storage quality review rejected the module-local Promise fallback because independent tabs cannot share it. The coordinator now fails closed when Web Locks are unavailable or reject: two independent Chromium pages both report unsaved, while the persisted revision and original settings remain unchanged.
+20. The same review found that a rejected dynamic storage import or lock request could leave a Context operation pending, and that a direct CAS conflict could lack recovery UI when no `storage` event arrived. Queue-level exception handling now terminates pending state, sensitive operations keep retry inside their owning flow, and conflict itself exposes backup/rebase recovery. Focused unit tests and two real-browser scenarios cover these boundaries.
+21. The first 76-scenario rerun correctly exposed an ambiguous alert locator after the new global unsaved notice appeared beside the parent PIN form alert. The test now identifies the credential alert by its visible text, without weakening either assertion. The final fresh run passed 76/76 with zero skips.
 
 ## Commands and results
 
@@ -128,23 +132,24 @@ git status --short --branch
 
 The fresh results were:
 
-- `npm test`: 28 Vitest files / 433 tests, 18 bundle-script tests, and 26 asset tests passed;
+- `npm test`: 28 Vitest files / 442 tests, 18 bundle-script tests, and 26 asset tests passed;
 - `npm run typecheck`: exit 0;
 - `npm run verify:assets`: 5 files, 257,674 B / 1,310,720 B, all `visual-qa-passed`;
-- `npm run verify:bundle`: entry static JS 106.1 KiB gzip, conservative homepage 415.9 KiB, Phaser 1,168.4 KiB raw, and GameScene closure 1,505.9 KiB raw, all inside their gates;
-- `npx playwright test --list`: exactly 74 tests across five projects: desktop Chromium 18, tablet WebKit 15, mobile Chromium 14, desktop Firefox 15, and narrow Chromium 12;
-- specialized matrix: 24/24 passed across the same five projects;
-- `npm run test:e2e`: 74/74 passed across the five configured projects with zero skips;
+- `npm run verify:bundle`: entry static JS 106.3 KiB gzip, conservative homepage 416.1 KiB, Phaser 1,168.4 KiB raw, and GameScene closure 1,505.8 KiB raw, all inside their gates;
+- `npx playwright test --list`: exactly 76 tests across five projects: desktop Chromium 20, tablet WebKit 15, mobile Chromium 14, desktop Firefox 15, and narrow Chromium 12;
+- specialized matrix: 26/26 passed across the same five projects;
+- `npm run test:e2e`: 76/76 passed across the five configured projects with zero skips;
 - official npm registry audit: zero known vulnerabilities after pinning Vite 6.4.3 and Playwright 1.55.1;
 - `git diff --check`: no errors;
 - `git status --short --branch`: clean after commit.
 
-The exact `rg` scan returned nine intentional lines:
+The exact `rg` scan returned 18 intentional lines:
 
 - seven `emoji` matches: five Dragon Palace prompt records plus the checker constant and its checker-test fixture. Each is the explicit `no emoji` art prohibition, not an emoji asset;
 - one `placeholder` match: `unknown-placeholder-block` in the deliberately corrupt V3 recovery fixture, which must be rejected and preserved byte-for-byte rather than shipped;
+- nine `xiyou-workspace-` matches: the audited legacy-key constants plus migration, rollback, dynamic-clear, and Context transaction tests; none is a component-side storage write;
 - one `useState<string[]>` match: the existing `AiLab` state backing its visible selected-evidence list and buttons. It is a typed visible UI state, not a hidden completion sequence or shipping placeholder;
-- zero `TODO`, zero `TBD`, and zero `xiyou-workspace-` matches.
+- zero `TODO` and zero `TBD` matches.
 
 The scan findings do not turn the existing AI mode into a completed system; Python and AI remain outside this one-level completion claim.
 
