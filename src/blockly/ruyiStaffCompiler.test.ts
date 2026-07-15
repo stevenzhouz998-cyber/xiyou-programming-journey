@@ -72,6 +72,81 @@ describe('compileRuyiStaffWorkspace', () => {
     })
   })
 
+  it('uses code-point block id order for deterministic diagnostics', () => {
+    workspace.newBlock('xiyou_inspect_weights', 'a-lowercase')
+    workspace.newBlock('xiyou_choose_ruyi_staff', 'B-uppercase')
+
+    expect(compileRuyiStaffWorkspace(workspace)).toEqual({
+      ok: false,
+      trace: [],
+      diagnostics: [
+        {
+          code: 'multiple-top-level',
+          sourceBlockId: 'B-uppercase',
+          concept: 'program-structure',
+        },
+      ],
+    })
+  })
+
+  it('compiles the reordered real connection chain on the next run', () => {
+    const inspect = workspace.newBlock('xiyou_inspect_weights', 'inspect')
+    const choose = workspace.newBlock('xiyou_choose_ruyi_staff', 'choose')
+    const shrink = workspace.newBlock('xiyou_shrink_ruyi_staff', 'shrink')
+    connect(inspect, choose)
+    connect(choose, shrink)
+    inspect.nextConnection?.disconnect()
+    choose.nextConnection?.disconnect()
+    connect(inspect, shrink)
+    connect(shrink, choose)
+
+    const result = compileRuyiStaffWorkspace(workspace)
+    expect(result.ok && result.trace.map((item) => item.opcode)).toEqual([
+      'inspect_weights',
+      'shrink_ruyi_staff',
+      'choose_ruyi_staff',
+    ])
+  })
+
+  it('removes a disposed real block subtree from the next compiled trace', () => {
+    const inspect = workspace.newBlock('xiyou_inspect_weights', 'inspect')
+    const choose = workspace.newBlock('xiyou_choose_ruyi_staff', 'choose')
+    const shrink = workspace.newBlock('xiyou_shrink_ruyi_staff', 'shrink')
+    connect(inspect, choose)
+    connect(choose, shrink)
+
+    choose.dispose(false)
+
+    expect(compileRuyiStaffWorkspace(workspace)).toEqual({
+      ok: true,
+      trace: [
+        instruction('inspect', 'inspect_weights'),
+      ],
+    })
+  })
+
+  it('reports multiple top-level structure after a real chain disconnect', () => {
+    const inspect = workspace.newBlock('xiyou_inspect_weights', 'inspect')
+    const choose = workspace.newBlock('xiyou_choose_ruyi_staff', 'choose')
+    const shrink = workspace.newBlock('xiyou_shrink_ruyi_staff', 'shrink')
+    connect(inspect, choose)
+    connect(choose, shrink)
+
+    choose.previousConnection?.disconnect()
+
+    expect(compileRuyiStaffWorkspace(workspace)).toEqual({
+      ok: false,
+      trace: [],
+      diagnostics: [
+        {
+          code: 'multiple-top-level',
+          sourceBlockId: 'choose',
+          concept: 'program-structure',
+        },
+      ],
+    })
+  })
+
   it.each([
     { name: 'empty workspaces', setup: () => undefined, code: 'empty-workspace', id: null },
     {

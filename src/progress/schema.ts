@@ -5,8 +5,9 @@ import type {
   BattleDiagnostic,
   BattleEvent,
   BattleInstruction,
-  BattleOpcode,
   BattleRunResult,
+  DragonPalaceInstruction,
+  DragonPalaceOpcode,
   DragonPalaceState,
 } from '../battle/types';
 import type { WorkspaceDraftV1 } from '../blockly/draft';
@@ -51,7 +52,6 @@ const missionIds = new Set(allMissions.map((mission) => mission.id));
 const blockTypes = new Set<DragonBlockType>([
   'xiyou_enter_palace', 'xiyou_request_weapon', 'xiyou_test_weapon',
 ]);
-const opcodes = new Set<BattleOpcode>(['enter_palace', 'request_weapon', 'test_weapon']);
 const states = new Set<DragonPalaceState>([
   'outside-palace', 'entered-palace', 'weapon-requested', 'weapon-tested',
 ]);
@@ -156,9 +156,11 @@ function state(value: unknown, field: string): DragonPalaceState {
   return value as DragonPalaceState;
 }
 
-function opcode(value: unknown, field: string): BattleOpcode {
-  if (typeof value !== 'string' || !opcodes.has(value as BattleOpcode)) invalid(`${field}操作码无效`);
-  return value as BattleOpcode;
+function opcode(value: unknown, field: string): DragonPalaceOpcode {
+  if (value !== 'enter_palace' && value !== 'request_weapon' && value !== 'test_weapon') {
+    invalid(`${field}操作码无效`);
+  }
+  return value;
 }
 
 function missions(value: unknown): Record<string, MissionProgress> {
@@ -316,7 +318,7 @@ function workspace(value: unknown, field: string): WorkspaceDraftV1 {
   return { version: 1, blocks };
 }
 
-function instruction(value: unknown, field: string): BattleInstruction {
+function instruction(value: unknown, field: string): DragonPalaceInstruction {
   const source = object(value, field);
   exactKeys(source, field, ['instructionId', 'sourceBlockId', 'opcode']);
   const sourceBlockId = nonEmptyBoundedString(

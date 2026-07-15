@@ -18,7 +18,9 @@ export interface RuyiWorkspaceDraftV1 {
 }
 
 function byId(left: Block, right: Block): number {
-  return left.id.localeCompare(right.id)
+  if (left.id < right.id) return -1
+  if (left.id > right.id) return 1
+  return 0
 }
 
 function isSafeCoordinate(value: number): boolean {

@@ -1,5 +1,5 @@
 import type { Block, Workspace } from 'blockly/core'
-import type { BattleInstruction } from '../battle/types'
+import type { DragonPalaceInstruction } from '../battle/types'
 import { DRAGON_BLOCK_OPCODE, isDragonBlockType } from './dragonPalaceBlocks'
 
 export type CompileDiagnosticCode =
@@ -15,7 +15,7 @@ export type CompileDiagnostic = {
 }
 
 export type CompileResult =
-  | { ok: true; trace: BattleInstruction[] }
+  | { ok: true; trace: DragonPalaceInstruction[] }
   | { ok: false; trace: []; diagnostics: CompileDiagnostic[] }
 
 function failure(code: CompileDiagnosticCode, sourceBlockId: string | null): CompileResult {
@@ -74,7 +74,7 @@ export function compileDragonPalaceWorkspace(workspace: Workspace): CompileResul
   if (blocks.length === 0) return failure('empty-workspace', null)
   if (topBlocks.length !== 1) return failure('invalid-connection', blocks[0].id)
 
-  const trace: BattleInstruction[] = []
+  const trace: DragonPalaceInstruction[] = []
   const visited = new Set<string>()
   let block: Block | null = topBlocks[0]
 

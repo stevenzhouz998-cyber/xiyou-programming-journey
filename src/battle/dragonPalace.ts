@@ -2,14 +2,15 @@ import type {
   BattleDiagnostic,
   BattleEvent,
   BattleInstruction,
-  BattleOpcode,
   BattleRunResult,
+  DragonPalaceInstruction,
+  DragonPalaceOpcode,
   DragonPalaceState,
 } from './types'
 
 function transition(
   currentState: DragonPalaceState,
-  opcode: BattleOpcode,
+  opcode: DragonPalaceOpcode,
 ): DragonPalaceState | null {
   if (currentState === 'outside-palace' && opcode === 'enter_palace') {
     return 'entered-palace'
@@ -26,7 +27,7 @@ function transition(
 function instructionEvent(
   type: 'instruction-accepted' | 'instruction-rejected' | 'state-changed',
   state: DragonPalaceState,
-  instruction: BattleInstruction,
+  instruction: DragonPalaceInstruction,
   messageCode: string,
 ): BattleEvent {
   return {
@@ -37,6 +38,16 @@ function instructionEvent(
     opcode: instruction.opcode,
     messageCode,
   }
+}
+
+function isDragonPalaceInstruction(
+  instruction: BattleInstruction,
+): instruction is DragonPalaceInstruction {
+  return (
+    instruction.opcode === 'enter_palace'
+    || instruction.opcode === 'request_weapon'
+    || instruction.opcode === 'test_weapon'
+  )
 }
 
 export function runDragonPalaceBattle(
@@ -56,6 +67,9 @@ export function runDragonPalaceBattle(
   ]
 
   for (const instruction of instructions) {
+    if (!isDragonPalaceInstruction(instruction)) {
+      throw new Error(`Unsupported Dragon Palace opcode: ${instruction.opcode}`)
+    }
     const nextState = transition(state, instruction.opcode)
 
     if (nextState === null) {

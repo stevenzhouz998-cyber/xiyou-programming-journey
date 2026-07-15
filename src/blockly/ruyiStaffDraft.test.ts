@@ -47,6 +47,16 @@ describe('RuyiWorkspaceDraftV1', () => {
     }
   })
 
+  it('saves blocks in deterministic code-point id order', () => {
+    workspace.newBlock('xiyou_inspect_weights', 'a-lowercase')
+    workspace.newBlock('xiyou_choose_ruyi_staff', 'B-uppercase')
+
+    expect(saveRuyiWorkspaceDraft(workspace).blocks.map((block) => block.id)).toEqual([
+      'B-uppercase',
+      'a-lowercase',
+    ])
+  })
+
   it.each([
     {
       name: 'duplicate ids',

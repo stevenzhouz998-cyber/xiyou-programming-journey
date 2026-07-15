@@ -1,11 +1,11 @@
 import * as Blockly from 'blockly/core'
-import type { BattleOpcode } from '../battle/types'
+import type { DragonPalaceOpcode } from '../battle/types'
 
 export const DRAGON_BLOCK_OPCODE = {
   xiyou_enter_palace: 'enter_palace',
   xiyou_request_weapon: 'request_weapon',
   xiyou_test_weapon: 'test_weapon',
-} as const satisfies Record<string, BattleOpcode>
+} as const satisfies Record<string, DragonPalaceOpcode>
 
 export type DragonBlockType = keyof typeof DRAGON_BLOCK_OPCODE
 

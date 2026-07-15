@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import * as Phaser from 'phaser'
-import type { BattleEvent, BattleOpcode, DragonPalaceState } from '../battle/types'
+import type { BattleEvent, DragonPalaceOpcode, DragonPalaceState } from '../battle/types'
 import { assetUrl } from '../utils/assets'
 
 interface GameSceneProps {
@@ -41,7 +41,7 @@ const WEAPON_SHEET_DISPLAY = {
 type EffectCell = 'none' | 'accepted' | 'blocked' | 'success'
 type WeaponDisplay = 'hidden' | 'all' | 'tested'
 
-const opcodeLabels: Record<BattleOpcode, string> = {
+const opcodeLabels: Record<DragonPalaceOpcode, string> = {
   enter_palace: '进入龙宫',
   request_weapon: '请求兵器',
   test_weapon: '试用兵器',

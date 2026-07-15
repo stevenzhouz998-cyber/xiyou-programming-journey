@@ -1,6 +1,32 @@
 import { describe, expect, it } from 'vitest'
 import { runRuyiStaffBattle } from './ruyiStaff'
 import type { RuyiStaffInstruction, RuyiStaffOpcode } from './types'
+import type {
+  BattleInstruction,
+  DragonPalaceInstruction,
+  DragonPalaceOpcode,
+} from './types'
+
+const dragonOpcode: DragonPalaceOpcode = 'enter_palace'
+const sharedRuyiInstruction = {
+  instructionId: 'instruction:shared-ruyi',
+  sourceBlockId: 'shared-ruyi',
+  opcode: 'inspect_weights',
+} satisfies BattleInstruction
+const dragonInstruction = {
+  instructionId: 'instruction:dragon',
+  sourceBlockId: 'dragon',
+  opcode: dragonOpcode,
+} satisfies DragonPalaceInstruction
+// @ts-expect-error Dragon Palace instructions cannot carry a Ruyi Staff opcode.
+const invalidDragonInstruction = sharedRuyiInstruction satisfies DragonPalaceInstruction
+// @ts-expect-error Ruyi Staff instructions cannot carry a Dragon Palace opcode.
+const invalidRuyiInstruction = dragonInstruction satisfies RuyiStaffInstruction
+
+void sharedRuyiInstruction
+void dragonInstruction
+void invalidDragonInstruction
+void invalidRuyiInstruction
 
 const instruction = (
   sourceBlockId: string,
@@ -98,6 +124,75 @@ describe('ruyi staff battle domain', () => {
       sourceBlockId: repeated.sourceBlockId,
     })
   })
+
+  it.each([
+    {
+      name: 'choose before inspect',
+      trace: [instruction('choose-first', 'choose_ruyi_staff')],
+      finalState: 'awaiting-inspection',
+      problemBlockId: 'choose-first',
+      problemOpcode: 'choose_ruyi_staff',
+    },
+    {
+      name: 'shrink directly after inspect',
+      trace: [
+        instruction('inspect', 'inspect_weights'),
+        instruction('shrink-too-soon', 'shrink_ruyi_staff'),
+      ],
+      finalState: 'weights-inspected',
+      problemBlockId: 'shrink-too-soon',
+      problemOpcode: 'shrink_ruyi_staff',
+    },
+    {
+      name: 'choose again after the correct selection',
+      trace: [
+        instruction('inspect', 'inspect_weights'),
+        instruction('choose-correct', 'choose_ruyi_staff'),
+        instruction('choose-again', 'choose_halberd'),
+      ],
+      finalState: 'ruyi-staff-selected',
+      problemBlockId: 'choose-again',
+      problemOpcode: 'choose_halberd',
+    },
+    {
+      name: 'repeat shrink after completion',
+      trace: [
+        instruction('inspect', 'inspect_weights'),
+        instruction('choose', 'choose_ruyi_staff'),
+        instruction('shrink', 'shrink_ruyi_staff'),
+        instruction('shrink-again', 'shrink_ruyi_staff'),
+      ],
+      finalState: 'ruyi-staff-shrunk',
+      problemBlockId: 'shrink-again',
+      problemOpcode: 'shrink_ruyi_staff',
+    },
+  ] as const)(
+    'rejects $name once and preserves the problem block provenance',
+    ({ trace, finalState, problemBlockId, problemOpcode }) => {
+      const result = runRuyiStaffBattle(trace)
+
+      expect(result.completed).toBe(false)
+      expect(result.finalState).toBe(finalState)
+      expect(result.events.filter((event) => event.type === 'run-started')).toHaveLength(1)
+      expect(result.events.filter((event) => event.type === 'run-finished')).toHaveLength(1)
+      expect(result.events.filter((event) => event.type === 'instruction-rejected')).toHaveLength(1)
+      expect(result.diagnostic).toMatchObject({
+        type: 'instruction-rejected',
+        concept: 'sequence-precondition',
+        instructionId: `instruction:${problemBlockId}`,
+        sourceBlockId: problemBlockId,
+        opcode: problemOpcode,
+      })
+      expect(result.events).toContainEqual(
+        expect.objectContaining({
+          type: 'instruction-rejected',
+          instructionId: `instruction:${problemBlockId}`,
+          sourceBlockId: problemBlockId,
+          opcode: problemOpcode,
+        }),
+      )
+    },
+  )
 
   it('returns program-ended-incomplete with the last accepted source for a valid prefix', () => {
     const result = runRuyiStaffBattle([

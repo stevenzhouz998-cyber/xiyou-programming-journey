@@ -1,4 +1,4 @@
-export type BattleOpcode = 'enter_palace' | 'request_weapon' | 'test_weapon'
+export type DragonPalaceOpcode = 'enter_palace' | 'request_weapon' | 'test_weapon'
 
 export type RuyiStaffOpcode =
   | 'inspect_weights'
@@ -7,6 +7,8 @@ export type RuyiStaffOpcode =
   | 'choose_ruyi_staff'
   | 'shrink_ruyi_staff'
 
+export type BattleOpcode = DragonPalaceOpcode | RuyiStaffOpcode
+
 export type RuyiStaffState =
   | 'awaiting-inspection'
   | 'weights-inspected'
@@ -14,23 +16,23 @@ export type RuyiStaffState =
   | 'ruyi-staff-selected'
   | 'ruyi-staff-shrunk'
 
-export interface RuyiStaffInstruction {
-  instructionId: string
-  sourceBlockId: string
-  opcode: RuyiStaffOpcode
-}
-
 export type DragonPalaceState =
   | 'outside-palace'
   | 'entered-palace'
   | 'weapon-requested'
   | 'weapon-tested'
 
-export interface BattleInstruction {
+interface MissionBattleInstruction<TOpcode extends BattleOpcode> {
   instructionId: string
   sourceBlockId: string
-  opcode: BattleOpcode
+  opcode: TOpcode
 }
+
+export type DragonPalaceInstruction = MissionBattleInstruction<DragonPalaceOpcode>
+
+export type RuyiStaffInstruction = MissionBattleInstruction<RuyiStaffOpcode>
+
+export type BattleInstruction = DragonPalaceInstruction | RuyiStaffInstruction
 
 interface BattleEventBase {
   state: DragonPalaceState
@@ -50,7 +52,7 @@ type BattleInstructionEvent<
   type: T
   instructionId: string
   sourceBlockId: string
-  opcode: BattleOpcode
+  opcode: DragonPalaceOpcode
 }
 
 export type BattleEvent =
@@ -67,7 +69,7 @@ export type BattleDiagnostic =
       state: DragonPalaceState
       instructionId: string
       sourceBlockId: string
-      opcode: BattleOpcode
+      opcode: DragonPalaceOpcode
       messageCode: string
     }
   | {
