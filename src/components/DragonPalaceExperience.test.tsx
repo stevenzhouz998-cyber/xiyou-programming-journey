@@ -1,11 +1,14 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BattleEvent, BattleInstruction } from '../battle/types'
 import { runDragonPalaceBattle } from '../battle/dragonPalace'
-import { ProgressProvider } from '../context/ProgressContext'
+import { ProgressProvider, useProgress } from '../context/ProgressContext'
 import { createInitialProgress, serializeProgress } from '../progress/progress'
 import { CURRENT_PROGRESS_KEY } from '../progress/storage'
 import { DragonPalaceExperience } from './DragonPalaceExperience'
+
+const playbackCallbacks = vi.hoisted(() => new Map<number, () => void>())
+const playbackEventReferences = vi.hoisted(() => new Map<number, BattleEvent[][]>())
 
 vi.mock('./GameScene', () => ({
   GameScene: ({
@@ -16,18 +19,30 @@ vi.mock('./GameScene', () => ({
     events: BattleEvent[]
     replayToken: number
     onPlaybackComplete?: () => void
-  }) => (
-    <section aria-label="测试龙宫场景" data-replay-token={replayToken}>
+  }) => {
+    if (onPlaybackComplete) playbackCallbacks.set(replayToken, onPlaybackComplete)
+    const references = playbackEventReferences.get(replayToken) ?? []
+    if (references.at(-1) !== events) references.push(events)
+    playbackEventReferences.set(replayToken, references)
+    return <section aria-label="测试龙宫场景" data-replay-token={replayToken}>
       <output data-testid="scene-events">{JSON.stringify(events)}</output>
-      <button type="button" onClick={onPlaybackComplete}>完成场景播放</button>
+      <button type="button" onClick={onPlaybackComplete}>{`完成场景播放 ${replayToken}`}</button>
     </section>
-  ),
+  },
 }))
 
 const originalStorage = localStorage
 
 function storedProgress() {
   return JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)
+}
+
+function SessionHintControls() {
+  const { recordMissionHint } = useProgress()
+  return <>
+    <button type="button" onClick={() => recordMissionHint('w1-m1', 'observe')}>测试观察提示</button>
+    <button type="button" onClick={() => recordMissionHint('w1-m1', 'think')}>测试思路提示</button>
+  </>
 }
 
 function renderExperience(onComplete = vi.fn()) {
@@ -38,9 +53,18 @@ function renderExperience(onComplete = vi.fn()) {
         muted={false}
         onComplete={onComplete}
       />
+      <SessionHintControls />
     </ProgressProvider>,
   )
   return onComplete
+}
+
+function currentRequestId(): number {
+  return Number(screen.getByLabelText('测试龙宫场景').getAttribute('data-replay-token'))
+}
+
+function finishRequest(requestId: number) {
+  act(() => playbackCallbacks.get(requestId)?.())
 }
 
 describe('DragonPalaceExperience', () => {
@@ -48,6 +72,8 @@ describe('DragonPalaceExperience', () => {
     Object.defineProperty(globalThis, 'localStorage', { value: originalStorage, configurable: true })
     Object.defineProperty(window, 'localStorage', { value: originalStorage, configurable: true })
     localStorage.clear()
+    playbackCallbacks.clear()
+    playbackEventReferences.clear()
   })
 
   afterEach(() => {
@@ -111,8 +137,51 @@ describe('DragonPalaceExperience', () => {
       runtimeFailures: 1,
       lastRun: { completed: true, finalState: 'weapon-tested' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }))
+    finishRequest(currentRequestId())
     expect(onComplete).toHaveBeenCalledWith({ stars: 3, hintsUsed: 0 })
+  })
+
+  it('keeps one playback request stable while draft and hint session writes clone progress', async () => {
+    const onComplete = renderExperience()
+    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }))
+    fireEvent.click(screen.getByRole('button', { name: '加入：请求兵器' }))
+    fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }))
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }))
+    const requestId = currentRequestId()
+    const callbackCount = playbackCallbacks.size
+
+    fireEvent.click(screen.getByRole('button', { name: '上移：试用兵器' }))
+    fireEvent.click(screen.getByRole('button', { name: '测试观察提示' }))
+    fireEvent.click(screen.getByRole('button', { name: '测试观察提示' }))
+
+    expect(currentRequestId()).toBe(requestId)
+    expect(playbackCallbacks.size).toBe(callbackCount)
+    expect(playbackEventReferences.get(requestId)).toHaveLength(1)
+    expect(onComplete).not.toHaveBeenCalled()
+  })
+
+  it('ignores late and duplicate callbacks and uses the winning run hint snapshot', async () => {
+    const onComplete = renderExperience()
+    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }))
+    fireEvent.click(screen.getByRole('button', { name: '加入：请求兵器' }))
+    fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }))
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }))
+    const requestA = currentRequestId()
+
+    fireEvent.click(screen.getByRole('button', { name: '测试观察提示' }))
+    fireEvent.click(screen.getByRole('button', { name: '测试思路提示' }))
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }))
+    const requestB = currentRequestId()
+    expect(requestB).toBeGreaterThan(requestA)
+
+    finishRequest(requestA)
+    expect(onComplete).not.toHaveBeenCalled()
+    finishRequest(requestB)
+    finishRequest(requestB)
+
+    expect(onComplete).toHaveBeenCalledTimes(1)
+    expect(onComplete).toHaveBeenCalledWith({ stars: 1, hintsUsed: 2 })
+    expect(storedProgress().sessions['w1-m1']).toMatchObject({ totalRuns: 2 })
   })
 
   it('stores incomplete evidence without invented instruction ids and returns to the last real block', async () => {
@@ -175,12 +244,15 @@ describe('DragonPalaceExperience', () => {
 
     expect(await screen.findByText('进入龙宫')).toBeVisible()
     expect(screen.getByTestId('scene-events')).toHaveTextContent('dragon-palace.run-finished.completed')
-    fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }))
+    finishRequest(currentRequestId())
     expect(onComplete).not.toHaveBeenCalled()
     expect(storedProgress().sessions['w1-m1']).toMatchObject({ totalRuns: 1 })
 
     fireEvent.click(screen.getByRole('button', { name: '重播最近一次' }))
     expect(screen.getByLabelText('测试龙宫场景')).toHaveAttribute('data-replay-token', '1')
+    finishRequest(currentRequestId())
+    expect(onComplete).not.toHaveBeenCalled()
+    expect(storedProgress().sessions['w1-m1']).toMatchObject({ totalRuns: 1 })
   })
 
   it('keeps unsaved edits in memory and retries the same transactional session', async () => {

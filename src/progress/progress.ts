@@ -52,15 +52,29 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
   if (!allMissions.some((mission) => mission.id === missionId)) throw new Error('任务编号无效');
   const previous = progress.missions[missionId];
   const stars = normalizeStars(input.stars);
-  const attempts = safeCount(previous?.attempts ?? 0, 1);
-  const hintsUsed = safeCount(previous?.hintsUsed ?? 0, normalizeHints(input.hintsUsed));
+  const normalizedHints = normalizeHints(input.hintsUsed);
+  if (previous) {
+    safeCount(previous.attempts, 1);
+    safeCount(previous.hintsUsed, normalizedHints);
+    if (previous.stars >= stars) return progress;
+    return {
+      ...progress,
+      missions: {
+        ...progress.missions,
+        [missionId]: { ...previous, stars },
+      },
+      savedAt: new Date().toISOString(),
+    };
+  }
+  const attempts = safeCount(0, 1);
+  const hintsUsed = safeCount(0, normalizedHints);
   return {
     ...progress,
     missions: {
       ...progress.missions,
       [missionId]: {
         status: 'completed',
-        stars: previous && previous.stars > stars ? previous.stars : stars,
+        stars,
         attempts,
         hintsUsed,
         completedAt: new Date().toISOString(),

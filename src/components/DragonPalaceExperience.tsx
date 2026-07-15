@@ -1,5 +1,5 @@
 import { lazy, Suspense, useRef, useState } from 'react'
-import type { BattleDiagnostic } from '../battle/types'
+import type { BattleDiagnostic, BattleEvent, BattleRunResult } from '../battle/types'
 import { runDragonPalaceBattle } from '../battle/dragonPalace'
 import type { CompileDiagnostic, CompileResult } from '../blockly/compiler'
 import type { WorkspaceDraftV1 } from '../blockly/draft'
@@ -31,6 +31,17 @@ interface Props {
   onComplete: (evidence: CompletionEvidence) => void
 }
 
+interface PlaybackRequest {
+  readonly requestId: number
+  readonly origin: 'empty' | 'restored' | 'run' | 'replay'
+  readonly events: BattleEvent[]
+  readonly result: BattleRunResult | null
+  readonly hintTiers: string[]
+  readonly runAt: string | null
+  readonly eligibleForCompletion: boolean
+  readonly evidence: CompletionEvidence | null
+}
+
 function completionEvidence(tiers: readonly string[]): CompletionEvidence {
   const hintsUsed = new Set(tiers).size
   return {
@@ -39,18 +50,55 @@ function completionEvidence(tiers: readonly string[]): CompletionEvidence {
   }
 }
 
+function restoredRequest(
+  result: BattleRunResult | null,
+  hintTiers: readonly string[],
+  runAt: string | null,
+): PlaybackRequest {
+  const snapshot = result === null ? null : structuredClone(result)
+  return {
+    requestId: 0,
+    origin: snapshot === null ? 'empty' : 'restored',
+    events: snapshot?.events ?? [],
+    result: snapshot,
+    hintTiers: [...hintTiers],
+    runAt,
+    eligibleForCompletion: false,
+    evidence: null,
+  }
+}
+
 export function DragonPalaceExperience({ reducedMotion, muted, onComplete }: Props) {
   const { progress, saveStatus, retrySave, updateMissionSession } = useProgress()
   const emptySessionRef = useRef(createMissionSession(EMPTY_SESSION_TIME))
   const session = progress.sessions[MISSION_ID] ?? emptySessionRef.current
-  const pendingCompletionRef = useRef<CompletionEvidence | null>(null)
+  const [playbackRequest, setPlaybackRequest] = useState<PlaybackRequest>(
+    () => restoredRequest(session.lastRun, session.usedHintTiers, session.lastRunAt),
+  )
+  const requestSequenceRef = useRef(playbackRequest.requestId)
+  const currentRequestRef = useRef(playbackRequest)
+  const consumedRequestsRef = useRef(new Set<number>())
+  const onCompleteRef = useRef(onComplete)
+  const missionCompletedRef = useRef(Boolean(progress.missions[MISSION_ID]))
   const workspaceRegionRef = useRef<HTMLDivElement>(null)
   const [diagnostic, setDiagnostic] = useState<FeedbackDiagnostic | null>(
     () => session.lastRun?.diagnostic ?? null,
   )
   const [occurrenceId, setOccurrenceId] = useState(0)
   const [focusBlockId, setFocusBlockId] = useState<string | null>(null)
-  const [replayToken, setReplayToken] = useState(0)
+  onCompleteRef.current = onComplete
+  missionCompletedRef.current = Boolean(progress.missions[MISSION_ID])
+
+  const replacePlaybackRequest = (request: PlaybackRequest) => {
+    currentRequestRef.current = request
+    setPlaybackRequest(request)
+  }
+
+  const invalidateCurrentCompletion = () => {
+    const current = currentRequestRef.current
+    if (!current.eligibleForCompletion) return
+    currentRequestRef.current = { ...current, eligibleForCompletion: false }
+  }
 
   const saveDraft = (draft: WorkspaceDraftV1) => {
     const now = new Date().toISOString()
@@ -62,7 +110,7 @@ export function DragonPalaceExperience({ reducedMotion, muted, onComplete }: Pro
 
   const run = (compileResult: CompileResult) => {
     setOccurrenceId((value) => value + 1)
-    pendingCompletionRef.current = null
+    invalidateCurrentCompletion()
 
     if (!compileResult.ok) {
       const primary = compileResult.diagnostics[0]
@@ -76,23 +124,57 @@ export function DragonPalaceExperience({ reducedMotion, muted, onComplete }: Pro
     }
 
     const result = runDragonPalaceBattle(compileResult.trace)
+    const resultSnapshot = structuredClone(result)
     const now = new Date().toISOString()
+    const hintTiers = [...session.usedHintTiers]
+    const request: PlaybackRequest = {
+      requestId: ++requestSequenceRef.current,
+      origin: 'run',
+      events: resultSnapshot.events,
+      result: resultSnapshot,
+      hintTiers,
+      runAt: now,
+      eligibleForCompletion: result.completed && !missionCompletedRef.current,
+      evidence: result.completed ? completionEvidence(hintTiers) : null,
+    }
+    replacePlaybackRequest(request)
     updateMissionSession(
       MISSION_ID,
       (current) => recordRun(current, result, compileResult.trace, now),
     )
     setDiagnostic(result.diagnostic)
-    setReplayToken((value) => value + 1)
-    if (result.completed) {
-      pendingCompletionRef.current = completionEvidence(session.usedHintTiers)
-    }
   }
 
-  const playbackComplete = () => {
-    const evidence = pendingCompletionRef.current
-    if (evidence === null) return
-    pendingCompletionRef.current = null
-    onComplete(evidence)
+  const playbackComplete = (requestId: number) => {
+    const current = currentRequestRef.current
+    if (
+      current.requestId !== requestId
+      || current.origin !== 'run'
+      || !current.eligibleForCompletion
+      || current.result?.completed !== true
+      || current.evidence === null
+      || missionCompletedRef.current
+      || consumedRequestsRef.current.has(requestId)
+    ) return
+    consumedRequestsRef.current.add(requestId)
+    currentRequestRef.current = { ...current, eligibleForCompletion: false }
+    onCompleteRef.current(current.evidence)
+  }
+
+  const replayLastRun = () => {
+    const result = session.lastRun ?? currentRequestRef.current.result
+    if (result === null) return
+    const resultSnapshot = structuredClone(result)
+    replacePlaybackRequest({
+      requestId: ++requestSequenceRef.current,
+      origin: 'replay',
+      events: resultSnapshot.events,
+      result: resultSnapshot,
+      hintTiers: [...session.usedHintTiers],
+      runAt: session.lastRunAt,
+      eligibleForCompletion: false,
+      evidence: null,
+    })
   }
 
   const focusWorkspace = () => {
@@ -106,19 +188,19 @@ export function DragonPalaceExperience({ reducedMotion, muted, onComplete }: Pro
       <div className="dragon-palace-scene-region">
         <Suspense fallback={<p role="status">龙宫场景加载中，请稍候……</p>}>
           <GameScene
-            events={session.lastRun?.events ?? []}
-            replayToken={replayToken}
+            events={playbackRequest.events}
+            replayToken={playbackRequest.requestId}
             reducedMotion={reducedMotion}
             muted={muted}
-            onPlaybackComplete={playbackComplete}
+            onPlaybackComplete={() => playbackComplete(playbackRequest.requestId)}
           />
         </Suspense>
         <div className="dragon-palace-scene-controls">
           <button
             type="button"
             className="button button-ghost"
-            disabled={session.lastRun === null}
-            onClick={() => setReplayToken((value) => value + 1)}
+            disabled={session.lastRun === null && playbackRequest.result === null}
+            onClick={replayLastRun}
           >
             重播最近一次
           </button>

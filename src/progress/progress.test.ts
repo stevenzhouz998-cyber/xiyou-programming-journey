@@ -25,7 +25,7 @@ describe('progress rules', () => {
     expect(isMissionUnlocked(progress, 'w2-m1')).toBe(true);
   });
 
-  it('keeps the best star score while counting attempts and hints', () => {
+  it('keeps the best star score while making repeated completion counters idempotent', () => {
     let progress = createInitialProgress();
     progress = {
       ...progress,
@@ -35,13 +35,26 @@ describe('progress rules', () => {
     progress = completeMission(progress, 'w1-m1', { stars: 3, hintsUsed: 0 });
     progress = completeMission(progress, 'w1-m1', { stars: 1, hintsUsed: 2 });
 
-    expect(progress.missions['w1-m1']).toMatchObject({ stars: 3, attempts: 2, hintsUsed: 2, status: 'completed' });
+    expect(progress.missions['w1-m1']).toMatchObject({ stars: 3, attempts: 1, hintsUsed: 0, status: 'completed' });
     expect(progress).toMatchObject({
       version: 3,
       schemaRevision: 1,
       sessions: {},
       privacy: { localDataNoticeSeen: true },
       recovery: { lastRecoveredAt: '2026-07-12T00:00:00.000Z', source: 'snapshot' },
+    });
+  });
+
+  it('preserves the first completion counters and timestamp across a repeated success', () => {
+    const first = completeMission(createInitialProgress(), 'w1-m1', { stars: 1, hintsUsed: 2 });
+    const firstRecord = structuredClone(first.missions['w1-m1']);
+    const repeated = completeMission(first, 'w1-m1', { stars: 3, hintsUsed: 2 });
+
+    expect(repeated.missions['w1-m1']).toEqual({
+      ...firstRecord,
+      stars: 3,
+      attempts: 1,
+      hintsUsed: 2,
     });
   });
 

@@ -112,6 +112,34 @@ describe('西游编程记', () => {
     });
   });
 
+  it('keeps repeated Dragon Palace success idempotent while still counting the engine run', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
+    fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
+    fireEvent.click(screen.getByRole('button', { name: '观察提示' }));
+    fireEvent.click(screen.getByRole('button', { name: '思路提示' }));
+    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：请求兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+    fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }));
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
+      missions: { 'w1-m1': { attempts: 1, hintsUsed: 2 } },
+      sessions: { 'w1-m1': { totalRuns: 1 } },
+    });
+
+    fireEvent.keyDown(screen.getByRole('dialog', { name: '闯关成功' }), { key: 'Escape' });
+    fireEvent.click(await screen.findByRole('button', { name: '龙宫求兵' }));
+    fireEvent.click(await screen.findByRole('button', { name: '执行战斗指令' }));
+    fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }));
+
+    expect(screen.queryByRole('dialog', { name: '闯关成功' })).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
+      missions: { 'w1-m1': { attempts: 1, hintsUsed: 2 } },
+      sessions: { 'w1-m1': { totalRuns: 2 } },
+    });
+  });
+
   it('isolates and traps the success dialog, then resets state on same-mode navigation', async () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
