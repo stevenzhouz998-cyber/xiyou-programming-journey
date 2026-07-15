@@ -232,16 +232,11 @@ test('@legacy snapshot recovery preserves corrupt source and exposes download', 
   expect(await page.evaluate(key => localStorage.getItem(key), corruptKey)).toBe(envelope);
 });
 
-test('@legacy keyboard-only PIN, hint and clear cancellation preserve focus isolation', async ({ page }) => {
+test('@legacy transactional parent PIN lifecycle, keyboard controls, and clear cancellation preserve focus', async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
   await page.goto('./');
   await expect(page.getByRole('button', { name: '我知道了' })).toBeFocused();
   await page.keyboard.press('Enter');
-  await page.evaluate(({ key, access }) => {
-    const progress = JSON.parse(localStorage.getItem(key)!);
-    progress.settings.parentPin = access;
-    localStorage.setItem(key, JSON.stringify(progress));
-  }, { key: currentKey, access: TEST_PARENT_ACCESS });
-  await page.reload();
   await page.getByRole('button', { name: /(开始第一关|继续今日闯关)/ }).focus();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/#\/mission\/w1-m1$/);
@@ -250,11 +245,126 @@ test('@legacy keyboard-only PIN, hint and clear cancellation preserve focus isol
   await page.keyboard.press('Enter');
   await expect(page.locator('.hint-panel p').nth(1)).toBeVisible();
   await page.goto('/xiyou-programming-journey/#/parent');
+  await expect(page.getByRole('heading', { name: '创建家长 PIN', level: 1 })).toBeFocused();
+  await expect(page.getByLabel('设置 4 位家长 PIN')).toHaveAttribute('type', 'password');
+  await expect(page.getByLabel('设置 4 位家长 PIN')).toHaveAttribute('autocomplete', 'new-password');
+
+  await page.getByLabel('设置 4 位家长 PIN').fill('2580');
+  await page.getByLabel('确认家长 PIN').fill('2580');
+  await page.getByRole('button', { name: '创建家长 PIN' }).click();
+  await expect(page.getByRole('alert')).toContainText('不能使用已经公开的旧默认码 2580');
+  await page.getByLabel('设置 4 位家长 PIN').fill('4826');
+  await page.getByLabel('确认家长 PIN').fill('4820');
+  await page.getByRole('button', { name: '创建家长 PIN' }).click();
+  await expect(page.getByRole('alert')).toContainText('两次输入的 PIN 不一致');
+  await page.getByLabel('确认家长 PIN').fill('4826');
+  await page.getByRole('button', { name: '创建家长 PIN' }).click();
+  await expect(page.getByRole('heading', { name: '请保存一次性恢复码' })).toBeFocused();
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).settings.parentPin, currentKey)).toBe('unset');
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '创建家长 PIN' })).toBeVisible();
+
+  await page.getByLabel('设置 4 位家长 PIN').fill('4826');
+  await page.getByLabel('确认家长 PIN').fill('4826');
+  await page.getByRole('button', { name: '创建家长 PIN' }).click();
+  const recoveryOutput = page.locator('output[aria-label="一次性恢复码"]');
+  const initialRecovery = (await recoveryOutput.textContent())!;
+  await page.evaluate(key => {
+    const state = { fail: true };
+    (window as typeof window & { __parentSaveState?: { fail: boolean } }).__parentSaveState = state;
+    const nativeSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (storageKey, value) {
+      if (storageKey === key && state.fail) throw new Error('intentional parent setting failure');
+      return nativeSetItem.call(this, storageKey, value);
+    };
+  }, currentKey);
+  await page.getByLabel('我已安全保存恢复码').check();
+  await page.getByRole('button', { name: '确认已保存并进入' }).click();
+  const commitAlert = page.getByText(/^新 PIN 尚未保存/);
+  await expect(commitAlert).toBeFocused();
+  await expect(commitAlert).toContainText('新 PIN 尚未保存');
+  await expect(recoveryOutput).toHaveText(initialRecovery);
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).settings.parentPin, currentKey)).toBe('unset');
+  await page.evaluate(() => { (window as typeof window & { __parentSaveState?: { fail: boolean } }).__parentSaveState!.fail = false; });
+  await page.getByRole('button', { name: '确认已保存并进入' }).click();
+  await expect(page.getByText('学习数据仅保存在这台电脑')).toBeVisible();
+
+  await page.getByRole('button', { name: '退出家长周报' }).click();
   await expect(page.getByRole('heading', { name: '家长周报', level: 1 })).toBeFocused();
   await page.getByLabel('家长 PIN').focus();
   for (const key of ['4', '8', '2', '6']) await page.keyboard.press(key);
   await expect(page.getByLabel('家长 PIN')).toHaveValue('4826');
   await page.keyboard.press('Enter');
+  await expect(page.getByText('学习数据仅保存在这台电脑')).toBeVisible();
+  await expect(page.getByLabel('当前 PIN')).toHaveValue('');
+  await expect(page.getByLabel('新 PIN', { exact: true })).toHaveValue('');
+
+  await page.getByLabel('当前 PIN').fill('4826');
+  await page.getByLabel('新 PIN', { exact: true }).fill('7319');
+  await page.getByLabel('确认新 PIN').fill('7319');
+  await page.getByRole('button', { name: '修改 PIN 并轮换恢复码' }).click();
+  await expect(page.getByRole('heading', { name: '请保存一次性恢复码' })).toBeFocused();
+  await page.reload();
+  await page.getByLabel('家长 PIN').fill('4826');
+  await page.getByRole('button', { name: '进入周报' }).click();
+  await expect(page.getByText('学习数据仅保存在这台电脑')).toBeVisible();
+
+  await page.getByLabel('当前 PIN').fill('4826');
+  await page.getByLabel('新 PIN', { exact: true }).fill('7319');
+  await page.getByLabel('确认新 PIN').fill('7319');
+  await page.getByRole('button', { name: '修改 PIN 并轮换恢复码' }).click();
+  const rotatedRecovery = (await recoveryOutput.textContent())!;
+  await page.getByLabel('我已安全保存恢复码').check();
+  await page.getByRole('button', { name: '确认已保存并进入' }).click();
+  await page.getByRole('button', { name: '退出家长周报' }).click();
+  await page.getByLabel('家长 PIN').fill('4826');
+  await page.getByRole('button', { name: '进入周报' }).click();
+  await expect(page.getByRole('alert')).toContainText('PIN 不正确');
+  await page.getByLabel('家长 PIN').fill('7319');
+  await page.getByRole('button', { name: '进入周报' }).click();
+  await expect(page.getByText('学习数据仅保存在这台电脑')).toBeVisible();
+
+  await page.getByRole('button', { name: '退出家长周报' }).click();
+  await page.getByRole('button', { name: '忘记 PIN，使用恢复码' }).click();
+  await page.getByLabel('恢复码').fill(initialRecovery);
+  await page.getByLabel('新的 4 位 PIN').fill('8642');
+  await page.getByLabel('确认新的 PIN').fill('8642');
+  await page.getByRole('button', { name: '验证并重设' }).click();
+  await expect(page.getByRole('alert')).toContainText('恢复码不正确');
+  await page.getByLabel('恢复码').fill(rotatedRecovery);
+  await page.getByRole('button', { name: '验证并重设' }).click();
+  await expect(page.getByRole('heading', { name: '请保存一次性恢复码' })).toBeFocused();
+  await page.reload();
+  await page.getByLabel('家长 PIN').fill('7319');
+  await page.getByRole('button', { name: '进入周报' }).click();
+  await expect(page.getByText('学习数据仅保存在这台电脑')).toBeVisible();
+
+  await page.getByRole('button', { name: '退出家长周报' }).click();
+  await page.getByRole('button', { name: '忘记 PIN，使用恢复码' }).click();
+  await page.getByLabel('恢复码').fill(rotatedRecovery);
+  await page.getByLabel('新的 4 位 PIN').fill('8642');
+  await page.getByLabel('确认新的 PIN').fill('8642');
+  await page.getByRole('button', { name: '验证并重设' }).click();
+  await page.getByLabel('我已安全保存恢复码').check();
+  await page.getByRole('button', { name: '确认已保存并进入' }).click();
+  await page.getByRole('button', { name: '退出家长周报' }).click();
+  await page.getByRole('button', { name: '忘记 PIN，使用恢复码' }).click();
+  await page.getByLabel('恢复码').fill(rotatedRecovery);
+  await page.getByLabel('新的 4 位 PIN').fill('9999');
+  await page.getByLabel('确认新的 PIN').fill('9999');
+  await page.getByRole('button', { name: '验证并重设' }).click();
+  await expect(page.getByRole('alert')).toContainText('恢复码不正确');
+  await page.getByRole('button', { name: '返回 PIN 登录' }).click();
+  await page.getByLabel('家长 PIN').focus();
+  for (const key of ['8', '6', '4', '2']) await page.keyboard.press(key);
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('学习数据仅保存在这台电脑')).toBeVisible();
+  expect(await page.locator('input[type="password"]').evaluateAll(inputs => inputs.map(input => (input as HTMLInputElement).value))).toEqual(['', '', '']);
+  expect(await page.locator('body').innerText()).not.toContain('4826');
+  expect(await page.locator('body').innerText()).not.toContain('7319');
+  expect(await page.locator('body').innerText()).not.toContain('8642');
+  if (testInfo.project.name === 'desktop-chromium-1440x1024') await captureScreenshot(page, testInfo, 'foundation-parent-1440.png');
+
   await page.getByRole('button', { name: '清空学习数据' }).focus(); await page.keyboard.press('Enter');
   await expect(page.getByTestId('parent-data-background')).toHaveAttribute('inert', '');
   await page.keyboard.press('Escape');
