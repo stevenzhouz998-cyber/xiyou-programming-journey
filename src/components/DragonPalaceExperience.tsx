@@ -101,11 +101,12 @@ export function DragonPalaceExperience({ reducedMotion, muted, onComplete }: Pro
     currentRequestRef.current = { ...current, eligibleForCompletion: false }
   }
 
-  const saveDraft = (draft: WorkspaceDraftV1) => {
+  const saveDraft = (draft: WorkspaceDraftV1, options?: { legacyWorkspaceKey?: string }) => {
     const now = new Date().toISOString()
     return updateMissionSession(
       MISSION_ID,
       (current) => updateWorkspaceDraft(current, draft, now),
+      options,
     )
   }
 

@@ -27,7 +27,10 @@ import { PROGRESS_SCHEMA_LIMITS } from '../progress/schema'
 interface Props {
   missionId: 'w1-m1'
   draft: WorkspaceDraftV1
-  onDraftChange: (draft: WorkspaceDraftV1) => { status: 'saved' | 'unsaved' | 'conflict' } | Promise<{ status: 'saved' | 'unsaved' | 'conflict' }>
+  onDraftChange: (
+    draft: WorkspaceDraftV1,
+    options?: { legacyWorkspaceKey?: string },
+  ) => { status: 'saved' | 'unsaved' | 'conflict' } | Promise<{ status: 'saved' | 'unsaved' | 'conflict' }>
   onRun: (result: CompileResult) => void
   focusBlockId: string | null
   onFocusHandled: () => void
@@ -432,18 +435,6 @@ export function BlocklyWorkspace({
   onDraftChangeRef.current = onDraftChange
   onFocusHandledRef.current = onFocusHandled
 
-  const removePendingLegacy = () => {
-    const key = pendingLegacyKeyRef.current
-    if (key === null) return
-    try {
-      localStorage.removeItem(key)
-      pendingLegacyKeyRef.current = null
-      setLegacyCleanupWarning(false)
-    } catch {
-      setLegacyCleanupWarning(true)
-    }
-  }
-
   const refreshWorkspace = (persist: boolean, force = false) => {
     const workspace = workspaceRef.current
     if (workspace === null) return
@@ -462,17 +453,27 @@ export function BlocklyWorkspace({
     const nextBytes = JSON.stringify(nextDraft)
     if (!force && lastDraftBytesRef.current === nextBytes) return
     lastDraftBytesRef.current = nextBytes
+    const pendingLegacyKey = pendingLegacyKeyRef.current
     try {
-      const result = onDraftChangeRef.current(nextDraft)
+      const result = pendingLegacyKey === null
+        ? onDraftChangeRef.current(nextDraft)
+        : onDraftChangeRef.current(nextDraft, { legacyWorkspaceKey: pendingLegacyKey })
       const handle = (resolved: { status: 'saved' | 'unsaved' | 'conflict' }) => {
         setSaveStatus(resolved.status === 'saved' ? 'saved' : 'unsaved')
-        if (resolved.status === 'saved') removePendingLegacy()
+        if (pendingLegacyKey !== null && resolved.status === 'saved') {
+          if (pendingLegacyKeyRef.current === pendingLegacyKey) pendingLegacyKeyRef.current = null
+          setLegacyCleanupWarning(false)
+        } else if (pendingLegacyKey !== null) setLegacyCleanupWarning(true)
       }
-      if (result instanceof Promise) void result.then(handle, () => setSaveStatus('unsaved'))
+      if (result instanceof Promise) void result.then(handle, () => {
+        setSaveStatus('unsaved')
+        if (pendingLegacyKey !== null) setLegacyCleanupWarning(true)
+      })
       else handle(result)
       setWorkspaceError(null)
     } catch {
       setSaveStatus('unsaved')
+      if (pendingLegacyKey !== null) setLegacyCleanupWarning(true)
     }
   }
 
@@ -716,8 +717,8 @@ export function BlocklyWorkspace({
       ) : null}
       {legacyCleanupWarning ? (
         <div role="alert">
-          <p>新草稿已保存但旧备份未清理。</p>
-          <button type="button" onClick={() => refreshWorkspace(true, true)}>重试清理旧备份</button>
+          <p>旧备份尚未清理，新草稿也尚未完成事务保存。</p>
+          <button type="button" onClick={() => refreshWorkspace(true, true)}>重试迁移保存</button>
         </div>
       ) : null}
       {workspaceError ? <p role="alert">{workspaceError}</p> : null}

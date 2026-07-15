@@ -16,6 +16,7 @@ class MemoryStorage implements Storage {
   private values = new Map<string, string>();
   failWrites = new Set<string>();
   failWritesOnce = new Set<string>();
+  failRemoves = new Set<string>();
   failCurrentValues = new Set<string>();
   failReads = new Set<string>();
   failReadAfterWrites = new Set<string>();
@@ -27,7 +28,11 @@ class MemoryStorage implements Storage {
     return this.values.get(key) ?? null;
   }
   key(index: number) { return [...this.values.keys()][index] ?? null; }
-  removeItem(key: string) { this.removedKeys.push(key); this.values.delete(key); }
+  removeItem(key: string) {
+    this.removedKeys.push(key);
+    if (this.failRemoves.has(key)) throw new Error(`remove-blocked:${key}`);
+    this.values.delete(key);
+  }
   setItem(key: string, value: string) {
     if (this.failWritesOnce.delete(key)) throw new Error(`write-blocked-once:${key}`);
     if (this.failWrites.has(key)) throw new Error(`write-blocked:${key}`);
@@ -62,6 +67,59 @@ describe('cross-tab storage coordinator', () => {
     expect(first).toMatchObject({ status: 'saved', revision: 1 });
     expect(stale).toMatchObject({ status: 'conflict', expectedRevision: 0, actualRevision: 1 });
     expect(JSON.parse(storage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ learnerName: 'A' });
+    expect(storage.getItem(REVISION_PROGRESS_KEY)).toBe('1');
+  });
+
+  it('rolls the V3 save back byte-for-byte when coordinated legacy cleanup fails', async () => {
+    const storage = new MemoryStorage();
+    const legacyWorkspaceKey = 'xiyou-workspace-w1-m1';
+    const legacyWorkspaceRaw = '{"blocks":{"languageVersion":0,"blocks":[]}}';
+    const currentRaw = serializeProgress({ ...createInitialProgress(), learnerName: '旧孩子' });
+    storage.setItem(CURRENT_PROGRESS_KEY, currentRaw);
+    storage.setItem(REVISION_PROGRESS_KEY, '0');
+    storage.setItem(legacyWorkspaceKey, legacyWorkspaceRaw);
+    storage.failRemoves.add(legacyWorkspaceKey);
+
+    const result = await saveProgressCoordinated(
+      { ...createInitialProgress(), learnerName: '迁移孩子' },
+      0,
+      { storage, lockManager: null, legacyWorkspaceKey },
+    );
+
+    expect(result).toMatchObject({ status: 'unsaved', error: expect.stringContaining('旧版积木草稿清理失败') });
+    expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe(currentRaw);
+    expect(storage.getItem(legacyWorkspaceKey)).toBe(legacyWorkspaceRaw);
+    expect(storage.getItem(REVISION_PROGRESS_KEY)).toBe('0');
+  });
+
+  it('serializes legacy cleanup with clear so exactly one same-revision transaction wins', async () => {
+    const storage = new MemoryStorage();
+    const legacyWorkspaceKey = 'xiyou-workspace-w1-m1';
+    storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(createInitialProgress()));
+    storage.setItem(REVISION_PROGRESS_KEY, '0');
+    storage.setItem(legacyWorkspaceKey, '{"legacy":true}');
+    let queue = Promise.resolve();
+    const lockManager = {
+      request: <T>(_name: string, callback: () => Promise<T> | T): Promise<T> => {
+        const run = queue.then(callback, callback);
+        queue = run.then(() => undefined, () => undefined);
+        return run;
+      },
+    };
+
+    const [saved, staleClear] = await Promise.all([
+      saveProgressCoordinated(
+        { ...createInitialProgress(), learnerName: '迁移孩子' },
+        0,
+        { storage, lockManager, legacyWorkspaceKey },
+      ),
+      clearProgressCoordinated(0, { storage, lockManager }),
+    ]);
+
+    expect(saved).toMatchObject({ status: 'saved', revision: 1 });
+    expect(staleClear).toMatchObject({ status: 'conflict', expectedRevision: 0, actualRevision: 1 });
+    expect(JSON.parse(storage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ learnerName: '迁移孩子' });
+    expect(storage.getItem(legacyWorkspaceKey)).toBeNull();
     expect(storage.getItem(REVISION_PROGRESS_KEY)).toBe('1');
   });
 

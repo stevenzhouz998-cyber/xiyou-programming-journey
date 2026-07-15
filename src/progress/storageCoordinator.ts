@@ -1,11 +1,12 @@
 import type { ProgressV3 } from './types';
 import {
   CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, REVISION_PROGRESS_KEY,
-  SNAPSHOT_PROGRESS_KEY, parseStoredRevision, saveProgressTransaction,
+  LEGACY_WORKSPACE_PREFIX, SNAPSHOT_PROGRESS_KEY, parseStoredRevision, saveProgressTransaction,
 } from './storage';
 
 export interface LockManagerLike { request<T>(name: string, callback: () => Promise<T> | T): Promise<T> }
 export interface CoordinatorOptions { storage?: Storage; lockManager?: LockManagerLike | null }
+export interface SaveCoordinatorOptions extends CoordinatorOptions { legacyWorkspaceKey?: string }
 export const PROGRESS_CONFLICT_ERROR = '其他标签页已更新，已暂停保存';
 type Conflict = { status: 'conflict'; expectedRevision: number; actualRevision: number; progress: ProgressV3; error: string };
 export type CoordinatedSaveResult =
@@ -95,7 +96,33 @@ export function coordinateProgressWrite<T>(
 }
 
 const saveKeys = [CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY, CORRUPT_PROGRESS_KEY, REVISION_PROGRESS_KEY];
-export function saveProgressCoordinated(progress: ProgressV3, expected: number, options: CoordinatorOptions = {}) {
-  return coordinateProgressWrite(progress, expected, options, saveKeys, storage => saveProgressTransaction(progress, storage),
+function saveWithLegacyCleanup(progress: ProgressV3, storage: Storage, legacyWorkspaceKey?: string) {
+  const saved = saveProgressTransaction(progress, storage);
+  if (saved.status !== 'saved' || legacyWorkspaceKey === undefined) return saved;
+  try {
+    storage.removeItem(legacyWorkspaceKey);
+    if (storage.getItem(legacyWorkspaceKey) !== null) throw new Error('删除后读回不一致');
+    return saved;
+  } catch (error) {
+    return { status: 'unsaved' as const, progress, error: `旧版积木草稿清理失败：${message(error)}` };
+  }
+}
+
+export function saveProgressCoordinated(
+  progress: ProgressV3,
+  expected: number,
+  options: SaveCoordinatorOptions = {},
+): Promise<CoordinatedSaveResult> {
+  const legacyWorkspaceKey = options.legacyWorkspaceKey;
+  if (legacyWorkspaceKey !== undefined && !legacyWorkspaceKey.startsWith(LEGACY_WORKSPACE_PREFIX)) {
+    return Promise.resolve({
+      status: 'unsaved' as const,
+      progress,
+      error: '旧版积木草稿键无效',
+    });
+  }
+  const transactionKeys = legacyWorkspaceKey === undefined ? saveKeys : [...saveKeys, legacyWorkspaceKey];
+  return coordinateProgressWrite(progress, expected, options, transactionKeys,
+    storage => saveWithLegacyCleanup(progress, storage, legacyWorkspaceKey),
     (result): result is ReturnType<typeof saveProgressTransaction> & CoordinatedSuccess => result.status === 'saved') as Promise<CoordinatedSaveResult>;
 }

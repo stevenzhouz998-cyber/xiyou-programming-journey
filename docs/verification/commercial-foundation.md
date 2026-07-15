@@ -1,26 +1,20 @@
 # Commercial foundation browser verification
 
-## 2026-07-15 storage concurrency correction
+## Current verified evidence — 2026-07-15
 
-The parent/save foundation now uses a persisted monotonic companion revision and one Web Lock for every application write transaction. A stale tab is rejected before snapshot/current/revision mutation, keeps its draft only in memory, and shows explicit **download this page backup** and **load the other tab version** actions. Generic retry cannot overwrite a conflict. Browsers without Web Locks use an in-process Promise queue; desktop Chromium additionally proves the real `navigator.locks.request` path.
+- Evidence scope: the Git commit containing this document, based on `439814b`.
+- Runner: Playwright 1.55.1 against a local release-like Vite 6.4.3 preview, with no HTTP compression.
+- Browser projects: desktop Chromium 1440×1024, tablet WebKit 768×1024, touch Chromium 390×844, desktop Firefox 1440×1024, and narrow touch Chromium 320×844.
+- Result: 74/74 Playwright scenarios passed with no skipped project in 4.2 minutes.
+- Non-browser gates: 436/436 Vitest tests, 18/18 bundle-script tests, 26/26 asset-manifest tests, TypeScript `--noEmit`, and `git diff --check` passed.
 
-Clear no longer snapshots the data being deleted. After the required parent-triggered backup download, it writes fresh initial V3 and deletes then reads back every V3 snapshot/corrupt key, V2 current/snapshot/corrupt key, V1 current, the old w1-m1 workspace bypass, and revision metadata. Any write, delete, or read-back failure rolls all related keys back byte-for-byte or reports an unknown result; a damaged fresh current can no longer recover pre-clear progress.
+The audited application paths for progress save, import, destructive clear, load repair, and legacy Blockly-workspace cleanup now use the same persisted monotonic revision contract. When `navigator.locks` is available, each transaction runs under the same named Web Lock; the fallback is an in-process Promise queue. A stale tab is rejected before mutation, keeps its draft in memory, and exposes explicit backup and rebase actions. Generic retry cannot overwrite a conflict.
 
-Fresh evidence: 433/433 unit tests, including held-lock regressions proving neither an older save nor an initial load repair can replace a newer in-memory child draft, dynamic rollback coverage for every legacy workspace key, and honest uncertain-storage handling; the two-tab Chromium suite uses a third lock holder to prove exactly one winner for two genuinely pending writers, visible stale-writer conflict, explicit rebase, and no stale revival after clear. The same sequential two-tab conflict/clear path passed Firefox and WebKit smoke. These additions raise the configured matrix to 74 scenarios; the whole site remains **not complete**.
+Legacy Blockly migration no longer deletes `xiyou-workspace-*` from the component after a separate save. The V3 current/snapshot write, legacy-key deletion and read-back, and revision increment are one coordinated transaction. A cleanup failure rolls the V3 write and legacy bytes back, and a concurrent clear using the same expected revision loses with an explicit conflict. Deterministic tests cover both cases. The product-code scan found no direct `localStorage.setItem`, `localStorage.removeItem`, or `localStorage.clear` call outside the storage transaction modules.
 
-- Date: 2026-07-13 (Asia/Shanghai)
-- Tested product tree SHA: `4f845efaecd9098fa6616728b73cc1b7bf7dc799`
-- Runner: Playwright 1.55.0, local release-like Vite preview, no HTTP compression
-- Projects: Chromium 1440×1024, WebKit 768×1024, touch Chromium 390×844, Firefox 1440×1024
-- Scenarios: 10 per project / 40 total; no skipped browser projects
+Clear writes a fresh initial V3 and deletes then reads back every captured V3 snapshot/corrupt key, V2 current/snapshot/corrupt key, V1 current, all `xiyou-workspace-*` keys, and revision metadata. Any write, delete, or read-back failure either rolls all captured bytes back or reports that storage may have changed; it is not presented as success.
 
-Fresh machine setup is reproducible with `npm ci && npm run install:browsers`. Linux CI may use `npx playwright install --with-deps chromium firefox webkit`; `--with-deps` was not run on this macOS host.
-
-## Executed evidence
-
-The suite performs the privacy acknowledgement, child failure and real Blockly command/run success, reload persistence, parent PIN/export, V1 migration, malformed import rollback, snapshot recovery, a second reopen with the recovered current save, byte-exact corrupt-source download and retained corrupt envelope, backup-and-clear, keyboard-only dialog/focus/import paths, recovery-notice focus return, system and user reduced-motion overrides, persistent visible mute controls, real CodeMirror/Python and AI tool loading, lazy-chunk failure/recovery, 320 px overflow, coarse-pointer targets, GitHub Pages base paths, unknown hash behavior, console/page/request health, and screenshots.
-
-Commands used for the final gate:
+### Commands and current metrics
 
 ```text
 npm test
@@ -30,42 +24,41 @@ npm run test:e2e -- --reporter=list
 git diff --check
 ```
 
-The fresh product-tree gate reported 159/159 Vitest tests, 14/14 bundle-script tests, 40/40 Playwright scenarios, zero skipped browser projects, and a clean worktree after the ordinary browser run. The recovery scenario passed in all four projects after recovering a snapshot, reloading the now-valid current save a second time, opening the PIN-protected parent page, downloading the exact persisted corruption envelope, and confirming the envelope key remained unchanged. Malformed or unreadable envelopes keep a valid current save at `normal` / `saved`, expose a separate parent-facing recovery-information error, and are never offered as downloads. Ordinary `npm run test:e2e` screenshots and transfer metrics stay under Playwright's per-test output directories and do not modify tracked evidence. The tracked screenshots below are updated only with `npm run test:e2e:update-evidence`; that explicit run also passed 40/40 at the previous screenshot baseline. Its fixed no-argument `Date` makes dynamic save timestamps repeatable without virtualizing timers or the Performance API. A repeated parent-evidence scenario produced the same SHA-256 `3d5a12e3ef82982149de188c277fb8376dcbbac84cb05b58d412c23ab4281518`.
+- Homepage entry static JS: 106.1 KiB gzip / 180 KiB budget.
+- Conservative homepage total: 415.9 KiB / 650 KiB budget.
+- Approved lazy Phaser chunk: 1,168.4 KiB raw / 1,600 KiB ceiling.
+- GameScene closure: 1,505.9 KiB raw / 431.3 KiB gzip.
+- Blockly workspace closure: 1,042.0 KiB raw / 302.7 KiB gzip.
+- Python editor closure: 696.3 KiB raw / 230.3 KiB gzip.
+- AI lab closure: 337.0 KiB raw / 109.4 KiB gzip.
+- Real cold Dragon Palace response bodies: 2,575,876 B, below the fixed 2.5 MiB budget.
 
-## Metrics
+The browser matrix covers privacy acknowledgement, real Blockly failure/correction/battle/persistence, parent PIN/export, V1/V2 migration, malformed import rollback, snapshot and corrupt-source recovery, backup-before-clear, keyboard/focus paths, reduced motion, mute controls, lazy-chunk failure/recovery, 320 px overflow, touch targets, GitHub Pages base paths, console/page/request health, cross-tab conflict/rebase, simultaneous-writer serialization, and prevention of stale revival after clear.
 
-- Homepage entry JS: 100.9 KiB gzip (budget 180 KiB).
-- Approved lazy Phaser chunk: 1,447.0 KiB raw / 331.9 KiB gzip (raw ceiling 1,600 KiB).
-- Blockly closure: 301.7 KiB gzip; Python closure: 225.0 KiB gzip; AI closure: 104.1 KiB gzip.
-- Mission tool operability checks use a 3,000 ms assertion; temporary tool-chunk failure must expose its alert within 1,000 ms.
-- The static cold-start gate conservatively totals entry JS gzip plus raw HTML, CSS and the three homepage JPEG files: **407.0 KiB / 650 KiB**. It fails the build above 650 KiB.
-- Browser QA independently collects the actual homepage request set, waits for every response-body promise after network idle, fails if any required local body cannot be read, and then sums the results. The no-compression preview measured **635,491 B / 665,600 B** across HTML, CSS, static JS and three JPEG requests. Resource Timing reported 253,569 B because of cache behavior; fully awaited response bodies are the authoritative fallback.
-- Asset optimization: `assets/source/visual/world-map.png` 2,768,227 B → `public/assets/world-map.jpg` 252,369 B (1536×1024, JPEG quality 55); `assets/source/visual/mentor.png` 2,656,744 B → `public/assets/mentor.jpg` 18,809 B (256×256); `assets/source/visual/young-hero.png` 2,703,718 B → `public/assets/young-hero.jpg` 21,394 B (256×256). macOS `sips` performed resize/format technical derivation from originals at baseline commit `629fa42`; no redrawing occurred. Original PNGs and non-shipping AVIF derivatives now live outside `public` under `assets/source/visual/` for provenance rollback. A build gate rejects any `.png` or `.avif` reintroduced under `public`; the fresh `dist` contained none and measured 3,296 KiB total / 3,288 KiB under `dist/assets`. Original generation prompts/licenses are still missing, so these derivatives are not final asset-provenance QA.
-
-## Screenshots
-
-- `screenshots/foundation-home-390.png`
-- `screenshots/foundation-home-768.png`
-- `screenshots/foundation-home-1440.png`
-- `screenshots/foundation-mission-1440.png`
-- `screenshots/foundation-parent-1440.png`
-
-These are browser evidence, not shipping assets. They retain the existing warm-paper, ink, jade, cinnabar and cloud-mountain direction; no new illustration asset was introduced.
-
-## Console, base path, and failure behavior
-
-- Expected application requests under `/xiyou-programming-journey/` returned below 400 in the base-path scenario.
-- Unknown hash routes intentionally return the home experience; this is distinct from a server-level missing-file 404.
-- Every scenario attaches console-error, page-error, failed-request and HTTP >=400 listeners before its first navigation and asserts no unexpected event afterward. Font requests aborted by deliberate route changes are classified explicitly; Python CDN and lazy 503 allowances exist only in their owning tests.
-- The explicit 503 chunk test is intentional and excluded from unexpected request failures. Its response is marked `no-store`; the recovery URL carries a retry token. WebKit verification reopens that retry URL in a clean tab because WebKit retains the rejected module in the failed document's module map.
-
-## Completion matrix audit
+### Current completion boundary
 
 | Row | Evidence level | Result |
 | --- | --- | --- |
-| Parent / saves | PIN, export, V1/V2→V3 migration, malformed import preservation, snapshot recovery, second-reopen corrupt download retention, backup-before-destructive-clear, exact rollback, monotonic revision, Web-Lock serialization, stale-writer conflict/rebase, privacy reset, and refresh paths in real browsers | **System loop complete for the implemented parent/save foundation**; this does not prove account/cloud sync |
-| UI / release | Four browser/device projects, 320 px overflow, keyboard/focus, touch targets, reduced-motion connection, lazy failure, base path and console checks | **Not complete**: public deployed cold-transfer/Lighthouse, production 404, asset-manifest provenance and deployed version matching remain unverified |
-| Blockly | First level actual command palette, visible workspace, wrong-order feedback and success/persistence | **One-level playable evidence only**; not full Blockly-system or 30-level evidence |
-| Python / AI | A valid V2 mode fixture is imported through the real parent PIN and keyboard-operated import transaction; it is used only to verify the real tool modes load and attempt real content. Pyodide health allowances are phase-scoped to `python-runtime`, the exact pinned jsDelivr directory, request/HTTP failures, and Firefox's exact normalized known console event on `w4-m2`. | **Mode UI and failure-path verification only**; fixture import is not a child progression or completion claim |
+| Parent / saves | Real-browser PIN, export, migration, recovery, rollback, revision serialization, conflict/rebase, backup and clear | **System loop complete for the implemented local parent/save foundation**; this does not prove account or cloud sync |
+| First Blockly battle | Real visible wrong program, child correction, code-driven battle, persistence, unlock and parent report | **One-level playable system evidence only**; not a 30-level claim |
+| UI / release | Five browser/device projects, 320 px, keyboard/focus, touch, reduced motion, lazy failure, base path, console and cold budgets | **Not complete**: public deployed Lighthouse/cold transfer, production 404, deployment-version matching and final release QA remain unverified |
+| Python / AI | Real editor/tool loading and bounded failure paths | **Mode UI and failure-path evidence only**; not child progression or completion evidence |
 
-Whole-site claim: **not complete**. No claim is made for 30-level full-content verification, battle, growth economy, divine beasts, equipment, rewards, public deployment, asset provenance, or commercial production completion. The next major gameplay blocker is the genuine code-driven battle/system loop; the next release blocker is deployed cold-network and Lighthouse verification.
+Whole-site claim: **not complete**. There is no claim for 30-level full-content evidence, the complete growth/reward/divine-beast/equipment/companion economy, public deployment verification, or commercial production completion.
+
+## Historical baseline — 2026-07-13 (not current evidence)
+
+This section preserves the older baseline for traceability. Its counts and metrics must not be combined with the 2026-07-15 result above.
+
+- Tested product tree SHA: `4f845efaecd9098fa6616728b73cc1b7bf7dc799`.
+- Runner: Playwright 1.55.0.
+- Projects: four browser/device projects.
+- Result: 159/159 Vitest tests, 14/14 bundle-script tests, and 40/40 Playwright scenarios.
+- Homepage entry JS: 100.9 KiB gzip.
+- Conservative homepage total: 407.0 KiB / 650 KiB.
+- Approved lazy Phaser chunk: 1,447.0 KiB raw / 331.9 KiB gzip.
+- Blockly, Python and AI closures: 301.7, 225.0 and 104.1 KiB gzip.
+- Historical no-compression homepage browser measurement: 635,491 B / 665,600 B.
+- Historical corrupt-envelope SHA-256 repeatability evidence: `3d5a12e3ef82982149de188c277fb8376dcbbac84cb05b58d412c23ab4281518`.
+
+The tracked files under `screenshots/foundation-*.png` belong to this historical screenshot baseline. Ordinary current `npm run test:e2e` runs keep screenshots and transfer artifacts under Playwright output directories and do not refresh those tracked files; only `npm run test:e2e:update-evidence` is allowed to replace them.

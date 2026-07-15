@@ -86,7 +86,10 @@ function setup({
 }: {
   draft?: WorkspaceDraftV1
   focusBlockId?: string | null
-  onDraftChange?: ReturnType<typeof vi.fn<(draft: WorkspaceDraftV1) => { status: 'saved' | 'unsaved' }>>
+  onDraftChange?: ReturnType<typeof vi.fn<(
+    draft: WorkspaceDraftV1,
+    options?: { legacyWorkspaceKey?: string },
+  ) => { status: 'saved' | 'unsaved' }>>
   onRun?: ReturnType<typeof vi.fn<(result: CompileResult) => void>>
   onFocusHandled?: ReturnType<typeof vi.fn<() => void>>
   workspace?: Blockly.Workspace
@@ -279,21 +282,30 @@ describe('BlocklyWorkspace', () => {
 
   it('migrates all three exact legacy labels with stable ids and connections, then removes saved bytes', async () => {
     localStorage.setItem(LEGACY_KEY, legacyBytes(['进入龙宫', '请求兵器', '试用兵器']))
-    const onDraftChange = vi.fn<(draft: WorkspaceDraftV1) => { status: 'saved' }>(
-      () => ({ status: 'saved' }),
+    const onDraftChange = vi.fn<(
+      draft: WorkspaceDraftV1,
+      options?: { legacyWorkspaceKey?: string },
+    ) => { status: 'saved' }>(
+      (_draft, options) => {
+        if (options?.legacyWorkspaceKey) localStorage.removeItem(options.legacyWorkspaceKey)
+        return { status: 'saved' }
+      },
     )
 
     setup({ onDraftChange })
 
     await waitFor(() => expect(onDraftChange).toHaveBeenCalledTimes(1))
-    expect(onDraftChange).toHaveBeenCalledWith({
-      version: 1,
-      blocks: [
-        expect.objectContaining({ id: 'legacy-1', type: 'xiyou_enter_palace', nextId: 'legacy-2' }),
-        expect.objectContaining({ id: 'legacy-2', type: 'xiyou_request_weapon', nextId: 'legacy-3' }),
-        expect.objectContaining({ id: 'legacy-3', type: 'xiyou_test_weapon', nextId: null }),
-      ],
-    })
+    expect(onDraftChange).toHaveBeenCalledWith(
+      {
+        version: 1,
+        blocks: [
+          expect.objectContaining({ id: 'legacy-1', type: 'xiyou_enter_palace', nextId: 'legacy-2' }),
+          expect.objectContaining({ id: 'legacy-2', type: 'xiyou_request_weapon', nextId: 'legacy-3' }),
+          expect.objectContaining({ id: 'legacy-3', type: 'xiyou_test_weapon', nextId: null }),
+        ],
+      },
+      { legacyWorkspaceKey: LEGACY_KEY },
+    )
     expect(localStorage.getItem(LEGACY_KEY)).toBeNull()
     expect(screen.getAllByRole('listitem')).toHaveLength(3)
   })
@@ -358,12 +370,15 @@ describe('BlocklyWorkspace', () => {
 
   it('migrates the exact legacy empty workspace bytes and removes them only after saving', async () => {
     localStorage.setItem(LEGACY_KEY, '{}')
-    const onDraftChange = vi.fn(() => ({ status: 'saved' as const }))
+    const onDraftChange = vi.fn((_draft: WorkspaceDraftV1, options?: { legacyWorkspaceKey?: string }) => {
+      if (options?.legacyWorkspaceKey) localStorage.removeItem(options.legacyWorkspaceKey)
+      return { status: 'saved' as const }
+    })
 
     setup({ onDraftChange })
 
     await waitFor(() => expect(onDraftChange).toHaveBeenCalledTimes(1))
-    expect(onDraftChange).toHaveBeenCalledWith(EMPTY_DRAFT)
+    expect(onDraftChange).toHaveBeenCalledWith(EMPTY_DRAFT, { legacyWorkspaceKey: LEGACY_KEY })
     expect(localStorage.getItem(LEGACY_KEY)).toBeNull()
     expect(screen.getByText(/指令卷轴还是空的/)).toBeInTheDocument()
   })
@@ -371,19 +386,22 @@ describe('BlocklyWorkspace', () => {
   it('keeps exact legacy empty bytes while unsaved and retries the same empty draft', async () => {
     localStorage.setItem(LEGACY_KEY, '{}')
     const onDraftChange = vi
-      .fn<(draft: WorkspaceDraftV1) => { status: 'saved' | 'unsaved' }>()
+      .fn<(draft: WorkspaceDraftV1, options?: { legacyWorkspaceKey?: string }) => { status: 'saved' | 'unsaved' }>()
       .mockReturnValueOnce({ status: 'unsaved' })
-      .mockReturnValueOnce({ status: 'saved' })
+      .mockImplementationOnce((_draft, options) => {
+        if (options?.legacyWorkspaceKey) localStorage.removeItem(options.legacyWorkspaceKey)
+        return { status: 'saved' }
+      })
 
     setup({ onDraftChange })
 
     await screen.findByText(/尚未保存/)
-    expect(onDraftChange).toHaveBeenNthCalledWith(1, EMPTY_DRAFT)
+    expect(onDraftChange).toHaveBeenNthCalledWith(1, EMPTY_DRAFT, { legacyWorkspaceKey: LEGACY_KEY })
     expect(localStorage.getItem(LEGACY_KEY)).toBe('{}')
 
     fireEvent.click(screen.getByRole('button', { name: '重试保存' }))
 
-    expect(onDraftChange).toHaveBeenNthCalledWith(2, EMPTY_DRAFT)
+    expect(onDraftChange).toHaveBeenNthCalledWith(2, EMPTY_DRAFT, { legacyWorkspaceKey: LEGACY_KEY })
     expect(screen.queryByText(/尚未保存/)).not.toBeInTheDocument()
     expect(localStorage.getItem(LEGACY_KEY)).toBeNull()
   })
@@ -490,17 +508,13 @@ describe('BlocklyWorkspace', () => {
     expect(dispose).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps saved status and the original backup when legacy cleanup throws', async () => {
+  it('keeps the original backup and reports the whole migration transaction unsaved', async () => {
     const original = legacyBytes(['进入龙宫'])
     localStorage.setItem(LEGACY_KEY, original)
-    vi.spyOn(localStorage, 'removeItem').mockImplementation(() => {
-      throw new Error('remove blocked')
-    })
+    setup({ onDraftChange: vi.fn(() => ({ status: 'unsaved' as const })) })
 
-    setup({ onDraftChange: vi.fn(() => ({ status: 'saved' as const })) })
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('新草稿已保存但旧备份未清理')
-    expect(screen.queryByText(/尚未保存/)).not.toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent('旧备份尚未清理，新草稿也尚未完成事务保存')
+    expect(screen.getByText(/尚未保存/)).toBeInTheDocument()
     expect(localStorage.getItem(LEGACY_KEY)).toBe(original)
   })
 
@@ -508,9 +522,12 @@ describe('BlocklyWorkspace', () => {
     const original = legacyBytes(['进入龙宫'])
     localStorage.setItem(LEGACY_KEY, original)
     const onDraftChange = vi
-      .fn<(draft: WorkspaceDraftV1) => { status: 'saved' | 'unsaved' }>()
+      .fn<(draft: WorkspaceDraftV1, options?: { legacyWorkspaceKey?: string }) => { status: 'saved' | 'unsaved' }>()
       .mockReturnValueOnce({ status: 'unsaved' })
-      .mockReturnValueOnce({ status: 'saved' })
+      .mockImplementationOnce((_draft, options) => {
+        if (options?.legacyWorkspaceKey) localStorage.removeItem(options.legacyWorkspaceKey)
+        return { status: 'saved' }
+      })
 
     setup({ onDraftChange })
     await screen.findByText(/尚未保存/)
@@ -518,6 +535,7 @@ describe('BlocklyWorkspace', () => {
 
     expect(onDraftChange).toHaveBeenCalledTimes(2)
     expect(onDraftChange.mock.calls[1][0]).toEqual(onDraftChange.mock.calls[0][0])
+    expect(onDraftChange.mock.calls[1][1]).toEqual({ legacyWorkspaceKey: LEGACY_KEY })
     expect(screen.queryByText(/尚未保存/)).not.toBeInTheDocument()
     expect(localStorage.getItem(LEGACY_KEY)).toBeNull()
   })

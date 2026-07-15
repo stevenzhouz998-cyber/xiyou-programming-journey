@@ -21,6 +21,7 @@ import type { CoordinatedSaveResult } from '../progress/storageCoordinator';
 import type { CoordinatedClearResult, CoordinatedImportResult } from '../progress/storageCoordinatorParent';
 
 export type ProgressSaveStatus = 'idle' | 'pending' | 'saved' | 'unsaved' | 'conflict';
+export interface ProgressWriteOptions { legacyWorkspaceKey?: string }
 
 export interface ProgressContextValue {
   progress: ProgressV3;
@@ -33,7 +34,11 @@ export interface ProgressContextValue {
   saveStatus: ProgressSaveStatus;
   saveError: string | null;
   complete: (missionId: string, input: CompletionInput) => Promise<CoordinatedSaveResult>;
-  updateMissionSession: (missionId: string, update: (session: MissionSession) => MissionSession) => Promise<CoordinatedSaveResult>;
+  updateMissionSession: (
+    missionId: string,
+    update: (session: MissionSession) => MissionSession,
+    options?: ProgressWriteOptions,
+  ) => Promise<CoordinatedSaveResult>;
   recordMissionHint: (missionId: string, tier: MissionSession['usedHintTiers'][number]) => Promise<CoordinatedSaveResult>;
   replaceProgress: (progress: ProgressV3) => Promise<CoordinatedSaveResult>;
   updateSettings: (settings: Partial<ProgressV3['settings']>) => Promise<CoordinatedSaveResult>;
@@ -49,9 +54,13 @@ export interface ProgressContextValue {
 const ProgressContext = createContext<ProgressContextValue | null>(null);
 const PROGRESS_CONFLICT_ERROR = '其他标签页已更新，已暂停保存';
 
-async function saveCoordinated(progress: ProgressV3, expectedRevision: number) {
+async function saveCoordinated(
+  progress: ProgressV3,
+  expectedRevision: number,
+  options: ProgressWriteOptions = {},
+) {
   const { saveProgressCoordinated } = await import('../progress/storageCoordinator');
-  return saveProgressCoordinated(progress, expectedRevision);
+  return saveProgressCoordinated(progress, expectedRevision, options);
 }
 
 export function ProgressProvider({ children }: { children: ReactNode }) {
@@ -112,7 +121,11 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       : null
   );
 
-  const commit = (next: ProgressV3, publishDraft = true): Promise<CoordinatedSaveResult> => {
+  const commit = (
+    next: ProgressV3,
+    publishDraft = true,
+    options: ProgressWriteOptions = {},
+  ): Promise<CoordinatedSaveResult> => {
     const blocked = currentConflict(next);
     if (blocked) return Promise.resolve(blocked);
     if (publishDraft) {
@@ -121,7 +134,11 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     }
     setSaveStatus('pending');
     setSaveError(null);
-    return enqueue(async () => markResult(await saveCoordinated(next, revisionRef.current), next, publishDraft));
+    return enqueue(async () => markResult(
+      await saveCoordinated(next, revisionRef.current, options),
+      next,
+      publishDraft,
+    ));
   };
 
   const runLoadRepair = async (repair: NonNullable<typeof initialLoad.repair>) => {
@@ -135,6 +152,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     missionId: string,
     update: (session: MissionSession) => MissionSession,
     now: string,
+    options: ProgressWriteOptions = {},
   ) => {
     if (!allMissions.some((mission) => mission.id === missionId)) throw new Error('任务编号无效');
     const currentProgress = progressRef.current;
@@ -147,7 +165,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       sessions: { ...currentProgress.sessions, [missionId]: updated },
       savedAt: now,
     });
-    return commit(next);
+    return commit(next, true, options);
   };
 
   const reloadExternalProgress = () => {
@@ -211,7 +229,9 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     saveStatus,
     saveError,
     complete: (missionId, input) => commit(completeMission(progressRef.current, missionId, input)),
-    updateMissionSession: (missionId, update) => updateMissionSessionAt(missionId, update, new Date().toISOString()),
+    updateMissionSession: (missionId, update, options) => (
+      updateMissionSessionAt(missionId, update, new Date().toISOString(), options)
+    ),
     recordMissionHint: (missionId, tier) => {
       const now = new Date().toISOString();
       return updateMissionSessionAt(missionId, (session) => recordHint(session, tier, now), now);

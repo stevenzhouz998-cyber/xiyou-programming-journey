@@ -335,6 +335,27 @@ describe('ProgressContext persistence status', () => {
       .toEqual(state.sessions['w1-m1']);
   });
 
+  it('passes legacy workspace cleanup through the same coordinated session save', async () => {
+    const legacyWorkspaceKey = 'xiyou-workspace-w1-m1';
+    installStorage({ [legacyWorkspaceKey]: '{"legacy":true}' });
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    let result: Awaited<ReturnType<ProgressContextValue['updateMissionSession']>> | undefined;
+    await act(async () => {
+      result = await latestContext!.updateMissionSession(
+        'w1-m1',
+        (session) => recordCompileFailure(session, 'program-structure', SESSION_NOW),
+        { legacyWorkspaceKey },
+      );
+    });
+
+    expect(result).toMatchObject({ status: 'saved', revision: 1 });
+    expect(localStorage.getItem(legacyWorkspaceKey)).toBeNull();
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).sessions['w1-m1'])
+      .toMatchObject({ compileFailures: 1 });
+    expect(localStorage.getItem(REVISION_PROGRESS_KEY)).toBe('1');
+  });
+
   it('updates an existing session instead of resetting its prior evidence', () => {
     const session = recordCompileFailure(createMissionSession(SESSION_NOW), 'program-structure', SESSION_NOW);
     installStorage({
