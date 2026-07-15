@@ -243,6 +243,43 @@ describe('RuyiStaffBlocklyWorkspace', () => {
     expect(screen.getByText('指令卷轴最多放500块积木，刚加入的积木没有保存。')).toBeVisible()
   })
 
+  it('rejects one connected three-block native paste at 499 without double-dispose and remains usable', async () => {
+    const onDraftChange = vi.fn(() => ({ status: 'saved' as const }))
+    const { workspace, onRun } = setup(chainDraft(499), onDraftChange)
+    onDraftChange.mockClear()
+
+    let pastedRoot!: Blockly.Block
+    act(() => {
+      Blockly.Events.disable()
+      try {
+        pastedRoot = workspace.newBlock('xiyou_inspect_weights', 'paste-root')
+        const middle = workspace.newBlock('xiyou_choose_ruyi_staff', 'paste-middle')
+        const tail = workspace.newBlock('xiyou_shrink_ruyi_staff', 'paste-tail')
+        pastedRoot.nextConnection!.connect(middle.previousConnection!)
+        middle.nextConnection!.connect(tail.previousConnection!)
+      } finally {
+        Blockly.Events.enable()
+      }
+      Blockly.Events.fire(new Blockly.Events.BlockCreate(pastedRoot))
+    })
+
+    await waitFor(() => expect(workspace.getAllBlocks(false)).toHaveLength(499))
+    expect(workspace.getBlockById('paste-root')).toBeNull()
+    expect(workspace.getBlockById('paste-middle')).toBeNull()
+    expect(workspace.getBlockById('paste-tail')).toBeNull()
+    expect(onDraftChange).not.toHaveBeenCalled()
+    expect(screen.getByText('指令卷轴最多放500块积木，刚加入的积木没有保存。')).toBeVisible()
+
+    fireEvent.click(screen.getByRole('button', { name: '加入：查看三件兵器重量' }))
+    await waitFor(() => expect(workspace.getAllBlocks(false)).toHaveLength(500))
+    fireEvent.click(screen.getAllByRole('button', { name: /^上移：/ })[1])
+    fireEvent.click(screen.getAllByRole('button', { name: /^删除：/ })[0])
+    await waitFor(() => expect(workspace.getAllBlocks(false)).toHaveLength(499))
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }))
+    expect(onRun).toHaveBeenLastCalledWith(expect.objectContaining({ ok: true }))
+    expect(onDraftChange).toHaveBeenCalledTimes(3)
+  }, 20_000)
+
   it('turns a synchronous draft persistence throw into one visible retry that can recover', async () => {
     const onDraftChange = vi.fn()
       .mockImplementationOnce(() => { throw new Error('synchronous persistence failure') })

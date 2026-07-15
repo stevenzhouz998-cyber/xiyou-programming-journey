@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProgressProvider, useProgress, type ProgressContextValue } from './ProgressContext';
 import { completeMission, createInitialProgress, serializeProgress } from '../progress/progress';
 import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, LEGACY_PROGRESS_KEY, REVISION_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from '../progress/storage';
@@ -11,6 +11,7 @@ import {
 } from '../progress/session';
 import { runRuyiStaffBattle } from '../battle/ruyiStaff';
 import type { RuyiStaffInstruction } from '../battle/types';
+import type { CoordinatedSaveResult } from '../progress/storageCoordinator';
 
 const originalStorage = localStorage;
 const originalLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
@@ -83,6 +84,8 @@ function Probe() {
       saveError: state.saveError,
       saveRetryable: state.saveRetryable,
       parentPin: state.progress.settings.parentPin,
+      muted: state.progress.settings.muted,
+      missions: state.progress.missions,
       sessions: state.progress.sessions,
       progressSavedAt: state.progress.savedAt,
     })}</output>
@@ -442,6 +445,111 @@ describe('ProgressContext persistence status', () => {
     expect(stored.missions['w1-m2']).toMatchObject({ attempts: 1, stars: 3 });
     expect(stored.sessions['w1-m2']).toMatchObject({ totalRuns: 1 });
     expect(localStorage.getItem(REVISION_PROGRESS_KEY)).toBe('2');
+  });
+
+  it('keeps one unpublished completion transaction across settings, hints, sessions and another completion', async () => {
+    installStorage({});
+    const pending: Array<{
+      progress: Parameters<typeof import('../progress/storageCoordinator').saveProgressCoordinated>[0];
+      resolve: (result: CoordinatedSaveResult) => void;
+    }> = [];
+    const saveProgressCoordinated = vi.fn<typeof import('../progress/storageCoordinator').saveProgressCoordinated>((progress) => (
+      new Promise<CoordinatedSaveResult>((resolve) => pending.push({ progress, resolve }))
+    ));
+    render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated } as unknown as typeof import('../progress/storageCoordinator'))}><Probe /></ProgressProvider>);
+
+    let writes!: Array<Promise<CoordinatedSaveResult>>;
+    act(() => {
+      writes = [
+        latestContext!.complete('w1-m1', { stars: 2, hintsUsed: 0 }),
+        latestContext!.updateSettings({ muted: true }),
+        latestContext!.recordMissionHint('w1-m2', 'observe'),
+        latestContext!.updateMissionSession('w1-m2', (session) => recordCompileFailure(session, 'program-structure', SESSION_NOW)),
+        latestContext!.complete('w1-m2', { stars: 3, hintsUsed: 1 }),
+      ];
+    });
+
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      muted: false, missions: {}, sessions: {}, saveStatus: 'pending',
+    });
+
+    for (let index = 0; index < writes.length; index += 1) {
+      await waitFor(() => expect(pending).toHaveLength(index + 1));
+      if (index < writes.length - 1) {
+        expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+          muted: false, missions: {}, sessions: {},
+        });
+      }
+      const current = pending[index];
+      await act(async () => current.resolve({ status: 'saved', revision: index + 1, progress: current.progress }));
+    }
+    await act(async () => { await Promise.all(writes); });
+
+    const final = JSON.parse(screen.getByTestId('state').textContent!);
+    expect(final).toMatchObject({
+      muted: true,
+      missions: {
+        'w1-m1': { status: 'completed', stars: 2 },
+        'w1-m2': { status: 'completed', stars: 3 },
+      },
+      sessions: { 'w1-m2': { compileFailures: 1, usedHintTiers: ['observe'] } },
+      saveStatus: 'saved',
+    });
+    expect(pending.every(({ progress }) => (
+      progress === pending[0].progress || progress.missions['w1-m1']?.status === 'completed'
+    ))).toBe(true);
+  });
+
+  it('blocks later unpublished writes after the first completion fails and retries the exact merged candidate', async () => {
+    installStorage({});
+    let resolveFirst!: (result: CoordinatedSaveResult) => void;
+    const first = new Promise<CoordinatedSaveResult>((resolve) => { resolveFirst = resolve; });
+    const saveProgressCoordinated = vi.fn<typeof import('../progress/storageCoordinator').saveProgressCoordinated>()
+      .mockImplementationOnce(() => first)
+      .mockImplementation(async (progress) => ({ status: 'saved', revision: 1, progress }));
+    render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated } as unknown as typeof import('../progress/storageCoordinator'))}><Probe /></ProgressProvider>);
+
+    let writes!: Array<Promise<CoordinatedSaveResult>>;
+    act(() => {
+      writes = [
+        latestContext!.complete('w1-m1', { stars: 2, hintsUsed: 0 }),
+        latestContext!.updateSettings({ muted: true }),
+        latestContext!.complete('w1-m2', { stars: 3, hintsUsed: 1 }),
+      ];
+    });
+    await waitFor(() => expect(saveProgressCoordinated).toHaveBeenCalledOnce());
+    await act(async () => resolveFirst({ status: 'unsaved', progress: saveProgressCoordinated.mock.calls[0][0], error: 'held completion failed' }));
+    await act(async () => { await Promise.all(writes); });
+
+    expect(saveProgressCoordinated).toHaveBeenCalledOnce();
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      muted: false, missions: {}, saveStatus: 'unsaved',
+    });
+    await act(async () => { await latestContext!.updateSettings({ reducedMotion: true }); });
+    expect(saveProgressCoordinated).toHaveBeenCalledOnce();
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      muted: false, missions: {}, saveStatus: 'unsaved',
+    });
+    const candidate = JSON.parse(latestContext!.createBackup().contents);
+    expect(candidate).toMatchObject({
+      settings: { muted: true, reducedMotion: true },
+      missions: {
+        'w1-m1': { status: 'completed', stars: 2 },
+        'w1-m2': { status: 'completed', stars: 3 },
+      },
+    });
+
+    await act(async () => { await latestContext!.retrySave(); });
+    expect(saveProgressCoordinated).toHaveBeenCalledTimes(2);
+    expect(saveProgressCoordinated.mock.calls[1][0]).toEqual(candidate);
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      muted: true,
+      missions: {
+        'w1-m1': { status: 'completed' },
+        'w1-m2': { status: 'completed' },
+      },
+      saveStatus: 'saved',
+    });
   });
 
   it('passes legacy workspace cleanup through the same coordinated session save', async () => {

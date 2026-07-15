@@ -47,6 +47,13 @@ describe('commercial responsive shell', () => {
     expect(css).toMatch(/\.ruyi-staff-program-region\s*\{[^}]*min-width:\s*0/s);
   });
 
+  it('keeps only a minimal current-run durability latch instead of retaining saved progress snapshots', () => {
+    const experience = readFileSync('src/components/RuyiStaffExperience.tsx', 'utf8');
+    expect(experience).not.toMatch(/new Map<number,\s*CoordinatedSaveResult>/);
+    expect(experience).not.toMatch(/\.set\(requestId,\s*saved\)/);
+    expect(experience).toMatch(/durableRunRef/);
+  });
+
   it('renders the executable w1-m2 mobile structure in scene-controls-program-feedback order with controlled overflow', async () => {
     localStorage.clear();
     const view = render(<div style={{ width: '320px' }}><ProgressProvider><RuyiStaffExperience reducedMotion muted onComplete={() => undefined} /></ProgressProvider></div>);

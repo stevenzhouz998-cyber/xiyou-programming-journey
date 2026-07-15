@@ -34,6 +34,7 @@ interface Playback {
   requestId: number; origin: 'empty' | 'restored' | 'run' | 'replay'; events: RuyiStaffBattleEvent[]; result: RuyiStaffBattleRunResult | null;
   eligible: boolean; evidence: Evidence | null; runAt: string | null; sessionSave: Promise<CoordinatedSaveResult> | null; sessionIdentity: string | null
 }
+interface DurableRunIdentity { requestId: number; runAt: string }
 function evidence(tiers: readonly string[]): Evidence { const count = new Set(tiers).size; return { stars: count === 0 ? 3 : count === 1 ? 2 : 1, hintsUsed: count } }
 function stableJson(value: unknown): string {
   return JSON.stringify(value, (_key, item) => {
@@ -65,8 +66,8 @@ export function RuyiStaffExperience({ reducedMotion, muted, onComplete, onSessio
   const emptyRef = useRef(createMissionSession(MISSION_ID, '1970-01-01T00:00:00.000Z'))
   const session = progress.sessions[MISSION_ID] ?? emptyRef.current
   const [playback, setPlayback] = useState(() => restored(session)); const playbackRef = useRef(playback); const sequenceRef = useRef(0)
-  const completedRequestsRef = useRef(new Set<number>()); const finishedPlaybackRef = useRef(new Set<number>()); const checkingSaveRef = useRef(new Set<number>()); const mountedRef = useRef(true)
-  const sessionDurableRef = useRef(new Map<number, CoordinatedSaveResult>())
+  const completedRequestRef = useRef<number | null>(null); const finishedPlaybackRequestRef = useRef<number | null>(null); const checkingSaveRef = useRef(new Set<number>()); const mountedRef = useRef(true)
+  const durableRunRef = useRef<DurableRunIdentity | null>(null)
   const completionHandedOffRequestRef = useRef<number | null>(null); const [completionHandedOffRequestId, setCompletionHandedOffRequestId] = useState<number | null>(null)
   const completeRef = useRef(onComplete); const sessionPersistenceRef = useRef(onSessionPersistenceActiveChange); const missionCompletedRef = useRef(Boolean(progress.missions[MISSION_ID]))
   const regionRef = useRef<HTMLDivElement>(null); const [diagnostic, setDiagnostic] = useState<Diagnostic | null>(() => session.lastRun?.diagnostic ?? null)
@@ -75,9 +76,16 @@ export function RuyiStaffExperience({ reducedMotion, muted, onComplete, onSessio
   completeRef.current = onComplete; sessionPersistenceRef.current = onSessionPersistenceActiveChange; missionCompletedRef.current = Boolean(progress.missions[MISSION_ID])
   useEffect(() => {
     mountedRef.current = true
-    return () => { mountedRef.current = false; sessionPersistenceRef.current(false) }
+    return () => { mountedRef.current = false; durableRunRef.current = null; finishedPlaybackRequestRef.current = null; completedRequestRef.current = null; sessionPersistenceRef.current(false) }
   }, [])
-  const replace = (next: Playback) => { playbackRef.current = next; setPlayback(next) }
+  const replace = (next: Playback) => {
+    if (playbackRef.current.requestId !== next.requestId) {
+      durableRunRef.current = null
+      finishedPlaybackRequestRef.current = null
+      completedRequestRef.current = null
+    }
+    playbackRef.current = next; setPlayback(next)
+  }
   useEffect(() => {
     if (currentSessionIdentity === syncedSessionIdentityRef.current) return
     const current = playbackRef.current
@@ -107,19 +115,19 @@ export function RuyiStaffExperience({ reducedMotion, muted, onComplete, onSessio
   }
   const maybeReleaseCompletion = (requestId: number) => {
     const current = playbackRef.current
-    const saved = sessionDurableRef.current.get(requestId)
-    if (!mountedRef.current || !saved || saved.status !== 'saved' || current.requestId !== requestId || current.origin !== 'run' || !current.eligible || current.result?.completed !== true || !current.evidence || !current.runAt || saved.progress.sessions[MISSION_ID]?.lastRunAt !== current.runAt || !finishedPlaybackRef.current.has(requestId) || missionCompletedRef.current || completedRequestsRef.current.has(requestId)) return
-    completedRequestsRef.current.add(requestId); completionHandedOffRequestRef.current = requestId; setCompletionHandedOffRequestId(requestId); playbackRef.current = { ...current, eligible: false }
+    const durable = durableRunRef.current
+    if (!mountedRef.current || !durable || durable.requestId !== requestId || current.requestId !== requestId || current.origin !== 'run' || !current.eligible || current.result?.completed !== true || !current.evidence || !current.runAt || durable.runAt !== current.runAt || finishedPlaybackRequestRef.current !== requestId || missionCompletedRef.current || completedRequestRef.current === requestId) return
+    completedRequestRef.current = requestId; durableRunRef.current = null; finishedPlaybackRequestRef.current = null; completionHandedOffRequestRef.current = requestId; setCompletionHandedOffRequestId(requestId); playbackRef.current = { ...current, eligible: false }
     sessionPersistenceRef.current(false)
     void completeRef.current(current.evidence)
   }
   const recordSessionSave = (requestId: number, saved: CoordinatedSaveResult) => {
     const current = playbackRef.current
-    if (!mountedRef.current || completedRequestsRef.current.has(requestId) || current.requestId !== requestId || current.origin !== 'run') return
+    if (!mountedRef.current || completedRequestRef.current === requestId || current.requestId !== requestId || current.origin !== 'run') return
     if (saved.status === 'conflict') { sessionPersistenceRef.current(false); return }
     if (saved.status !== 'saved' || !current.runAt || saved.progress.sessions[MISSION_ID]?.lastRunAt !== current.runAt) return
-    sessionDurableRef.current.set(requestId, saved)
-    if (!current.eligible || current.result?.completed !== true) sessionPersistenceRef.current(false)
+    if (!current.eligible || current.result?.completed !== true) { durableRunRef.current = null; sessionPersistenceRef.current(false); return }
+    durableRunRef.current = { requestId, runAt: current.runAt }
     maybeReleaseCompletion(requestId)
   }
   const checkSessionSave = (requestId: number, pending: Promise<CoordinatedSaveResult>) => {
@@ -132,10 +140,10 @@ export function RuyiStaffExperience({ reducedMotion, muted, onComplete, onSessio
   }
   const playbackComplete = (requestId: number) => {
     const current = playbackRef.current
-    if (current.requestId !== requestId || current.origin !== 'run' || !current.eligible || current.result?.completed !== true || !current.evidence || missionCompletedRef.current || completedRequestsRef.current.has(requestId)) return
-    finishedPlaybackRef.current.add(requestId)
+    if (current.requestId !== requestId || current.origin !== 'run' || !current.eligible || current.result?.completed !== true || !current.evidence || missionCompletedRef.current || completedRequestRef.current === requestId) return
+    finishedPlaybackRequestRef.current = requestId
     maybeReleaseCompletion(requestId)
-    if (current.sessionSave && !sessionDurableRef.current.has(requestId)) checkSessionSave(requestId, current.sessionSave)
+    if (current.sessionSave && durableRunRef.current?.requestId !== requestId) checkSessionSave(requestId, current.sessionSave)
   }
   const replay = () => {
     const result = session.lastRun ?? playbackRef.current.result; if (!result) return; const snapshot = structuredClone(result)

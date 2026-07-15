@@ -180,13 +180,17 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
       if (allBlocks.length > MAX_WORKSPACE_BLOCKS) {
         const createdIds = 'ids' in event && Array.isArray(event.ids) ? event.ids as string[] : []
         withoutEvents(() => {
-          const overflow = allBlocks.length - MAX_WORKSPACE_BLOCKS
           const created = createdIds.map((id) => workspace.getBlockById(id)).filter((block): block is Blockly.Block => block !== null)
-          const targets = created.length >= overflow ? created.slice(-overflow) : orderedBlocks(workspace).slice(MAX_WORKSPACE_BLOCKS)
-          targets.forEach((block) => block.dispose(false))
+          const candidates = created.length > 0 ? created : orderedBlocks(workspace).slice(MAX_WORKSPACE_BLOCKS)
+          const candidateIds = new Set(candidates.map((block) => block.id))
+          const roots = candidates.filter((block) => {
+            const parent = block.getParent()
+            return parent === null || !candidateIds.has(parent.id)
+          })
+          roots.forEach((block) => workspace.getBlockById(block.id)?.dispose(false))
         })
-        setCapacityMessage('指令卷轴最多放500块积木，刚加入的积木没有保存。')
         refresh(false)
+        setCapacityMessage('指令卷轴最多放500块积木，刚加入的积木没有保存。')
         return
       }
       refresh(true)

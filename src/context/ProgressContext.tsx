@@ -90,6 +90,13 @@ interface ProgressProviderProps {
   loadParentCoordinator?: typeof loadDefaultParentCoordinator;
 }
 
+type FailedSaveResult = Extract<CoordinatedSaveResult, { status: 'unsaved' | 'conflict' }>;
+interface UnpublishedTransaction {
+  draft: ProgressV3;
+  generation: number;
+  failure: FailedSaveResult | null;
+}
+
 export function ProgressProvider({
   children,
   loadSaveCoordinator = loadDefaultSaveCoordinator,
@@ -103,7 +110,7 @@ export function ProgressProvider({
   const revisionRef = useRef(initialLoad.revision);
   const conflictRef = useRef(false);
   const pendingRepairRef = useRef(initialLoad.repair);
-  const pendingUnpublishedRef = useRef<ProgressV3 | null>(null);
+  const pendingUnpublishedRef = useRef<UnpublishedTransaction | null>(null);
   const queueRef = useRef<Promise<unknown>>(Promise.resolve());
   const [loadState, setLoadState] = useState<LoadState>(() => loadStateFrom(initialLoad));
   const setLoadPersistence = (persistence: LoadState['persistence']) => {
@@ -165,9 +172,18 @@ export function ProgressProvider({
     draft: ProgressV3,
     publishDraft: boolean,
     retryable = true,
+    unpublishedGeneration: number | null = null,
   ) => {
     if (result.status === 'saved') {
-      if (pendingUnpublishedRef.current === draft) pendingUnpublishedRef.current = null;
+      if (unpublishedGeneration !== null) {
+        const transaction = pendingUnpublishedRef.current;
+        if (!transaction || transaction.generation !== unpublishedGeneration) {
+          publishRevision(result.revision);
+          setLoadPersistence('saved');
+          return result;
+        }
+        pendingUnpublishedRef.current = null;
+      }
       if (!publishDraft || progressRef.current === draft) publishSaved(result.progress, result.revision);
       else {
         // A newer child edit is already visible. The older durable save may
@@ -177,6 +193,12 @@ export function ProgressProvider({
       }
     }
     else {
+      if (unpublishedGeneration !== null) {
+        const transaction = pendingUnpublishedRef.current;
+        if (transaction && transaction.generation >= unpublishedGeneration && !transaction.failure) {
+          transaction.failure = result;
+        }
+      }
       conflictRef.current = result.status === 'conflict';
       setSaveStatus(result.status === 'conflict' ? 'conflict' : 'unsaved');
       setSaveError(result.error);
@@ -191,6 +213,14 @@ export function ProgressProvider({
       : null
   );
 
+  const workingProgress = () => pendingUnpublishedRef.current?.draft ?? progressRef.current;
+
+  const normalizeSaveFailure = (error: unknown, draft: ProgressV3): FailedSaveResult => ({
+    status: 'unsaved',
+    progress: draft,
+    error: `存储操作无法完成：${error instanceof Error ? error.message : String(error)}`,
+  });
+
   const commit = (
     next: ProgressV3,
     publishDraft = true,
@@ -198,9 +228,24 @@ export function ProgressProvider({
     retryable = true,
     retainUnpublished = false,
   ): Promise<CoordinatedSaveResult> => {
-    if (retainUnpublished) pendingUnpublishedRef.current = next;
+    const existingTransaction = pendingUnpublishedRef.current;
+    const holdUntilSaved = retainUnpublished || existingTransaction !== null;
+    const unpublishedGeneration = holdUntilSaved ? (existingTransaction?.generation ?? 0) + 1 : null;
+    if (unpublishedGeneration !== null) {
+      pendingUnpublishedRef.current = {
+        draft: next,
+        generation: unpublishedGeneration,
+        failure: existingTransaction?.failure ?? null,
+      };
+      publishDraft = false;
+    }
     const blocked = currentConflict(next);
-    if (blocked) return Promise.resolve(blocked);
+    if (blocked) {
+      if (unpublishedGeneration !== null && blocked.status !== 'saved') pendingUnpublishedRef.current!.failure = blocked;
+      return Promise.resolve(blocked);
+    }
+    const heldFailure = pendingUnpublishedRef.current?.failure;
+    if (unpublishedGeneration !== null && heldFailure) return Promise.resolve(heldFailure);
     if (publishDraft) {
       progressRef.current = next;
       setProgress(next);
@@ -208,12 +253,16 @@ export function ProgressProvider({
     setSaveStatus('pending');
     setSaveError(null);
     setSaveRetryable(retryable);
-    return enqueue(async () => markResult(
-      await saveCoordinated(next, revisionRef.current, options),
-      next,
-      publishDraft,
-      retryable,
-    ), 'unsaved', retryable);
+    return enqueue(async () => {
+      if (unpublishedGeneration !== null) {
+        const failure = pendingUnpublishedRef.current?.failure;
+        if (failure) return failure;
+      }
+      let result: CoordinatedSaveResult;
+      try { result = await saveCoordinated(next, revisionRef.current, options); }
+      catch (error) { result = normalizeSaveFailure(error, next); }
+      return markResult(result, next, publishDraft, retryable, unpublishedGeneration);
+    }, 'unsaved', retryable);
   };
 
   const runLoadRepair = async (repair: NonNullable<typeof initialLoad.repair>) => {
@@ -229,7 +278,7 @@ export function ProgressProvider({
     now: string,
     options: ProgressWriteOptions,
   ) => {
-    const currentProgress = progressRef.current;
+    const currentProgress = workingProgress();
     const next = migrateProgress({
       ...currentProgress,
       sessions: { ...currentProgress.sessions, [missionId]: updated },
@@ -241,13 +290,15 @@ export function ProgressProvider({
   const updateMissionSessionAt = (...args: MissionSessionUpdateAtArgs) => {
     const [missionId, update, now, options = {}] = args;
     if (missionId === 'w1-m1') {
-      const current = progressRef.current.sessions['w1-m1']
-        ? structuredClone(progressRef.current.sessions['w1-m1'])
+      const currentProgress = workingProgress();
+      const current = currentProgress.sessions['w1-m1']
+        ? structuredClone(currentProgress.sessions['w1-m1'])
         : createMissionSession('w1-m1', now);
       return persistMissionSession(missionId, update(current), now, options);
     }
-    const current = progressRef.current.sessions['w1-m2']
-      ? structuredClone(progressRef.current.sessions['w1-m2'])
+    const currentProgress = workingProgress();
+    const current = currentProgress.sessions['w1-m2']
+      ? structuredClone(currentProgress.sessions['w1-m2'])
       : createMissionSession('w1-m2', now);
     return persistMissionSession(missionId, update(current), now, options);
   };
@@ -340,7 +391,7 @@ export function ProgressProvider({
     saveStatus,
     saveError,
     saveRetryable,
-    complete: (missionId, input) => commit(completeMission(progressRef.current, missionId, input), false, {}, true, true),
+    complete: (missionId, input) => commit(completeMission(workingProgress(), missionId, input), false, {}, true, true),
     updateMissionSession,
     recordMissionHint: (missionId, tier) => {
       const now = new Date().toISOString();
@@ -358,11 +409,14 @@ export function ProgressProvider({
       );
     },
     replaceProgress: (next) => commit(next),
-    updateSettings: (settings) => commit({
-      ...progressRef.current,
-      settings: { ...progressRef.current.settings, ...settings },
-      savedAt: new Date().toISOString(),
-    }),
+    updateSettings: (settings) => {
+      const current = workingProgress();
+      return commit({
+        ...current,
+        settings: { ...current.settings, ...settings },
+        savedAt: new Date().toISOString(),
+      });
+    },
     commitParentAccess: (parentPin) => {
       const next = {
         ...progressRef.current,
@@ -398,14 +452,15 @@ export function ProgressProvider({
         const draft = progressRef.current;
         return markResult(await saveCoordinated(draft, revisionRef.current), draft, true);
       });
-      const draft = pendingUnpublishedRef.current ?? progressRef.current;
-      const publishDraft = pendingUnpublishedRef.current === null;
-      return enqueue(async () => markResult(
-        await saveCoordinated(draft, revisionRef.current),
-        draft,
-        publishDraft,
-        true,
-      ));
+      return enqueue(async () => {
+        const transaction = pendingUnpublishedRef.current;
+        const draft = transaction?.draft ?? progressRef.current;
+        const generation = transaction?.generation ?? null;
+        let result: CoordinatedSaveResult;
+        try { result = await saveCoordinated(draft, revisionRef.current); }
+        catch (error) { result = normalizeSaveFailure(error, draft); }
+        return markResult(result, draft, transaction === null, true, generation);
+      });
     },
     importProgressFile: (raw) => {
       if (conflictRef.current) return Promise.resolve(currentConflict() as CoordinatedImportResult);
@@ -441,7 +496,7 @@ export function ProgressProvider({
         return result;
       }, 'unchanged', false);
     },
-    createBackup: () => createProgressBackup(pendingUnpublishedRef.current ?? progressRef.current),
+    createBackup: () => createProgressBackup(pendingUnpublishedRef.current?.draft ?? progressRef.current),
     reloadExternalProgress,
   }), [
     loadState,
