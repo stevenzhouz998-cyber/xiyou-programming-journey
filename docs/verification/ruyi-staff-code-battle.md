@@ -1,10 +1,10 @@
 # Ruyi Staff code battle browser verification
 
 - Date: 2026-07-16 (Asia/Shanghai)
-- Tested implementation and strengthened browser-evidence commit: `430ca436dd97a9377380a6434f1479d7655d6963`; the commit containing this document is evidence-only.
+- Tested implementation and strengthened browser-evidence commit: `a89bda60d1bca1b59318e187ef698c59843bbfe2`; the commit containing this document is evidence-only.
 - Runner: Playwright against the local production Vite preview, with five configured projects and one worker
 - Projects: Chromium 1440×1024, Firefox 1440×1024, WebKit 768×1024, touch Chromium 390×844, and touch Chromium 320×844
-- Full result: **105/105 passed; zero failures, zero skipped tests, and zero skipped projects**
+- Full result: **109/109 passed; zero failures, zero skipped tests, and zero skipped projects**
 
 ## What the real-browser path proves
 
@@ -19,7 +19,9 @@ Additional matrix coverage includes:
 - intentional storage failure with a visible retry path, without falsely reporting an unsaved result as persisted;
 - corrupt V3 recovery, snapshot recovery, stable recovered block IDs, and byte-preserving damaged-source download;
 - parent aggregate plus export/import through the visible parent flow: the complete exported `w1-m2` session exactly matches storage, a visible mission edit removes the shrink block and persists a different two-block session, and visible parent import restores the complete exported session exactly;
-- the exact Ruyi Staff experience-chunk 503 path, retaining visible local recovery rather than blanking the application;
+- exact 503 paths for the outer Ruyi Staff experience, the formal Ruyi scene, and the real Ruyi Blockly workspace. Inner failures leave the unaffected half usable, while every failure retains the story, objective, local error, and explicit reload action;
+- exact outer-chunk 503 paths for Dragon Palace and the legacy mission tools, which now fail inside the play column rather than replacing the mission page;
+- unified Ruyi browser-health capture for console errors, page errors, and request failures. Injected failures are exempted only through their exact target URL chain; generic WebKit/Firefox importer errors additionally require an observed failure on that exact target. Unrelated `app-vendor` errors remain failures;
 - fixed cold-load collection that fails closed on request failure, unreadable bodies, redirects, non-2xx responses, or cache reuse;
 - 320 px touch targets, scene → program → feedback order, and no page-level horizontal overflow. Blockly's own workspace remains internally scrollable as intended.
 
@@ -27,16 +29,16 @@ The separate `w1-m3` compatibility regression preloads completed `w1-m1` and `w1
 
 ## Real scenario matrix
 
-The complete matrix contains the existing commercial-foundation and Dragon Palace regressions plus 21 assigned Ruyi Staff scenarios. Project-level filters assign each specialized scenario to the browser that actually performs it; excluded paths are not reported as passes or skips.
+The complete matrix contains the existing commercial-foundation and Dragon Palace regressions plus 23 assigned Ruyi Staff scenarios. Project-level filters assign each specialized scenario to the browser that actually performs it; excluded paths are not reported as passes or skips.
 
 | Project | Total tests | Assigned Ruyi Staff scenarios |
 | --- | ---: | ---: |
-| desktop-chromium-1440x1024 | 32 | 8 |
+| desktop-chromium-1440x1024 | 36 | 10 |
 | tablet-webkit-768x1024 | 20 | 4 |
 | mobile-chromium-390x844 | 18 | 3 |
 | desktop-firefox-1440x1024 | 20 | 4 |
 | narrow-chromium-320x844 | 15 | 2 |
-| **Total** | **105** | **21** |
+| **Total** | **109** | **23** |
 
 ## Fixed budget evidence
 
@@ -46,24 +48,24 @@ Every final project measured the same cold response-body total:
 
 | Route | Measured bytes | Limit | Headroom |
 | --- | ---: | ---: | ---: |
-| `w1-m1 龙宫求兵` | 2,595,678 | 2,621,440 | 25,762 |
-| `w1-m2 定海神针` | 2,587,431 | 2,621,440 | 34,009 |
+| `w1-m1 龙宫求兵` | 2,597,162 | 2,621,440 | 24,278 |
+| `w1-m2 定海神针` | 2,588,910 | 2,621,440 | 32,530 |
 
-The final desktop Chromium homepage measurement was 663,043 B / 665,600 B, leaving only 2,557 B of headroom; transferred bytes were 254,769 B. The same fixed gate passed in all five projects. These are narrow margins, not permission to add eager route code.
+The final desktop Chromium homepage measurement was 664,266 B / 665,600 B, leaving only 1,334 B of headroom; transferred bytes were 255,969 B. The same fixed gate passed in all five projects. These are narrow margins, not permission to add eager route code.
 
-The second formal mission is dynamically loaded. Route-only Dragon Palace/Ruyi experience code, compatibility mission tools, mission-only icons, Phaser, Blockly, CodeMirror, React/router, and shared icon code are split so neither formal mission must load the legacy `world-map.jpg`. Legacy missions still retain that backdrop through an explicit compatibility wrapper. The existing world-map asset was not re-encoded or modified: it remains 252,369 B with SHA-256 `391e0bad0f58bb147edeb40c7ba9e616a480851e88df5a4842795b341f795acc`.
+The second formal mission is dynamically loaded. Route-only Dragon Palace/Ruyi experience code, compatibility mission tools, mission-only icons, Phaser, Blockly, CodeMirror, React/router, and shared icon code are split so neither formal mission must load the legacy `world-map.jpg`. Focus restoration, shared validation, and progress-domain code now have explicit shared chunks: the final manifest contains zero non-entry static imports of the application entry and zero static or mixed static-dynamic dependency cycles. Legacy missions still retain their backdrop through an explicit compatibility wrapper. The existing world-map asset was not re-encoded or modified: it remains 252,369 B with SHA-256 `391e0bad0f58bb147edeb40c7ba9e616a480851e88df5a4842795b341f795acc`.
 
 Static bundle gates also passed:
 
 | Gate | Final result |
 | --- | ---: |
-| Entry static JS | 106.2 KiB gzip / 180 KiB |
-| Conservative homepage | 418.1 KiB / 650 KiB |
+| Entry static JS | 106.9 KiB gzip / 180 KiB |
+| Conservative homepage | 419.2 KiB / 650 KiB |
 | Phaser | 1,168.4 KiB raw / 1,600 KiB |
-| Blockly workspace closure | 1,005.1 KiB raw / 291.3 KiB gzip |
+| Blockly workspace closure | 991.0 KiB raw / 285.0 KiB gzip |
 | Ruyi Staff Blockly closure | 930.7 KiB raw / 267.8 KiB gzip |
-| Dragon Palace scene closure | 1,468.1 KiB raw / 419.2 KiB gzip |
-| Ruyi Staff scene closure | 1,468.5 KiB raw / 419.3 KiB gzip |
+| Dragon Palace scene closure | 1,468.2 KiB raw / 419.5 KiB gzip |
+| Ruyi Staff scene closure | 1,468.6 KiB raw / 419.6 KiB gzip |
 
 ## Asset and screenshot QA
 
@@ -96,6 +98,8 @@ The gate failed before it passed:
 10. The full unit suite subsequently exposed old synchronous/lazy timing assumptions: 541/543, then 542/543. Tests were changed to await the actual accessible route/workspace elements rather than weakening product assertions; the final result was **543/543**.
 11. Original-resolution review then rejected the nominal 320/390 result because the simple Blockly flyout remained open and pushed the real connected stack outside the host. New geometry assertions failed with a stack right edge of 475.96 px against host right edges of 370 px and 300 px. Narrow initialization and resize now convert the flyout to auto-close, hide it after Blockly's delayed show, resize the SVG, and use Blockly's own workspace viewport/connected-block operations to place the real stack inside the host. The focused mobile rerun passed 2/2, screenshot generation passed 5/5, and a fourth complete run passed **105/105** with exact block bounds and unobscured-control checks.
 12. Final specification review rejected three weak evidence boundaries: the wrong-program path did not assert the formal scene's blocked effect cell; parity reused one page and compared only opcodes; parent import compared only `lastTrace` without first persisting a visible mutation. Source inspection established RED for all three. The first strengthened focused run passed 8/9; the parent scenario attempted to use a success-dialog navigation label after an ordinary edit, so it never reached the real visible mission navigation. Binding it to the mission page's actual `成长地图` control made the parent rerun pass 1/1 and the strengthened focused set pass 9/9. The fifth complete run then passed **105/105** in 5.8 minutes with all three stronger claims inside the five-project matrix.
+13. Quality review then rejected two outer lazy boundaries and the generated manifest graph. The new browser checks lost both Dragon Palace and legacy mission headings under injected outer-chunk 503 responses, while the new manifest tests passed only 20/22 because the checker did not reject reverse entry imports or dependency cycles. The real manifest showed `ParentDataTools -> entry`, `PythonEditor -> entry`, and `app-core -> dynamic storageCoordinator -> static app-core`. Play-column boundaries restored local recovery; explicit focus, validation, and progress-domain shared chunks removed the graph defects; and the focused browser set passed 6/6 while manifest tests passed 22/22 without a whitelist or visited-set exception.
+14. The same review found no real Ruyi inner-boundary product defect: new outer-experience, scene, and Blockly 503 paths passed 3/3 immediately, but they closed a missing browser-evidence gap and introduced uniform console/page-error/request-failure capture. The first expanded full run exposed WebKit's generic importer error at `app-vendor`; after an initially over-narrow URL filter, the second full run passed 108/109 and exposed the equivalent Firefox `Error`. The final filter permits those generic browser messages only when the same test observed a failure on the exact injected target URL. Firefox/WebKit focused reruns passed 2/2, unrelated `app-vendor` negative cases remained rejected, and the final expanded run passed **109/109** in 5.8 minutes.
 
 ## Commands and final results
 
@@ -110,12 +114,12 @@ npm audit --registry=https://registry.npmjs.org
 git diff --check
 ```
 
-- `npm test`: 36 Vitest files / 543 tests, 20 bundle tests, and 27 asset tests passed;
+- `npm test`: 36 Vitest files / 543 tests, 22 bundle tests, and 27 asset tests passed;
 - `npm run typecheck`: exit 0;
 - `npm run verify:assets`: 5 files, 257,674 B / 1,310,720 B, all approved manifest checks passed;
 - `npm run verify:bundle`: all fixed entry, homepage, Phaser, Blockly, Ruyi Staff and scene closure gates passed;
-- `npx playwright test --list`: exactly 105 tests across the five projects listed above;
-- `npm run test:e2e`: 105/105 passed in 5.8 minutes, with zero failures and zero skips;
+- `npx playwright test --list`: exactly 109 tests across the five projects listed above;
+- `npm run test:e2e`: 109/109 passed in 5.8 minutes, with zero failures and zero skips;
 - official npm registry audit: zero known vulnerabilities;
 - `git diff --check`: no errors;
 - secret scan: no credential/key patterns found;
@@ -135,4 +139,4 @@ The product scan found only intentional occurrences: five `no emoji` prompt cons
 
 `整站：not complete`
 
-The cold-load headroom remains small: 25,762 B for `w1-m1`, 34,009 B for `w1-m2`, and only 2,557 B for the measured homepage. The formal Blockly route also depends on an external Blockly sprite. Existing global JPEG/audio provenance is incomplete; the untouched legacy world map remains outside release approval. Public deployment, production 404 behavior, deployed version matching, and public-network performance were not verified. The optional GStack browser wrapper was unavailable because it required setup, so no tool installation was performed; all claimed browser evidence comes from the project's real Chromium, Firefox, and WebKit Playwright runs plus original-resolution screenshot inspection.
+The cold-load headroom remains small: 24,278 B for `w1-m1`, 32,530 B for `w1-m2`, and only 1,334 B for the measured homepage. The formal Blockly route also depends on an external Blockly sprite. Existing global JPEG/audio provenance is incomplete; the untouched legacy world map remains outside release approval. Public deployment, production 404 behavior, deployed version matching, and public-network performance were not verified. The optional GStack browser wrapper was unavailable because it required setup, so no tool installation was performed; all claimed browser evidence comes from the project's real Chromium, Firefox, and WebKit Playwright runs plus original-resolution screenshot inspection.
