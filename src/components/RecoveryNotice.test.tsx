@@ -65,4 +65,20 @@ describe('RecoveryNotice', () => {
     expect(screen.getByRole('alert')).not.toHaveTextContent('安全保存');
     expect(screen.getByRole('link', { name: '请家长查看详情' })).toHaveAttribute('href', '#/parent?recovery=1');
   });
+
+  it('shows explicit cross-tab conflict recovery actions instead of an overwrite retry', () => {
+    const download = vi.fn();
+    const reload = vi.fn();
+    render(<RecoveryNotice
+      loadStatus="normal" persistence="unsaved" loadError={null}
+      saveError="其他标签页已更新，已暂停保存" hasCorruptDownload={false}
+      conflict onRetry={vi.fn()} onDownloadConflictBackup={download} onReloadExternal={reload}
+    />);
+    expect(screen.getByRole('alert')).toHaveTextContent('其他标签页已更新，已暂停保存');
+    expect(screen.queryByRole('button', { name: '重试保存' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '下载本页备份' }));
+    fireEvent.click(screen.getByRole('button', { name: '载入其他标签页版本' }));
+    expect(download).toHaveBeenCalledOnce();
+    expect(reload).toHaveBeenCalledOnce();
+  });
 });

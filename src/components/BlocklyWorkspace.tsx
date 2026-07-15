@@ -27,7 +27,7 @@ import { PROGRESS_SCHEMA_LIMITS } from '../progress/schema'
 interface Props {
   missionId: 'w1-m1'
   draft: WorkspaceDraftV1
-  onDraftChange: (draft: WorkspaceDraftV1) => { status: 'saved' | 'unsaved' }
+  onDraftChange: (draft: WorkspaceDraftV1) => { status: 'saved' | 'unsaved' | 'conflict' } | Promise<{ status: 'saved' | 'unsaved' | 'conflict' }>
   onRun: (result: CompileResult) => void
   focusBlockId: string | null
   onFocusHandled: () => void
@@ -464,8 +464,12 @@ export function BlocklyWorkspace({
     lastDraftBytesRef.current = nextBytes
     try {
       const result = onDraftChangeRef.current(nextDraft)
-      setSaveStatus(result.status)
-      if (result.status === 'saved') removePendingLegacy()
+      const handle = (resolved: { status: 'saved' | 'unsaved' | 'conflict' }) => {
+        setSaveStatus(resolved.status === 'saved' ? 'saved' : 'unsaved')
+        if (resolved.status === 'saved') removePendingLegacy()
+      }
+      if (result instanceof Promise) void result.then(handle, () => setSaveStatus('unsaved'))
+      else handle(result)
       setWorkspaceError(null)
     } catch {
       setSaveStatus('unsaved')

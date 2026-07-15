@@ -9,9 +9,12 @@ interface RecoveryNoticeProps {
   saveError: string | null;
   hasCorruptDownload: boolean;
   onRetry: () => unknown;
+  conflict?: boolean;
+  onDownloadConflictBackup?: () => void;
+  onReloadExternal?: () => void;
 }
 
-export function RecoveryNotice({ loadStatus, persistence, loadError, corruptError = null, saveError, hasCorruptDownload, onRetry }: RecoveryNoticeProps) {
+export function RecoveryNotice({ loadStatus, persistence, loadError, corruptError = null, saveError, hasCorruptDownload, onRetry, conflict = false, onDownloadConflictBackup, onReloadExternal }: RecoveryNoticeProps) {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => setDismissed(false), [persistence, loadStatus]);
@@ -22,6 +25,11 @@ export function RecoveryNotice({ loadStatus, persistence, loadError, corruptErro
     || loadStatus === 'reset-after-corruption';
 
   if (persistence === 'unsaved') {
+    if (conflict) return <aside className="recovery-notice recovery-notice-alert" role="alert">
+      <div><strong>其他标签页已更新，已暂停保存</strong><p>{saveError ?? '本页草稿仍保留在内存中，不会自动覆盖其他标签页。'}</p></div>
+      <button type="button" onClick={onDownloadConflictBackup}>下载本页备份</button>
+      <button type="button" onClick={onReloadExternal}>载入其他标签页版本</button>
+    </aside>;
     const message = loadStatus === 'recovered-from-snapshot'
       ? '已从安全快照恢复到当前会话，但本次进度尚未保存'
       : loadStatus === 'reset-after-corruption'

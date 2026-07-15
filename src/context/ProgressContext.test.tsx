@@ -1,8 +1,8 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ProgressProvider, useProgress, type ProgressContextValue } from './ProgressContext';
 import { createInitialProgress, serializeProgress } from '../progress/progress';
-import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from '../progress/storage';
+import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, LEGACY_PROGRESS_KEY, REVISION_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from '../progress/storage';
 import {
   createMissionSession,
   recordCompileFailure,
@@ -10,21 +10,32 @@ import {
 } from '../progress/session';
 
 const originalStorage = localStorage;
+const originalLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
 const SESSION_NOW = '2026-07-15T06:00:00.000Z';
 let latestContext: ProgressContextValue | null = null;
 
 function installStorage(initial: Record<string, string>, failWrites = false) {
   const values = new Map(Object.entries(initial));
-  const controls = { failWrites, failKeys: new Set<string>() };
+  const controls = {
+    failWrites,
+    failKeys: new Set<string>(),
+    failReads: new Set<string>(),
+    failReadAfterWrites: new Set<string>(),
+    peek: (key: string) => values.get(key) ?? null,
+  };
   const storage: Storage = {
     get length() { return values.size; },
     clear: () => values.clear(),
-    getItem: (key) => values.get(key) ?? null,
+    getItem: (key) => {
+      if (controls.failReads.has(key)) throw new Error('disk read unavailable');
+      return values.get(key) ?? null;
+    },
     key: (index) => [...values.keys()][index] ?? null,
     removeItem: (key) => { values.delete(key); },
     setItem: (key, value) => {
       if (controls.failWrites || controls.failKeys.has(key)) throw new Error('disk unavailable');
       values.set(key, value);
+      if (controls.failReadAfterWrites.has(key)) controls.failReads.add(key);
     },
   };
   Object.defineProperty(globalThis, 'localStorage', { value: storage, configurable: true });
@@ -36,6 +47,8 @@ afterEach(() => {
   Object.defineProperty(globalThis, 'localStorage', { value: originalStorage, configurable: true });
   Object.defineProperty(window, 'localStorage', { value: originalStorage, configurable: true });
   originalStorage.clear();
+  if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks);
+  else Reflect.deleteProperty(navigator, 'locks');
 });
 
 function Probe() {
@@ -64,23 +77,107 @@ function Probe() {
 }
 
 describe('ProgressContext persistence status', () => {
-  it('starts idle before the first durable mutation and then becomes saved', () => {
+  it('never lets an older completed save overwrite a newer in-memory draft', async () => {
+    installStorage({});
+    const held: Array<() => void> = [];
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: {
+        request: <T,>(_name: string, callback: () => Promise<T> | T) => new Promise<T>((resolve, reject) => {
+          held.push(() => { void Promise.resolve(callback()).then(resolve, reject); });
+        }),
+      },
+    });
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    let first!: ReturnType<ProgressContextValue['updateMissionSession']>;
+    let second!: ReturnType<ProgressContextValue['updateMissionSession']>;
+    act(() => {
+      first = latestContext!.updateMissionSession('w1-m1', (session) => recordCompileFailure(session, 'program-structure', SESSION_NOW));
+      second = latestContext!.updateMissionSession('w1-m1', (session) => recordCompileFailure(session, 'program-structure', SESSION_NOW));
+    });
+    await waitFor(() => expect(held).toHaveLength(1));
+    await act(async () => { held.shift()!(); await first; });
+
+    expect(latestContext!.progress.sessions['w1-m1'].compileFailures).toBe(2);
+
+    await waitFor(() => expect(held).toHaveLength(1));
+    await act(async () => { held.shift()!(); await second; });
+  });
+  it('never lets a held initial repair overwrite a newer in-memory draft', async () => {
+    installStorage({
+      [LEGACY_PROGRESS_KEY]: JSON.stringify({
+        version: 1, learnerName: '旧迁移', missions: {},
+        settings: { muted: false, reducedMotion: false, parentPin: '2580' },
+        savedAt: '2026-07-01T00:00:00.000Z',
+      }),
+      [REVISION_PROGRESS_KEY]: '0',
+    });
+    const held: Array<() => void> = [];
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: {
+        request: <T,>(_name: string, callback: () => Promise<T> | T) => new Promise<T>((resolve, reject) => {
+          held.push(() => { void Promise.resolve(callback()).then(resolve, reject); });
+        }),
+      },
+    });
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    await waitFor(() => expect(held).toHaveLength(1));
+
+    let edit!: ReturnType<ProgressContextValue['replaceProgress']>;
+    act(() => { edit = latestContext!.replaceProgress({ ...latestContext!.progress, learnerName: '快速新草稿' }); });
+    expect(latestContext!.progress.learnerName).toBe('快速新草稿');
+
+    await act(async () => { held.shift()!(); });
+    await waitFor(() => expect(held).toHaveLength(1));
+    expect(latestContext!.progress.learnerName).toBe('快速新草稿');
+
+    await act(async () => { held.shift()!(); await edit; });
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ learnerName: '快速新草稿' });
+    expect(localStorage.getItem(REVISION_PROGRESS_KEY)).toBe('2');
+  });
+  it('pauses a stale tab on an external revision and reloads only after an explicit user action', async () => {
+    installStorage({
+      [CURRENT_PROGRESS_KEY]: serializeProgress({ ...createInitialProgress(), learnerName: 'A 初始' }),
+      [REVISION_PROGRESS_KEY]: '1',
+    });
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({ ...createInitialProgress(), learnerName: 'B 已保存' }));
+    localStorage.setItem(REVISION_PROGRESS_KEY, '2');
+    window.dispatchEvent(new StorageEvent('storage', { key: REVISION_PROGRESS_KEY, newValue: '2' }));
+    await waitFor(() => expect(latestContext!.saveStatus).toBe('conflict'));
+    expect(latestContext!.progress.learnerName).toBe('A 初始');
+
+    const stale = await latestContext!.replaceProgress({ ...latestContext!.progress, learnerName: 'A 旧草稿' });
+    expect(stale).toMatchObject({ status: 'conflict' });
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ learnerName: 'B 已保存' });
+
+    act(() => latestContext!.reloadExternalProgress());
+    expect(latestContext!.progress.learnerName).toBe('B 已保存');
+    expect(latestContext!.revision).toBe(2);
+  });
+  it('starts idle before the first durable mutation and then becomes saved', async () => {
     installStorage({});
     render(<ProgressProvider><Probe /></ProgressProvider>);
     expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ loadPersistence: 'idle', saveStatus: 'idle' });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
-    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ loadPersistence: 'saved', saveStatus: 'saved' });
+    await waitFor(() => expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ loadPersistence: 'saved', saveStatus: 'saved' }));
   });
-  it('exposes snapshot recovery load details', () => {
+  it('exposes snapshot recovery load details and becomes saved only after coordinated repair', async () => {
     installStorage({
       [CURRENT_PROGRESS_KEY]: '{bad',
       [SNAPSHOT_PROGRESS_KEY]: serializeProgress({ ...createInitialProgress(), learnerName: '快照名字' }),
     });
     render(<ProgressProvider><Probe /></ProgressProvider>);
     expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
-      learnerName: '快照名字', loadStatus: 'recovered-from-snapshot', loadPersistence: 'saved', loadError: null,
+      learnerName: '快照名字', loadStatus: 'recovered-from-snapshot', loadPersistence: 'unsaved', loadError: null,
     });
     expect(JSON.parse(screen.getByTestId('state').textContent!).corruptDownload).toContain('"current":"{bad"');
+    await waitFor(() => expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      loadPersistence: 'saved', saveStatus: 'saved', saveError: null,
+    }));
   });
 
   it('exposes the preserved corrupt source again on the second initialization', () => {
@@ -102,56 +199,58 @@ describe('ProgressContext persistence status', () => {
     });
   });
 
-  it('keeps unsaved progress in the session and exposes save failure', () => {
+  it('keeps unsaved progress in the session and exposes save failure', async () => {
     installStorage({}, true);
     render(<ProgressProvider><Probe /></ProgressProvider>);
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
-    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+    await waitFor(() => expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
       learnerName: '会话新名字', saveStatus: 'unsaved', saveError: expect.stringContaining('写入当前存档'),
-    });
+    }));
   });
 
-  it('retries only after first creating a real unsaved session state', () => {
+  it('retries only after first creating a real unsaved session state', async () => {
     const storage = installStorage({}, true);
     render(<ProgressProvider><Probe /></ProgressProvider>);
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
-    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+    await waitFor(() => expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
       learnerName: '会话新名字', saveStatus: 'unsaved', saveError: expect.any(String),
-    });
+    }));
     storage.failWrites = false;
     fireEvent.click(screen.getByRole('button', { name: '重试保存' }));
-    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ saveStatus: 'saved', saveError: null });
+    await waitFor(() => expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ saveStatus: 'saved', saveError: null }));
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ learnerName: '会话新名字' });
   });
 
-  it('retries a recovered snapshot that could not initially be written back', () => {
+  it('retries a recovered snapshot that could not initially be written back', async () => {
     const storage = installStorage({
       [CURRENT_PROGRESS_KEY]: '{bad',
       [SNAPSHOT_PROGRESS_KEY]: serializeProgress({ ...createInitialProgress(), learnerName: '恢复会话' }),
     });
     storage.failKeys.add(CURRENT_PROGRESS_KEY);
     render(<ProgressProvider><Probe /></ProgressProvider>);
-    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+    await waitFor(() => expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
       learnerName: '恢复会话', loadStatus: 'recovered-from-snapshot', loadPersistence: 'unsaved',
-    });
+      saveStatus: 'unsaved', saveError: expect.stringContaining('写回加载存档'),
+    }));
     storage.failKeys.clear();
     fireEvent.click(screen.getByRole('button', { name: '重试保存' }));
-    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+    await waitFor(() => expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
       loadStatus: 'recovered-from-snapshot', loadPersistence: 'saved', saveStatus: 'saved', saveError: null,
-    });
+    }));
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ learnerName: '恢复会话' });
   });
 
-  it('replaces React progress only after an import is durably saved', () => {
+  it('replaces React progress only after an import is durably saved', async () => {
     const storage = installStorage({
       [CURRENT_PROGRESS_KEY]: serializeProgress({ ...createInitialProgress(), learnerName: '旧名字' }),
     }, true);
     render(<ProgressProvider><Probe /></ProgressProvider>);
     fireEvent.click(screen.getByRole('button', { name: '导入' }));
+    await waitFor(() => expect(latestContext!.saveStatus).toBe('unsaved'));
     expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ learnerName: '旧名字' });
     storage.failWrites = false;
     fireEvent.click(screen.getByRole('button', { name: '导入' }));
-    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ learnerName: '导入名字', saveStatus: 'saved' });
+    await waitFor(() => expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ learnerName: '导入名字', saveStatus: 'saved' }));
   });
 
   it('keeps current session progress when clear cannot be stored', () => {
@@ -163,15 +262,15 @@ describe('ProgressContext persistence status', () => {
     expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ learnerName: '保留我' });
   });
 
-  it('publishes a parent credential only after the dedicated durable transaction succeeds', () => {
+  it('publishes a parent credential only after the dedicated durable transaction succeeds', async () => {
     const initial = createInitialProgress();
     initial.settings.parentPin = '4826';
     const storage = installStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(initial) });
     storage.failKeys.add(CURRENT_PROGRESS_KEY);
     render(<ProgressProvider><Probe /></ProgressProvider>);
 
-    let failed: ReturnType<ProgressContextValue['commitParentAccess']> | undefined;
-    act(() => { failed = latestContext!.commitParentAccess('7319'); });
+    let failed: Awaited<ReturnType<ProgressContextValue['commitParentAccess']>> | undefined;
+    await act(async () => { failed = await latestContext!.commitParentAccess('7319'); });
     expect(failed).toMatchObject({ status: 'unsaved' });
     expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
       parentPin: '4826', saveStatus: 'idle', saveError: null,
@@ -179,25 +278,46 @@ describe('ProgressContext persistence status', () => {
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).settings.parentPin).toBe('4826');
 
     storage.failKeys.clear();
-    fireEvent.click(screen.getByRole('button', { name: '重试保存' }));
+    await act(async () => { await latestContext!.retrySave(); });
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).settings.parentPin).toBe('4826');
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
     expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ parentPin: '4826' });
 
-    let saved: ReturnType<ProgressContextValue['commitParentAccess']> | undefined;
-    act(() => { saved = latestContext!.commitParentAccess('7319'); });
+    let saved: Awaited<ReturnType<ProgressContextValue['commitParentAccess']>> | undefined;
+    await act(async () => { saved = await latestContext!.commitParentAccess('7319'); });
     expect(saved).toMatchObject({ status: 'saved' });
     expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({ parentPin: '7319', saveStatus: 'saved' });
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).settings.parentPin).toBe('7319');
   });
 
-  it('creates a missing mission session and commits an updater result through V3 storage', () => {
+  it('reports credential storage as uncertain when a write cannot be read back or rolled back', async () => {
+    const initial = createInitialProgress();
+    initial.settings.parentPin = '4826';
+    const storage = installStorage({
+      [CURRENT_PROGRESS_KEY]: serializeProgress(initial),
+      [REVISION_PROGRESS_KEY]: '0',
+    });
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    storage.failReadAfterWrites.add(CURRENT_PROGRESS_KEY);
+
+    let result: Awaited<ReturnType<ProgressContextValue['commitParentAccess']>> | undefined;
+    await act(async () => { result = await latestContext!.commitParentAccess('7319'); });
+
+    expect(result).toMatchObject({ status: 'unsaved', storageMayHaveChanged: true });
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      parentPin: '4826', saveStatus: 'unsaved', saveError: expect.stringContaining('回滚失败'),
+    });
+    expect(JSON.parse(storage.peek(CURRENT_PROGRESS_KEY)!).settings.parentPin).toBe('7319');
+    expect(storage.peek(REVISION_PROGRESS_KEY)).toBe('0');
+  });
+
+  it('creates a missing mission session and commits an updater result through V3 storage', async () => {
     installStorage({});
     render(<ProgressProvider><Probe /></ProgressProvider>);
 
-    let result: ReturnType<ProgressContextValue['updateMissionSession']> | undefined;
-    act(() => {
-      result = latestContext!.updateMissionSession('w1-m1', (session) => (
+    let result: Awaited<ReturnType<ProgressContextValue['updateMissionSession']>> | undefined;
+    await act(async () => {
+      result = await latestContext!.updateMissionSession('w1-m1', (session) => (
         recordCompileFailure(session, 'program-structure', SESSION_NOW)
       ));
     });
@@ -236,12 +356,12 @@ describe('ProgressContext persistence status', () => {
       .toMatchObject({ compileFailures: 2, conceptFailures: { programStructure: 2 } });
   });
 
-  it('keeps an unsaved session mutation in memory and retries the same evidence', () => {
+  it('keeps an unsaved session mutation in memory and retries the same evidence', async () => {
     const storage = installStorage({}, true);
     render(<ProgressProvider><Probe /></ProgressProvider>);
 
-    act(() => {
-      latestContext!.recordMissionHint('w1-m1', 'observe');
+    await act(async () => {
+      await latestContext!.recordMissionHint('w1-m1', 'observe');
     });
     const unsaved = JSON.parse(screen.getByTestId('state').textContent!);
     expect(unsaved).toMatchObject({
@@ -252,7 +372,7 @@ describe('ProgressContext persistence status', () => {
     expect(localStorage.getItem(CURRENT_PROGRESS_KEY)).toBeNull();
 
     storage.failWrites = false;
-    act(() => { latestContext!.retrySave(); });
+    await act(async () => { await latestContext!.retrySave(); });
 
     const saved = JSON.parse(screen.getByTestId('state').textContent!);
     expect(saved).toMatchObject({ saveStatus: 'saved', saveError: null });
@@ -306,15 +426,17 @@ describe('ProgressContext persistence status', () => {
     expect(localStorage.getItem(CURRENT_PROGRESS_KEY)).toBe(storedBefore);
   });
 
-  it('serializes two distinct hint mutations issued in the same event', () => {
+  it('serializes two distinct hint mutations issued in the same event', async () => {
     installStorage({});
     render(<ProgressProvider><Probe /></ProgressProvider>);
-    let first: ReturnType<ProgressContextValue['recordMissionHint']> | undefined;
-    let second: ReturnType<ProgressContextValue['recordMissionHint']> | undefined;
+    let first: Awaited<ReturnType<ProgressContextValue['recordMissionHint']>> | undefined;
+    let second: Awaited<ReturnType<ProgressContextValue['recordMissionHint']>> | undefined;
 
-    act(() => {
-      first = latestContext!.recordMissionHint('w1-m1', 'observe');
-      second = latestContext!.recordMissionHint('w1-m1', 'think');
+    await act(async () => {
+      const firstTask = latestContext!.recordMissionHint('w1-m1', 'observe');
+      const secondTask = latestContext!.recordMissionHint('w1-m1', 'think');
+      first = await firstTask;
+      second = await secondTask;
     });
 
     expect(first).toMatchObject({ status: 'saved' });
@@ -325,19 +447,21 @@ describe('ProgressContext persistence status', () => {
       .toEqual(state.sessions['w1-m1']);
   });
 
-  it('serializes two generic session updaters issued in the same event', () => {
+  it('serializes two generic session updaters issued in the same event', async () => {
     installStorage({});
     render(<ProgressProvider><Probe /></ProgressProvider>);
-    let first: ReturnType<ProgressContextValue['updateMissionSession']> | undefined;
-    let second: ReturnType<ProgressContextValue['updateMissionSession']> | undefined;
+    let first: Awaited<ReturnType<ProgressContextValue['updateMissionSession']>> | undefined;
+    let second: Awaited<ReturnType<ProgressContextValue['updateMissionSession']>> | undefined;
 
-    act(() => {
-      first = latestContext!.updateMissionSession('w1-m1', (session) => (
+    await act(async () => {
+      const firstTask = latestContext!.updateMissionSession('w1-m1', (session) => (
         recordCompileFailure(session, 'program-structure', SESSION_NOW)
       ));
-      second = latestContext!.updateMissionSession('w1-m1', (session) => (
+      const secondTask = latestContext!.updateMissionSession('w1-m1', (session) => (
         recordHint(session, 'partial', SESSION_NOW)
       ));
+      first = await firstTask;
+      second = await secondTask;
     });
 
     expect(first).toMatchObject({ status: 'saved' });
@@ -352,16 +476,16 @@ describe('ProgressContext persistence status', () => {
       .toEqual(state.sessions['w1-m1']);
   });
 
-  it('immediately retries the latest unsaved session before React rerenders', () => {
+  it('immediately retries the latest unsaved session before React rerenders', async () => {
     const storage = installStorage({}, true);
     render(<ProgressProvider><Probe /></ProgressProvider>);
-    let failed: ReturnType<ProgressContextValue['recordMissionHint']> | undefined;
-    let retried: ReturnType<ProgressContextValue['retrySave']> | undefined;
+    let failed: Awaited<ReturnType<ProgressContextValue['recordMissionHint']>> | undefined;
+    let retried: Awaited<ReturnType<ProgressContextValue['retrySave']>> | undefined;
 
-    act(() => {
-      failed = latestContext!.recordMissionHint('w1-m1', 'observe');
+    await act(async () => {
+      failed = await latestContext!.recordMissionHint('w1-m1', 'observe');
       storage.failWrites = false;
-      retried = latestContext!.retrySave();
+      retried = await latestContext!.retrySave();
     });
 
     expect(failed).toMatchObject({ status: 'unsaved' });

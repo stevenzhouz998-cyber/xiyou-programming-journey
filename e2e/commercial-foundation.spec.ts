@@ -303,9 +303,9 @@ test('@legacy transactional parent PIN lifecycle, keyboard controls, and clear c
   await setParentSaveFailure(page, true);
   await page.getByLabel('我已安全保存恢复码').check();
   await page.getByRole('button', { name: '确认已保存并进入' }).click();
-  const commitAlert = page.getByText(/^新 PIN 尚未保存/);
+  const commitAlert = page.getByText(/^浏览器未能完成新 PIN 的存储确认/);
   await expect(commitAlert).toBeFocused();
-  await expect(commitAlert).toContainText('新 PIN 尚未保存');
+  await expect(commitAlert).toContainText('未能完成新 PIN 的存储确认');
   await expect(recoveryOutput).toHaveText(initialRecovery);
   expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).settings.parentPin, currentKey)).toBe('unset');
   await page.getByRole('navigation').getByRole('button', { name: '成长地图' }).click();
@@ -562,14 +562,19 @@ test('@legacy persistent reduced motion and mute settings reach visible controls
   await expect(page.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'true');
   await page.getByRole('button', { name: '使用普通动画' }).click();
   await expect(page.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'false');
+  await expect.poll(() => page.evaluate(key => {
+    const settings = JSON.parse(localStorage.getItem(key)!).settings;
+    return [settings.reducedMotion, settings.reducedMotionOverride];
+  }, currentKey)).toEqual([false, true]);
   await page.reload();
   await expect(page.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'false');
   await page.getByRole('button', { name: '减弱动画' }).click();
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)!).settings.reducedMotion, currentKey)).toBe(true);
   await page.reload();
   await expect(page.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'true');
   await page.getByRole('button', { name: '关闭声音' }).click();
   await expect(page.getByRole('button', { name: '开启声音' })).toBeVisible();
-  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).settings.muted, currentKey)).toBe(true);
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)!).settings.muted, currentKey)).toBe(true);
   await page.reload();
   await expect(page.getByRole('button', { name: '开启声音' })).toBeVisible();
   expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).settings.muted, currentKey)).toBe(true);

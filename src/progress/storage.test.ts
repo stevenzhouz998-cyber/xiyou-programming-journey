@@ -10,15 +10,17 @@ import {
   LEGACY_V2_CORRUPT_KEY,
   LEGACY_V2_CURRENT_KEY,
   LEGACY_V2_SNAPSHOT_KEY,
+  LEGACY_WORKSPACE_KEY,
+  REVISION_PROGRESS_KEY,
   SNAPSHOT,
   SNAPSHOT_PROGRESS_KEY,
-  clearProgressTransaction,
   createProgressBackup,
-  importProgressTransaction,
   loadProgressTransaction,
   retrySave,
   saveProgressTransaction,
 } from './storage';
+import { repairLoadedProgressTransaction } from './storageRepair';
+import { clearProgressTransaction, importProgressTransaction } from './storageParent';
 import type { ProgressV3 } from './types';
 
 const NOW = new Date('2026-07-12T08:09:10.000Z');
@@ -30,6 +32,7 @@ class MemoryStorage implements Storage {
   throwAfterWrites = new Set<string>();
   mismatchWrites = new Set<string>();
   failReads = new Set<string>();
+  failRemoves = new Set<string>();
   failReadAfterWrites = new Set<string>();
   get length() { return this.values.size; }
   clear() { this.values.clear(); }
@@ -38,7 +41,10 @@ class MemoryStorage implements Storage {
     return this.values.get(key) ?? null;
   }
   key(index: number) { return [...this.values.keys()][index] ?? null; }
-  removeItem(key: string) { this.values.delete(key); }
+  removeItem(key: string) {
+    if (this.failRemoves.has(key)) throw new Error(`remove-blocked:${key}`);
+    this.values.delete(key);
+  }
   setItem(key: string, value: string) {
     if (this.failWrites.has(key)) throw new Error(`blocked:${key}`);
     this.values.set(key, this.mismatchWrites.has(key) ? `${value}-changed` : value);
@@ -50,6 +56,17 @@ class MemoryStorage implements Storage {
 
 function progress(name: string) {
   return { ...createInitialProgress(), learnerName: name };
+}
+
+function loadAndRepair(storage: Storage, loadClock = clock) {
+  const loaded = loadProgressTransaction(storage, loadClock);
+  if (!loaded.repair) return loaded;
+  const repaired = repairLoadedProgressTransaction(loaded.repair, storage);
+  return {
+    ...loaded,
+    persistence: repaired.status === 'saved' ? 'saved' as const : 'unsaved' as const,
+    error: repaired.status === 'saved' ? null : repaired.error,
+  };
 }
 
 function legacy(name = '旧行者') {
@@ -115,9 +132,24 @@ describe('progress storage transactions', () => {
     const storage = new MemoryStorage();
     expect(loadProgressTransaction(storage, clock)).toEqual({
       progress: createInitialProgress(), status: 'normal', corruptDownload: null,
-      persistence: 'idle', error: null, corruptError: null,
+      persistence: 'idle', error: null, corruptError: null, revision: 0, repair: null,
     });
     expect(storage.length).toBe(0);
+  });
+
+  it('loads the companion revision and fails closed on invalid revision bytes', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress('当前')));
+    storage.setItem(REVISION_PROGRESS_KEY, '12');
+    expect(loadProgressTransaction(storage, clock)).toMatchObject({ status: 'normal', revision: 12 });
+
+    storage.setItem(REVISION_PROGRESS_KEY, '01');
+    expect(loadProgressTransaction(storage, clock)).toMatchObject({
+      status: 'storage-unavailable', persistence: 'unsaved', revision: 0,
+      error: expect.stringContaining('revision'), progress: { learnerName: '小行者' },
+    });
+    expect(storage.getItem(REVISION_PROGRESS_KEY)).toBe('01');
+    expect(JSON.parse(storage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ learnerName: '当前' });
   });
 
   it('reports the original write failure when verification also fails', () => {
@@ -146,7 +178,10 @@ describe('progress storage transactions', () => {
     storage.setItem(LEGACY_V2_SNAPSHOT_KEY, v2Snapshot);
     storage.setItem(LEGACY_V2_CORRUPT_KEY, v2Corrupt);
 
-    const result = loadProgressTransaction(storage, clock);
+    const inspected = loadProgressTransaction(storage, clock);
+    expect(inspected).toMatchObject({ status: 'migrated', persistence: 'unsaved' });
+    expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBeNull();
+    const result = loadAndRepair(storage);
 
     expect(result).toMatchObject({
       status: 'migrated', persistence: 'saved', error: null, corruptError: null,
@@ -166,7 +201,7 @@ describe('progress storage transactions', () => {
     storage.setItem(LEGACY_V2_CURRENT_KEY, badV2);
     storage.setItem(LEGACY_PROGRESS_KEY, validV1);
 
-    expect(loadProgressTransaction(storage, clock)).toMatchObject({
+    expect(loadAndRepair(storage)).toMatchObject({
       status: 'migrated', persistence: 'saved', progress: { learnerName: 'V1 回退' },
     });
     expect(storage.getItem(LEGACY_V2_CURRENT_KEY)).toBe(badV2);
@@ -278,7 +313,7 @@ describe('progress storage transactions', () => {
   it('migrates a valid legacy V1 and preserves the legacy key', () => {
     const storage = new MemoryStorage();
     storage.setItem(LEGACY_PROGRESS_KEY, legacy());
-    const result = loadProgressTransaction(storage, clock);
+    const result = loadAndRepair(storage);
     expect(result).toMatchObject({ status: 'migrated', persistence: 'saved', error: null, progress: { version: 3, sessions: {}, learnerName: '旧行者' } });
     expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe(serializeProgress(result.progress));
     expect(storage.getItem(LEGACY_PROGRESS_KEY)).toBe(legacy());
@@ -288,9 +323,9 @@ describe('progress storage transactions', () => {
     const storage = new MemoryStorage();
     storage.setItem(LEGACY_PROGRESS_KEY, legacy());
     storage.failWrites.add(CURRENT_PROGRESS_KEY);
-    expect(loadProgressTransaction(storage, clock)).toMatchObject({
+    expect(loadAndRepair(storage)).toMatchObject({
       status: 'migrated', persistence: 'unsaved', progress: { learnerName: '旧行者' },
-      error: expect.stringContaining('迁移当前存档'),
+      error: expect.stringContaining('写回加载存档'),
     });
     expect(storage.getItem(LEGACY_PROGRESS_KEY)).toBe(legacy());
   });
@@ -303,9 +338,9 @@ describe('progress storage transactions', () => {
     storage.setItem(LEGACY_V2_CORRUPT_KEY, v2Envelope);
     storage.failWrites.add(CURRENT_PROGRESS_KEY);
 
-    expect(loadProgressTransaction(storage, clock)).toMatchObject({
+    expect(loadAndRepair(storage)).toMatchObject({
       status: 'migrated', persistence: 'unsaved', corruptDownload: v2Envelope,
-      progress: { learnerName: '写失败 V2' }, error: expect.stringContaining('迁移当前存档'),
+      progress: { learnerName: '写失败 V2' }, error: expect.stringContaining('写回加载存档'),
     });
     expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBeNull();
     expect(storage.getItem(LEGACY_V2_CURRENT_KEY)).toBe(v2Current);
@@ -316,7 +351,7 @@ describe('progress storage transactions', () => {
     const storage = new MemoryStorage();
     storage.setItem(CURRENT_PROGRESS_KEY, '{bad current');
     storage.setItem(SNAPSHOT_PROGRESS_KEY, serializeProgress(progress('快照')));
-    const result = loadProgressTransaction(storage, clock);
+    const result = loadAndRepair(storage);
     expect(result).toMatchObject({
       status: 'recovered-from-snapshot',
       persistence: 'saved', error: null,
@@ -328,6 +363,18 @@ describe('progress storage transactions', () => {
     expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe(serializeProgress(result.progress));
   });
 
+  it('inspects a corrupt load without mutating storage', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(CURRENT_PROGRESS_KEY, '{bad current');
+    storage.setItem(SNAPSHOT_PROGRESS_KEY, serializeProgress(progress('旧快照')));
+    const before = storage.snapshot();
+
+    const loaded = loadProgressTransaction(storage, clock);
+
+    expect(loaded).toMatchObject({ status: 'recovered-from-snapshot', persistence: 'unsaved', repair: { expectedCurrentRaw: '{bad current' } });
+    expect(storage.snapshot()).toEqual(before);
+  });
+
   it('recovers V3 snapshot sessions and preserves them when reopened', () => {
     const storage = new MemoryStorage();
     const damagedBytes = '\u0000{broken V3 bytes}\n';
@@ -335,7 +382,7 @@ describe('progress storage transactions', () => {
     storage.setItem(CURRENT_PROGRESS_KEY, damagedBytes);
     storage.setItem(SNAPSHOT_PROGRESS_KEY, serializeProgress(snapshot));
 
-    const recovered = loadProgressTransaction(storage, clock);
+    const recovered = loadAndRepair(storage);
     expect(recovered).toMatchObject({
       status: 'recovered-from-snapshot', persistence: 'saved',
       progress: { learnerName: '含会话快照', sessions: { 'w1-m1': { totalRuns: 4 } } },
@@ -354,7 +401,7 @@ describe('progress storage transactions', () => {
     const storage = new MemoryStorage();
     storage.setItem(CURRENT_PROGRESS_KEY, '{bad current');
     storage.setItem(SNAPSHOT_PROGRESS_KEY, '{bad snapshot');
-    const result = loadProgressTransaction(storage, clock);
+    const result = loadAndRepair(storage);
     expect(result).toMatchObject({
       status: 'reset-after-corruption', persistence: 'saved', error: null,
       progress: { recovery: { source: 'initial', lastRecoveredAt: NOW.toISOString() } },
@@ -367,7 +414,7 @@ describe('progress storage transactions', () => {
     const storage = new MemoryStorage();
     storage.setItem(CURRENT_PROGRESS_KEY, '{bad');
     storage.setItem(SNAPSHOT_PROGRESS_KEY, JSON.stringify({ version: 999 }));
-    const result = loadProgressTransaction(storage, clock);
+    const result = loadAndRepair(storage);
     expect(result.status).toBe('reset-after-corruption');
     expect(JSON.parse(result.corruptDownload!).snapshot).toBe(JSON.stringify({ version: 999 }));
   });
@@ -377,7 +424,7 @@ describe('progress storage transactions', () => {
     storage.setItem(CURRENT_PROGRESS_KEY, '{bad');
     storage.setItem(SNAPSHOT_PROGRESS_KEY, serializeProgress(progress('快照')));
     storage.failWrites.add(CORRUPT_PROGRESS_KEY);
-    const result = loadProgressTransaction(storage, clock);
+    const result = loadAndRepair(storage);
     expect(result).toMatchObject({
       status: 'recovered-from-snapshot', persistence: 'unsaved', progress: { learnerName: '快照' },
       error: expect.stringContaining('保留损坏存档'),
@@ -391,18 +438,17 @@ describe('progress storage transactions', () => {
     storage.setItem(CURRENT_PROGRESS_KEY, '{bad current');
     storage.setItem(SNAPSHOT_PROGRESS_KEY, '{bad snapshot');
     storage.failWrites.add(CORRUPT_PROGRESS_KEY);
-    expect(loadProgressTransaction(storage, clock)).toMatchObject({
+    expect(loadAndRepair(storage)).toMatchObject({
       status: 'reset-after-corruption', persistence: 'unsaved',
       error: expect.stringContaining('保留损坏存档'),
     });
     expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe('{bad current');
   });
 
-  it('keeps corrupt current protected across later save, import, and clear transactions', () => {
+  it('keeps corrupt current protected across later save and import transactions', () => {
     for (const transaction of [
       (storage: Storage) => saveProgressTransaction(progress('稍后保存'), storage),
       (storage: Storage) => importProgressTransaction(serializeProgress(progress('稍后导入')), storage),
-      (storage: Storage) => clearProgressTransaction(storage),
     ]) {
       const storage = new MemoryStorage();
       storage.setItem(CURRENT_PROGRESS_KEY, '{bad current');
@@ -430,7 +476,6 @@ describe('progress storage transactions', () => {
     const cases = [
       ['save', (storage: Storage) => saveProgressTransaction(progress('新保存'), storage), 'unsaved'],
       ['import', (storage: Storage) => importProgressTransaction(serializeProgress(progress('新导入')), storage), 'unsaved'],
-      ['clear', (storage: Storage) => clearProgressTransaction(storage), 'unchanged'],
     ] as const;
 
     for (const [, transaction, expectedStatus] of cases) {
@@ -449,11 +494,10 @@ describe('progress storage transactions', () => {
     }
   });
 
-  it('allows save, import, and clear when an exact valid corrupt envelope protects current', () => {
+  it('allows save and import when an exact valid corrupt envelope protects current', () => {
     for (const transaction of [
       (storage: Storage) => saveProgressTransaction(progress('稍后保存'), storage),
       (storage: Storage) => importProgressTransaction(serializeProgress(progress('稍后导入')), storage),
-      (storage: Storage) => clearProgressTransaction(storage),
     ]) {
       const storage = new MemoryStorage();
       const corruptRaw = '{bad current';
@@ -518,7 +562,7 @@ describe('progress storage transactions', () => {
       current: '{bad current', snapshot: null, capturedAt: NOW.toISOString(),
     });
     expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe('{bad current');
-    expect(storage.getItem(CORRUPT_PROGRESS_KEY)).toBe(result.corruptDownload);
+    expect(storage.getItem(CORRUPT_PROGRESS_KEY)).toBeNull();
   });
 
   it('returns recovered session data and reports when rewriting current fails', () => {
@@ -526,9 +570,9 @@ describe('progress storage transactions', () => {
     storage.setItem(CURRENT_PROGRESS_KEY, '{bad');
     storage.setItem(SNAPSHOT_PROGRESS_KEY, serializeProgress(progress('快照')));
     storage.failWrites.add(CURRENT_PROGRESS_KEY);
-    expect(loadProgressTransaction(storage, clock)).toMatchObject({
+    expect(loadAndRepair(storage)).toMatchObject({
       status: 'recovered-from-snapshot', persistence: 'unsaved', progress: { learnerName: '快照' },
-      error: expect.stringContaining('写回恢复存档'),
+      error: expect.stringContaining('写回加载存档'),
     });
     expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe('{bad');
   });
@@ -574,7 +618,7 @@ describe('progress storage transactions', () => {
     recoveryStorage.setItem(CURRENT_PROGRESS_KEY, '{bad');
     recoveryStorage.setItem(SNAPSHOT_PROGRESS_KEY, serializeProgress(progress('快照')));
     recoveryStorage.throwAfterWrites.add(CORRUPT_PROGRESS_KEY);
-    expect(loadProgressTransaction(recoveryStorage, clock)).toMatchObject({ persistence: 'saved', error: null });
+    expect(loadAndRepair(recoveryStorage)).toMatchObject({ persistence: 'saved', error: null });
   });
 
   it('reports verification mismatch and read failures as unsaved', () => {
@@ -602,7 +646,7 @@ describe('progress storage transactions', () => {
     corruptVerifyUnreadable.setItem(CURRENT_PROGRESS_KEY, '{bad');
     corruptVerifyUnreadable.setItem(SNAPSHOT_PROGRESS_KEY, serializeProgress(progress('快照')));
     corruptVerifyUnreadable.failReadAfterWrites.add(CORRUPT_PROGRESS_KEY);
-    expect(loadProgressTransaction(corruptVerifyUnreadable, clock)).toMatchObject({
+    expect(loadAndRepair(corruptVerifyUnreadable)).toMatchObject({
       status: 'recovered-from-snapshot', persistence: 'unsaved',
       error: expect.stringContaining('保留损坏存档失败：无法校验写入结果'),
     });
@@ -746,14 +790,75 @@ describe('progress storage transactions', () => {
     });
   });
 
-  it('clears by snapshotting valid current before writing initial progress', () => {
+  it('clears every recovery and legacy route before writing fresh initial progress', () => {
     const storage = new MemoryStorage();
     const old = progress('旧');
     storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(old));
+    storage.setItem(SNAPSHOT_PROGRESS_KEY, serializeProgress(progress('旧快照')));
+    storage.setItem(CORRUPT_PROGRESS_KEY, 'old corrupt');
+    storage.setItem(LEGACY_V2_CURRENT_KEY, legacyV2('旧 V2'));
+    storage.setItem(LEGACY_V2_SNAPSHOT_KEY, legacyV2('旧 V2 快照'));
+    storage.setItem(LEGACY_V2_CORRUPT_KEY, 'old V2 corrupt');
+    storage.setItem(LEGACY_PROGRESS_KEY, legacy('旧 V1'));
+    storage.setItem(LEGACY_WORKSPACE_KEY, '{"blocks":[]}');
+    storage.setItem(REVISION_PROGRESS_KEY, '9');
     const result = clearProgressTransaction(storage);
-    expect(result).toEqual({ status: 'cleared', progress: createInitialProgress() });
-    expect(storage.getItem(SNAPSHOT_PROGRESS_KEY)).toBe(serializeProgress(old));
+    expect(result).toMatchObject({ status: 'cleared', progress: createInitialProgress() });
     expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe(serializeProgress(createInitialProgress()));
+    expect(storage.getItem(SNAPSHOT_PROGRESS_KEY)).toBeNull();
+    expect(storage.getItem(CORRUPT_PROGRESS_KEY)).toBeNull();
+    expect(storage.getItem(LEGACY_V2_CURRENT_KEY)).toBeNull();
+    expect(storage.getItem(LEGACY_V2_SNAPSHOT_KEY)).toBeNull();
+    expect(storage.getItem(LEGACY_V2_CORRUPT_KEY)).toBeNull();
+    expect(storage.getItem(LEGACY_PROGRESS_KEY)).toBeNull();
+    expect(storage.getItem(LEGACY_WORKSPACE_KEY)).toBeNull();
+
+    storage.setItem(CURRENT_PROGRESS_KEY, '{bad fresh current');
+    const reloaded = loadProgressTransaction(storage, clock);
+    expect(reloaded.status).toBe('reset-after-corruption');
+    expect(reloaded.progress).toEqual(expect.objectContaining({ learnerName: '小行者', sessions: {}, missions: {} }));
+  });
+
+  it('clears every legacy Blockly workspace while preserving unrelated storage', () => {
+    const storage = new MemoryStorage();
+    const otherWorkspaceKey = 'xiyou-workspace-w2-m3';
+    const unrelatedKey = 'unrelated-app-setting';
+    storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress('旧')));
+    storage.setItem(LEGACY_WORKSPACE_KEY, '{"blocks":["w1-m1"]}');
+    storage.setItem(otherWorkspaceKey, '{"blocks":["w2-m3"]}');
+    storage.setItem(unrelatedKey, 'keep me');
+
+    expect(clearProgressTransaction(storage)).toMatchObject({ status: 'cleared' });
+    expect(storage.getItem(LEGACY_WORKSPACE_KEY)).toBeNull();
+    expect(storage.getItem(otherWorkspaceKey)).toBeNull();
+    expect(storage.getItem(unrelatedKey)).toBe('keep me');
+  });
+
+  it('rolls back the main save and dynamic workspace bytes when dynamic workspace removal fails', () => {
+    const storage = new MemoryStorage();
+    const otherWorkspaceKey = 'xiyou-workspace-w2-m3';
+    storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress('保留')));
+    storage.setItem(LEGACY_WORKSPACE_KEY, '{"blocks":["w1-m1"]}');
+    storage.setItem(otherWorkspaceKey, '{"blocks":["w2-m3"]}');
+    const before = storage.snapshot();
+    storage.failRemoves.add(otherWorkspaceKey);
+
+    expect(clearProgressTransaction(storage)).toMatchObject({ status: 'unchanged' });
+    expect(storage.snapshot()).toEqual(before);
+  });
+
+  it('rolls back every clear key byte-for-byte when a removal fails', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress('保留')));
+    storage.setItem(SNAPSHOT_PROGRESS_KEY, serializeProgress(progress('保留快照')));
+    storage.setItem(CORRUPT_PROGRESS_KEY, 'corrupt bytes');
+    storage.setItem(LEGACY_V2_CURRENT_KEY, legacyV2('保留 V2'));
+    storage.setItem(REVISION_PROGRESS_KEY, '4');
+    const before = storage.snapshot();
+    storage.failRemoves.add(CORRUPT_PROGRESS_KEY);
+
+    expect(clearProgressTransaction(storage)).toMatchObject({ status: 'unchanged' });
+    expect(storage.snapshot()).toEqual(before);
   });
 
   it('makes clear write failures observable and retains current', () => {

@@ -3,7 +3,7 @@
 - Date: 2026-07-15 (Asia/Shanghai)
 - Runner: Playwright against the local production Vite preview, with five configured projects and one worker
 - Projects: Chromium 1440×1024, Firefox 1440×1024, WebKit 768×1024, touch Chromium 390×844, and touch Chromium 320×844
-- Full result: **69/69 passed; zero skipped tests and zero skipped projects**
+- Full result: **74/74 passed; zero skipped tests and zero skipped projects**
 
 ## What the real-browser path proves
 
@@ -22,6 +22,7 @@ Additional matrix coverage includes:
 - legacy commercial-foundation regression coverage, including focus, responsive layout, parent data tools, Python/AI loading, base path, and visible lazy-module recovery.
 - the first non-specialized compatibility mission (`w1-m2`) uses one visible React command sequence as its only run input: it visibly adds an incorrect sequence, runs it, moves and deletes commands, rebuilds the correct sequence, completes, and returns to a map showing 2/30 progress without injecting completion state. It is explicitly labelled as a non-Blockly compatibility tool, renders no Blockly host or SVG canvas, and is not level-content complete;
 - all five projects execute the same visible parent-credential lifecycle: reject the former public default, reject mismatched confirmation, prove a pre-confirmation reload leaves setup or the old change/recovery credentials intact, then deliberately fail storage during setup, change, and recovery. Each failure keeps the same recovery code, navigation away and back still rejects the proposed credential and accepts the old credential, and only a later successful acknowledgement rotates the stored SHA-256 digests. Raw PIN and recovery values are cleared from the component. This remains a local browser UI gate rather than account-level security.
+- desktop Chromium opens two real tabs at the same revision and verifies the browser's Web Lock API, one winner for simultaneous writes, a zero-write stale conflict, draft backup, explicit rebase, and a post-clear stale write that cannot revive old mission, credential, or session data; Firefox and WebKit pass the sequential two-tab conflict/clear smoke path.
 
 ## Real scenario matrix
 
@@ -29,12 +30,12 @@ All five projects run the ten `@legacy` commercial-foundation tests plus assigne
 
 | Project | Assigned Dragon Palace tags | Legacy | Dragon Palace | Total |
 | --- | --- | ---: | ---: | ---: |
-| desktop-chromium-1440x1024 | `@full @storage @keyboard @visual @corrupt-full @cold` | 10 | 6 | 16 |
-| tablet-webkit-768x1024 | `@full @parity @corrupt-smoke @cold` | 10 | 4 | 14 |
-| mobile-chromium-390x844 | `@full @parity @cold` | 10 | 3 | 13 |
-| desktop-firefox-1440x1024 | `@full @keyboard @corrupt-smoke @cold` | 10 | 4 | 14 |
+| desktop-chromium-1440x1024 | `@full @storage @keyboard @visual @corrupt-full @cold` | 10 | 8 | 18 |
+| tablet-webkit-768x1024 | `@full @parity @corrupt-smoke @cold` | 10 | 5 | 15 |
+| mobile-chromium-390x844 | `@full @parity @cold` | 10 | 4 | 14 |
+| desktop-firefox-1440x1024 | `@full @keyboard @corrupt-smoke @cold` | 10 | 5 | 15 |
 | narrow-chromium-320x844 | `@narrow @cold` | 10 | 2 | 12 |
-| **Total** |  | **50** | **19** | **69** |
+| **Total** |  | **50** | **24** | **74** |
 
 `@full` is the complete visible wrong-program, correction, success, refresh, unlock, PIN, export, and import path. `@narrow` is a real visible wrong-program-to-success path plus horizontal-overflow verification. `@visual` creates three real Blockly programs and captures the accepted-effect, blocked-effect, and full three-weapon Phaser states. The other tags execute the behavior named in each tag.
 
@@ -127,13 +128,13 @@ git status --short --branch
 
 The fresh results were:
 
-- `npm test`: 27 Vitest files / 413 tests, 18 bundle-script tests, and 26 asset tests passed;
+- `npm test`: 28 Vitest files / 433 tests, 18 bundle-script tests, and 26 asset tests passed;
 - `npm run typecheck`: exit 0;
 - `npm run verify:assets`: 5 files, 257,674 B / 1,310,720 B, all `visual-qa-passed`;
-- `npm run verify:bundle`: entry static JS 107.8 KiB gzip, conservative homepage 417.6 KiB, Phaser 1,168.4 KiB raw, and GameScene closure 1,514.1 KiB raw, all inside their gates;
-- `npx playwright test --list`: exactly 69 tests across five projects: desktop Chromium 16, tablet WebKit 14, mobile Chromium 13, desktop Firefox 14, and narrow Chromium 12;
-- specialized matrix: 19/19 passed across the same five projects;
-- `npm run test:e2e`: 69/69 passed across the five configured projects with zero skips;
+- `npm run verify:bundle`: entry static JS 106.1 KiB gzip, conservative homepage 415.9 KiB, Phaser 1,168.4 KiB raw, and GameScene closure 1,505.9 KiB raw, all inside their gates;
+- `npx playwright test --list`: exactly 74 tests across five projects: desktop Chromium 18, tablet WebKit 15, mobile Chromium 14, desktop Firefox 15, and narrow Chromium 12;
+- specialized matrix: 24/24 passed across the same five projects;
+- `npm run test:e2e`: 74/74 passed across the five configured projects with zero skips;
 - official npm registry audit: zero known vulnerabilities after pinning Vite 6.4.3 and Playwright 1.55.1;
 - `git diff --check`: no errors;
 - `git status --short --branch`: clean after commit.

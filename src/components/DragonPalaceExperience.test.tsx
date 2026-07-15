@@ -34,7 +34,17 @@ vi.mock('./GameScene', () => ({
 const originalStorage = localStorage
 
 function storedProgress() {
-  return JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)
+  const raw = localStorage.getItem(CURRENT_PROGRESS_KEY)
+  return raw === null ? null : JSON.parse(raw)
+}
+
+async function waitForStoredSession() {
+  let session: NonNullable<ReturnType<typeof storedProgress>>['sessions'][string] | undefined
+  await waitFor(() => {
+    session = storedProgress()?.sessions['w1-m1']
+    expect(session).toBeDefined()
+  }, { timeout: 5000 })
+  return session!
 }
 
 function SessionHintControls() {
@@ -85,10 +95,10 @@ describe('DragonPalaceExperience', () => {
   it('records an explicit compile failure without pretending the engine ran', async () => {
     renderExperience()
 
-    fireEvent.click(await screen.findByRole('button', { name: '执行战斗指令' }, { timeout: 3000 }))
+    fireEvent.click(await screen.findByRole('button', { name: '执行战斗指令' }, { timeout: 5000 }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('指令卷轴还是空的')
-    expect(storedProgress().sessions['w1-m1']).toMatchObject({
+    expect(await waitForStoredSession()).toMatchObject({
       compileFailures: 1,
       totalRuns: 0,
       runtimeFailures: 0,
@@ -108,7 +118,7 @@ describe('DragonPalaceExperience', () => {
 
     expect(await screen.findByText('悟空还在龙宫外，龙王还听不到请求。请观察悟空现在在哪里。')).toBeVisible()
     expect(onComplete).not.toHaveBeenCalled()
-    const failedSession = storedProgress().sessions['w1-m1']
+    const failedSession = await waitForStoredSession()
     expect(failedSession).toMatchObject({
       totalRuns: 1,
       runtimeFailures: 1,
@@ -132,11 +142,11 @@ describe('DragonPalaceExperience', () => {
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }))
 
     expect(onComplete).not.toHaveBeenCalled()
-    expect(storedProgress().sessions['w1-m1']).toMatchObject({
+    await waitFor(() => expect(storedProgress()?.sessions['w1-m1']).toMatchObject({
       totalRuns: 2,
       runtimeFailures: 1,
       lastRun: { completed: true, finalState: 'weapon-tested' },
-    })
+    }), { timeout: 5000 })
     finishRequest(currentRequestId())
     expect(onComplete).toHaveBeenCalledWith({ stars: 3, hintsUsed: 0 })
   })
@@ -181,7 +191,7 @@ describe('DragonPalaceExperience', () => {
 
     expect(onComplete).toHaveBeenCalledTimes(1)
     expect(onComplete).toHaveBeenCalledWith({ stars: 1, hintsUsed: 2 })
-    expect(storedProgress().sessions['w1-m1']).toMatchObject({ totalRuns: 2 })
+    await waitFor(() => expect(storedProgress()?.sessions['w1-m1']).toMatchObject({ totalRuns: 2 }), { timeout: 5000 })
   })
 
   it('stores incomplete evidence without invented instruction ids and returns to the last real block', async () => {
@@ -190,7 +200,7 @@ describe('DragonPalaceExperience', () => {
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }))
 
     expect(await screen.findByText(/最后一块积木之后还缺一步/)).toBeVisible()
-    const session = storedProgress().sessions['w1-m1']
+    const session = await waitForStoredSession()
     expect(session).toMatchObject({
       totalRuns: 1,
       runtimeFailures: 1,
@@ -246,13 +256,13 @@ describe('DragonPalaceExperience', () => {
     expect(screen.getByTestId('scene-events')).toHaveTextContent('dragon-palace.run-finished.completed')
     finishRequest(currentRequestId())
     expect(onComplete).not.toHaveBeenCalled()
-    expect(storedProgress().sessions['w1-m1']).toMatchObject({ totalRuns: 1 })
+    expect(await waitForStoredSession()).toMatchObject({ totalRuns: 1 })
 
     fireEvent.click(screen.getByRole('button', { name: '重播最近一次' }))
     expect(screen.getByLabelText('测试龙宫场景')).toHaveAttribute('data-replay-token', '1')
     finishRequest(currentRequestId())
     expect(onComplete).not.toHaveBeenCalled()
-    expect(storedProgress().sessions['w1-m1']).toMatchObject({ totalRuns: 1 })
+    expect((await waitForStoredSession())).toMatchObject({ totalRuns: 1 })
   })
 
   it('keeps unsaved edits in memory and retries the same transactional session', async () => {
@@ -274,14 +284,14 @@ describe('DragonPalaceExperience', () => {
     renderExperience()
 
     fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }))
-    expect(screen.getByText('本关尚未保存，请重试。')).toBeVisible()
+    expect(await screen.findByText('本关尚未保存，请重试。')).toBeVisible()
     expect(screen.getByText('进入龙宫')).toBeVisible()
     expect(localStorage.getItem(CURRENT_PROGRESS_KEY)).toBeNull()
 
     failWrites = false
     fireEvent.click(screen.getByRole('button', { name: '重试保存本关' }))
     await waitFor(() => expect(screen.queryByText('本关尚未保存，请重试。')).not.toBeInTheDocument())
-    expect(storedProgress().sessions['w1-m1'].workspace.blocks[0]).toMatchObject({
+    expect((await waitForStoredSession()).workspace.blocks[0]).toMatchObject({
       type: 'xiyou_enter_palace',
     })
   })

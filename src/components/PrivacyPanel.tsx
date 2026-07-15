@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { focusAfterInert } from '../utils/focus';
 
-type AcknowledgeResult = { status: 'saved' } | { status: 'unsaved'; error: string };
+type AcknowledgeResult = { status: 'saved' } | { status: 'unsaved' | 'conflict'; error: string };
 
 export function PrivacyPanel({
   acknowledged,
   onAcknowledge,
 }: {
   acknowledged: boolean;
-  onAcknowledge: () => AcknowledgeResult;
+  onAcknowledge: () => AcknowledgeResult | Promise<AcknowledgeResult>;
 }) {
   const [error, setError] = useState('');
   const dialogRef = useRef<HTMLElement>(null);
@@ -31,8 +31,12 @@ export function PrivacyPanel({
   if (acknowledged) return null;
 
   const acknowledge = () => {
+    const handle = (result: AcknowledgeResult) => {
+      if (result.status !== 'saved') setError('确认尚未保存，请保持页面打开并稍后重试。');
+    };
     const result = onAcknowledge();
-    if (result.status === 'unsaved') setError('确认尚未保存，请保持页面打开并稍后重试。');
+    if (result instanceof Promise) void result.then(handle);
+    else handle(result);
   };
 
   const keepFocusInside = (event: React.KeyboardEvent<HTMLElement>) => {

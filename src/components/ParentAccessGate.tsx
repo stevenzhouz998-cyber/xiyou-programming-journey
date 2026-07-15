@@ -10,6 +10,7 @@ import {
 
 type AccessMode = 'login' | 'setup' | 'recover';
 type PendingAccess = { record: string; recoveryCode: string };
+type SaveRecordResult = boolean | 'unknown';
 
 function validPin(value: string): boolean { return /^\d{4}$/.test(value); }
 
@@ -43,9 +44,9 @@ function RecoveryCodePanel({ code, commitError, onConfirmed }: {
   return (
     <main className="parent-gate">
       <section className="gate-card" aria-labelledby="recovery-heading">
-        <span className="eyebrow">仅显示一次 · 尚未提交</span>
+        <span className="eyebrow">仅显示一次 · 等待存储确认</span>
         <h1 id="recovery-heading" ref={headingRef} tabIndex={-1}>请保存一次性恢复码</h1>
-        <p>忘记 PIN 时，需要它才能重设。网站不会保存恢复码原文，也无法替你找回。确认保存前，新 PIN 不会生效。</p>
+        <p>忘记 PIN 时，需要它才能重设。网站不会保存恢复码原文，也无法替你找回。只有浏览器确认写入成功后，页面才会进入家长区。</p>
         <output className="recovery-code" aria-label="一次性恢复码">{code}</output>
         <div className="workspace-actions">
           <button type="button" className="button button-ghost" onClick={copy}>复制恢复码</button>
@@ -62,7 +63,7 @@ function RecoveryCodePanel({ code, commitError, onConfirmed }: {
 
 export function ParentAccessGate({ record, saveRecord, children }: {
   record: string;
-  saveRecord: (record: string) => boolean;
+  saveRecord: (record: string) => SaveRecordResult | Promise<SaveRecordResult>;
   children: ReactNode;
 }) {
   const [allowed, setAllowed] = useState(false);
@@ -100,10 +101,13 @@ export function ParentAccessGate({ record, saveRecord, children }: {
     setPending({ record: nextRecord, recoveryCode: rawRecovery });
   };
 
-  const commitPending = () => {
+  const commitPending = async () => {
     if (!pending) return;
-    if (!saveRecord(pending.record)) {
-      setError('新 PIN 尚未保存。请检查浏览器存储后重试，当前恢复码仍然有效。');
+    const saved = await saveRecord(pending.record);
+    if (saved !== true) {
+      setError(saved === 'unknown'
+        ? '浏览器无法确认新 PIN 的存储状态。请保留本页恢复码，刷新后重新验证家长凭据。'
+        : '浏览器未能完成新 PIN 的存储确认。请保留本页恢复码，检查存储后再重试。');
       return;
     }
     clearSecrets();

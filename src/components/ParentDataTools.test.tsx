@@ -66,7 +66,7 @@ describe('ParentDataTools', () => {
     expect(clear).toHaveBeenCalledOnce();
   });
 
-  it('downloads backup before clear and never clears when download throws', () => {
+  it('downloads backup before clear and never clears when download throws', async () => {
     const order: string[] = [];
     const clear = vi.fn(() => { order.push('clear'); return { status: 'cleared' as const, progress: createInitialProgress() }; });
     const download = vi.fn(() => order.push('download'));
@@ -74,7 +74,7 @@ describe('ParentDataTools', () => {
     fireEvent.click(screen.getByRole('button', { name: '清空学习数据' }));
     fireEvent.change(screen.getByLabelText('输入“清空”以确认'), { target: { value: '清空' } });
     fireEvent.click(screen.getByRole('button', { name: '备份并清空' }));
-    expect(order).toEqual(['download', 'clear']);
+    await waitFor(() => expect(order).toEqual(['download', 'clear']));
 
     clear.mockClear(); download.mockImplementation(() => { throw new Error('下载被阻止'); });
     fireEvent.click(screen.getByRole('button', { name: '清空学习数据' }));
@@ -84,13 +84,13 @@ describe('ParentDataTools', () => {
     expect(screen.getByText(/学习数据未清空/)).toBeInTheDocument();
   });
 
-  it('keeps the dialog result honest when clear storage fails', () => {
+  it('keeps the dialog result honest when clear storage fails', async () => {
     const failed = { status: 'unchanged' as const, progress: createInitialProgress(), error: '存储已禁用' };
     render(<ParentDataTools {...props({ onClear: vi.fn(() => failed) })} />);
     fireEvent.click(screen.getByRole('button', { name: '清空学习数据' }));
     fireEvent.change(screen.getByLabelText('输入“清空”以确认'), { target: { value: '清空' } });
     fireEvent.click(screen.getByRole('button', { name: '备份并清空' }));
-    expect(screen.getByRole('status')).toHaveTextContent('当前进度未清空');
+    expect(await screen.findByRole('status')).toHaveTextContent('当前进度未清空');
     expect(screen.getByRole('status')).toHaveTextContent('存储已禁用');
   });
 

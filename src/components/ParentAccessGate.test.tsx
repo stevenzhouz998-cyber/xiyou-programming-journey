@@ -46,13 +46,29 @@ describe('ParentAccessGate', () => {
     const code = (await screen.findByLabelText('一次性恢复码')).textContent;
     confirmRecoverySaved();
     const error = await screen.findByRole('alert');
-    expect(error).toHaveTextContent('新 PIN 尚未保存');
+    expect(error).toHaveTextContent('未能完成新 PIN 的存储确认');
     expect(error).toHaveFocus();
     expect(screen.getByLabelText('一次性恢复码')).toHaveTextContent(code!);
     expect(screen.queryByText('家长数据')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '确认已保存并进入' }));
     await waitFor(() => expect(screen.getByText('家长数据')).toBeVisible());
     expect(saveRecord).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the recovery code visible when credential storage is unknown', async () => {
+    const saveRecord = vi.fn(() => 'unknown' as const);
+    render(<ParentAccessGate record="unset" saveRecord={saveRecord}><p>家长数据</p></ParentAccessGate>);
+    enterNewPin('4826');
+    fireEvent.click(screen.getByRole('button', { name: '创建家长 PIN' }));
+    const code = (await screen.findByLabelText('一次性恢复码')).textContent;
+
+    confirmRecoverySaved();
+
+    const error = await screen.findByRole('alert');
+    expect(error).toHaveTextContent('无法确认新 PIN 的存储状态');
+    expect(error).not.toHaveTextContent('旧凭据仍有效');
+    expect(screen.getByLabelText('一次性恢复码')).toHaveTextContent(code!);
+    expect(screen.queryByText('家长数据')).not.toBeInTheDocument();
   });
 
   it('uses secret inputs, rejects the retired default, clears login PIN, and leaves change fields empty', async () => {

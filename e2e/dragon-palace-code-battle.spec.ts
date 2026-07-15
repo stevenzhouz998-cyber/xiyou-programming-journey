@@ -19,7 +19,10 @@ type SessionEvidence = {
 async function acknowledge(page: Page) {
   await page.goto('./')
   const dialog = page.getByRole('dialog', { name: '你的学习数据保存在这台设备' })
-  if (await dialog.isVisible()) await page.getByRole('button', { name: '我知道了' }).click()
+  if (await dialog.isVisible()) {
+    await page.getByRole('button', { name: '我知道了' }).click()
+    await expect(dialog).toBeHidden()
+  }
   const changed = await page.evaluate(({ key, access }) => {
     const raw = localStorage.getItem(key)
     if (!raw) return false
@@ -30,6 +33,10 @@ async function acknowledge(page: Page) {
     return true
   }, { key: CURRENT_KEY, access: TEST_PARENT_ACCESS })
   if (changed) await page.reload()
+  await expect.poll(() => page.evaluate(key => {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw).settings.parentPin : null
+  }, CURRENT_KEY)).toBe(TEST_PARENT_ACCESS)
 }
 
 async function openFirstMission(page: Page) {
@@ -46,8 +53,7 @@ async function add(page: Page, label: '进入龙宫' | '请求兵器' | '试用�
 
 async function press(page: Page, name: string | RegExp) {
   const button = page.getByRole('button', { name })
-  await button.focus()
-  await page.keyboard.press('Enter')
+  await button.press('Enter')
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -106,10 +112,14 @@ async function buildWrongThenCorrect(page: Page, keyboardOnly = false) {
   const activate = keyboardOnly
     ? (name: string | RegExp) => press(page, name)
     : (name: string | RegExp) => page.getByRole('button', { name }).click()
+  const program = page.locator('.block-program-list li')
 
   await activate('加入：请求兵器')
+  await expect(program).toHaveCount(1)
   await activate('加入：进入龙宫')
+  await expect(program).toHaveCount(2)
   await activate('加入：试用兵器')
+  await expect(program).toHaveCount(3)
   await activate('执行战斗指令')
   const feedback = page.getByRole('alert').filter({ hasText: '悟空还在龙宫外' })
   await expect(feedback).toBeFocused()
@@ -126,6 +136,10 @@ async function buildWrongThenCorrect(page: Page, keyboardOnly = false) {
   await expect(page.locator('.block-program-list li').nth(2)).toContainText('试用兵器')
   await activate('执行战斗指令')
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 15_000 })
+  await expect.poll(() => page.evaluate((key) => {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw).missions['w1-m1']?.status : undefined
+  }, CURRENT_KEY)).toBe('completed')
 }
 
 async function captureSuccessfulState(page: Page, testInfo: TestInfo) {
@@ -191,6 +205,7 @@ test('@full real Blockly wrong program is corrected through visible controls, pe
 
   await page.getByRole('button', { name: '成长地图' }).first().click()
   await expect(page.getByRole('button', { name: '定海神针' })).toBeEnabled()
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)!).settings.parentPin, CURRENT_KEY)).toBe(TEST_PARENT_ACCESS)
   await page.getByRole('button', { name: '家长周报' }).click()
   await expect(page.getByText(/运行 2 次 · 调整 1 次/)).toBeHidden()
   await enterParentReport(page)
@@ -284,7 +299,9 @@ test('@parity reduced motion and pre-execution mute preserve the same event sequ
   await page.getByRole('button', { name: '备份并清空' }).click()
   await backupStarted
   const privacyDialog = page.getByRole('dialog', { name: '你的学习数据保存在这台设备' })
-  if (await privacyDialog.isVisible()) await page.getByRole('button', { name: '我知道了' }).click()
+  await expect(privacyDialog).toBeVisible()
+  await page.getByRole('button', { name: '我知道了' }).click()
+  await expect(privacyDialog).toBeHidden()
   await page.getByRole('button', { name: '成长地图' }).first().click()
   await page.getByRole('button', { name: /开始第一关：龙宫求兵|继续第1周第1关/ }).click()
   await page.getByRole('button', { name: '减弱动画' }).click()

@@ -1,5 +1,13 @@
 # Commercial foundation browser verification
 
+## 2026-07-15 storage concurrency correction
+
+The parent/save foundation now uses a persisted monotonic companion revision and one Web Lock for every application write transaction. A stale tab is rejected before snapshot/current/revision mutation, keeps its draft only in memory, and shows explicit **download this page backup** and **load the other tab version** actions. Generic retry cannot overwrite a conflict. Browsers without Web Locks use an in-process Promise queue; desktop Chromium additionally proves the real `navigator.locks.request` path.
+
+Clear no longer snapshots the data being deleted. After the required parent-triggered backup download, it writes fresh initial V3 and deletes then reads back every V3 snapshot/corrupt key, V2 current/snapshot/corrupt key, V1 current, the old w1-m1 workspace bypass, and revision metadata. Any write, delete, or read-back failure rolls all related keys back byte-for-byte or reports an unknown result; a damaged fresh current can no longer recover pre-clear progress.
+
+Fresh evidence: 433/433 unit tests, including held-lock regressions proving neither an older save nor an initial load repair can replace a newer in-memory child draft, dynamic rollback coverage for every legacy workspace key, and honest uncertain-storage handling; the two-tab Chromium suite uses a third lock holder to prove exactly one winner for two genuinely pending writers, visible stale-writer conflict, explicit rebase, and no stale revival after clear. The same sequential two-tab conflict/clear path passed Firefox and WebKit smoke. These additions raise the configured matrix to 74 scenarios; the whole site remains **not complete**.
+
 - Date: 2026-07-13 (Asia/Shanghai)
 - Tested product tree SHA: `4f845efaecd9098fa6616728b73cc1b7bf7dc799`
 - Runner: Playwright 1.55.0, local release-like Vite preview, no HTTP compression
@@ -55,7 +63,7 @@ These are browser evidence, not shipping assets. They retain the existing warm-p
 
 | Row | Evidence level | Result |
 | --- | --- | --- |
-| Parent / saves | PIN, export, V1→V2 migration, malformed import preservation, snapshot recovery, second-reopen corrupt download retention, backup-before-clear, privacy reset, and refresh paths in real browsers | **System loop complete for the implemented parent/save foundation** |
+| Parent / saves | PIN, export, V1/V2→V3 migration, malformed import preservation, snapshot recovery, second-reopen corrupt download retention, backup-before-destructive-clear, exact rollback, monotonic revision, Web-Lock serialization, stale-writer conflict/rebase, privacy reset, and refresh paths in real browsers | **System loop complete for the implemented parent/save foundation**; this does not prove account/cloud sync |
 | UI / release | Four browser/device projects, 320 px overflow, keyboard/focus, touch targets, reduced-motion connection, lazy failure, base path and console checks | **Not complete**: public deployed cold-transfer/Lighthouse, production 404, asset-manifest provenance and deployed version matching remain unverified |
 | Blockly | First level actual command palette, visible workspace, wrong-order feedback and success/persistence | **One-level playable evidence only**; not full Blockly-system or 30-level evidence |
 | Python / AI | A valid V2 mode fixture is imported through the real parent PIN and keyboard-operated import transaction; it is used only to verify the real tool modes load and attempt real content. Pyodide health allowances are phase-scoped to `python-runtime`, the exact pinned jsDelivr directory, request/HTTP failures, and Firefox's exact normalized known console event on `w4-m2`. | **Mode UI and failure-path verification only**; fixture import is not a child progression or completion claim |

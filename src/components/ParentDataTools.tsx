@@ -12,11 +12,11 @@ export interface ParentDataToolsProps {
   progress: ProgressV3;
   loadStatus: LoadStatus;
   loadPersistence: 'idle' | 'saved' | 'unsaved';
-  saveStatus: 'idle' | 'saved' | 'unsaved';
+  saveStatus: 'idle' | 'pending' | 'saved' | 'unsaved' | 'conflict';
   corruptDownload: string | null;
   corruptError?: string | null;
-  onImport: (raw: string) => ImportResult;
-  onClear: () => ClearResult;
+  onImport: (raw: string) => ImportResult | { status: 'conflict'; error: string } | Promise<ImportResult | { status: 'conflict'; error: string }>;
+  onClear: () => ClearResult | { status: 'conflict'; error: string } | Promise<ClearResult | { status: 'conflict'; error: string }>;
   onCreateBackup: () => ProgressBackup;
   onDownload: Download;
   onDialogOpenChange?: (open: boolean) => void;
@@ -78,7 +78,7 @@ export function ParentDataTools(props: ParentDataToolsProps) {
     try {
       const raw = await readFile(file);
       if (!mountedRef.current || sequence !== importSequenceRef.current) return;
-      const result = props.onImport(raw);
+      const result = await props.onImport(raw);
       if (result.status === 'saved') {
         const versionMessage = result.sourceVersion === 1
           ? '已将 V1 升级为 V3'
@@ -106,7 +106,7 @@ export function ParentDataTools(props: ParentDataToolsProps) {
     } catch (error) { setMessage(`备份下载未生成：${error instanceof Error ? error.message : String(error)}`); }
   };
 
-  const clear = () => {
+  const clear = async () => {
     if (phrase !== '清空') return;
     try {
       const backup = props.onCreateBackup();
@@ -115,9 +115,10 @@ export function ParentDataTools(props: ParentDataToolsProps) {
       setMessage(`备份下载未生成，学习数据未清空：${error instanceof Error ? error.message : String(error)}`);
       return;
     }
-    const result = props.onClear();
+    const result = await props.onClear();
     if (result.status === 'unchanged') setMessage(`清空失败，当前进度未清空：${result.error}`);
     else if (result.status === 'unknown') setMessage(`设备中的清空结果无法确认；当前页面仍保留原进度，请保留刚生成的备份并在刷新前停止操作。${result.error}`);
+    else if (result.status === 'conflict') setMessage(`清空已暂停：${result.error}`);
     else setMessage('已生成备份下载并清空本地进度。');
     closeConfirm();
   };
