@@ -1,24 +1,24 @@
 # Ruyi Staff code battle browser verification
 
 - Date: 2026-07-16 (Asia/Shanghai)
-- Tested implementation commit: `d58b211bc86e001c82e849bff9335fd672bf6032`; the commit containing this document is evidence-only.
+- Tested implementation and strengthened browser-evidence commit: `430ca436dd97a9377380a6434f1479d7655d6963`; the commit containing this document is evidence-only.
 - Runner: Playwright against the local production Vite preview, with five configured projects and one worker
 - Projects: Chromium 1440×1024, Firefox 1440×1024, WebKit 768×1024, touch Chromium 390×844, and touch Chromium 320×844
 - Full result: **105/105 passed; zero failures, zero skipped tests, and zero skipped projects**
 
 ## What the real-browser path proves
 
-`w1-m2 定海神针` now uses one visible, real Blockly workspace as the only source of battle instructions. The primary child path builds and visibly runs the wrong sequence containing the halberd instruction, observes the corresponding wrong battle action and focused problem block, then uses visible Blockly controls to delete, add, and move blocks into the correct sequence. The corrected connection graph compiles into the execution trace, drives the battle state machine to success, and records the stable source block IDs that produced each action.
+`w1-m2 定海神针` now uses one visible, real Blockly workspace as the only source of battle instructions. The primary child path builds and visibly runs the wrong sequence containing the halberd instruction, observes the selected halberd, the formal scene's `blocked` effect cell, the exact weight-error feedback, and the focused problem block, then uses visible Blockly controls to delete, add, and move blocks into the correct sequence. This wrong-action evidence is asserted in all five configured browser projects. The corrected connection graph compiles into the execution trace, drives the battle state machine to success, and records the stable source block IDs that produced each action.
 
 The browser then verifies that the successful trace, block IDs, session state, and mission progress survive refresh; `w1-m3` unlocks; the parent report includes the completed mission; and V3 export/import preserves the result. No browser test injects `w1-m2` completion with `page.evaluate`, mutates a hidden success source, or replaces the real workspace with the compatibility tool. Browser-side evaluation is limited to read-only evidence and the deliberate storage-failure fixture switch.
 
 Additional matrix coverage includes:
 
 - keyboard-only workspace correction and completion;
-- visible reduced-motion and mute runs that preserve the same gameplay result while suppressing the optional presentation/audio behavior;
+- two independent visible runs created from only the completed `w1-m1` fixture: a standard-motion, unmuted baseline and a separate reduced-motion, muted-before-execution page. Both build and execute the real Blockly program; after normalizing independently generated block IDs, their complete trace, events, and final state are exactly equal. The baseline observes the success-audio request and media play, while the muted page observes zero success-audio requests and zero `HTMLMediaElement.play` calls;
 - intentional storage failure with a visible retry path, without falsely reporting an unsaved result as persisted;
 - corrupt V3 recovery, snapshot recovery, stable recovered block IDs, and byte-preserving damaged-source download;
-- parent aggregate plus export/import through the visible parent flow;
+- parent aggregate plus export/import through the visible parent flow: the complete exported `w1-m2` session exactly matches storage, a visible mission edit removes the shrink block and persists a different two-block session, and visible parent import restores the complete exported session exactly;
 - the exact Ruyi Staff experience-chunk 503 path, retaining visible local recovery rather than blanking the application;
 - fixed cold-load collection that fails closed on request failure, unreadable bodies, redirects, non-2xx responses, or cache reuse;
 - 320 px touch targets, scene → program → feedback order, and no page-level horizontal overflow. Blockly's own workspace remains internally scrollable as intended.
@@ -95,6 +95,7 @@ The gate failed before it passed:
 9. The third complete browser run passed **105/105** before the later original-resolution mobile review.
 10. The full unit suite subsequently exposed old synchronous/lazy timing assumptions: 541/543, then 542/543. Tests were changed to await the actual accessible route/workspace elements rather than weakening product assertions; the final result was **543/543**.
 11. Original-resolution review then rejected the nominal 320/390 result because the simple Blockly flyout remained open and pushed the real connected stack outside the host. New geometry assertions failed with a stack right edge of 475.96 px against host right edges of 370 px and 300 px. Narrow initialization and resize now convert the flyout to auto-close, hide it after Blockly's delayed show, resize the SVG, and use Blockly's own workspace viewport/connected-block operations to place the real stack inside the host. The focused mobile rerun passed 2/2, screenshot generation passed 5/5, and a fourth complete run passed **105/105** with exact block bounds and unobscured-control checks.
+12. Final specification review rejected three weak evidence boundaries: the wrong-program path did not assert the formal scene's blocked effect cell; parity reused one page and compared only opcodes; parent import compared only `lastTrace` without first persisting a visible mutation. Source inspection established RED for all three. The first strengthened focused run passed 8/9; the parent scenario attempted to use a success-dialog navigation label after an ordinary edit, so it never reached the real visible mission navigation. Binding it to the mission page's actual `成长地图` control made the parent rerun pass 1/1 and the strengthened focused set pass 9/9. The fifth complete run then passed **105/105** in 5.8 minutes with all three stronger claims inside the five-project matrix.
 
 ## Commands and final results
 
@@ -114,7 +115,7 @@ git diff --check
 - `npm run verify:assets`: 5 files, 257,674 B / 1,310,720 B, all approved manifest checks passed;
 - `npm run verify:bundle`: all fixed entry, homepage, Phaser, Blockly, Ruyi Staff and scene closure gates passed;
 - `npx playwright test --list`: exactly 105 tests across the five projects listed above;
-- `npm run test:e2e`: 105/105 passed in 5.5 minutes, with zero failures and zero skips;
+- `npm run test:e2e`: 105/105 passed in 5.8 minutes, with zero failures and zero skips;
 - official npm registry audit: zero known vulnerabilities;
 - `git diff --check`: no errors;
 - secret scan: no credential/key patterns found;
