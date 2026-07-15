@@ -7,6 +7,7 @@ import {
   isMissionUnlocked,
   serializeProgress,
 } from './progress';
+import { createMissionSession } from './session';
 
 describe('progress rules', () => {
   it('unlocks missions in order and requires the boss before the next week', () => {
@@ -74,6 +75,22 @@ describe('progress rules', () => {
     progress = completeMission(progress, 'w1-m2', { stars: 3, hintsUsed: 0 });
 
     expect(getWeeklyReport(progress, 1)).toMatchObject({ completed: 2, total: 5, stars: 5, hintsUsed: 2 });
+  });
+
+  it('merges the first real mission session support into the week-one parent report', () => {
+    const progress = createInitialProgress();
+    progress.sessions['w1-m1'] = {
+      ...createMissionSession('2026-07-15T06:00:00.000Z'),
+      totalRuns: 3,
+      runtimeFailures: 1,
+      compileFailures: 1,
+      conceptFailures: { programStructure: 2, sequencePrecondition: 0, completeness: 0 },
+    };
+
+    expect(getWeeklyReport(progress, 1)).toMatchObject({
+      needsSupport: ['程序结构'],
+    });
+    expect(getWeeklyReport(progress, 2).needsSupport).toEqual([]);
   });
 
   it('round-trips valid exports and rejects corrupted data', () => {

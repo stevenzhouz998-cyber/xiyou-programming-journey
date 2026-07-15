@@ -14,6 +14,7 @@ export type {
 export { createInitialProgress } from './schema';
 
 import { allMissions } from '../course/course';
+import { getSessionSupport } from './session';
 
 export interface CompletionInput {
   stars: number;
@@ -79,15 +80,19 @@ export function isMissionUnlocked(progress: ProgressV3, missionId: string): bool
 export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyReport {
   const missions = allMissions.filter((mission) => mission.week === week);
   const records = missions.flatMap((mission) => progress.missions[mission.id] ? [progress.missions[mission.id]] : []);
+  const missionSupport = missions
+    .filter((mission) => (progress.missions[mission.id]?.hintsUsed ?? 0) >= 2)
+    .map((mission) => mission.knowledge);
+  const sessionSupport = week === 1 && progress.sessions['w1-m1']
+    ? getSessionSupport(progress.sessions['w1-m1'])
+    : [];
   return {
     week,
     completed: records.length,
     total: missions.length,
     stars: records.reduce((sum, record) => sum + record.stars, 0),
     hintsUsed: records.reduce((sum, record) => sum + record.hintsUsed, 0),
-    needsSupport: missions
-      .filter((mission) => (progress.missions[mission.id]?.hintsUsed ?? 0) >= 2)
-      .map((mission) => mission.knowledge),
+    needsSupport: [...new Set([...missionSupport, ...sessionSupport])],
   };
 }
 

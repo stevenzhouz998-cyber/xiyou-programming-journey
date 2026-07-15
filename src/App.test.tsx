@@ -3,6 +3,12 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import App from './App';
 import { createInitialProgress, serializeProgress } from './progress/progress';
 import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from './progress/storage';
+import type { BattleEvent } from './battle/types';
+import { createMissionSession } from './progress/session';
+
+vi.mock('./components/GameScene', () => ({
+  GameScene: ({ events, onPlaybackComplete }: { events: BattleEvent[]; onPlaybackComplete?: () => void }) => <section aria-label="测试龙宫场景"><output data-testid="app-scene-events">{JSON.stringify(events)}</output><button type="button" onClick={onPlaybackComplete}>完成场景播放</button></section>,
+}));
 
 const originalStorage = localStorage;
 
@@ -74,21 +80,47 @@ describe('西游编程记', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
     fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
-    fireEvent.click(await screen.findByRole('button', { name: '进入龙宫' }));
-    fireEvent.click(screen.getByRole('button', { name: '请求兵器' }));
-    fireEvent.click(screen.getByRole('button', { name: '试用兵器' }));
-    fireEvent.click(screen.getByRole('button', { name: '运行指令' }));
+    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：请求兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+    expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }));
     expect(screen.getByRole('heading', { name: '闯关成功' })).toBeInTheDocument();
+  });
+
+  it('records each stable hint tier once and bases stars on distinct tiers', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
+    fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
+    fireEvent.click(screen.getByRole('button', { name: '观察提示' }));
+    fireEvent.click(screen.getByRole('button', { name: '观察提示' }));
+    fireEvent.click(screen.getByRole('button', { name: '观察提示' }));
+    fireEvent.click(screen.getByRole('button', { name: '思路提示' }));
+    expect(await screen.findByText(/指令卷轴还是空的/)).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: '加入：进入龙宫' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：请求兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+    fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }));
+
+    expect(screen.getByLabelText('1颗星')).toBeVisible();
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
+      missions: { 'w1-m1': { hintsUsed: 2, stars: 1 } },
+      sessions: { 'w1-m1': { usedHintTiers: ['observe', 'think'] } },
+    });
   });
 
   it('isolates and traps the success dialog, then resets state on same-mode navigation', async () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
     fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
-    fireEvent.click(await screen.findByRole('button', { name: '进入龙宫' }));
-    fireEvent.click(screen.getByRole('button', { name: '请求兵器' }));
-    fireEvent.click(screen.getByRole('button', { name: '试用兵器' }));
-    fireEvent.click(screen.getByRole('button', { name: '运行指令' }));
+    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：请求兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+    fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }));
     const dialog = screen.getByRole('dialog', { name: '闯关成功' });
     expect(screen.getByTestId('app-background')).toHaveAttribute('inert');
     expect(screen.getByTestId('mission-background')).toHaveAttribute('inert');
@@ -109,10 +141,11 @@ describe('西游编程记', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '我知道了' }));
     fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
-    fireEvent.click(await screen.findByRole('button', { name: '进入龙宫' }));
-    fireEvent.click(screen.getByRole('button', { name: '请求兵器' }));
-    fireEvent.click(screen.getByRole('button', { name: '试用兵器' }));
-    fireEvent.click(screen.getByRole('button', { name: '运行指令' }));
+    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：请求兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+    fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }));
     fireEvent.keyDown(screen.getByRole('dialog', { name: '闯关成功' }), { key: 'Escape' });
     const homeHeading = screen.getByRole('heading', { name: '西游编程记' });
     await waitFor(() => expect(homeHeading).toHaveFocus());
@@ -126,6 +159,32 @@ describe('西游编程记', () => {
     fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
     expect(screen.getByRole('heading', { name: '家长周报' })).toBeInTheDocument();
     expect(screen.getByText('学习数据仅保存在这台电脑')).toBeInTheDocument();
+  });
+
+  it('shows only aggregate Dragon Palace attempts and support behind the parent PIN', () => {
+    const progress = createInitialProgress();
+    progress.privacy.localDataNoticeSeen = true;
+    progress.sessions['w1-m1'] = {
+      ...createMissionSession('2026-07-15T06:00:00.000Z'),
+      totalRuns: 3,
+      runtimeFailures: 1,
+      compileFailures: 1,
+      conceptFailures: { programStructure: 2, sequencePrecondition: 0, completeness: 0 },
+      workspace: { version: 1, blocks: [{ id: 'private-block', type: 'xiyou_enter_palace', nextId: null, x: 0, y: 0 }] },
+    };
+    progress.savedAt = '2026-07-15T06:00:00.000Z';
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
+    expect(screen.queryByText('运行 3 次 · 调整 2 次')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '2580' } });
+    fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
+
+    expect(screen.getByText('运行 3 次 · 调整 2 次')).toBeVisible();
+    expect(screen.getByText('程序结构')).toBeVisible();
+    expect(screen.queryByText('private-block')).not.toBeInTheDocument();
+    expect(screen.queryByText('xiyou_enter_palace')).not.toBeInTheDocument();
   });
 
   it('submits the parent PIN through the form keyboard path', () => {
@@ -230,10 +289,11 @@ describe('西游编程记', () => {
     const storage = installDynamicStorage({ [CURRENT_PROGRESS_KEY]: saved }, true, '磁盘错误 A');
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
-    fireEvent.click(await screen.findByRole('button', { name: '进入龙宫' }));
-    fireEvent.click(screen.getByRole('button', { name: '请求兵器' }));
-    fireEvent.click(screen.getByRole('button', { name: '试用兵器' }));
-    fireEvent.click(screen.getByRole('button', { name: '运行指令' }));
+    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：请求兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+    fireEvent.click(screen.getByRole('button', { name: '完成场景播放' }));
     expect(screen.getByRole('heading', { name: '闯关成功' })).toBeInTheDocument();
     expect(screen.getAllByRole('alert')).toHaveLength(1);
     expect(screen.getByRole('alert')).toHaveTextContent('磁盘错误 A');

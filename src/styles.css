@@ -115,6 +115,23 @@ h1, h2, .brand strong { font-family: 'Songti SC', 'STSong', serif; }
 .game-scene { width: 100%; min-height: 180px; aspect-ratio: 19 / 5; overflow: hidden; background-image: url('/assets/world-map.jpg'); background-size: cover; background-position: center; border-bottom: 1px solid var(--line); }
 .game-scene canvas { display: block; width: 100% !important; height: 100% !important; }
 
+.dragon-palace-experience { display: grid; grid-template-columns: minmax(280px, .8fr) minmax(360px, 1.2fr); align-items: start; }
+.dragon-palace-scene-region { grid-column: 1; border-right: 1px solid var(--line); }
+.dragon-palace-program-region { grid-column: 2; }
+.dragon-palace-feedback-region { grid-column: 1 / -1; padding: 0 22px 18px; }
+.dragon-palace-scene-controls { display: flex; justify-content: flex-end; padding: 12px 14px; }
+.battle-transcript { min-height: 48px; margin: 0; padding: 10px 14px; color: var(--ink-muted); background: var(--paper-light); border-top: 1px solid var(--line); line-height: 1.55; }
+.block-program-list { display: grid !important; gap: 8px !important; margin: 8px 0 0 !important; padding: 0 !important; list-style: none; }
+.block-program-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px; border: 1px solid rgba(47,115,91,.2); border-radius: 8px; background: rgba(255,255,255,.42); }
+.block-program-actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.block-program-actions button, .battle-feedback button, .unsaved-session button { min-height: 36px; padding: 5px 10px; color: var(--jade-deep); border: 1px solid rgba(47,115,91,.35); border-radius: 7px; background: var(--paper-light); cursor: pointer; }
+.battle-feedback, .unsaved-session { margin-top: 12px; padding: 13px 15px; border-radius: 10px; line-height: 1.55; }
+.battle-feedback { border-left: 4px solid var(--cinnabar); background: #f8e6d9; color: #58271f; }
+.battle-feedback p, .unsaved-session p { margin-bottom: 9px; }
+.unsaved-session { border-left: 4px solid var(--gold); background: #fff0d8; color: #5d3c16; }
+.dragon-palace-experience button:focus-visible, .block-program-list li:focus-visible, .battle-feedback:focus-visible { outline: 3px solid #d28f2c; outline-offset: 3px; }
+.mission-session-summary { margin-top: 8px !important; color: var(--jade-deep) !important; font-weight: 700; }
+
 .code-workspace, .python-workspace, .ai-lab { padding: 14px 22px 18px; }
 .command-palette { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .command-palette p { margin: 0; flex: 0 0 auto; }
@@ -210,6 +227,7 @@ progress { width: 100%; accent-color: var(--jade); }
 .privacy-card { width: min(560px, 100%); padding: 28px; border-radius: 18px; background: #fffdf5; color: #2f2b22; box-shadow: 0 20px 60px rgb(0 0 0 / 28%); }
 .privacy-card li { margin-block: 10px; }
 [data-reduced-motion="true"] *, [data-reduced-motion="true"] *::before, [data-reduced-motion="true"] *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+[data-reduced-motion="true"] .battle-transcript, [data-reduced-motion="true"] .battle-feedback { visibility: visible; }
 
 .mission-tools-loading, .mission-tools-error { min-height: 180px; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 24px; text-align: center; overflow-wrap: anywhere; }
 .mission-tools-error p { margin: 0; color: var(--ink-muted); }
@@ -252,6 +270,14 @@ progress { width: 100%; accent-color: var(--jade); }
   .story-column { padding: 18px; }
   .mission-objective { grid-template-columns: 1fr; gap: 8px; padding: 14px; }
   .mission-objective > span { justify-self: start; }
+  .dragon-palace-experience { grid-template-columns: 1fr; }
+  .dragon-palace-scene-region, .dragon-palace-program-region, .dragon-palace-feedback-region { grid-column: 1; }
+  .dragon-palace-scene-region { grid-row: 1; border-right: 0; border-bottom: 1px solid var(--line); }
+  .dragon-palace-scene-controls { grid-row: 2; }
+  .dragon-palace-program-region { grid-row: 3; }
+  .dragon-palace-feedback-region { grid-row: 4; padding: 0 12px 14px; }
+  .block-program-list li { align-items: stretch; flex-direction: column; }
+  .block-program-actions { justify-content: flex-start; }
   .code-workspace, .python-workspace, .ai-lab { padding: 12px; min-width: 0; overflow: hidden; }
   .blockly-host, .code-editor, .cm-editor { max-width: 100%; overflow: auto; }
   .command-palette, .workspace-actions, .success-actions, .parent-heading, .data-tools, .clear-progress-card > div { align-items: stretch; flex-direction: column; }
