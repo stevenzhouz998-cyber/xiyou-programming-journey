@@ -61,6 +61,53 @@ async function readEvidence(page: Page) {
   }, CURRENT_KEY)
 }
 
+async function readFullSession(page: Page) {
+  return page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).sessions['w1-m2'], CURRENT_KEY)
+}
+
+async function installMediaObserver(page: Page) {
+  await page.addInitScript(() => {
+    const play = HTMLMediaElement.prototype.play
+    ;(window as Window & { __xiyouStaffMediaPlayCalls?: string[] }).__xiyouStaffMediaPlayCalls = []
+    HTMLMediaElement.prototype.play = function () {
+      ;(window as Window & { __xiyouStaffMediaPlayCalls?: string[] }).__xiyouStaffMediaPlayCalls?.push(this.currentSrc || this.src)
+      return play.call(this)
+    }
+  })
+  const successRequests: string[] = []
+  page.on('request', (request) => { if (request.url().includes('/assets/audio/success.m4a')) successRequests.push(request.url()) })
+  return {
+    successRequests,
+    playCalls: () => page.evaluate(() => (window as Window & { __xiyouStaffMediaPlayCalls?: string[] }).__xiyouStaffMediaPlayCalls ?? []),
+  }
+}
+
+function normalizeExecution(evidence: Awaited<ReturnType<typeof readEvidence>>) {
+  const normalizedIds = new Map<string, string>()
+  evidence.trace.forEach((item: { sourceBlockId: string }, index: number) => normalizedIds.set(item.sourceBlockId, `block-${index + 1}`))
+  const normalize = (item: { sourceBlockId: string | null; instructionId: string | null }) => {
+    const sourceBlockId = item.sourceBlockId === null ? null : normalizedIds.get(item.sourceBlockId) ?? item.sourceBlockId
+    return {
+      ...item,
+      sourceBlockId,
+      instructionId: item.instructionId === null || sourceBlockId === null ? null : `instruction:${sourceBlockId}`,
+    }
+  }
+  return {
+    trace: evidence.trace.map(normalize),
+    events: evidence.events.map(normalize),
+    finalState: evidence.finalState,
+  }
+}
+
+async function completeCorrectProgram(page: Page) {
+  await add(page, '查看三件兵器重量')
+  await add(page, '选择定海神针（13500斤）')
+  await add(page, '缩小定海神针')
+  await activate(page, '执行战斗指令')
+  await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 15_000 })
+}
+
 async function expectNoOverflow(page: Page) {
   expect(await page.evaluate(() => ({
     document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -109,7 +156,9 @@ async function wrongThenCorrect(page: Page, keyboard = false) {
   await add(page, '选择方天画戟（7200斤）', keyboard)
   await add(page, '缩小定海神针', keyboard)
   await activate(page, '执行战斗指令', keyboard)
-  await expect(page.locator('.ruyi-staff-scene-frame .game-scene')).toHaveAttribute('data-selected-weapon', 'halberd')
+  const scene = page.locator('.ruyi-staff-scene-frame .game-scene')
+  await expect(scene).toHaveAttribute('data-selected-weapon', 'halberd')
+  await expect(scene).toHaveAttribute('data-effect-cell', 'blocked')
   const alert = page.getByRole('alert').filter({ hasText: '7200斤比13500斤轻' })
   await expect(alert).toBeFocused()
   await activate(page, '回到问题积木', keyboard)
@@ -201,20 +250,38 @@ test('@staff-storage failed coordinated draft save stays visible and retry persi
   await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).sessions['w1-m2']?.workspace.blocks.length ?? 0, CURRENT_KEY)).toBe(1)
 })
 
-test('@staff-parity reduced motion and mute preserve the executable trace without success media', async ({ page }) => {
-  const successRequests: string[] = []
-  page.on('request', (request) => { if (request.url().includes('/assets/audio/success.m4a')) successRequests.push(request.url()) })
+test('@staff-parity independent standard and reduced-muted runs preserve exact execution semantics without muted success media', async ({ page, browser }) => {
+  test.setTimeout(90_000)
+  const standardMedia = await installMediaObserver(page)
   await openMission(page)
-  await activate(page, '减弱动画')
-  await activate(page, '关闭声音')
-  await add(page, '查看三件兵器重量')
-  await add(page, '选择定海神针（13500斤）')
-  await add(page, '缩小定海神针')
-  await activate(page, '执行战斗指令')
-  await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 15_000 })
-  await expect(page.locator('.ruyi-staff-scene-frame .game-scene')).toHaveAttribute('data-motion-mode', 'reduced')
-  expect((await readEvidence(page)).trace.map((item: { opcode: string }) => item.opcode)).toEqual(['inspect_weights', 'choose_ruyi_staff', 'shrink_ruyi_staff'])
-  expect(successRequests).toEqual([])
+  await expect(page.locator('.ruyi-staff-scene-frame .game-scene')).toHaveAttribute('data-motion-mode', 'standard')
+  await expect(page.getByRole('button', { name: '关闭声音' })).toBeVisible()
+  await completeCorrectProgram(page)
+  await expect.poll(async () => (await standardMedia.playCalls()).filter((url) => url.includes('/assets/audio/success.m4a')).length).toBeGreaterThan(0)
+  await expect.poll(() => standardMedia.successRequests.length).toBeGreaterThan(0)
+  const standard = normalizeExecution(await readEvidence(page))
+
+  const mutedContext = await browser.newContext({
+    baseURL: new URL('./', page.url()).href,
+    viewport: page.viewportSize() ?? { width: 1280, height: 720 },
+    serviceWorkers: 'block',
+  })
+  try {
+    const mutedPage = await mutedContext.newPage()
+    const mutedMedia = await installMediaObserver(mutedPage)
+    await openMission(mutedPage)
+    await activate(mutedPage, '减弱动画')
+    await activate(mutedPage, '关闭声音')
+    await expect(mutedPage.getByTestId('app-shell')).toHaveAttribute('data-reduced-motion', 'true')
+    await expect(mutedPage.getByRole('button', { name: '开启声音' })).toBeVisible()
+    await completeCorrectProgram(mutedPage)
+    await expect(mutedPage.locator('.ruyi-staff-scene-frame .game-scene')).toHaveAttribute('data-motion-mode', 'reduced')
+    expect(await mutedMedia.playCalls()).toEqual([])
+    expect(mutedMedia.successRequests).toEqual([])
+    expect(normalizeExecution(await readEvidence(mutedPage))).toEqual(standard)
+  } finally {
+    await mutedContext.close()
+  }
 })
 
 function recoveredSnapshot() {
@@ -265,13 +332,23 @@ test('@staff-cold cold w1-m2 response bodies stay within fixed 2.5 MiB with fail
 })
 
 test('@staff-parent parent report and V3 export-import preserve exact w1-m2 session', async ({ page }) => {
-  await openMission(page); await wrongThenCorrect(page); const before = await readEvidence(page)
+  await openMission(page); await wrongThenCorrect(page); const before = await readFullSession(page)
   await activate(page, '回成长地图'); await activate(page, '家长周报')
   const pin = page.getByLabel('家长 PIN'); await pin.fill('4826'); await activate(page, '进入周报')
   await expect(page.getByText('运行 2 次 · 调整 1 次')).toBeVisible()
   const started = page.waitForEvent('download'); await activate(page, '导出进度'); const download = await started; const file = await download.path(); expect(file).not.toBeNull()
-  const exported = JSON.parse(fs.readFileSync(file!, 'utf8')); expect(exported.sessions['w1-m2'].lastTrace).toEqual(before.trace)
+  const exported = JSON.parse(fs.readFileSync(file!, 'utf8')); expect(exported.sessions['w1-m2']).toEqual(before)
+
+  await activate(page, '成长地图'); await activate(page, '定海神针')
+  await activate(page, '删除：缩小定海神针')
+  await expect.poll(() => readFullSession(page)).not.toEqual(exported.sessions['w1-m2'])
+  const changed = await readFullSession(page)
+  expect(changed.workspace.blocks).toHaveLength(2)
+
+  await page.getByTestId('mission-background').getByRole('button', { name: '成长地图' }).click(); await activate(page, '家长周报')
+  const returnPin = page.getByLabel('家长 PIN'); await returnPin.fill('4826'); await activate(page, '进入周报')
   await page.getByLabel('选择进度文件').setInputFiles(file!); await expect(page.getByText('导入成功：来源版本 V3。')).toBeVisible()
+  await expect.poll(() => readFullSession(page)).toEqual(exported.sessions['w1-m2'])
 })
 
 test('@staff-lazy 503 on w1-m2 experience chunk keeps story and explicit reload', async ({ page }) => {
