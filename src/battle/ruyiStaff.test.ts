@@ -3,10 +3,15 @@ import { runRuyiStaffBattle } from './ruyiStaff'
 import type { RuyiStaffInstruction, RuyiStaffOpcode } from './types'
 import type {
   BattleInstruction,
+  BattleState,
   DragonPalaceInstruction,
   DragonPalaceOpcode,
 } from './types'
 
+const sharedDragonState: BattleState = 'outside-palace'
+const sharedRuyiState: BattleState = 'awaiting-inspection'
+// @ts-expect-error BattleState rejects states outside both mission domains.
+const invalidSharedState: BattleState = 'unknown-battle-state'
 const dragonOpcode: DragonPalaceOpcode = 'enter_palace'
 const sharedRuyiInstruction = {
   instructionId: 'instruction:shared-ruyi',
@@ -24,6 +29,9 @@ const invalidDragonInstruction = sharedRuyiInstruction satisfies DragonPalaceIns
 const invalidRuyiInstruction = dragonInstruction satisfies RuyiStaffInstruction
 
 void sharedRuyiInstruction
+void sharedDragonState
+void sharedRuyiState
+void invalidSharedState
 void dragonInstruction
 void invalidDragonInstruction
 void invalidRuyiInstruction

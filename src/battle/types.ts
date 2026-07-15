@@ -22,6 +22,8 @@ export type DragonPalaceState =
   | 'weapon-requested'
   | 'weapon-tested'
 
+export type BattleState = DragonPalaceState | RuyiStaffState
+
 interface MissionBattleInstruction<TOpcode extends BattleOpcode> {
   instructionId: string
   sourceBlockId: string
