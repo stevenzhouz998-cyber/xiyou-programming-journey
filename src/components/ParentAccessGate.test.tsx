@@ -22,14 +22,14 @@ describe('ParentAccessGate', () => {
     expect(newPin).toHaveAttribute('autocomplete', 'new-password');
     enterNewPin('2580');
     fireEvent.click(screen.getByRole('button', { name: '创建家长 PIN' }));
-    expect(await screen.findByText('不能使用已经公开的旧默认码 2580，请设置新的 PIN。')).toBeVisible();
+    expect(await screen.findByText('不能使用已公开的旧默认码，请设置新的 PIN。')).toBeVisible();
     enterNewPin('4826', '4820');
     fireEvent.click(screen.getByRole('button', { name: '创建家长 PIN' }));
     expect(await screen.findByText('两次输入的 PIN 不一致。')).toBeVisible();
     enterNewPin('4826');
     fireEvent.click(screen.getByRole('button', { name: '创建家长 PIN' }));
     const heading = await screen.findByRole('heading', { name: '请保存一次性恢复码' });
-    expect(heading).toHaveFocus();
+    await waitFor(() => expect(heading).toHaveFocus());
     expect(saveRecord).not.toHaveBeenCalled();
     view.unmount();
 

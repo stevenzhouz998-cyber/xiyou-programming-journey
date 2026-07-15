@@ -55,7 +55,7 @@ describe('progress V2 schema', () => {
       missions: {
         'w1-m1': { status: 'completed', stars: 2, attempts: 3, hintsUsed: 1, completedAt: '2026-07-12T00:00:00.000Z' },
       },
-      settings: { muted: true, reducedMotion: false, parentPin: '2580' },
+      settings: { muted: true, reducedMotion: false, parentPin: 'unset' },
       savedAt: '2026-07-12T00:00:00.000Z',
     };
     expect(migrateProgress(v1)).toMatchObject({

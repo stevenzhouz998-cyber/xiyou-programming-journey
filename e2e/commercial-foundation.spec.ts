@@ -252,7 +252,7 @@ test('@legacy transactional parent PIN lifecycle, keyboard controls, and clear c
   await page.getByLabel('设置 4 位家长 PIN').fill('2580');
   await page.getByLabel('确认家长 PIN').fill('2580');
   await page.getByRole('button', { name: '创建家长 PIN' }).click();
-  await expect(page.getByRole('alert')).toContainText('不能使用已经公开的旧默认码 2580');
+  await expect(page.getByRole('alert')).toContainText('不能使用已公开的旧默认码');
   await page.getByLabel('设置 4 位家长 PIN').fill('4826');
   await page.getByLabel('确认家长 PIN').fill('4820');
   await page.getByRole('button', { name: '创建家长 PIN' }).click();

@@ -88,7 +88,7 @@ export function ParentAccessGate({ record, saveRecord, children }: {
 
   const newPinError = (value: string) => {
     if (!validPin(value)) return '请设置 4 位数字 PIN。';
-    if (value === '2580') return '不能使用已经公开的旧默认码 2580，请设置新的 PIN。';
+    if (isParentAccessUnset(value)) return '不能使用已公开的旧默认码，请设置新的 PIN。';
     return '';
   };
 
