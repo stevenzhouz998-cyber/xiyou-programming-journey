@@ -3,6 +3,7 @@ import { constants } from 'node:fs';
 import { lstat, open, readFile, readdir, realpath } from 'node:fs/promises';
 import { dirname, isAbsolute, join, posix, relative, resolve, sep, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import sharp from 'sharp';
 
 export const MAX_RASTER_BYTES = 512 * 1024;
 export const MAX_MISSION_MEDIA_BYTES = Math.floor(1.25 * 1024 * 1024);
@@ -259,6 +260,29 @@ export function readWebpDimensions(buffer) {
   return pixelDimensions;
 }
 
+export async function decodeWebpDimensions(buffer) {
+  const containerDimensions = readWebpDimensions(buffer);
+  try {
+    const { data, info } = await sharp(buffer, {
+      failOn: 'error',
+      limitInputPixels: 20_000_000,
+    }).raw().toBuffer({ resolveWithObject: true });
+    const decodedDimensions = { width: info.width, height: info.height };
+    const expectedPixelBytes = info.width * info.height * info.channels;
+    if (!Number.isInteger(info.width) || !Number.isInteger(info.height) || !Number.isInteger(info.channels)
+      || info.width <= 0 || info.height <= 0 || info.channels <= 0 || data.length !== expectedPixelBytes) {
+      throw new Error('decoder returned no complete pixel data');
+    }
+    if (decodedDimensions.width !== containerDimensions.width || decodedDimensions.height !== containerDimensions.height) {
+      throw new Error('decoder dimensions do not match the WebP container');
+    }
+    return decodedDimensions;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Asset manifest: WebP must fully decode its pixel data: ${detail}.`);
+  }
+}
+
 async function listFiles(root, relativeRoot = '') {
   const entries = await readdir(join(root, relativeRoot), { withFileTypes: true });
   const files = [];
@@ -295,11 +319,18 @@ export async function collectAssetFiles(assetRoot) {
       const fileInfo = await handle.stat();
       if (!fileInfo.isFile()) throw new Error(`Asset manifest: shipping asset must be a regular file: ${relativePath}.`);
       const bytes = await handle.readFile();
+      let decodedDimensions;
+      try {
+        decodedDimensions = await decodeWebpDimensions(bytes);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(`Asset manifest: ${relativePath} must fully decode as WebP: ${detail}`, { cause: error });
+      }
       publicFiles.push({
         path: posix.join('assets/dragon-palace', relativePath),
         sha256: createHash('sha256').update(bytes).digest('hex'),
         bytes: bytes.length,
-        ...readWebpDimensions(bytes),
+        ...decodedDimensions,
       });
     } finally {
       await handle?.close();

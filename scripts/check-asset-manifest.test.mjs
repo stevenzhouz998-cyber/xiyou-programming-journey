@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   collectAssetFiles,
+  decodeWebpDimensions,
   parseAssetManifest,
   readWebpDimensions,
   verifyAssetManifest,
@@ -161,6 +162,35 @@ test('requires a complete WebP pixel payload after a VP8X canvas', () => {
   assert.throws(() => readWebpDimensions(webp(vp8x(1600, 900))), /pixel payload|dimensions are missing/i);
   assert.deepEqual(readWebpDimensions(webp(vp8x(1600, 900), vp8(1600, 900))), { width: 1600, height: 900 });
   assert.throws(() => readWebpDimensions(webp(vp8x(1600, 900), vp8(800, 450))), /dimension.*mismatch/i);
+});
+
+test('rejects a structurally valid VP8 header that cannot be fully decoded', async () => {
+  const headerOnlyFrame = webp(vp8x(32, 32), vp8(32, 32));
+  assert.deepEqual(readWebpDimensions(headerOnlyFrame), { width: 32, height: 32 });
+  await assert.rejects(() => decodeWebpDimensions(headerOnlyFrame), /decode|decodable|pixel/i);
+
+  const tempRoot = await mkdtemp(join(tmpdir(), 'xiyou-webp-decode-'));
+  try {
+    await writeFile(join(tempRoot, 'invalid.webp'), headerOnlyFrame);
+    await assert.rejects(() => collectAssetFiles(tempRoot), /invalid\.webp.*fully decode/i);
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('fully decodes all five shipping WebP files at their expected dimensions', async () => {
+  const assetRoot = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'assets', 'dragon-palace');
+  const expectedDimensions = new Map([
+    ['background.webp', { width: 1600, height: 900 }],
+    ['dragon-king.webp', { width: 640, height: 640 }],
+    ['effects.webp', { width: 1024, height: 512 }],
+    ['weapons.webp', { width: 1024, height: 512 }],
+    ['wukong.webp', { width: 640, height: 640 }],
+  ]);
+  for (const [name, expected] of expectedDimensions) {
+    const bytes = await readFile(join(assetRoot, name));
+    assert.deepEqual(await decodeWebpDimensions(bytes), expected, name);
+  }
 });
 
 test('rejects truncated WebP chunks, RIFF size mismatches, and trailing junk', () => {
