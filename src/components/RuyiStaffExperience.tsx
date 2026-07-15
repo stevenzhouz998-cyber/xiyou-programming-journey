@@ -52,6 +52,7 @@ export function RuyiStaffExperience({ reducedMotion, muted, onComplete, loaders 
   const session = progress.sessions[MISSION_ID] ?? emptyRef.current
   const [playback, setPlayback] = useState(() => restored(session.lastRun)); const playbackRef = useRef(playback); const sequenceRef = useRef(0)
   const completedRequestsRef = useRef(new Set<number>()); const finishedPlaybackRef = useRef(new Set<number>()); const checkingSaveRef = useRef(new Set<number>()); const mountedRef = useRef(true)
+  const completionHandedOffRequestRef = useRef<number | null>(null); const [completionHandedOffRequestId, setCompletionHandedOffRequestId] = useState<number | null>(null)
   const completeRef = useRef(onComplete); const missionCompletedRef = useRef(Boolean(progress.missions[MISSION_ID]))
   const regionRef = useRef<HTMLDivElement>(null); const [diagnostic, setDiagnostic] = useState<Diagnostic | null>(() => session.lastRun?.diagnostic ?? null)
   const [occurrenceId, setOccurrenceId] = useState(0); const [focusBlockId, setFocusBlockId] = useState<string | null>(null)
@@ -78,7 +79,7 @@ export function RuyiStaffExperience({ reducedMotion, muted, onComplete, loaders 
   const releaseCompletion = (requestId: number, saved: CoordinatedSaveResult) => {
     const current = playbackRef.current
     if (!mountedRef.current || saved.status !== 'saved' || current.requestId !== requestId || current.origin !== 'run' || !current.eligible || current.result?.completed !== true || !current.evidence || !current.runAt || saved.progress.sessions[MISSION_ID]?.lastRunAt !== current.runAt || !finishedPlaybackRef.current.has(requestId) || missionCompletedRef.current || completedRequestsRef.current.has(requestId)) return
-    completedRequestsRef.current.add(requestId); playbackRef.current = { ...current, eligible: false }
+    completedRequestsRef.current.add(requestId); completionHandedOffRequestRef.current = requestId; setCompletionHandedOffRequestId(requestId); playbackRef.current = { ...current, eligible: false }
     void completeRef.current(current.evidence)
   }
   const checkSessionSave = (requestId: number, pending: Promise<CoordinatedSaveResult>) => {
@@ -97,16 +98,19 @@ export function RuyiStaffExperience({ reducedMotion, muted, onComplete, loaders 
     replace({ requestId: ++sequenceRef.current, origin: 'replay', events: snapshot.events, result: snapshot, eligible: false, evidence: null, runAt: session.lastRunAt, sessionSave: null })
   }
   const retrySessionSave = async () => {
-    const requestId = playbackRef.current.requestId
+    const current = playbackRef.current
+    if (current.origin !== 'run' || current.sessionSave === null || completionHandedOffRequestRef.current === current.requestId) return
+    const requestId = current.requestId
     const saved = await retrySave()
     releaseCompletion(requestId, saved)
   }
   const focusWorkspace = () => regionRef.current?.querySelector<HTMLElement>('[aria-label="Blockly 积木编辑区"]')?.focus()
+  const sessionRetryActive = playback.origin === 'run' && playback.sessionSave !== null && completionHandedOffRequestId !== playback.requestId
   return <div className="ruyi-staff-experience" onKeyDown={activateButtonOnEnter}>
     <div className="ruyi-staff-scene-region"><ToolErrorBoundary label="定海神针场景" reloadPage={reloadPage}><Suspense fallback={<p role="status">龙宫场景加载中，请稍候……</p>}><RuyiStaffScene events={playback.events} replayToken={playback.requestId} reducedMotion={reducedMotion} muted={muted} onPlaybackComplete={() => playbackComplete(playback.requestId)} /></Suspense></ToolErrorBoundary><div className="dragon-palace-scene-controls"><button type="button" className="button button-ghost" disabled={!session.lastRun && !playback.result} onClick={replay}>重播最近一次</button></div></div>
     <div className="ruyi-staff-program-region" ref={regionRef}><ToolErrorBoundary label="定海神针编程工作台" reloadPage={reloadPage}><Suspense fallback={<p role="status">编程工作台加载中，请稍候……</p>}><RuyiStaffBlocklyWorkspace draft={session.workspace} onDraftChange={saveDraft} onRun={run} focusBlockId={focusBlockId} onFocusHandled={() => setFocusBlockId(null)} /></Suspense></ToolErrorBoundary></div>
     <div className="ruyi-staff-feedback-region"><RuyiStaffFeedback diagnostic={diagnostic} occurrenceId={occurrenceId} onFocusBlock={setFocusBlockId} onFocusWorkspace={focusWorkspace} />
-      {saveStatus === 'unsaved' || saveStatus === 'conflict' ? <div className="unsaved-session" role="status"><p>{saveStatus === 'conflict' ? '本关存档与其他标签页冲突，请先按顶部提示处理。' : '本关尚未保存，请重试。'}</p>{saveStatus === 'unsaved' ? <button type="button" onClick={retrySessionSave}>重试保存本关</button> : null}</div> : null}
+      {sessionRetryActive && (saveStatus === 'unsaved' || saveStatus === 'conflict') ? <div className="unsaved-session" role="status"><p>{saveStatus === 'conflict' ? '本关存档与其他标签页冲突，请先按顶部提示处理。' : '本关尚未保存，请重试。'}</p>{saveStatus === 'unsaved' ? <button type="button" onClick={retrySessionSave}>重试保存本关</button> : null}</div> : null}
     </div>
   </div>
 }

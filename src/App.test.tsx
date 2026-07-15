@@ -182,6 +182,66 @@ describe('西游编程记', () => {
     expect(audio).toHaveBeenCalledWith('/assets/audio/success.m4a');
   });
 
+  it('offers exactly one final-completion retry when w1-m2 run evidence is already durable', async () => {
+    const progress = completeMission(withParentAccess(createInitialProgress()), 'w1-m1', { stars: 3, hintsUsed: 0 });
+    progress.privacy.localDataNoticeSeen = true;
+    const storage = installDynamicStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(progress) }, false);
+    window.location.hash = '#/mission/w1-m2';
+    const audio = vi.fn(function MockAudio() { return { play: vi.fn() }; });
+    vi.stubGlobal('Audio', audio);
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '加入：查看三件兵器重量' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：选择定海神针（13500斤）' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：缩小定海神针' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
+      sessions: { 'w1-m2': { lastRun: { completed: true } } },
+    }));
+    storage.failWrites = true;
+    fireEvent.click(screen.getByRole('button', { name: '完成定海神针场景播放' }));
+
+    expect(await screen.findByText('通关待保存：进度尚未安全写入这台电脑。')).toBeVisible();
+    expect(screen.queryByRole('button', { name: '重试保存本关' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /重试保存/ })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: '重试保存通关' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
+    expect(audio).not.toHaveBeenCalledWith('/assets/audio/success.m4a');
+
+    storage.failWrites = false;
+    fireEvent.click(screen.getByRole('button', { name: '重试保存通关' }));
+    expect(await screen.findByRole('heading', { name: '闯关成功' })).toBeVisible();
+    expect(audio).toHaveBeenCalledWith('/assets/audio/success.m4a');
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
+      missions: { 'w1-m2': { status: 'completed' } },
+    });
+  });
+
+  it('does not expose a run-session retry when final w1-m2 completion conflicts', async () => {
+    const progress = completeMission(withParentAccess(createInitialProgress()), 'w1-m1', { stars: 3, hintsUsed: 0 });
+    progress.privacy.localDataNoticeSeen = true;
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    localStorage.setItem(REVISION_PROGRESS_KEY, '0');
+    window.location.hash = '#/mission/w1-m2';
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '加入：查看三件兵器重量' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：选择定海神针（13500斤）' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：缩小定海神针' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
+      sessions: { 'w1-m2': { lastRun: { completed: true } } },
+    }));
+    localStorage.setItem(REVISION_PROGRESS_KEY, String(Number(localStorage.getItem(REVISION_PROGRESS_KEY)) + 1));
+    fireEvent.click(screen.getByRole('button', { name: '完成定海神针场景播放' }));
+
+    expect(await screen.findByText(/通关待保存/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: '重试保存本关' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/本关存档与其他标签页冲突/)).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('button', { name: /重试保存/ })).toHaveLength(0);
+    expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
+  });
+
   it('completes w1-m2 while muted without constructing or playing success audio', async () => {
     const progress = completeMission(withParentAccess(createInitialProgress()), 'w1-m1', { stars: 3, hintsUsed: 0 });
     progress.privacy.localDataNoticeSeen = true;

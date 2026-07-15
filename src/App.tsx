@@ -15,6 +15,7 @@ import { downloadTextFile } from './utils/download';
 import './styles.css';
 
 const GlobalModalIsolationContext = createContext<(open: boolean) => void>(() => undefined);
+const MissionCompletionPersistenceContext = createContext<(active: boolean) => void>(() => undefined);
 const ParentAccessGate = lazy(() => import('./components/ParentAccessGate').then((module) => ({ default: module.ParentAccessGate })));
 const ParentDataTools = lazy(() => import('./components/ParentDataTools').then((module) => ({ default: module.ParentDataTools })));
 const RecoveryNotice = lazy(() => import('./components/RecoveryNotice').then((module) => ({ default: module.RecoveryNotice })));
@@ -99,8 +100,9 @@ function SuccessDialog({ stars, feedback, hasNext, onMap, onNext }: { stars: num
 
 function MissionPageContent({ reducedMotion, id }: { reducedMotion: boolean; id: string }) {
   const navigate = useNavigate();
+  const setCompletionPersistenceActive = useContext(MissionCompletionPersistenceContext);
   const mission = getMission(id);
-  const { progress, complete, recordMissionHint, retrySave } = useProgress();
+  const { progress, complete, recordMissionHint, retrySave, saveError } = useProgress();
   const [hintsUsed, setHintsUsed] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [success, setSuccess] = useState(false);
@@ -110,23 +112,26 @@ function MissionPageContent({ reducedMotion, id }: { reducedMotion: boolean; id:
   type CompletionSave = { stars: number; hintsUsed: number; status: 'pending' | 'unsaved' | 'conflict' };
   const completionSaveRef = useRef<CompletionSave | null>(null);
   const [completionSave, setCompletionSave] = useState<CompletionSave | null>(null);
+  useEffect(() => () => setCompletionPersistenceActive(false), [setCompletionPersistenceActive]);
   if (!mission) return <main className="not-found"><h1>这页经卷没有找到</h1><Link to="/">返回成长地图</Link></main>;
   if (!isMissionUnlocked(progress, mission.id)) return <main className="not-found"><LockKey size={40} /><h1>这一关还没有解锁</h1><Link to="/">先完成前一关</Link></main>;
 
   const revealSuccess = (request: CompletionSave) => {
     if (completionSaveRef.current !== request || successRef.current) return false;
     completionSaveRef.current = null; setCompletionSave(null); successRef.current = true; setStars(request.stars); setSuccess(true);
+    setCompletionPersistenceActive(false);
     playAudio(assetUrl(mission.isBoss ? '/assets/audio/boss.m4a' : '/assets/audio/success.m4a'), progress.settings.muted);
     return true;
   };
   const pass = async (earnedStars: number, completionHints = hintsUsed): Promise<boolean> => {
     if (successRef.current || completionSaveRef.current !== null) return false;
     const request: CompletionSave = { stars: earnedStars, hintsUsed: completionHints, status: 'pending' };
+    setCompletionPersistenceActive(true);
     completionSaveRef.current = request; setCompletionSave(request);
     const result = await complete(mission.id, { stars: earnedStars, hintsUsed: completionHints });
     if (completionSaveRef.current !== request) return false;
-    if (result.status === 'saved') return revealSuccess(request);
-    const failed: CompletionSave = { ...request, status: result.status };
+    if (result.status === 'saved' && result.progress.missions[mission.id]?.status === 'completed') return revealSuccess(request);
+    const failed: CompletionSave = { ...request, status: result.status === 'saved' ? 'unsaved' : result.status };
     completionSaveRef.current = failed; setCompletionSave(failed);
     return false;
   };
@@ -137,8 +142,8 @@ function MissionPageContent({ reducedMotion, id }: { reducedMotion: boolean; id:
     completionSaveRef.current = request; setCompletionSave(request);
     const result = await retrySave();
     if (completionSaveRef.current !== request) return;
-    if (result.status === 'saved') { revealSuccess(request); return; }
-    const next: CompletionSave = { ...request, status: result.status };
+    if (result.status === 'saved' && result.progress.missions[mission.id]?.status === 'completed') { revealSuccess(request); return; }
+    const next: CompletionSave = { ...request, status: result.status === 'saved' ? 'unsaved' : result.status };
     completionSaveRef.current = next; setCompletionSave(next);
   };
   const validate = (sequence: string[]) => {
@@ -154,7 +159,7 @@ function MissionPageContent({ reducedMotion, id }: { reducedMotion: boolean; id:
     : mission.mode === 'python'
       ? { starterCode: mission.starterCode ?? '', expectedOutput: mission.expectedOutput ?? '', onPass: () => pass(hintsUsed === 0 ? 3 : hintsUsed === 1 ? 2 : 1) }
       : { commands: mission.expectedSequence, onRun: validate };
-  return <main className="mission-page"><div data-testid="mission-background" inert={success ? true : undefined} aria-hidden={success ? true : undefined}><header className="mission-header"><button className="back-button" type="button" onClick={() => navigate('/')}><ArrowLeft size={21} />成长地图</button><div><span>第{mission.week}周 · 第{mission.order}关{mission.isBoss ? ' · BOSS' : ''}</span><h1>{mission.title}</h1></div><div className="canon-badge"><BookOpenText size={20} /><span>{mission.canon.title}</span></div></header><div className="mission-layout"><aside className="story-column"><span className="eyebrow">原著故事层</span><h2>{mission.subtitle}</h2>{mission.storyBeats.map((item) => <article className="story-beat" key={item.title}><CheckCircle size={20} weight="fill" /><div><strong>{item.title}</strong><p>{item.summary}</p></div></article>)}<a className="canon-link" href={mission.canon.sourceUrl} target="_blank" rel="noreferrer">查看原著第{mission.canon.chapters.map(chapterLabel).join('、')}回</a><HintPanel hints={mission.hints} onUse={(tier) => { if (mission.id === 'w1-m1' || mission.id === 'w1-m2') { if (!progress.sessions[mission.id]?.usedHintTiers.includes(tier)) recordMissionHint(mission.id, tier); } else setHintsUsed((count) => count + 1); }} /></aside><section className="play-column"><div className="mission-objective"><span>今日任务</span><h2>{mission.objective}</h2><p>知识法宝：{mission.knowledge}</p></div>{mission.id === 'w1-m1' ? <DragonPalaceExperience reducedMotion={reducedMotion} muted={progress.settings.muted} onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)} /> : mission.id === 'w1-m2' ? <LazySectionBoundary label="定海神针任务"><Suspense fallback={<p className="mission-tools-loading" role="status">定海神针任务加载中，请稍候……</p>}><RuyiStaffExperience reducedMotion={reducedMotion} muted={progress.settings.muted} onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)} /></Suspense></LazySectionBoundary> : <MissionTools missionId={mission.id} mode={mission.mode} sceneProps={{ activeStep, reducedMotion }} toolProps={toolProps} />}{feedback && !success && <div className="feedback-message">{feedback}</div>}{completionSave ? <div className="completion-save-status" role="status" aria-live="polite"><p>{completionSave.status === 'pending' ? '正在保存通关结果…' : completionSave.status === 'conflict' ? '通关待保存：其他标签页已经更新，请先按顶部提示处理存档冲突。' : '通关待保存：进度尚未安全写入这台电脑。'}</p>{completionSave.status === 'unsaved' ? <button type="button" className="button button-primary" onClick={retryCompletionSave}>重试保存通关</button> : null}</div> : null}</section></div></div>{success && <SuccessDialog stars={stars} feedback={feedback} hasNext={Boolean(next)} onMap={() => navigate('/')} onNext={() => next && navigate(`/mission/${next.id}`)} />}</main>;
+  return <main className="mission-page"><div data-testid="mission-background" inert={success ? true : undefined} aria-hidden={success ? true : undefined}><header className="mission-header"><button className="back-button" type="button" onClick={() => navigate('/')}><ArrowLeft size={21} />成长地图</button><div><span>第{mission.week}周 · 第{mission.order}关{mission.isBoss ? ' · BOSS' : ''}</span><h1>{mission.title}</h1></div><div className="canon-badge"><BookOpenText size={20} /><span>{mission.canon.title}</span></div></header><div className="mission-layout"><aside className="story-column"><span className="eyebrow">原著故事层</span><h2>{mission.subtitle}</h2>{mission.storyBeats.map((item) => <article className="story-beat" key={item.title}><CheckCircle size={20} weight="fill" /><div><strong>{item.title}</strong><p>{item.summary}</p></div></article>)}<a className="canon-link" href={mission.canon.sourceUrl} target="_blank" rel="noreferrer">查看原著第{mission.canon.chapters.map(chapterLabel).join('、')}回</a><HintPanel hints={mission.hints} onUse={(tier) => { if (mission.id === 'w1-m1' || mission.id === 'w1-m2') { if (!progress.sessions[mission.id]?.usedHintTiers.includes(tier)) recordMissionHint(mission.id, tier); } else setHintsUsed((count) => count + 1); }} /></aside><section className="play-column"><div className="mission-objective"><span>今日任务</span><h2>{mission.objective}</h2><p>知识法宝：{mission.knowledge}</p></div>{mission.id === 'w1-m1' ? <DragonPalaceExperience reducedMotion={reducedMotion} muted={progress.settings.muted} onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)} /> : mission.id === 'w1-m2' ? <LazySectionBoundary label="定海神针任务"><Suspense fallback={<p className="mission-tools-loading" role="status">定海神针任务加载中，请稍候……</p>}><RuyiStaffExperience reducedMotion={reducedMotion} muted={progress.settings.muted} onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)} /></Suspense></LazySectionBoundary> : <MissionTools missionId={mission.id} mode={mission.mode} sceneProps={{ activeStep, reducedMotion }} toolProps={toolProps} />}{feedback && !success && <div className="feedback-message">{feedback}</div>}{completionSave ? <div className="completion-save-status" role={completionSave.status === 'pending' ? 'status' : 'alert'} aria-live={completionSave.status === 'pending' ? 'polite' : 'assertive'}><p>{completionSave.status === 'pending' ? '正在保存通关结果…' : completionSave.status === 'conflict' ? '通关待保存：其他标签页已经更新，请保留当前页面，稍后处理存档冲突。' : '通关待保存：进度尚未安全写入这台电脑。'}</p>{completionSave.status === 'unsaved' && saveError ? <p>{saveError}</p> : null}{completionSave.status === 'unsaved' ? <button type="button" className="button button-primary" onClick={retryCompletionSave}>重试保存通关</button> : null}</div> : null}</section></div></div>{success && <SuccessDialog stars={stars} feedback={feedback} hasNext={Boolean(next)} onMap={() => navigate('/')} onNext={() => next && navigate(`/mission/${next.id}`)} />}</main>;
 }
 
 function MissionPage({ reducedMotion }: { reducedMotion: boolean }) {
@@ -176,6 +181,7 @@ function AppRoutes() {
     typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   ));
   const [globalModalOpen, setGlobalModalOpen] = useState(false);
+  const [completionPersistenceActive, setCompletionPersistenceActive] = useState(false);
 
   useEffect(() => {
     if (progress.settings.reducedMotionOverride || typeof window.matchMedia !== 'function') return undefined;
@@ -203,15 +209,15 @@ function AppRoutes() {
   const showRecoveryNotice = conflict || persistence === 'unsaved' || hasRecoveryDetails
     || (loadStatus !== 'normal' && loadStatus !== 'storage-unavailable');
 
-  return <GlobalModalIsolationContext.Provider value={setGlobalModalOpen}><div className="app-shell" data-testid="app-shell" data-reduced-motion={String(effectiveReducedMotion)}>
-    {showRecoveryNotice && <LazySectionBoundary label="存档恢复提示"><Suspense fallback={<aside className="recovery-notice recovery-notice-alert" role="status">存档恢复提示加载中，请稍候……</aside>}><RecoveryNotice loadStatus={loadStatus} persistence={persistence} loadError={loadError} corruptError={corruptError} saveError={saveError} hasCorruptDownload={corruptDownload !== null} conflict={conflict} retryable={saveRetryable} onRetry={retrySave} onDownloadConflictBackup={() => { const backup = data.createBackup(); downloadTextFile(backup.filename, backup.contents, backup.mimeType); }} onReloadExternal={data.reloadExternalProgress} /></Suspense></LazySectionBoundary>}
+  return <MissionCompletionPersistenceContext.Provider value={setCompletionPersistenceActive}><GlobalModalIsolationContext.Provider value={setGlobalModalOpen}><div className="app-shell" data-testid="app-shell" data-reduced-motion={String(effectiveReducedMotion)}>
+    {showRecoveryNotice && !completionPersistenceActive && <LazySectionBoundary label="存档恢复提示"><Suspense fallback={<aside className="recovery-notice recovery-notice-alert" role="status">存档恢复提示加载中，请稍候……</aside>}><RecoveryNotice loadStatus={loadStatus} persistence={persistence} loadError={loadError} corruptError={corruptError} saveError={saveError} hasCorruptDownload={corruptDownload !== null} conflict={conflict} retryable={saveRetryable} onRetry={retrySave} onDownloadConflictBackup={() => { const backup = data.createBackup(); downloadTextFile(backup.filename, backup.contents, backup.mimeType); }} onReloadExternal={data.reloadExternalProgress} /></Suspense></LazySectionBoundary>}
     <div data-testid="app-background" inert={privacyOpen || globalModalOpen ? true : undefined} aria-hidden={privacyOpen || globalModalOpen ? true : undefined}>
       <Header reducedMotion={effectiveReducedMotion} />
       <RouteFocus blocked={privacyOpen || globalModalOpen} />
       <Routes><Route path="/" element={<HomePage />} /><Route path="/mission/:id" element={<MissionPage reducedMotion={effectiveReducedMotion} />} /><Route path="/parent" element={<ParentPage />} /><Route path="*" element={<HomePage />} /></Routes>
     </div>
     <PrivacyPanel acknowledged={progress.privacy.localDataNoticeSeen} onAcknowledge={acknowledgePrivacy} />
-  </div></GlobalModalIsolationContext.Provider>;
+  </div></GlobalModalIsolationContext.Provider></MissionCompletionPersistenceContext.Provider>;
 }
 
 export default function App() { return <HashRouter><ProgressProvider><AppRoutes /></ProgressProvider></HashRouter>; }
