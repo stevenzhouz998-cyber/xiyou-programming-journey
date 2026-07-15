@@ -16,6 +16,14 @@ const expectedMap = {
   xiyou_shrink_ruyi_staff: 'shrink_ruyi_staff',
 } as const
 
+const expectedLabels: Record<RuyiBlockType, string> = {
+  xiyou_inspect_weights: '查看三件兵器重量',
+  xiyou_choose_sabre: '选择大捍刀（3600斤）',
+  xiyou_choose_halberd: '选择方天画戟（7200斤）',
+  xiyou_choose_ruyi_staff: '选择定海神针（13500斤）',
+  xiyou_shrink_ruyi_staff: '缩小定海神针',
+}
+
 function connect(previous: Blockly.Block, next: Blockly.Block) {
   if (!previous.nextConnection || !next.previousConnection) {
     throw new Error('Expected statement connections')
@@ -43,6 +51,7 @@ describe('compileRuyiStaffWorkspace', () => {
       expect(block.previousConnection).not.toBeNull()
       expect(block.nextConnection).not.toBeNull()
       expect(block.outputConnection).toBeNull()
+      expect(block.toString()).toBe(expectedLabels[type])
     }
   })
 

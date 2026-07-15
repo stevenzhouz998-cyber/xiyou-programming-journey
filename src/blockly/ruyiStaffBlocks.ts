@@ -13,11 +13,11 @@ export const RUYI_BLOCK_OPCODE = {
 export type RuyiBlockType = keyof typeof RUYI_BLOCK_OPCODE
 
 const RUYI_BLOCK_LABEL: Record<RuyiBlockType, string> = {
-  xiyou_inspect_weights: '查看兵器重量',
-  xiyou_choose_sabre: '选择九环大刀',
-  xiyou_choose_halberd: '选择方天画戟',
-  xiyou_choose_ruyi_staff: '选择如意金箍棒',
-  xiyou_shrink_ruyi_staff: '缩小如意金箍棒',
+  xiyou_inspect_weights: '查看三件兵器重量',
+  xiyou_choose_sabre: '选择大捍刀（3600斤）',
+  xiyou_choose_halberd: '选择方天画戟（7200斤）',
+  xiyou_choose_ruyi_staff: '选择定海神针（13500斤）',
+  xiyou_shrink_ruyi_staff: '缩小定海神针',
 }
 
 export function isRuyiBlockType(type: string): type is RuyiBlockType {
