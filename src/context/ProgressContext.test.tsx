@@ -73,6 +73,7 @@ function Probe() {
       corruptError: state.corruptError,
       saveStatus: state.saveStatus,
       saveError: state.saveError,
+      saveRetryable: state.saveRetryable,
       parentPin: state.progress.settings.parentPin,
       sessions: state.progress.sessions,
       progressSavedAt: state.progress.savedAt,
@@ -314,7 +315,7 @@ describe('ProgressContext persistence status', () => {
     await act(async () => { failed = await latestContext!.commitParentAccess('7319'); });
     expect(failed).toMatchObject({ status: 'unsaved' });
     expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
-      parentPin: '4826', saveStatus: 'unsaved', saveError: expect.any(String),
+      parentPin: '4826', saveStatus: 'unsaved', saveError: expect.any(String), saveRetryable: false,
     });
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).settings.parentPin).toBe('4826');
 

@@ -10,11 +10,12 @@ interface RecoveryNoticeProps {
   hasCorruptDownload: boolean;
   onRetry: () => unknown;
   conflict?: boolean;
+  retryable?: boolean;
   onDownloadConflictBackup?: () => void;
   onReloadExternal?: () => void;
 }
 
-export function RecoveryNotice({ loadStatus, persistence, loadError, corruptError = null, saveError, hasCorruptDownload, onRetry, conflict = false, onDownloadConflictBackup, onReloadExternal }: RecoveryNoticeProps) {
+export function RecoveryNotice({ loadStatus, persistence, loadError, corruptError = null, saveError, hasCorruptDownload, onRetry, conflict = false, retryable = true, onDownloadConflictBackup, onReloadExternal }: RecoveryNoticeProps) {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => setDismissed(false), [persistence, loadStatus]);
@@ -37,9 +38,9 @@ export function RecoveryNotice({ loadStatus, persistence, loadError, corruptErro
         : '本次进度尚未保存';
     const error = saveError ?? loadError ?? '浏览器暂时无法保存本地学习进度。';
     return <aside className="recovery-notice recovery-notice-alert" role="alert">
-      <div><strong>{message}</strong><p>{error} 学习结果仍保留在当前页面，请重试保存。</p></div>
+      <div><strong>{message}</strong><p>{error} {retryable ? '学习结果仍保留在当前页面，请重试保存。' : '请返回刚才的操作重新确认。'}</p></div>
       {hasDetails && <a href="#/parent?recovery=1">请家长查看详情</a>}
-      <button type="button" onClick={onRetry}>重试保存</button>
+      {retryable && <button type="button" onClick={onRetry}>重试保存</button>}
     </aside>;
   }
   if (dismissed || (loadStatus === 'normal' && !hasDetails) || loadStatus === 'storage-unavailable') return null;

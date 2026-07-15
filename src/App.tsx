@@ -140,7 +140,7 @@ function ParentPage() {
 
 function AppRoutes() {
   const data = useProgress();
-  const { progress, loadStatus, loadPersistence, loadError, corruptDownload, corruptError, saveStatus, saveError, acknowledgePrivacy, retrySave } = data;
+  const { progress, loadStatus, loadPersistence, loadError, corruptDownload, corruptError, saveStatus, saveError, saveRetryable, acknowledgePrivacy, retrySave } = data;
   const [systemReducedMotion, setSystemReducedMotion] = useState(() => (
     typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   ));
@@ -173,7 +173,7 @@ function AppRoutes() {
     || (loadStatus !== 'normal' && loadStatus !== 'storage-unavailable');
 
   return <GlobalModalIsolationContext.Provider value={setGlobalModalOpen}><div className="app-shell" data-testid="app-shell" data-reduced-motion={String(effectiveReducedMotion)}>
-    {showRecoveryNotice && <Suspense fallback={null}><RecoveryNotice loadStatus={loadStatus} persistence={persistence} loadError={loadError} corruptError={corruptError} saveError={saveError} hasCorruptDownload={corruptDownload !== null} conflict={conflict} onRetry={retrySave} onDownloadConflictBackup={() => { const backup = data.createBackup(); downloadTextFile(backup.filename, backup.contents, backup.mimeType); }} onReloadExternal={data.reloadExternalProgress} /></Suspense>}
+    {showRecoveryNotice && <Suspense fallback={null}><RecoveryNotice loadStatus={loadStatus} persistence={persistence} loadError={loadError} corruptError={corruptError} saveError={saveError} hasCorruptDownload={corruptDownload !== null} conflict={conflict} retryable={saveRetryable} onRetry={retrySave} onDownloadConflictBackup={() => { const backup = data.createBackup(); downloadTextFile(backup.filename, backup.contents, backup.mimeType); }} onReloadExternal={data.reloadExternalProgress} /></Suspense>}
     <div data-testid="app-background" inert={privacyOpen || globalModalOpen ? true : undefined} aria-hidden={privacyOpen || globalModalOpen ? true : undefined}>
       <Header reducedMotion={effectiveReducedMotion} />
       <RouteFocus blocked={privacyOpen || globalModalOpen} />

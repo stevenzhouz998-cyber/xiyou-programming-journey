@@ -35,6 +35,16 @@ describe('RecoveryNotice', () => {
     expect(screen.getByRole('status')).toHaveTextContent('学习进度已经安全恢复');
   });
 
+  it('does not offer a generic retry for a failed sensitive transaction', () => {
+    render(<RecoveryNotice
+      loadStatus="normal" persistence="unsaved" loadError={null}
+      saveError="家长凭据未保存" hasCorruptDownload={false}
+      retryable={false} onRetry={vi.fn()}
+    />);
+    expect(screen.getByRole('alert')).toHaveTextContent('请返回刚才的操作重新确认');
+    expect(screen.queryByRole('button', { name: '重试保存' })).not.toBeInTheDocument();
+  });
+
   it('keeps the parent details link whenever corrupt data is available', () => {
     render(<RecoveryNotice loadStatus="normal" persistence="saved" loadError={null} saveError={null} hasCorruptDownload onRetry={vi.fn()} />);
     expect(screen.getByRole('status')).toHaveTextContent('有一份存档信息需要家长查看');

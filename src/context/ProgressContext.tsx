@@ -33,6 +33,7 @@ export interface ProgressContextValue {
   corruptError: string | null;
   saveStatus: ProgressSaveStatus;
   saveError: string | null;
+  saveRetryable: boolean;
   complete: (missionId: string, input: CompletionInput) => Promise<CoordinatedSaveResult>;
   updateMissionSession: (
     missionId: string,
@@ -81,10 +82,12 @@ export function ProgressProvider({
   const [loadPersistence, setLoadPersistence] = useState<'idle' | 'saved' | 'unsaved'>(initialLoad.persistence);
   const [saveStatus, setSaveStatus] = useState<ProgressSaveStatus>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveRetryable, setSaveRetryable] = useState(true);
 
   const enqueue = <T,>(
     operation: () => Promise<T>,
     failureStatus: 'unsaved' | 'unchanged' = 'unsaved',
+    retryable = true,
   ): Promise<T> => {
     const guarded = async () => {
       try {
@@ -94,6 +97,7 @@ export function ProgressProvider({
         conflictRef.current = false;
         setSaveStatus('unsaved');
         setSaveError(detail);
+        setSaveRetryable(retryable);
         return { status: failureStatus, progress: progressRef.current, error: detail } as T;
       }
     };
@@ -123,10 +127,16 @@ export function ProgressProvider({
     conflictRef.current = false;
     setSaveStatus('saved');
     setSaveError(null);
+    setSaveRetryable(true);
     setLoadPersistence('saved');
   };
 
-  const markResult = (result: CoordinatedSaveResult, draft: ProgressV3, publishDraft: boolean) => {
+  const markResult = (
+    result: CoordinatedSaveResult,
+    draft: ProgressV3,
+    publishDraft: boolean,
+    retryable = true,
+  ) => {
     if (result.status === 'saved') {
       if (!publishDraft || progressRef.current === draft) publishSaved(result.progress, result.revision);
       else {
@@ -140,6 +150,7 @@ export function ProgressProvider({
       conflictRef.current = result.status === 'conflict';
       setSaveStatus(result.status === 'conflict' ? 'conflict' : 'unsaved');
       setSaveError(result.error);
+      setSaveRetryable(result.status === 'conflict' ? false : retryable);
     }
     return result;
   };
@@ -154,6 +165,7 @@ export function ProgressProvider({
     next: ProgressV3,
     publishDraft = true,
     options: ProgressWriteOptions = {},
+    retryable = true,
   ): Promise<CoordinatedSaveResult> => {
     const blocked = currentConflict(next);
     if (blocked) return Promise.resolve(blocked);
@@ -163,11 +175,13 @@ export function ProgressProvider({
     }
     setSaveStatus('pending');
     setSaveError(null);
+    setSaveRetryable(retryable);
     return enqueue(async () => markResult(
       await saveCoordinated(next, revisionRef.current, options),
       next,
       publishDraft,
-    ));
+      retryable,
+    ), 'unsaved', retryable);
   };
 
   const runLoadRepair = async (repair: NonNullable<typeof initialLoad.repair>) => {
@@ -211,6 +225,7 @@ export function ProgressProvider({
     conflictRef.current = false;
     setSaveStatus('idle');
     setSaveError(null);
+    setSaveRetryable(true);
     setLoadPersistence(loaded.persistence);
     pendingRepairRef.current = loaded.repair;
     if (loaded.repair) {
@@ -241,6 +256,7 @@ export function ProgressProvider({
       conflictRef.current = true;
       setSaveStatus('conflict');
       setSaveError(PROGRESS_CONFLICT_ERROR);
+      setSaveRetryable(false);
       setLoadPersistence('unsaved');
     };
     window.addEventListener('storage', externalWrite);
@@ -257,6 +273,7 @@ export function ProgressProvider({
     corruptError: initialLoad.corruptError,
     saveStatus,
     saveError,
+    saveRetryable,
     complete: (missionId, input) => commit(completeMission(progressRef.current, missionId, input)),
     updateMissionSession: (missionId, update, options) => (
       updateMissionSessionAt(missionId, update, new Date().toISOString(), options)
@@ -281,22 +298,24 @@ export function ProgressProvider({
       if (blocked) return Promise.resolve(blocked);
       setSaveStatus('pending');
       setSaveError(null);
+      setSaveRetryable(false);
       return enqueue(async () => {
         const result = await saveCoordinated(next, revisionRef.current);
         // A credential failure belongs to the recovery-code panel. The generic
         // retry must continue to reference the last published credential.
-        return markResult(result, next, false);
-      });
+        return markResult(result, next, false, false);
+      }, 'unsaved', false);
     },
     acknowledgePrivacy: () => commit({
       ...progressRef.current,
       privacy: { localDataNoticeSeen: true },
       savedAt: new Date().toISOString(),
-    }, false),
+    }, false, {}, false),
     retrySave: () => {
       const blocked = currentConflict();
       if (blocked) return Promise.resolve(blocked);
       setSaveStatus('pending');
+      setSaveRetryable(true);
       const repair = pendingRepairRef.current;
       if (repair) return enqueue(async () => {
         const repaired = await runLoadRepair(repair);
@@ -310,6 +329,7 @@ export function ProgressProvider({
     importProgressFile: (raw) => {
       if (conflictRef.current) return Promise.resolve(currentConflict() as CoordinatedImportResult);
       setSaveStatus('pending');
+      setSaveRetryable(false);
       return enqueue(async () => {
         const { importProgressCoordinated } = await loadParentCoordinator();
         const result = await importProgressCoordinated(raw, revisionRef.current);
@@ -318,13 +338,15 @@ export function ProgressProvider({
           conflictRef.current = result.status === 'conflict';
           setSaveStatus(result.status === 'conflict' ? 'conflict' : 'unsaved');
           setSaveError(result.error);
+          setSaveRetryable(false);
         }
         return result;
-      });
+      }, 'unsaved', false);
     },
     clearProgress: () => {
       if (conflictRef.current) return Promise.resolve(currentConflict() as CoordinatedClearResult);
       setSaveStatus('pending');
+      setSaveRetryable(false);
       return enqueue(async () => {
         const { clearProgressCoordinated } = await loadParentCoordinator();
         const result = await clearProgressCoordinated(revisionRef.current);
@@ -333,9 +355,10 @@ export function ProgressProvider({
           conflictRef.current = result.status === 'conflict';
           setSaveStatus(result.status === 'conflict' ? 'conflict' : 'unsaved');
           setSaveError(result.error);
+          setSaveRetryable(false);
         }
         return result;
-      }, 'unchanged');
+      }, 'unchanged', false);
     },
     createBackup: () => createProgressBackup(progressRef.current),
     reloadExternalProgress,
@@ -348,6 +371,7 @@ export function ProgressProvider({
     progress,
     revision,
     saveError,
+    saveRetryable,
     saveStatus,
   ]);
 

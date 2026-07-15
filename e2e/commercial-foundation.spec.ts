@@ -283,11 +283,11 @@ test('@legacy transactional parent PIN lifecycle, keyboard controls, and clear c
   await page.getByLabel('设置 4 位家长 PIN').fill('2580');
   await page.getByLabel('确认家长 PIN').fill('2580');
   await page.getByRole('button', { name: '创建家长 PIN' }).click();
-  await expect(page.getByRole('alert')).toContainText('不能使用已公开的旧默认码');
+  await expect(page.getByRole('alert').filter({ hasText: '不能使用已公开的旧默认码' })).toBeVisible();
   await page.getByLabel('设置 4 位家长 PIN').fill('4826');
   await page.getByLabel('确认家长 PIN').fill('4820');
   await page.getByRole('button', { name: '创建家长 PIN' }).click();
-  await expect(page.getByRole('alert')).toContainText('两次输入的 PIN 不一致');
+  await expect(page.getByRole('alert').filter({ hasText: '两次输入的 PIN 不一致' })).toBeVisible();
   await page.getByLabel('确认家长 PIN').fill('4826');
   await page.getByRole('button', { name: '创建家长 PIN' }).click();
   await expect(page.getByRole('heading', { name: '请保存一次性恢复码' })).toBeFocused();
@@ -360,7 +360,7 @@ test('@legacy transactional parent PIN lifecycle, keyboard controls, and clear c
   await page.goBack();
   await fillAfterHistoryNavigation(page.getByLabel('家长 PIN'), '7319');
   await page.getByRole('button', { name: '进入周报' }).click();
-  await expect(page.getByRole('alert')).toContainText('PIN 不正确');
+  await expect(page.getByRole('alert').filter({ hasText: 'PIN 不正确' })).toContainText('PIN 不正确');
   await fillAfterHistoryNavigation(page.getByLabel('家长 PIN'), '4826');
   await page.getByRole('button', { name: '进入周报' }).click();
   await page.getByLabel('当前 PIN').fill('4826');
@@ -374,7 +374,7 @@ test('@legacy transactional parent PIN lifecycle, keyboard controls, and clear c
   await page.getByRole('button', { name: '退出家长周报' }).click();
   await page.getByLabel('家长 PIN').fill('4826');
   await page.getByRole('button', { name: '进入周报' }).click();
-  await expect(page.getByRole('alert')).toContainText('PIN 不正确');
+  await expect(page.getByRole('alert').filter({ hasText: 'PIN 不正确' })).toBeVisible();
   await page.getByLabel('家长 PIN').fill('7319');
   await page.getByRole('button', { name: '进入周报' }).click();
   await expect(page.getByText('学习数据仅保存在这台电脑')).toBeVisible();
@@ -385,7 +385,7 @@ test('@legacy transactional parent PIN lifecycle, keyboard controls, and clear c
   await page.getByLabel('新的 4 位 PIN').fill('8642');
   await page.getByLabel('确认新的 PIN').fill('8642');
   await page.getByRole('button', { name: '验证并重设' }).click();
-  await expect(page.getByRole('alert')).toContainText('恢复码不正确');
+  await expect(page.getByRole('alert').filter({ hasText: '恢复码不正确' })).toBeVisible();
   await page.getByLabel('恢复码').fill(rotatedRecovery);
   await page.getByRole('button', { name: '验证并重设' }).click();
   await expect(page.getByRole('heading', { name: '请保存一次性恢复码' })).toBeFocused();
@@ -411,7 +411,7 @@ test('@legacy transactional parent PIN lifecycle, keyboard controls, and clear c
   await page.goBack();
   await fillAfterHistoryNavigation(page.getByLabel('家长 PIN'), '8642');
   await page.getByRole('button', { name: '进入周报' }).click();
-  await expect(page.getByRole('alert')).toContainText('PIN 不正确');
+  await expect(page.getByRole('alert').filter({ hasText: 'PIN 不正确' })).toBeVisible();
   await fillAfterHistoryNavigation(page.getByLabel('家长 PIN'), '7319');
   await page.getByRole('button', { name: '进入周报' }).click();
   await page.getByRole('button', { name: '退出家长周报' }).click();
@@ -429,7 +429,7 @@ test('@legacy transactional parent PIN lifecycle, keyboard controls, and clear c
   await page.getByLabel('新的 4 位 PIN').fill('9999');
   await page.getByLabel('确认新的 PIN').fill('9999');
   await page.getByRole('button', { name: '验证并重设' }).click();
-  await expect(page.getByRole('alert')).toContainText('恢复码不正确');
+  await expect(page.getByRole('alert').filter({ hasText: '恢复码不正确' })).toBeVisible();
   await page.getByRole('button', { name: '返回 PIN 登录' }).click();
   await page.getByLabel('家长 PIN').focus();
   for (const key of ['8', '6', '4', '2']) await page.keyboard.press(key);
