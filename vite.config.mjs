@@ -30,9 +30,12 @@ export default defineConfig({
           if (id.includes('/node_modules/@phosphor-icons/react/dist/lib/')) return 'phosphor-core';
           if (/\/node_modules\/(?:react|react-dom|react-router|react-router-dom|scheduler)\//.test(id)) return 'app-vendor';
           const source = id.replaceAll('\\', '/');
+          if (source.endsWith('/src/utils/focus.ts')) return 'focus-shared';
+          if (source.endsWith('/src/engine/validation.ts')) return 'validation-shared';
           if (source.includes('/src/battle/')
-            || source.endsWith('/src/context/ProgressContext.tsx')
             || /\/src\/progress\/(?:progress|schema|session|storage|types)\.ts$/.test(source)
+          ) return 'progress-core';
+          if (source.endsWith('/src/context/ProgressContext.tsx')
             || source.endsWith('/src/utils/assets.ts')
             || source.endsWith('/src/components/ToolErrorBoundary.tsx')) return 'app-core';
         },

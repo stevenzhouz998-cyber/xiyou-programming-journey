@@ -9,6 +9,39 @@ const TEST_PARENT_ACCESS = 'access-v1:cf7667b114bf7a735116fc8439f0d17f3213159c48
 const NOW = '2026-07-16T00:00:00.000Z'
 const updateEvidence = process.env.XIYOU_UPDATE_EVIDENCE === '1'
 
+type StaffHealthEvent = { kind: 'console' | 'pageerror' | 'requestfailed'; url: string; detail: string }
+let staffHealthEvents: StaffHealthEvent[] = []
+let allowStaffHealth: (event: StaffHealthEvent) => boolean = () => false
+
+const expectedNavigationAbort = (event: StaffHealthEvent) => event.kind === 'requestfailed' && (
+  (event.url.startsWith('https://fonts.gstatic.com/') && /ABORTED|cancelled/i.test(event.detail))
+  || (event.url.includes('/assets/audio/') && /ABORTED|cancelled/i.test(event.detail))
+  || (event.url === 'https://static.blockly.com/media/sprites.svg' && /ABORTED|cancelled/i.test(event.detail))
+)
+
+function isExactInjectedChunkFailure(event: StaffHealthEvent, targetUrl: string | null) {
+  if (targetUrl === null) return false
+  if (event.kind === 'requestfailed') return event.url === targetUrl
+  if (event.kind !== 'console') return false
+  if (event.url === targetUrl && event.detail === 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)') return true
+  const failure = `Failed to fetch dynamically imported module: ${targetUrl}`
+  return event.detail === failure || event.detail === `TypeError: ${failure}`
+}
+
+test.beforeEach(async ({ page }) => {
+  staffHealthEvents = []
+  allowStaffHealth = expectedNavigationAbort
+  page.on('console', message => {
+    if (message.type() === 'error') staffHealthEvents.push({ kind: 'console', url: message.location().url || page.url(), detail: message.text() })
+  })
+  page.on('pageerror', error => staffHealthEvents.push({ kind: 'pageerror', url: page.url(), detail: error.message }))
+  page.on('requestfailed', request => staffHealthEvents.push({ kind: 'requestfailed', url: request.url(), detail: request.failure()?.errorText ?? 'unknown' }))
+})
+
+test.afterEach(() => {
+  expect(staffHealthEvents.filter(event => !allowStaffHealth(event)), 'unexpected Ruyi Staff browser health events').toEqual([])
+})
+
 function unlockedFixture() {
   return {
     version: 3, schemaRevision: 1, learnerName: '小行者',
@@ -353,9 +386,39 @@ test('@staff-parent parent report and V3 export-import preserve exact w1-m2 sess
 
 test('@staff-lazy 503 on w1-m2 experience chunk keeps story and explicit reload', async ({ page }) => {
   await preloadUnlocked(page)
-  await page.route(/RuyiStaffExperience-.*\.js/, (route) => route.fulfill({ status: 503, body: 'unavailable' }))
+  let targetUrl: string | null = null
+  allowStaffHealth = event => expectedNavigationAbort(event) || isExactInjectedChunkFailure(event, targetUrl)
+  await page.route(/RuyiStaffExperience-.*\.js/, (route) => { targetUrl = route.request().url(); return route.fulfill({ status: 503, body: 'unavailable' }) })
   await page.goto('./#/mission/w1-m2')
   await expect(page.getByRole('heading', { name: '定海神针', level: 1 })).toBeVisible()
   await expect(page.getByRole('alert')).toContainText('定海神针任务加载失败')
+  await expect(page.getByRole('button', { name: '重新加载页面' })).toBeVisible()
+})
+
+test('@staff-lazy RuyiStaffScene 503 keeps the real Blockly half and local recovery visible', async ({ page }) => {
+  await preloadUnlocked(page)
+  let targetUrl: string | null = null
+  allowStaffHealth = event => expectedNavigationAbort(event) || isExactInjectedChunkFailure(event, targetUrl)
+  await page.route(/RuyiStaffScene-.*\.js/, (route) => { targetUrl = route.request().url(); return route.fulfill({ status: 503, body: 'unavailable' }) })
+  await page.goto('./#/mission/w1-m2')
+  await expect(page.getByRole('heading', { name: '定海神针', level: 1 })).toBeVisible()
+  await expect(page.getByText('神珍依悟空心意变小，成为如意金箍棒。')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '比较兵器重量并选出金箍棒', level: 2 })).toBeVisible()
+  await expect(page.getByRole('alert')).toContainText('定海神针场景加载失败')
+  await expect(page.getByRole('button', { name: '加入：查看三件兵器重量' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '重新加载页面' })).toBeVisible()
+})
+
+test('@staff-lazy RuyiStaffBlocklyWorkspace 503 keeps the formal scene and local recovery visible', async ({ page }) => {
+  await preloadUnlocked(page)
+  let targetUrl: string | null = null
+  allowStaffHealth = event => expectedNavigationAbort(event) || isExactInjectedChunkFailure(event, targetUrl)
+  await page.route(/RuyiStaffBlocklyWorkspace-.*\.js/, (route) => { targetUrl = route.request().url(); return route.fulfill({ status: 503, body: 'unavailable' }) })
+  await page.goto('./#/mission/w1-m2')
+  await expect(page.getByRole('heading', { name: '定海神针', level: 1 })).toBeVisible()
+  await expect(page.getByText('神珍依悟空心意变小，成为如意金箍棒。')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '比较兵器重量并选出金箍棒', level: 2 })).toBeVisible()
+  await expect(page.locator('.ruyi-staff-scene-frame .game-scene canvas')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('alert')).toContainText('定海神针编程工作台加载失败')
   await expect(page.getByRole('button', { name: '重新加载页面' })).toBeVisible()
 })

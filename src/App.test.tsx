@@ -179,7 +179,7 @@ describe('西游编程记', () => {
     window.location.hash = '#/mission/w1-m3';
     const { container } = render(<App />);
     expect(await screen.findByRole('heading', { name: '四海披挂', level: 1 })).toBeVisible();
-    expect(container.querySelector('.legacy-mission-tools')).toHaveAttribute('data-mission-id', 'w1-m3');
+    await waitFor(() => expect(container.querySelector('.legacy-mission-tools')).toHaveAttribute('data-mission-id', 'w1-m3'));
   });
 
   it('passes w1-m2 through the same delayed scene-completion and success-audio path', async () => {

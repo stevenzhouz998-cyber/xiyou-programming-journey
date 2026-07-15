@@ -8,6 +8,7 @@ let allowHealth: (event: HealthEvent) => boolean = () => false;
 let healthPhase = 'normal';
 let healthOwnerUrl: string | null = null;
 const blocklyWorkspaceChunk = /\/assets\/BlocklyWorkspace-[^/]+\.js(?:\?.*)?$/;
+const recoverableLazyChunk = /\/assets\/(?:BlocklyWorkspace|DragonPalaceExperience|MissionTools)-[^/]+\.js(?:\?.*)?$/;
 const appEntryChunk = /\/assets\/index-[^/]+\.js(?:\?.*)?$/;
 const appVendorChunk = /\/assets\/app-vendor-[^/]+\.js(?:\?.*)?$/;
 type BrowserName = 'chromium' | 'firefox' | 'webkit';
@@ -20,16 +21,17 @@ const isAllowedPythonHealth = (event: HealthEvent, pageUrl: string, browserName:
   return browserName === 'firefox' && event.kind === 'console' && event.url === pageUrl
     && /#\/mission\/w4-m2$/.test(pageUrl) && event.detail === 'uncaught exception: undefined';
 };
-const isAllowedLazyFailure = (event: HealthEvent, target503Url: string | null, browserName: BrowserName) => {
-  if (!target503Url || !blocklyWorkspaceChunk.test(target503Url) || event.phase !== 'lazy-target-503' || event.kind !== 'console') return false;
+const isAllowedLazyFailure = (event: HealthEvent, target503Url: string | null, browserName: BrowserName, exactTarget503Observed = false) => {
+  if (!target503Url || !recoverableLazyChunk.test(target503Url) || event.phase !== 'lazy-target-503' || event.kind !== 'console') return false;
   let sameOrigin = false;
   try { sameOrigin = new URL(event.url).origin === new URL(target503Url).origin; } catch { return false; }
   if (!sameOrigin) return false;
   if (event.url === target503Url && event.detail === 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)') return true;
   const dynamicImportFailure = `Failed to fetch dynamically imported module: ${target503Url}`;
   return event.detail === dynamicImportFailure || event.detail === `TypeError: ${dynamicImportFailure}`
-    || ((appEntryChunk.test(event.url) || appVendorChunk.test(event.url)) && ((browserName === 'webkit' && event.detail === 'TypeError: Importing a module script failed.')
-      || (browserName === 'firefox' && event.detail === 'Error')));
+    || (exactTarget503Observed && (appEntryChunk.test(event.url) || appVendorChunk.test(event.url))
+      && ((browserName === 'webkit' && event.detail === 'TypeError: Importing a module script failed.')
+        || (browserName === 'firefox' && event.detail === 'Error')));
 };
 const expectedFontNavigationAbort = (event: HealthEvent) => event.kind === 'requestfailed'
   && event.url.startsWith('https://fonts.gstatic.com/') && event.detail.includes('ABORTED');
@@ -37,6 +39,13 @@ const expectedMediaNavigationAbort = (event: HealthEvent) => event.kind === 'req
   && event.url.includes('/assets/audio/') && /ABORTED|cancelled/i.test(event.detail);
 const expectedBlocklyNavigationAbort = (event: HealthEvent) => event.kind === 'requestfailed'
   && event.url === 'https://static.blockly.com/media/sprites.svg' && /ABORTED|cancelled/i.test(event.detail);
+const exactTarget503WasObserved = (events: HealthEvent[], target503Url: string | null) => target503Url !== null && events.some(event => (
+  event.url === target503Url && (
+    (event.kind === 'http' && event.status === 503)
+    || event.kind === 'requestfailed'
+    || (event.kind === 'console' && event.detail === 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)')
+  )
+));
 
 test.beforeEach(async ({ page, browserName }) => {
   healthEvents = [];
@@ -516,10 +525,11 @@ test('@legacy lazy tool failure is visible quickly and reload recovers', async (
   expect(Date.now() - failedAt).toBeLessThanOrEqual(1000);
   expect(target503Url).not.toBeNull();
   allowHealth = event => expectedFontNavigationAbort(event) || expectedMediaNavigationAbort(event) || expectedBlocklyNavigationAbort(event)
-    || isAllowedLazyFailure(event, target503Url, browserName)
+    || isAllowedLazyFailure(event, target503Url, browserName, exactTarget503WasObserved(healthEvents, target503Url))
     || (event.url === target503Url && ((event.kind === 'http' && event.status === 503) || event.kind === 'requestfailed'));
   const knownTarget = `${new URL(page.url()).origin}/assets/BlocklyWorkspace-known.js`;
   const knownEntry = `${new URL(page.url()).origin}/assets/index-known.js`;
+  const knownVendor = `${new URL(page.url()).origin}/assets/app-vendor-known.js`;
   expect(isAllowedLazyFailure({ kind: 'console', url: page.url(), detail: 'unrelated console error', phase: 'lazy-target-503' }, knownTarget, browserName)).toBe(false);
   expect(isAllowedLazyFailure({ kind: 'console', url: knownEntry, detail: 'Error', phase: 'lazy-target-503' }, knownTarget, 'chromium')).toBe(false);
   expect(isAllowedLazyFailure({ kind: 'console', url: 'https://example.com/assets/index-unrelated.js', detail: 'Error', phase: 'lazy-target-503' }, knownTarget, 'firefox')).toBe(false);
@@ -535,9 +545,14 @@ test('@legacy lazy tool failure is visible quickly and reload recovers', async (
   expect(isAllowedLazyFailure({ kind: 'console', url: knownEntry, detail: 'Failed to fetch dynamically imported module: /assets/BlocklyWorkspace-near.js', phase: 'lazy-target-503' }, knownTarget, 'chromium')).toBe(false);
   expect(isAllowedLazyFailure({ kind: 'console', url: knownEntry, detail: `Failed to fetch dynamically imported module: ${knownTarget} unrelated suffix`, phase: 'lazy-target-503' }, knownTarget, 'chromium')).toBe(false);
   expect(isAllowedLazyFailure({ kind: 'console', url: knownEntry, detail: `TypeError: Failed to fetch dynamically imported module: ${knownTarget} unrelated suffix`, phase: 'lazy-target-503' }, knownTarget, 'chromium')).toBe(false);
-  expect(isAllowedLazyFailure({ kind: 'console', url: knownEntry, detail: 'TypeError: Importing a module script failed.', phase: 'lazy-target-503' }, knownTarget, 'webkit')).toBe(true);
+  expect(isAllowedLazyFailure({ kind: 'console', url: knownEntry, detail: 'TypeError: Importing a module script failed.', phase: 'lazy-target-503' }, knownTarget, 'webkit', true)).toBe(true);
   expect(isAllowedLazyFailure({ kind: 'console', url: knownEntry, detail: 'Error', phase: 'lazy-target-503' }, knownTarget, 'webkit')).toBe(false);
-  expect(isAllowedLazyFailure({ kind: 'console', url: knownEntry, detail: 'Error', phase: 'lazy-target-503' }, knownTarget, 'firefox')).toBe(true);
+  expect(isAllowedLazyFailure({ kind: 'console', url: knownEntry, detail: 'Error', phase: 'lazy-target-503' }, knownTarget, 'firefox', true)).toBe(true);
+  expect(isAllowedLazyFailure({ kind: 'console', url: knownVendor, detail: 'Error', phase: 'lazy-target-503' }, knownTarget, 'firefox')).toBe(false);
+  expect(isAllowedLazyFailure({ kind: 'console', url: knownVendor, detail: 'Error', phase: 'lazy-target-503' }, knownTarget, 'firefox', true)).toBe(true);
+  expect(isAllowedLazyFailure({ kind: 'console', url: knownVendor, detail: 'TypeError: Importing a module script failed.', phase: 'lazy-target-503' }, knownTarget, 'webkit', true)).toBe(true);
+  expect(isAllowedLazyFailure({ kind: 'console', url: knownVendor, detail: 'Error', phase: 'lazy-target-503' }, knownTarget, 'webkit')).toBe(false);
+  expect(isAllowedLazyFailure({ kind: 'console', url: knownVendor, detail: 'TypeError: Importing a module script failed.', phase: 'normal' }, knownTarget, 'webkit')).toBe(false);
   expect(isAllowedLazyFailure({ kind: 'console', url: knownEntry, detail: 'TypeError: Importing a module script failed.', phase: 'lazy-target-503' }, knownTarget, 'firefox')).toBe(false);
   fail = false;
   await page.getByRole('button', { name: '重新加载页面' }).click();
@@ -553,6 +568,49 @@ test('@legacy lazy tool failure is visible quickly and reload recovers', async (
   await recoveredPage.waitForLoadState('networkidle');
   expect(recoveredHealth, 'recovered clean tab browser health').toEqual([]);
   await recoveredPage.close();
+});
+
+test('@lazy-boundary DragonPalaceExperience 503 keeps the first mission story and objective with local recovery', async ({ page, browserName }) => {
+  let target503Url: string | null = null;
+  healthPhase = 'lazy-target-503';
+  allowHealth = event => expectedFontNavigationAbort(event) || expectedMediaNavigationAbort(event) || expectedBlocklyNavigationAbort(event)
+    || isAllowedLazyFailure(event, target503Url, browserName, exactTarget503WasObserved(healthEvents, target503Url))
+    || (event.url === target503Url && ((event.kind === 'http' && event.status === 503) || event.kind === 'requestfailed'));
+  await page.route('**/assets/DragonPalaceExperience-*.js', route => {
+    target503Url = route.request().url();
+    return route.fulfill({ status: 503, headers: { 'cache-control': 'no-store' }, body: 'unavailable' });
+  });
+  await acknowledge(page);
+  await page.getByRole('button', { name: /(开始第一关|继续今日闯关)/ }).click();
+  await expect(page.getByRole('heading', { name: '龙宫求兵', level: 1 })).toBeVisible();
+  await expect(page.getByText('悟空来到东海龙宫求一件趁手兵器。')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '排列求兵的正确步骤', level: 2 })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('龙宫求兵任务加载失败');
+  await expect(page.getByRole('button', { name: '重新加载页面' })).toBeVisible();
+});
+
+test('@lazy-boundary MissionTools 503 keeps the legacy mission story and objective with local recovery', async ({ page, browserName }) => {
+  const fixture = v3(false);
+  fixture.missions = {
+    'w1-m1': { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: '2026-07-12T00:00:00.000Z' },
+    'w1-m2': { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: '2026-07-13T00:00:00.000Z' },
+  };
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), { key: currentKey, value: fixture });
+  let target503Url: string | null = null;
+  healthPhase = 'lazy-target-503';
+  allowHealth = event => expectedFontNavigationAbort(event) || expectedMediaNavigationAbort(event) || expectedBlocklyNavigationAbort(event)
+    || isAllowedLazyFailure(event, target503Url, browserName, exactTarget503WasObserved(healthEvents, target503Url))
+    || (event.url === target503Url && ((event.kind === 'http' && event.status === 503) || event.kind === 'requestfailed'));
+  await page.route('**/assets/MissionTools-*.js', route => {
+    target503Url = route.request().url();
+    return route.fulfill({ status: 503, headers: { 'cache-control': 'no-store' }, body: 'unavailable' });
+  });
+  await page.goto('./#/mission/w1-m3');
+  await expect(page.getByRole('heading', { name: '四海披挂', level: 1 })).toBeVisible();
+  await expect(page.getByText('其余三海龙王带来金冠、金甲和云履。')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '按原著顺序整理披挂', level: 2 })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('兼容任务工具加载失败');
+  await expect(page.getByRole('button', { name: '重新加载页面' })).toBeVisible();
 });
 
 test('@legacy persistent reduced motion and mute settings reach visible controls and real scene branch', async ({ page }) => {

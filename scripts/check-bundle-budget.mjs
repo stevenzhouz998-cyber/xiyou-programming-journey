@@ -61,10 +61,39 @@ function collectClosure(manifest, root, includeDynamic) {
 export const collectStaticClosure = (manifest, root) => collectClosure(manifest, root, false);
 export const collectRuntimeClosure = (manifest, root) => collectClosure(manifest, root, true);
 
+function assertHealthyManifestGraph(manifest, entryKey) {
+  for (const [key, chunk] of Object.entries(manifest)) {
+    if (key !== entryKey && (chunk.imports ?? []).includes(entryKey)) {
+      throw new Error(`Bundle budget: non-entry chunk ${key} statically imports application entry ${entryKey}.`);
+    }
+  }
+
+  const visited = new Set();
+  const active = new Set();
+  const path = [];
+  const walk = (key) => {
+    if (active.has(key)) {
+      const cycleStart = path.indexOf(key);
+      throw new Error(`Bundle budget: manifest dependency cycle ${[...path.slice(cycleStart), key].join(' -> ')}.`);
+    }
+    if (visited.has(key)) return;
+    const chunk = manifest[key];
+    if (!chunk) throw new Error(`Bundle budget: manifest import ${key} is missing.`);
+    active.add(key);
+    path.push(key);
+    for (const dependency of new Set([...(chunk.imports ?? []), ...(chunk.dynamicImports ?? [])])) walk(dependency);
+    path.pop();
+    active.delete(key);
+    visited.add(key);
+  };
+  for (const key of Object.keys(manifest)) walk(key);
+}
+
 export function analyzeManifest(manifest, gzipSizes, rawSizes = {}) {
   const entryKey = Object.keys(manifest).find((key) => key.replaceAll('\\', '/') === 'src/main.tsx' && manifest[key].isEntry)
     ?? Object.keys(manifest).find((key) => manifest[key].isEntry && manifest[key].src === 'index.html');
   if (!entryKey) throw new Error('Bundle budget: src/main.tsx/index.html application entry is missing from the Vite manifest.');
+  assertHealthyManifestGraph(manifest, entryKey);
   const visited = collectStaticClosure(manifest, entryKey);
   for (const chunk of Object.values(manifest)) if (chunk.file) assertSafeFile(chunk.file);
   const staticFiles = [...new Set([...visited].map((key) => manifest[key].file).filter((file) => file?.endsWith('.js')))];

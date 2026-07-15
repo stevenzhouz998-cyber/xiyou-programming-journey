@@ -22,7 +22,7 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop-chromium-1440x1024',
-      grep: /@legacy|@full|@storage|@keyboard|@visual|@corrupt-full|@cold|@staff-full|@staff-storage|@staff-keyboard|@staff-parity|@staff-corrupt|@staff-cold|@staff-parent|@staff-lazy/,
+      grep: /@legacy|@full|@storage|@keyboard|@visual|@corrupt-full|@cold|@lazy-boundary|@staff-full|@staff-storage|@staff-keyboard|@staff-parity|@staff-corrupt|@staff-cold|@staff-parent|@staff-lazy/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 1024 } },
     },
     {

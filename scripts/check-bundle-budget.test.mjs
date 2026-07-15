@@ -88,6 +88,36 @@ test('deduplicates aliases that emit the same file', () => {
   assert.equal(analyzeManifest(manifest, { 'assets/main.js': 1, 'assets/shared.js': 8 }).entryGzipBytes, 9);
 });
 
+test('rejects a non-entry chunk that statically imports the application entry', () => {
+  const manifest = {
+    ...base,
+    'src/main.tsx': { ...base['src/main.tsx'], dynamicImports: ['lazy.js'] },
+    'lazy.js': { file: 'assets/lazy.js', isDynamicEntry: true, imports: ['src/main.tsx'] },
+  };
+  const sizes = { 'assets/main.js': 1, 'assets/vendor.js': 1, 'assets/lazy.js': 1 };
+  assert.throws(() => analyzeManifest(manifest, sizes, sizes), /non-entry.*application entry|application entry.*non-entry/i);
+});
+
+test('rejects static and mixed static-dynamic manifest dependency cycles', () => {
+  const staticCycle = {
+    ...base,
+    'src/main.tsx': { ...base['src/main.tsx'], imports: ['a.js'] },
+    'a.js': { file: 'assets/a.js', imports: ['b.js'] },
+    'b.js': { file: 'assets/b.js', imports: ['a.js'] },
+  };
+  const staticSizes = Object.fromEntries(Object.values(staticCycle).map((chunk) => [chunk.file, 1]));
+  assert.throws(() => analyzeManifest(staticCycle, staticSizes, staticSizes), /cycle/i);
+
+  const mixedCycle = {
+    ...base,
+    'src/main.tsx': { ...base['src/main.tsx'], imports: ['app-core.js'] },
+    'app-core.js': { file: 'assets/app-core.js', dynamicImports: ['coordinator.js'] },
+    'coordinator.js': { file: 'assets/coordinator.js', isDynamicEntry: true, imports: ['app-core.js'] },
+  };
+  const mixedSizes = Object.fromEntries(Object.values(mixedCycle).map((chunk) => [chunk.file, 1]));
+  assert.throws(() => analyzeManifest(mixedCycle, mixedSizes, mixedSizes), /cycle/i);
+});
+
 test('detects Phaser provenance even when output is renamed', () => {
   const manifest = { ...base, 'vendor.js': { file: 'assets/vendor.js', src: 'node_modules/phaser/src/phaser.js', imports: [] } };
   assert.throws(() => analyzeManifest(manifest, { 'assets/main.js': 1, 'assets/vendor.js': 1 }), /Phaser.*static/i);
@@ -116,7 +146,7 @@ test('rejects Phaser from non-scene mode closures', () => {
   assert.throws(() => analyzeManifest(manifest, Object.fromEntries(Object.values(manifest).map((chunk) => [chunk.file, 1])), Object.fromEntries(Object.values(manifest).map((chunk) => [chunk.file, 1]))), /BlocklyWorkspace.*Phaser/);
 });
 
-test('follows nested dynamic imports and cycles in runtime closures', () => {
+test('rejects nested dependency cycles before runtime closure analysis', () => {
   const manifest = {
     ...base,
     'src/components/BlocklyWorkspace.tsx': { file: 'assets/blockly.js', dynamicImports: ['helper.js'] },
@@ -124,7 +154,7 @@ test('follows nested dynamic imports and cycles in runtime closures', () => {
     'node_modules/phaser/runtime.js': { file: 'assets/renamed.js', src: 'node_modules/phaser/runtime.js', imports: ['helper.js'] },
   };
   const sizes = Object.fromEntries(Object.values(manifest).map((chunk) => [chunk.file, 1]));
-  assert.throws(() => analyzeManifest(manifest, sizes, sizes), /BlocklyWorkspace.*Phaser/);
+  assert.throws(() => analyzeManifest(manifest, sizes, sizes), /cycle/i);
 });
 
 test('counts nested GameScene dynamic Phaser and enforces its raw limit', () => {
@@ -132,7 +162,7 @@ test('counts nested GameScene dynamic Phaser and enforces its raw limit', () => 
     ...base,
     'src/components/GameScene.tsx': { file: 'assets/scene.js', dynamicImports: ['helper.js'] },
     'helper.js': { file: 'assets/helper.js', dynamicImports: ['node_modules/phaser/runtime.js'] },
-    'node_modules/phaser/runtime.js': { file: 'assets/renamed.js', src: 'node_modules/phaser/runtime.js', imports: ['helper.js'] },
+    'node_modules/phaser/runtime.js': { file: 'assets/renamed.js', src: 'node_modules/phaser/runtime.js', imports: [] },
   };
   const gzip = Object.fromEntries(Object.values(manifest).map((chunk) => [chunk.file, 1]));
   const raw = { ...gzip, 'assets/renamed.js': 1600 * 1024 + 1 };
