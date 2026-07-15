@@ -122,11 +122,20 @@ function rebuild(workspace: Blockly.Workspace, blocks: Blockly.Block[]) {
   renderWorkspaceTopBlocks(workspace)
 }
 
+function setWorkspaceBlocksLocked(workspace: Blockly.Workspace, locked: boolean) {
+  withoutEvents(() => workspace.getAllBlocks(false).forEach((block) => {
+    block.setMovable(!locked)
+    block.setDeletable(!locked)
+    block.setEditable(!locked)
+  }))
+}
+
 export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBlockId, onFocusHandled, saveRecoverySuperseded = false, locked = false }: Props) {
   const adapter = useContext(AdapterContext)
-  const hostRef = useRef<HTMLDivElement>(null); const workspaceRef = useRef<Blockly.Workspace | null>(null)
+  const hostRef = useRef<HTMLDivElement>(null); const lockMessageRef = useRef<HTMLParagraphElement>(null); const workspaceRef = useRef<Blockly.Workspace | null>(null)
   const itemRefs = useRef(new Map<string, HTMLLIElement>()); const onDraftRef = useRef(onDraftChange); const handledRef = useRef(onFocusHandled)
   const lastDraftRef = useRef<string | null>(null); const lastPropRef = useRef<string | null>(null)
+  const acceptedDraftRef = useRef<RuyiWorkspaceDraftV1>(structuredClone(draft)); const lockedRef = useRef(locked); const lockedRestoreTimerRef = useRef<number | null>(null)
   const mountedRef = useRef(false); const saveRequestRef = useRef<{ generation: number; bytes: string | null; status: 'idle' | 'pending' | 'saved' | 'unsaved' | 'conflict' }>({ generation: 0, bytes: null, status: 'idle' })
   const pendingDraftRef = useRef<RuyiWorkspaceDraftV1 | null>(null)
   const [ready, setReady] = useState(false); const [result, setResult] = useState<RuyiCompileResult>({ ok: false, trace: [], diagnostics: [{ code: 'empty-workspace', sourceBlockId: null, concept: 'program-structure' }] })
@@ -134,7 +143,7 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
   const [workspaceError, setWorkspaceError] = useState<string | null>(null)
   const [capacityMessage, setCapacityMessage] = useState<string | null>(null)
   const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'pending' | 'saved' | 'unsaved' | 'conflict'>('idle')
-  onDraftRef.current = onDraftChange; handledRef.current = onFocusHandled
+  onDraftRef.current = onDraftChange; handledRef.current = onFocusHandled; lockedRef.current = locked
 
   const persistDraft = (next: RuyiWorkspaceDraftV1) => {
     const bytes = JSON.stringify(next)
@@ -164,19 +173,38 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
     let next: RuyiWorkspaceDraftV1
     try { next = saveRuyiWorkspaceDraft(workspace) } catch { setWorkspaceError('当前积木结构无法安全保存，原草稿保持不变。'); return }
     const bytes = JSON.stringify(next); if (bytes === lastDraftRef.current) return
-    lastDraftRef.current = bytes
+    lastDraftRef.current = bytes; acceptedDraftRef.current = structuredClone(next)
     persistDraft(next)
     setWorkspaceError(null)
+  }
+
+  const restoreAcceptedDraft = (workspace: Blockly.Workspace) => {
+    if (!mountedRef.current || workspaceRef.current !== workspace) return
+    const accepted = structuredClone(acceptedDraftRef.current)
+    withoutEvents(() => loadRuyiWorkspaceDraft(workspace, accepted))
+    lastDraftRef.current = JSON.stringify(accepted)
+    refresh(false)
+    setWorkspaceBlocksLocked(workspace, lockedRef.current)
+  }
+
+  const scheduleLockedRestore = (workspace: Blockly.Workspace) => {
+    setWorkspaceBlocksLocked(workspace, true)
+    if (lockedRestoreTimerRef.current !== null) return
+    lockedRestoreTimerRef.current = window.setTimeout(() => {
+      lockedRestoreTimerRef.current = null
+      if (lockedRef.current) restoreAcceptedDraft(workspace)
+    }, 0)
   }
 
   useEffect(() => {
     const host = hostRef.current; if (!host) return
     mountedRef.current = true
     registerRuyiStaffBlocks(); const workspace = adapter.create(host); workspaceRef.current = workspace
-    withoutEvents(() => loadRuyiWorkspaceDraft(workspace, draft)); lastDraftRef.current = JSON.stringify(draft); lastPropRef.current = JSON.stringify(draft)
+    withoutEvents(() => loadRuyiWorkspaceDraft(workspace, draft)); acceptedDraftRef.current = structuredClone(draft); lastDraftRef.current = JSON.stringify(draft); lastPropRef.current = JSON.stringify(draft)
     refresh(false)
     const listener = (event: Blockly.Events.Abstract) => {
       if (event.isUiEvent) return
+      if (lockedRef.current) { scheduleLockedRestore(workspace); return }
       const allBlocks = workspace.getAllBlocks(false)
       if (allBlocks.length > MAX_WORKSPACE_BLOCKS) {
         const createdIds = 'ids' in event && Array.isArray(event.ids) ? event.ids as string[] : []
@@ -199,7 +227,7 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
     const fit = () => fitNarrowWorkspace(workspace)
     fit(); const fitFrame = window.requestAnimationFrame(fit); const fitAfterFlyout = window.setTimeout(fit, 50); window.addEventListener('resize', fit)
     workspace.addChangeListener(listener); setReady(true)
-    return () => { mountedRef.current = false; saveRequestRef.current.generation += 1; setReady(false); window.cancelAnimationFrame(fitFrame); window.clearTimeout(fitAfterFlyout); window.removeEventListener('resize', fit); workspace.removeChangeListener(listener); workspace.dispose(); if (workspaceRef.current === workspace) workspaceRef.current = null; itemRefs.current.clear() }
+    return () => { mountedRef.current = false; saveRequestRef.current.generation += 1; setReady(false); window.cancelAnimationFrame(fitFrame); window.clearTimeout(fitAfterFlyout); if (lockedRestoreTimerRef.current !== null) { window.clearTimeout(lockedRestoreTimerRef.current); lockedRestoreTimerRef.current = null }; window.removeEventListener('resize', fit); workspace.removeChangeListener(listener); workspace.dispose(); if (workspaceRef.current === workspace) workspaceRef.current = null; itemRefs.current.clear() }
   }, [adapter])
 
   useEffect(() => {
@@ -207,10 +235,26 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
     const incoming = JSON.stringify(draft); if (incoming === lastPropRef.current) return
     if (incoming === lastDraftRef.current) { lastPropRef.current = incoming; return }
     let fitFrame = 0
-    try { withoutEvents(() => loadRuyiWorkspaceDraft(workspace, draft)); lastDraftRef.current = incoming; lastPropRef.current = incoming; refresh(false); fitNarrowWorkspace(workspace); fitFrame = window.requestAnimationFrame(() => fitNarrowWorkspace(workspace)); setWorkspaceError(null) }
+    try { withoutEvents(() => loadRuyiWorkspaceDraft(workspace, draft)); acceptedDraftRef.current = structuredClone(draft); lastDraftRef.current = incoming; lastPropRef.current = incoming; refresh(false); setWorkspaceBlocksLocked(workspace, lockedRef.current); fitNarrowWorkspace(workspace); fitFrame = window.requestAnimationFrame(() => fitNarrowWorkspace(workspace)); setWorkspaceError(null) }
     catch { setWorkspaceError('传入的积木草稿无法安全恢复，当前工作区保持不变。') }
     return () => { if (fitFrame) window.cancelAnimationFrame(fitFrame) }
   }, [draft, ready])
+
+  useEffect(() => {
+    const workspace = workspaceRef.current; const host = hostRef.current
+    if (!ready || !workspace || !host) return
+    if (locked) {
+      setWorkspaceBlocksLocked(workspace, true)
+      const active = document.activeElement
+      if (active === host || (active instanceof Node && host.contains(active))) lockMessageRef.current?.focus()
+      return
+    }
+    if (lockedRestoreTimerRef.current !== null) {
+      window.clearTimeout(lockedRestoreTimerRef.current); lockedRestoreTimerRef.current = null
+      restoreAcceptedDraft(workspace)
+    }
+    setWorkspaceBlocksLocked(workspace, false)
+  }, [locked, ready])
 
   useEffect(() => {
     if (!ready || focusBlockId === null) return
@@ -243,13 +287,13 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
   const atCapacity = blocks.length >= MAX_WORKSPACE_BLOCKS
 
   return <section className="code-workspace ruyi-staff-workspace" aria-label="定海神针图形化编程工作台" onKeyDown={activateButtonOnEnter}>
-    {locked ? <p className="workspace-lock-message" role="status">通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。</p> : null}
+    {locked ? <p ref={lockMessageRef} className="workspace-lock-message" role="status" tabIndex={-1}>通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。</p> : null}
     <div className="command-palette"><p className="eyebrow">指令匣 · 点击加入卷轴</p><div className="command-buttons">{ACTIONS.map(({ type, label }) => <button type="button" className="command-button" key={type} disabled={locked || atCapacity} onClick={() => mutate((workspace) => {
       if (workspace.getTopBlocks(false).length > 1) throw new Error('multiple chains')
       const chain = orderedBlocks(workspace); const block = workspace.newBlock(type); initializeWorkspaceBlock(block)
       const tail = chain.at(-1); if (tail) tail.nextConnection?.connect(block.previousConnection!); rebuild(workspace, [...chain, block])
     })}>{`\u52a0\u5165\uff1a${label}`}</button>)}</div>{capacityMessage || atCapacity ? <p role="status">{capacityMessage ?? '指令卷轴已经装满500块积木。先删除一些积木，才能继续加入。'}</p> : null}</div>
-    <div ref={hostRef} className={`blockly-host${locked ? ' blockly-host-locked' : ''}`} aria-label="Blockly 积木编辑区" aria-disabled={locked || undefined} tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); run() } }} />
+    <div ref={hostRef} className={`blockly-host${locked ? ' blockly-host-locked' : ''}`} aria-label="Blockly 积木编辑区" aria-disabled={locked || undefined} inert={locked ? true : undefined} tabIndex={locked ? -1 : 0} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); run() } }} />
     <div className="command-scroll"><span className="eyebrow">当前指令卷轴</span>
       {!result.ok ? <p role="status">{issue(result)}</p> : null}
       {blocks.length > 0 ? <ol className="block-program-list" aria-label={result.ok ? '已连接的指令顺序' : '工作区积木（尚未形成唯一顺序）'}>{blocks.map((block, index) => <li key={block.id} tabIndex={-1} ref={(node) => { if (node) itemRefs.current.set(block.id, node); else itemRefs.current.delete(block.id) }}><span>{block.label}</span><span className="block-program-actions">

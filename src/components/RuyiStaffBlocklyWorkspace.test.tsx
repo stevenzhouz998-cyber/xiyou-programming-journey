@@ -59,6 +59,54 @@ describe('RuyiStaffBlocklyWorkspace', () => {
     expect(onRun).not.toHaveBeenCalled()
   })
 
+  it('atomically restores the accepted draft after locked native delete, paste and keyboard attempts, then unlocks', async () => {
+    const draft = chainDraft(3)
+    const workspace = new Blockly.Workspace()
+    const onDraftChange = vi.fn(() => ({ status: 'saved' as const }))
+    const onRun = vi.fn<(result: RuyiCompileResult) => void>()
+    const adapter = { create: () => workspace }
+    const renderWorkspace = (locked: boolean) => (
+      <RuyiStaffBlocklyWorkspaceAdapterProvider adapter={adapter}>
+        <RuyiStaffBlocklyWorkspace draft={draft} onDraftChange={onDraftChange} onRun={onRun} focusBlockId={null} onFocusHandled={() => undefined} locked={locked} />
+      </RuyiStaffBlocklyWorkspaceAdapterProvider>
+    )
+    const view = render(renderWorkspace(false))
+    const host = screen.getByLabelText('Blockly 积木编辑区')
+    host.focus()
+    expect(host).toHaveFocus()
+    onDraftChange.mockClear()
+
+    view.rerender(renderWorkspace(true))
+
+    const lockMessage = screen.getByText('通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。')
+    await waitFor(() => expect(lockMessage).toHaveFocus())
+    expect(host).toHaveAttribute('inert')
+    expect(host).toHaveAttribute('tabindex', '-1')
+    expect(workspace.getAllBlocks(false).every((block) => !block.isMovable() && !block.isDeletable() && !block.isEditable())).toBe(true)
+
+    const acceptedIds = draft.blocks.map((block) => block.id).sort()
+    act(() => {
+      workspace.getBlockById('block-1')!.dispose(false)
+      const pasted = workspace.newBlock('xiyou_shrink_ruyi_staff', 'locked-native-paste')
+      pasted.moveBy(120, 80)
+      fireEvent.keyDown(host, { key: 'Delete' })
+      fireEvent.keyDown(host, { key: 'v', ctrlKey: true })
+    })
+
+    await waitFor(() => expect(workspace.getAllBlocks(false).map((block) => block.id).sort()).toEqual(acceptedIds))
+    expect(workspace.getBlockById('locked-native-paste')).toBeNull()
+    expect(workspace.getAllBlocks(false).every((block) => !block.isMovable() && !block.isDeletable() && !block.isEditable())).toBe(true)
+    expect(onDraftChange).not.toHaveBeenCalled()
+
+    view.rerender(renderWorkspace(false))
+    await waitFor(() => expect(workspace.getAllBlocks(false).every((block) => block.isMovable() && block.isDeletable() && block.isEditable())).toBe(true))
+    expect(screen.getByLabelText('Blockly 积木编辑区')).not.toHaveAttribute('inert')
+    expect(screen.getByLabelText('Blockly 积木编辑区')).toHaveAttribute('tabindex', '0')
+    fireEvent.click(screen.getByRole('button', { name: '加入：查看三件兵器重量' }))
+    await waitFor(() => expect(workspace.getAllBlocks(false)).toHaveLength(4))
+    expect(onDraftChange).toHaveBeenCalledOnce()
+  })
+
   it('offers exactly five mission blocks and compiles the connected real workspace', () => {
     const { workspace, onRun } = setup()
     expect(screen.getAllByRole('button', { name: /^\u52a0\u5165\uff1a/ }).map((button) => button.textContent)).toEqual([
