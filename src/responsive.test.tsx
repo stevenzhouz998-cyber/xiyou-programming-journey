@@ -13,6 +13,8 @@ describe('commercial responsive shell', () => {
     expect(app).not.toMatch(/from ['"].*PythonEditor/);
     expect(app).not.toMatch(/from ['"].*AiLab/);
     expect(app).not.toMatch(/from ['"].*GameScene/);
+    expect(app).not.toMatch(/from ['"].*RuyiStaffExperience/);
+    expect(app).toMatch(/lazy\(\(\) => import\(['"]\.\/components\/RuyiStaffExperience['"]\)/);
     expect(css).not.toMatch(/(?:html|body)\s*\{[^}]*min-width:\s*1180px/s);
     expect(css).toMatch(/@media\s*\([^)]*max-width:\s*900px/);
     expect(css).toMatch(/@media\s*\([^)]*max-width:\s*600px/);
@@ -22,6 +24,11 @@ describe('commercial responsive shell', () => {
     expect(css).toMatch(/\.game-scene\s*\{[^}]*aspect-ratio:\s*19\s*\/\s*8/s);
     expect(css).not.toMatch(/\.game-scene\s*\{[^}]*min-height:/s);
     expect(css).toMatch(/\.game-scene canvas\s*\{[^}]*width:\s*100%[^}]*height:\s*auto/s);
+    expect(css).toMatch(/@media\s*\([^)]*max-width:\s*900px[\s\S]*\.ruyi-staff-scene-region[^}]*grid-row:\s*1/s);
+    expect(css).toMatch(/@media\s*\([^)]*max-width:\s*900px[\s\S]*\.ruyi-staff-program-region[^}]*grid-row:\s*2/s);
+    expect(css).toMatch(/@media\s*\([^)]*max-width:\s*900px[\s\S]*\.ruyi-staff-feedback-region[^}]*grid-row:\s*3/s);
+    expect(css).toMatch(/\.ruyi-staff-experience\s*\{[^}]*min-width:\s*0/s);
+    expect(css).toMatch(/\.ruyi-staff-program-region\s*\{[^}]*min-width:\s*0/s);
   });
 
   it('shows a status while loading and renders the real selected tool', async () => {

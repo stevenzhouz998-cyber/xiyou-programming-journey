@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
-import { createInitialProgress, serializeProgress } from './progress/progress';
+import { completeMission, createInitialProgress, serializeProgress } from './progress/progress';
 import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, REVISION_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from './progress/storage';
 import type { BattleEvent } from './battle/types';
 import { createMissionSession } from './progress/session';
 
 vi.mock('./components/GameScene', () => ({
   GameScene: ({ events, onPlaybackComplete }: { events: BattleEvent[]; onPlaybackComplete?: () => void }) => <section aria-label="测试龙宫场景"><output data-testid="app-scene-events">{JSON.stringify(events)}</output><button type="button" onClick={onPlaybackComplete}>完成场景播放</button></section>,
+}));
+
+vi.mock('./components/RuyiStaffScene', () => ({
+  RuyiStaffScene: ({ events, onPlaybackComplete }: { events: BattleEvent[]; onPlaybackComplete?: () => void }) => <section aria-label="测试定海神针场景"><output data-testid="app-ruyi-events">{JSON.stringify(events)}</output><button type="button" onClick={onPlaybackComplete}>完成定海神针场景播放</button></section>,
 }));
 
 const originalStorage = localStorage;
@@ -142,6 +146,42 @@ describe('西游编程记', () => {
     }));
   });
 
+  it('routes w1-m2 to the lazy real Ruyi Staff experience and records its hints transactionally', async () => {
+    const progress = completeMission(withParentAccess(createInitialProgress()), 'w1-m1', { stars: 3, hintsUsed: 0 });
+    progress.privacy.localDataNoticeSeen = true;
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    window.location.hash = '#/mission/w1-m2';
+    render(<App />);
+
+    expect(await screen.findByRole('button', { name: '加入：查看三件兵器重量' })).toBeVisible();
+    expect(screen.queryByText('拖动调整事件顺序')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '观察提示' }));
+    fireEvent.click(screen.getByRole('button', { name: '观察提示' }));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
+      sessions: { 'w1-m2': { usedHintTiers: ['observe'] } },
+    }));
+  });
+
+  it('passes w1-m2 through the same delayed scene-completion and success-audio path', async () => {
+    const progress = completeMission(withParentAccess(createInitialProgress()), 'w1-m1', { stars: 3, hintsUsed: 0 });
+    progress.privacy.localDataNoticeSeen = true;
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    window.location.hash = '#/mission/w1-m2';
+    const audioPlay = vi.fn().mockResolvedValue(undefined);
+    const audio = vi.fn(function MockAudio() { return { play: audioPlay }; });
+    vi.stubGlobal('Audio', audio);
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '加入：查看三件兵器重量' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：选择定海神针（13500斤）' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：缩小定海神针' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+    expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '完成定海神针场景播放' }));
+    expect(screen.getByRole('heading', { name: '闯关成功' })).toBeVisible();
+    expect(audio).toHaveBeenCalledWith('/assets/audio/success.m4a');
+  });
+
   it('keeps repeated Dragon Palace success idempotent while still counting the engine run', async () => {
     render(<App />);
     await acknowledgePrivacySuccessfully();
@@ -243,6 +283,19 @@ describe('西游编程记', () => {
     expect(screen.getByText('程序结构')).toBeVisible();
     expect(screen.queryByText('private-block')).not.toBeInTheDocument();
     expect(screen.queryByText('xiyou_enter_palace')).not.toBeInTheDocument();
+  });
+
+  it('aggregates both executable week-one sessions in the parent report', async () => {
+    const progress = withParentAccess(createInitialProgress());
+    progress.privacy.localDataNoticeSeen = true;
+    progress.sessions['w1-m1'] = { ...createMissionSession('w1-m1', '2026-07-16T00:00:00.000Z'), totalRuns: 2, runtimeFailures: 1 };
+    progress.sessions['w1-m2'] = { ...createMissionSession('w1-m2', '2026-07-16T00:00:00.000Z'), totalRuns: 3, compileFailures: 2 };
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
+    fireEvent.change(await screen.findByLabelText('家长 PIN'), { target: { value: '4826' } });
+    fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
+    expect(await screen.findByText('运行 5 次 · 调整 3 次')).toBeVisible();
   });
 
   it('submits the parent PIN through the form keyboard path', async () => {
