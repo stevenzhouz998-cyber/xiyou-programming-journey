@@ -43,7 +43,46 @@ class MemoryStorage implements Storage {
   peek(key: string) { return this.values.get(key) ?? null; }
 }
 
+const immediateLockManager = {
+  request: async <T>(_name: string, callback: () => Promise<T> | T): Promise<T> => callback(),
+};
+
 describe('cross-tab storage coordinator', () => {
+  it('fails closed without a reliable cross-tab lock instead of reporting a silent save success', async () => {
+    const storage = new MemoryStorage();
+    const currentRaw = serializeProgress(createInitialProgress());
+    storage.setItem(CURRENT_PROGRESS_KEY, currentRaw);
+    storage.setItem(REVISION_PROGRESS_KEY, '0');
+
+    const result = await saveProgressCoordinated(
+      { ...createInitialProgress(), learnerName: '不应静默覆盖' },
+      0,
+      { storage, lockManager: null },
+    );
+
+    expect(result).toMatchObject({ status: 'unsaved', error: expect.stringContaining('跨标签页') });
+    expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe(currentRaw);
+    expect(storage.getItem(REVISION_PROGRESS_KEY)).toBe('0');
+  });
+
+  it('normalizes a rejected Web Lock request to unsaved without touching storage', async () => {
+    const storage = new MemoryStorage();
+    const currentRaw = serializeProgress(createInitialProgress());
+    storage.setItem(CURRENT_PROGRESS_KEY, currentRaw);
+    storage.setItem(REVISION_PROGRESS_KEY, '0');
+    const lockManager = { request: async <T>(): Promise<T> => { throw new Error('lock denied'); } };
+
+    const result = await saveProgressCoordinated(
+      { ...createInitialProgress(), learnerName: '不应写入' },
+      0,
+      { storage, lockManager },
+    );
+
+    expect(result).toMatchObject({ status: 'unsaved', error: expect.stringContaining('lock denied') });
+    expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe(currentRaw);
+    expect(storage.getItem(REVISION_PROGRESS_KEY)).toBe('0');
+  });
+
   it('serializes writes with Web Locks and rejects the stale writer without mutating storage', async () => {
     const storage = new MemoryStorage();
     storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(createInitialProgress()));
@@ -83,7 +122,7 @@ describe('cross-tab storage coordinator', () => {
     const result = await saveProgressCoordinated(
       { ...createInitialProgress(), learnerName: '迁移孩子' },
       0,
-      { storage, lockManager: null, legacyWorkspaceKey },
+      { storage, lockManager: immediateLockManager, legacyWorkspaceKey },
     );
 
     expect(result).toMatchObject({ status: 'unsaved', error: expect.stringContaining('旧版积木草稿清理失败') });
@@ -137,9 +176,9 @@ describe('cross-tab storage coordinator', () => {
     const saved = await saveProgressCoordinated(
       { ...createInitialProgress(), learnerName: '并发新保存' },
       0,
-      { storage, lockManager: null },
+      { storage, lockManager: immediateLockManager },
     );
-    const staleRepair = await repairLoadedProgressCoordinated(inspected.repair!, { storage, lockManager: null });
+    const staleRepair = await repairLoadedProgressCoordinated(inspected.repair!, { storage, lockManager: immediateLockManager });
 
     expect(saved).toMatchObject({ status: 'saved', revision: 1 });
     expect(staleRepair).toMatchObject({ status: 'conflict', expectedRevision: 0, actualRevision: 1 });
@@ -156,7 +195,7 @@ describe('cross-tab storage coordinator', () => {
     const result = await saveProgressCoordinated(
       { ...createInitialProgress(), settings: { ...createInitialProgress().settings, parentPin: '7319' } },
       0,
-      { storage, lockManager: null },
+      { storage, lockManager: immediateLockManager },
     );
 
     expect(result).toMatchObject({
@@ -178,7 +217,7 @@ describe('cross-tab storage coordinator', () => {
     const result = await saveProgressCoordinated(
       { ...createInitialProgress(), learnerName: '新凭据' },
       0,
-      { storage, lockManager: null },
+      { storage, lockManager: immediateLockManager },
     );
 
     expect(result).toMatchObject({
@@ -200,7 +239,7 @@ describe('cross-tab storage coordinator', () => {
     const result = await saveProgressCoordinated(
       { ...createInitialProgress(), learnerName: '不应写入' },
       0,
-      { storage, lockManager: null },
+      { storage, lockManager: immediateLockManager },
     );
 
     expect(result).toMatchObject({ status: 'unsaved', error: expect.stringContaining('revision') });
@@ -213,7 +252,7 @@ describe('cross-tab storage coordinator', () => {
     storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress({ ...createInitialProgress(), learnerName: '保留我' }));
     storage.setItem(REVISION_PROGRESS_KEY, 'invalid');
 
-    const result = await clearProgressCoordinated(0, { storage, lockManager: null });
+    const result = await clearProgressCoordinated(0, { storage, lockManager: immediateLockManager });
 
     expect(result).toMatchObject({ status: 'unchanged', error: expect.stringContaining('revision') });
     expect(JSON.parse(storage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ learnerName: '保留我' });
@@ -231,11 +270,11 @@ describe('cross-tab storage coordinator', () => {
     const imported = await importProgressCoordinated(
       serializeProgress({ ...createInitialProgress(), learnerName: '导入孩子' }),
       3,
-      { storage, lockManager: null },
+      { storage, lockManager: immediateLockManager },
     );
     expect(imported).toMatchObject({ status: 'saved', revision: 4, sourceVersion: 3 });
 
-    const cleared = await clearProgressCoordinated(4, { storage, lockManager: null });
+    const cleared = await clearProgressCoordinated(4, { storage, lockManager: immediateLockManager });
     expect(cleared).toMatchObject({ status: 'cleared', revision: 5 });
     expect(storage.getItem(SNAPSHOT_PROGRESS_KEY)).toBeNull();
     expect(storage.getItem(CORRUPT_PROGRESS_KEY)).toBeNull();
@@ -244,7 +283,7 @@ describe('cross-tab storage coordinator', () => {
     const stale = await saveProgressCoordinated(
       { ...createInitialProgress(), learnerName: '旧页复活' },
       4,
-      { storage, lockManager: null },
+      { storage, lockManager: immediateLockManager },
     );
     expect(stale).toMatchObject({ status: 'conflict', actualRevision: 5 });
     expect(JSON.parse(storage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ learnerName: '小行者' });

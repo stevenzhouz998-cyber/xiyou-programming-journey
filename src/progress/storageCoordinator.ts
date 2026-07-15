@@ -14,16 +14,17 @@ export type CoordinatedSaveResult =
   | { status: 'unsaved'; progress: ProgressV3; error: string; storageMayHaveChanged?: true }
   | Conflict;
 
-let fallback: Promise<unknown> = Promise.resolve();
 const locks = (options: CoordinatorOptions) => options.lockManager === undefined
   ? (typeof navigator === 'undefined' ? null : (navigator as Navigator & { locks?: LockManagerLike }).locks ?? null)
   : options.lockManager;
 function locked<T>(options: CoordinatorOptions, operation: () => T | Promise<T>): Promise<T> {
   const manager = locks(options);
-  if (manager) return manager.request('xiyou-programming-progress-v3-write', operation);
-  const run = fallback.then(operation, operation);
-  fallback = run.then(() => undefined, () => undefined);
-  return run;
+  if (!manager) return Promise.reject(new Error('浏览器不支持可靠的跨标签页存档锁，已拒绝写入'));
+  try {
+    return Promise.resolve(manager.request('xiyou-programming-progress-v3-write', operation));
+  } catch (error) {
+    return Promise.reject(error);
+  }
 }
 function message(error: unknown) { return error instanceof Error ? error.message : String(error); }
 function conflict(progress: ProgressV3, expectedRevision: number, actualRevision: number): Conflict {
@@ -92,7 +93,11 @@ export function coordinateProgressWrite<T>(
         ...(result.status !== 'cleared' && rollback.length ? { storageMayHaveChanged: true as const } : {}),
       } as T;
     }
-  }) as Promise<(T & { revision?: number }) | Conflict>;
+  }).catch((error) => ({
+    status: failureStatus,
+    progress,
+    error: `跨标签页写入协调失败：${message(error)}`,
+  } as T)) as Promise<(T & { revision?: number }) | Conflict>;
 }
 
 const saveKeys = [CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY, CORRUPT_PROGRESS_KEY, REVISION_PROGRESS_KEY];

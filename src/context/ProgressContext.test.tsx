@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ProgressProvider, useProgress, type ProgressContextValue } from './ProgressContext';
 import { createInitialProgress, serializeProgress } from '../progress/progress';
 import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, LEGACY_PROGRESS_KEY, REVISION_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from '../progress/storage';
@@ -13,6 +13,13 @@ const originalStorage = localStorage;
 const originalLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
 const SESSION_NOW = '2026-07-15T06:00:00.000Z';
 let latestContext: ProgressContextValue | null = null;
+
+function installImmediateLocks() {
+  Object.defineProperty(navigator, 'locks', {
+    configurable: true,
+    value: { request: async <T,>(_name: string, callback: () => Promise<T> | T): Promise<T> => callback() },
+  });
+}
 
 function installStorage(initial: Record<string, string>, failWrites = false) {
   const values = new Map(Object.entries(initial));
@@ -42,6 +49,8 @@ function installStorage(initial: Record<string, string>, failWrites = false) {
   Object.defineProperty(window, 'localStorage', { value: storage, configurable: true });
   return controls;
 }
+
+beforeEach(() => installImmediateLocks());
 
 afterEach(() => {
   Object.defineProperty(globalThis, 'localStorage', { value: originalStorage, configurable: true });
@@ -77,6 +86,38 @@ function Probe() {
 }
 
 describe('ProgressContext persistence status', () => {
+  it('normalizes a rejected storage chunk load and leaves pending with an actionable error', async () => {
+    installStorage({});
+    render(<ProgressProvider
+      loadSaveCoordinator={() => Promise.reject(new Error('storage chunk 503'))}
+    ><Probe /></ProgressProvider>);
+
+    let result: Awaited<ReturnType<ProgressContextValue['updateSettings']>> | undefined;
+    await act(async () => { result = await latestContext!.updateSettings({ muted: true }); });
+
+    expect(result).toMatchObject({ status: 'unsaved', error: expect.stringContaining('storage chunk 503') });
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      saveStatus: 'unsaved', saveError: expect.stringContaining('storage chunk 503'),
+    });
+  });
+
+  it('normalizes a rejected Web Lock request and leaves pending with an actionable error', async () => {
+    installStorage({});
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: { request: async () => { throw new Error('lock request rejected'); } },
+    });
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    let result: Awaited<ReturnType<ProgressContextValue['updateSettings']>> | undefined;
+    await act(async () => { result = await latestContext!.updateSettings({ muted: true }); });
+
+    expect(result).toMatchObject({ status: 'unsaved', error: expect.stringContaining('lock request rejected') });
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      saveStatus: 'unsaved', saveError: expect.stringContaining('lock request rejected'),
+    });
+  });
+
   it('never lets an older completed save overwrite a newer in-memory draft', async () => {
     installStorage({});
     const held: Array<() => void> = [];
@@ -273,7 +314,7 @@ describe('ProgressContext persistence status', () => {
     await act(async () => { failed = await latestContext!.commitParentAccess('7319'); });
     expect(failed).toMatchObject({ status: 'unsaved' });
     expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
-      parentPin: '4826', saveStatus: 'idle', saveError: null,
+      parentPin: '4826', saveStatus: 'unsaved', saveError: expect.any(String),
     });
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).settings.parentPin).toBe('4826');
 

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { afterEach } from 'vitest';
+import { afterEach, beforeEach } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
 const values = new Map<string, string>();
@@ -20,5 +20,19 @@ Object.defineProperty(window.HTMLCanvasElement.prototype, 'getContext', { value:
   getImageData: () => ({ data: new Uint8ClampedArray(4) }),
   measureText: () => ({ width: 0 }),
 }, { get: (target, property) => property in target ? target[property as keyof typeof target] : () => undefined }), configurable: true });
+
+beforeEach(() => {
+  let queue = Promise.resolve();
+  Object.defineProperty(navigator, 'locks', {
+    configurable: true,
+    value: {
+      request: <T,>(_name: string, callback: () => Promise<T> | T): Promise<T> => {
+        const run = queue.then(callback, callback);
+        queue = run.then(() => undefined, () => undefined);
+        return run;
+      },
+    },
+  });
+});
 
 afterEach(() => cleanup());

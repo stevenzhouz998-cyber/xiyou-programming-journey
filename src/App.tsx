@@ -162,15 +162,18 @@ function AppRoutes() {
   const effectiveReducedMotion = progress.settings.reducedMotionOverride
     ? progress.settings.reducedMotion
     : systemReducedMotion;
-  const persistence = loadPersistence === 'unsaved' || saveStatus === 'unsaved' ? 'unsaved' : saveStatus === 'saved' ? 'saved' : loadPersistence;
+  const conflict = saveStatus === 'conflict';
+  const persistence = loadPersistence === 'unsaved' || saveStatus === 'unsaved' || conflict
+    ? 'unsaved'
+    : saveStatus === 'saved' ? 'saved' : loadPersistence;
   const privacyOpen = !progress.privacy.localDataNoticeSeen;
   const hasRecoveryDetails = corruptDownload !== null || corruptError !== null
     || loadStatus === 'recovered-from-snapshot' || loadStatus === 'reset-after-corruption';
-  const showRecoveryNotice = persistence === 'unsaved' || hasRecoveryDetails
+  const showRecoveryNotice = conflict || persistence === 'unsaved' || hasRecoveryDetails
     || (loadStatus !== 'normal' && loadStatus !== 'storage-unavailable');
 
   return <GlobalModalIsolationContext.Provider value={setGlobalModalOpen}><div className="app-shell" data-testid="app-shell" data-reduced-motion={String(effectiveReducedMotion)}>
-    {showRecoveryNotice && <Suspense fallback={null}><RecoveryNotice loadStatus={loadStatus} persistence={persistence} loadError={loadError} corruptError={corruptError} saveError={saveError} hasCorruptDownload={corruptDownload !== null} conflict={saveStatus === 'conflict'} onRetry={retrySave} onDownloadConflictBackup={() => { const backup = data.createBackup(); downloadTextFile(backup.filename, backup.contents, backup.mimeType); }} onReloadExternal={data.reloadExternalProgress} /></Suspense>}
+    {showRecoveryNotice && <Suspense fallback={null}><RecoveryNotice loadStatus={loadStatus} persistence={persistence} loadError={loadError} corruptError={corruptError} saveError={saveError} hasCorruptDownload={corruptDownload !== null} conflict={conflict} onRetry={retrySave} onDownloadConflictBackup={() => { const backup = data.createBackup(); downloadTextFile(backup.filename, backup.contents, backup.mimeType); }} onReloadExternal={data.reloadExternalProgress} /></Suspense>}
     <div data-testid="app-background" inert={privacyOpen || globalModalOpen ? true : undefined} aria-hidden={privacyOpen || globalModalOpen ? true : undefined}>
       <Header reducedMotion={effectiveReducedMotion} />
       <RouteFocus blocked={privacyOpen || globalModalOpen} />

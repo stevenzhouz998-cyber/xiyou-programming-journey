@@ -53,17 +53,23 @@ export interface ProgressContextValue {
 
 const ProgressContext = createContext<ProgressContextValue | null>(null);
 const PROGRESS_CONFLICT_ERROR = '其他标签页已更新，已暂停保存';
+const loadDefaultSaveCoordinator = () => import('../progress/storageCoordinator');
+const loadDefaultStorageRepair = () => import('../progress/storageRepair');
+const loadDefaultParentCoordinator = () => import('../progress/storageCoordinatorParent');
 
-async function saveCoordinated(
-  progress: ProgressV3,
-  expectedRevision: number,
-  options: ProgressWriteOptions = {},
-) {
-  const { saveProgressCoordinated } = await import('../progress/storageCoordinator');
-  return saveProgressCoordinated(progress, expectedRevision, options);
+interface ProgressProviderProps {
+  children: ReactNode;
+  loadSaveCoordinator?: typeof loadDefaultSaveCoordinator;
+  loadStorageRepair?: typeof loadDefaultStorageRepair;
+  loadParentCoordinator?: typeof loadDefaultParentCoordinator;
 }
 
-export function ProgressProvider({ children }: { children: ReactNode }) {
+export function ProgressProvider({
+  children,
+  loadSaveCoordinator = loadDefaultSaveCoordinator,
+  loadStorageRepair = loadDefaultStorageRepair,
+  loadParentCoordinator = loadDefaultParentCoordinator,
+}: ProgressProviderProps) {
   const [initialLoad] = useState(() => loadProgressTransaction());
   const [progress, setProgress] = useState<ProgressV3>(initialLoad.progress);
   const progressRef = useRef(initialLoad.progress);
@@ -76,10 +82,33 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   const [saveStatus, setSaveStatus] = useState<ProgressSaveStatus>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const enqueue = <T,>(operation: () => Promise<T>): Promise<T> => {
-    const run = queueRef.current.then(operation, operation);
+  const enqueue = <T,>(
+    operation: () => Promise<T>,
+    failureStatus: 'unsaved' | 'unchanged' = 'unsaved',
+  ): Promise<T> => {
+    const guarded = async () => {
+      try {
+        return await operation();
+      } catch (error) {
+        const detail = `存储操作无法完成：${error instanceof Error ? error.message : String(error)}`;
+        conflictRef.current = false;
+        setSaveStatus('unsaved');
+        setSaveError(detail);
+        return { status: failureStatus, progress: progressRef.current, error: detail } as T;
+      }
+    };
+    const run = queueRef.current.then(guarded, guarded);
     queueRef.current = run.then(() => undefined, () => undefined);
     return run;
+  };
+
+  const saveCoordinated = async (
+    next: ProgressV3,
+    expectedRevision: number,
+    options: ProgressWriteOptions = {},
+  ) => {
+    const { saveProgressCoordinated } = await loadSaveCoordinator();
+    return saveProgressCoordinated(next, expectedRevision, options);
   };
 
   const publishRevision = (nextRevision: number) => {
@@ -142,7 +171,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   };
 
   const runLoadRepair = async (repair: NonNullable<typeof initialLoad.repair>) => {
-    const { repairLoadedProgressCoordinated } = await import('../progress/storageRepair');
+    const { repairLoadedProgressCoordinated } = await loadStorageRepair();
     const result = await repairLoadedProgressCoordinated(repair);
     if (result.status === 'saved' && pendingRepairRef.current === repair) pendingRepairRef.current = null;
     return markResult(result, repair.progress, true);
@@ -250,22 +279,13 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       };
       const blocked = currentConflict(next);
       if (blocked) return Promise.resolve(blocked);
+      setSaveStatus('pending');
+      setSaveError(null);
       return enqueue(async () => {
         const result = await saveCoordinated(next, revisionRef.current);
-        if (result.status === 'saved') publishSaved(next, result.revision);
-        else if (result.status === 'conflict') {
-          conflictRef.current = true;
-          setSaveStatus('conflict');
-          setSaveError(result.error);
-        }
-        else if (result.storageMayHaveChanged) {
-          conflictRef.current = false;
-          setSaveStatus('unsaved');
-          setSaveError(result.error);
-        }
         // A credential failure belongs to the recovery-code panel. The generic
         // retry must continue to reference the last published credential.
-        return result;
+        return markResult(result, next, false);
       });
     },
     acknowledgePrivacy: () => commit({
@@ -291,10 +311,10 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       if (conflictRef.current) return Promise.resolve(currentConflict() as CoordinatedImportResult);
       setSaveStatus('pending');
       return enqueue(async () => {
-        const { importProgressCoordinated } = await import('../progress/storageCoordinatorParent');
+        const { importProgressCoordinated } = await loadParentCoordinator();
         const result = await importProgressCoordinated(raw, revisionRef.current);
         if (result.status === 'saved') publishSaved(result.progress, result.revision);
-        else if (result.status === 'conflict' || result.status === 'unsaved' || result.status === 'rollback-failed') {
+        else {
           conflictRef.current = result.status === 'conflict';
           setSaveStatus(result.status === 'conflict' ? 'conflict' : 'unsaved');
           setSaveError(result.error);
@@ -306,7 +326,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       if (conflictRef.current) return Promise.resolve(currentConflict() as CoordinatedClearResult);
       setSaveStatus('pending');
       return enqueue(async () => {
-        const { clearProgressCoordinated } = await import('../progress/storageCoordinatorParent');
+        const { clearProgressCoordinated } = await loadParentCoordinator();
         const result = await clearProgressCoordinated(revisionRef.current);
         if (result.status === 'cleared') publishSaved(result.progress, result.revision);
         else {
@@ -315,11 +335,21 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
           setSaveError(result.error);
         }
         return result;
-      });
+      }, 'unchanged');
     },
     createBackup: () => createProgressBackup(progressRef.current),
     reloadExternalProgress,
-  }), [initialLoad, loadPersistence, progress, revision, saveError, saveStatus]);
+  }), [
+    initialLoad,
+    loadParentCoordinator,
+    loadPersistence,
+    loadSaveCoordinator,
+    loadStorageRepair,
+    progress,
+    revision,
+    saveError,
+    saveStatus,
+  ]);
 
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;
 }

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import { createInitialProgress, serializeProgress } from './progress/progress';
-import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from './progress/storage';
+import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, REVISION_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from './progress/storage';
 import type { BattleEvent } from './battle/types';
 import { createMissionSession } from './progress/session';
 
@@ -75,6 +75,24 @@ describe('西游编程记', () => {
     expect(screen.getByRole('heading', { name: '西游编程记' })).toBeInTheDocument();
     expect(screen.getAllByText(/第[一二三四五六]周/)).toHaveLength(6);
     expect(screen.getByRole('button', { name: /开始第一关/ })).toBeEnabled();
+  });
+
+  it('shows conflict backup and reload actions when CAS detects a stale tab without a storage event', async () => {
+    const loaded = withParentAccess(createInitialProgress());
+    loaded.privacy.localDataNoticeSeen = true;
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(loaded));
+    localStorage.setItem(REVISION_PROGRESS_KEY, '0');
+    render(<App />);
+
+    const external = { ...loaded, learnerName: '其他标签页版本' };
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(external));
+    localStorage.setItem(REVISION_PROGRESS_KEY, '1');
+    fireEvent.click(screen.getByRole('button', { name: '减弱动画' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('其他标签页已更新，已暂停保存');
+    expect(screen.getByRole('button', { name: '下载本页备份' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '载入其他标签页版本' })).toBeVisible();
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ learnerName: '其他标签页版本' });
   });
 
   it('opens the first canonical mission with source and three-level hints', async () => {

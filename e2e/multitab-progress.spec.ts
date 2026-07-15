@@ -113,3 +113,65 @@ test('@storage gives exactly one winner to simultaneous stale writers under the 
   await holder.close();
   await second.close();
 });
+
+test('@storage fails closed in two independent pages when Web Locks are unavailable', async ({ context, page }) => {
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
+  });
+  await page.goto('./');
+  expect(await page.evaluate(() => typeof navigator.locks)).toBe('undefined');
+  await page.evaluate(({ currentKey, revisionKey, initial }) => {
+    localStorage.clear();
+    localStorage.setItem(currentKey, JSON.stringify(initial));
+    localStorage.setItem(revisionKey, '0');
+  }, { currentKey, revisionKey, initial });
+  await page.reload();
+  const second = await context.newPage();
+  await second.goto('./');
+  expect(await second.evaluate(() => typeof navigator.locks)).toBe('undefined');
+
+  await Promise.all([
+    page.getByRole('button', { name: '减弱动画' }).click(),
+    second.getByRole('button', { name: '关闭声音' }).click(),
+  ]);
+
+  await expect(page.getByRole('alert')).toContainText('浏览器不支持可靠的跨标签页存档锁');
+  await expect(second.getByRole('alert')).toContainText('浏览器不支持可靠的跨标签页存档锁');
+  expect(await revision(page)).toBe('0');
+  const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), currentKey);
+  expect(stored.settings).toMatchObject({ reducedMotion: false, muted: false });
+  await second.close();
+});
+
+test('@storage exposes conflict recovery when CAS detects staleness without a storage event', async ({ context, page }) => {
+  await page.goto('./');
+  await page.evaluate(({ currentKey, revisionKey, initial }) => {
+    localStorage.clear();
+    localStorage.setItem(currentKey, JSON.stringify(initial));
+    localStorage.setItem(revisionKey, '0');
+  }, { currentKey, revisionKey, initial });
+  await page.reload();
+  const stale = await context.newPage();
+  await stale.addInitScript(() => {
+    const nativeAddEventListener = window.addEventListener;
+    Object.defineProperty(window, 'addEventListener', {
+      configurable: true,
+      value(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) {
+        if (type !== 'storage') nativeAddEventListener.call(window, type, listener, options);
+      },
+    });
+  });
+  await stale.goto('./');
+
+  await page.getByRole('button', { name: '减弱动画' }).click();
+  await expect.poll(() => revision(page)).toBe('1');
+  await expect(stale.getByRole('alert')).toHaveCount(0);
+  await stale.getByRole('button', { name: '关闭声音' }).click();
+
+  await expect(stale.getByRole('alert')).toContainText('其他标签页已更新，已暂停保存');
+  await expect(stale.getByRole('button', { name: '下载本页备份' })).toBeVisible();
+  await expect(stale.getByRole('button', { name: '载入其他标签页版本' })).toBeVisible();
+  const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), currentKey);
+  expect(stored.settings).toMatchObject({ reducedMotion: true, muted: false });
+  await stale.close();
+});
