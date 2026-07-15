@@ -11,6 +11,7 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:4173/xiyou-programming-journey/',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    serviceWorkers: 'block',
   },
   webServer: {
     command: 'npm run build && npm run preview -- --host 127.0.0.1 --port 4173',
@@ -28,6 +29,11 @@ export default defineConfig({
       name: 'tablet-webkit-768x1024',
       grep: /@legacy|@full|@parity|@corrupt-smoke|@cold/,
       use: { browserName: 'webkit', viewport: { width: 768, height: 1024 } },
+    },
+    {
+      name: 'visual-chromium-768x1024',
+      grep: /@visual/,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 768, height: 1024 } },
     },
     {
       name: 'mobile-chromium-390x844',

@@ -144,19 +144,24 @@ it('consumes accepted events in order and updates the actor, weapon, and scene s
 
   await flushNextTween() // run-started
   await flushNextTween() // enter accepted
+  expect(scene).toHaveAttribute('data-effect-cell', 'accepted')
   await flushNextTween() // entered-palace
   expect(scene).toHaveAttribute('data-scene-state', 'entered-palace')
+  expect(scene).toHaveAttribute('data-effect-cell', 'none')
   expect(nodes.wukong.setX).toHaveBeenCalled()
 
   await flushNextTween() // request accepted
   await flushNextTween() // weapon-requested
   expect(scene).toHaveAttribute('data-scene-state', 'weapon-requested')
+  expect(scene).toHaveAttribute('data-weapon-display', 'all')
   expect(nodes.weapons.setVisible).toHaveBeenLastCalledWith(true)
   expect(nodes.weapons.setCrop).toHaveBeenCalledWith()
   expect(nodes.weapons.setDisplaySize).toHaveBeenLastCalledWith(396, 198)
 
   await flushAllTweens()
   expect(scene).toHaveAttribute('data-scene-state', 'weapon-tested')
+  expect(scene).toHaveAttribute('data-effect-cell', 'success')
+  expect(scene).toHaveAttribute('data-weapon-display', 'tested')
   expect(nodes.weapons.setCrop).toHaveBeenLastCalledWith(682, 0, 342, 512)
   expect(nodes.weapons.setScale).toHaveBeenLastCalledWith(132 / 342, 198 / 512)
   expect(screen.getByRole('status')).toHaveTextContent(
@@ -173,6 +178,7 @@ it('shows the blocked effect for a rejected instruction without advancing the re
 
   const scene = screen.getByRole('img', { name: '龙宫试兵代码执行场景' })
   expect(scene).toHaveAttribute('data-scene-state', 'entered-palace')
+  expect(scene).toHaveAttribute('data-effect-cell', 'blocked')
   expect(nodes.effects.setVisible).toHaveBeenLastCalledWith(true)
   expect(nodes.effects.setCrop).toHaveBeenCalledWith(341, 0, 341, 512)
   expect(nodes.effects.setScale).toHaveBeenLastCalledWith(150 / 341, 120 / 512)

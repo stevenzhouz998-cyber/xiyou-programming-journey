@@ -38,6 +38,8 @@ const WEAPON_SHEET_DISPLAY = {
   width: WEAPON_CELL_DISPLAY.width * 3,
   height: WEAPON_CELL_DISPLAY.height,
 }
+type EffectCell = 'none' | 'accepted' | 'blocked' | 'success'
+type WeaponDisplay = 'hidden' | 'all' | 'tested'
 
 const opcodeLabels: Record<BattleOpcode, string> = {
   enter_palace: '进入龙宫',
@@ -131,6 +133,8 @@ export function GameScene({
   const [loadError, setLoadError] = useState<string | null>(null)
   const [sceneState, setSceneState] = useState<DragonPalaceState>('outside-palace')
   const [transcript, setTranscript] = useState<readonly string[]>([])
+  const [effectCell, setEffectCell] = useState<EffectCell>('none')
+  const [weaponDisplay, setWeaponDisplay] = useState<WeaponDisplay>('hidden')
 
   eventsRef.current = events
   reducedMotionRef.current = reducedMotion
@@ -159,6 +163,8 @@ export function GameScene({
       .setDisplaySize(WEAPON_SHEET_DISPLAY.width, WEAPON_SHEET_DISPLAY.height)
       .setVisible(false)
     nodes.effects.setX(width * 0.55).setY(height * 0.45).setCrop().setVisible(false)
+    setEffectCell('none')
+    setWeaponDisplay('hidden')
   }
 
   const applyEvent = (owner: symbol, scene: Phaser.Scene, nodes: SceneNodes, event: BattleEvent) => {
@@ -167,20 +173,28 @@ export function GameScene({
     if (event.type === 'run-started') resetScene(owner, scene, nodes)
     if (event.type === 'instruction-accepted') {
       showSheetCell(nodes.effects, 0, EFFECT_CELL_DISPLAY)
+      setEffectCell('accepted')
     }
     if (event.type === 'state-changed') {
       nodes.wukong.setX(stateX(event.state, scene.scale.width))
       nodes.effects.setVisible(false)
-      if (event.state === 'weapon-requested') showWeaponSheet(nodes.weapons)
+      setEffectCell('none')
+      if (event.state === 'weapon-requested') {
+        showWeaponSheet(nodes.weapons)
+        setWeaponDisplay('all')
+      }
       if (event.state === 'weapon-tested') {
         showSheetCell(nodes.weapons, 2, WEAPON_CELL_DISPLAY)
+        setWeaponDisplay('tested')
       }
     }
     if (event.type === 'instruction-rejected') {
       showSheetCell(nodes.effects, 1, EFFECT_CELL_DISPLAY)
+      setEffectCell('blocked')
     }
     if (event.type === 'run-finished' && event.messageCode.endsWith('.completed')) {
       showSheetCell(nodes.effects, 2, EFFECT_CELL_DISPLAY)
+      setEffectCell('success')
     }
 
     setSceneState(event.state)
@@ -368,6 +382,8 @@ export function GameScene({
         style={{ backgroundImage: 'none', backgroundColor: '#e8e0cf' }}
         data-motion-mode={reducedMotion ? 'reduced' : 'standard'}
         data-scene-state={loadError ? undefined : sceneState}
+        data-effect-cell={loadError ? undefined : effectCell}
+        data-weapon-display={loadError ? undefined : weaponDisplay}
         role="img"
         aria-label="龙宫试兵代码执行场景"
       />

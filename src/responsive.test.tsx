@@ -19,7 +19,9 @@ describe('commercial responsive shell', () => {
     expect(css).toMatch(/:focus-visible/);
     expect(css).not.toMatch(/(?:html|body)\s*\{[^}]*overflow-x:\s*hidden/s);
     expect(css).toMatch(/@media\s*\(hover:\s*none\),\s*\(pointer:\s*coarse\),\s*\(max-width:\s*900px\)[\s\S]*min-height:\s*44px/);
-    expect(css).toMatch(/\.game-scene canvas\s*\{[^}]*width:\s*100%[^}]*height:\s*100%/s);
+    expect(css).toMatch(/\.game-scene\s*\{[^}]*aspect-ratio:\s*19\s*\/\s*8/s);
+    expect(css).not.toMatch(/\.game-scene\s*\{[^}]*min-height:/s);
+    expect(css).toMatch(/\.game-scene canvas\s*\{[^}]*width:\s*100%[^}]*height:\s*auto/s);
   });
 
   it('shows a status while loading and renders the real selected tool', async () => {

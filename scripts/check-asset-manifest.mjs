@@ -4,7 +4,7 @@ import { lstat, open, readFile, readdir, realpath } from 'node:fs/promises';
 import { dirname, isAbsolute, join, posix, relative, resolve, sep, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
-import { DRAGON_PALACE_MEDIA_BYTES, SINGLE_RASTER_BYTES } from './check-bundle-budget.mjs';
+import { DRAGON_PALACE_MEDIA_BYTES, SINGLE_RASTER_BYTES } from './budget-limits.mjs';
 
 export const MAX_RASTER_BYTES = SINGLE_RASTER_BYTES;
 export const MAX_MISSION_MEDIA_BYTES = DRAGON_PALACE_MEDIA_BYTES;

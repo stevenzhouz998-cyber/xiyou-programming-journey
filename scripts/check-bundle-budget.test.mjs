@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import * as bundleBudget from './check-bundle-budget.mjs';
 
 const { analyzeManifest, assertNoSourceVisualAssets } = bundleBudget;
@@ -13,6 +14,26 @@ test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
   assert.equal(bundleBudget.DRAGON_PALACE_COLD_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.DRAGON_PALACE_MEDIA_BYTES, 1.25 * 1024 * 1024);
   assert.equal(bundleBudget.SINGLE_RASTER_BYTES, 512 * 1024);
+});
+
+test('keeps Dragon Palace budgets in one shared module', () => {
+  const budgetSource = readFileSync(new URL('./budget-limits.mjs', import.meta.url), 'utf8');
+  const bundleSource = readFileSync(new URL('./check-bundle-budget.mjs', import.meta.url), 'utf8');
+  const e2eSource = readFileSync(new URL('../e2e/dragon-palace-code-battle.spec.ts', import.meta.url), 'utf8');
+  assert.match(budgetSource, /DRAGON_PALACE_COLD_BYTES\s*=\s*2\.5\s*\*\s*1024\s*\*\s*1024/);
+  assert.match(bundleSource, /from '\.\/budget-limits\.mjs'/);
+  assert.match(e2eSource, /from '\.\.\/scripts\/budget-limits\.mjs'/);
+  assert.doesNotMatch(e2eSource, /const COLD_BYTES_LIMIT/);
+});
+
+test('requires the browser cold gate to fail closed for every HTTP response', () => {
+  const configSource = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
+  const e2eSource = readFileSync(new URL('../e2e/dragon-palace-code-battle.spec.ts', import.meta.url), 'utf8');
+  assert.match(configSource, /serviceWorkers:\s*'block'/);
+  assert.match(e2eSource, /'cache-control':\s*'no-store'/);
+  assert.match(e2eSource, /page\.on\('requestfailed'/);
+  assert.match(e2eSource, /const status = response\.status\(\)/);
+  assert.doesNotMatch(e2eSource, /url\.origin\s*!==/);
 });
 
 test('fails an entry static closure over 180 KiB gzip', () => {

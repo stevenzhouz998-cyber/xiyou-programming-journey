@@ -1,9 +1,9 @@
 # Dragon Palace code battle browser verification
 
 - Date: 2026-07-15 (Asia/Shanghai)
-- Runner: Playwright against the local production Vite preview, with five configured projects and one worker
-- Projects: Chromium 1440×1024, Firefox 1440×1024, WebKit 768×1024, touch Chromium 390×844, and touch Chromium 320×844
-- Full result: **68/68 passed; zero skipped tests and zero skipped projects**
+- Runner: Playwright against the local production Vite preview, with six configured projects and one worker
+- Projects: Chromium 1440×1024, Firefox 1440×1024, WebKit 768×1024, touch Chromium 390×844, touch Chromium 320×844, and a dedicated Chromium 768×1024 visual-evidence project
+- Full result: **69/69 passed; zero skipped tests and zero skipped projects**
 
 ## What the real-browser path proves
 
@@ -14,7 +14,7 @@ No successful gameplay state is injected with `page.evaluate`. Browser-side eval
 Additional matrix coverage includes:
 
 - keyboard-only real Blockly correction and completion in desktop Chromium and Firefox;
-- reduced-motion plus muted replay parity in mobile Chromium and tablet WebKit;
+- two visible success runs for reduced-motion plus mute parity in mobile Chromium and tablet WebKit: the unmuted run records `HTMLMediaElement.play()` and `success.m4a` requests, then the child visibly clears progress, enables reduced motion and mute before the second execution, which produces the same event sequence/transcript/final state with no new media play or request;
 - an intentional storage write failure that keeps the real edit visible and persists it through the visible retry control;
 - corrupt V3 Blockly recovery with a stable recovered block ID and a successful visible rerun in Chromium, Firefox, and WebKit;
 - byte-preserving corrupt-envelope download behind the parent PIN in desktop Chromium;
@@ -23,18 +23,19 @@ Additional matrix coverage includes:
 
 ## Real scenario matrix
 
-Every project runs the ten `@legacy` commercial-foundation tests plus its assigned Dragon Palace scenarios. Specialized tests have no project-name `return`, no `test.skip`, and no smoke branch hidden behind a stronger title.
+The five behavior projects run the ten `@legacy` commercial-foundation tests plus assigned Dragon Palace scenarios. A sixth 768px Chromium project runs only the three-state visual scenario so evidence capture does not depend on WebKit's unstable WebGL full-page compositor. Specialized tests have no project-name `return`, no `test.skip`, and no smoke branch hidden behind a stronger title.
 
 | Project | Assigned Dragon Palace tags | Legacy | Dragon Palace | Total |
 | --- | --- | ---: | ---: | ---: |
 | desktop-chromium-1440x1024 | `@full @storage @keyboard @corrupt-full @cold` | 10 | 5 | 15 |
 | tablet-webkit-768x1024 | `@full @parity @corrupt-smoke @cold` | 10 | 4 | 14 |
+| visual-chromium-768x1024 | `@visual` | 0 | 1 | 1 |
 | mobile-chromium-390x844 | `@full @parity @cold` | 10 | 3 | 13 |
 | desktop-firefox-1440x1024 | `@full @keyboard @corrupt-smoke @cold` | 10 | 4 | 14 |
 | narrow-chromium-320x844 | `@narrow @cold` | 10 | 2 | 12 |
-| **Total** |  | **50** | **18** | **68** |
+| **Total** |  | **50** | **19** | **69** |
 
-`@full` is the complete visible wrong-program, correction, success, refresh, unlock, PIN, export, and import path. `@narrow` is a real visible wrong-program-to-success path plus horizontal-overflow verification. `@keyboard`, `@parity`, `@storage`, `@corrupt-full`, and `@corrupt-smoke` each execute the behavior named in the tag.
+`@full` is the complete visible wrong-program, correction, success, refresh, unlock, PIN, export, and import path. `@narrow` is a real visible wrong-program-to-success path plus horizontal-overflow verification. `@visual` creates three real Blockly programs and captures the accepted-effect, blocked-effect, and full three-weapon Phaser states. The other tags execute the behavior named in each tag.
 
 ## Fixed budget evidence
 
@@ -44,15 +45,15 @@ The committed constants are:
 - Dragon Palace formal media total: `1.25 * 1024 * 1024` bytes;
 - a single raster: `512 * 1024` bytes.
 
-The cold-load scenario disables cache reuse, waits for the Dragon Palace canvas and Blockly host, and awaits every successful HTTP(S) response body regardless of origin. It includes HTML, CSS, JavaScript, Phaser, Blockly, the existing header avatar, all five Dragon Palace WebPs, and the 1,775-byte Blockly sprite response from `https://static.blockly.com`. It excludes non-network `blob:` decoding responses so WebKit does not count already downloaded images twice. Response-body failures are not caught or converted to zero; any unreadable successful HTTP(S) body fails the test.
+The cold-load scenario blocks service workers, sends `Cache-Control: no-store` plus `Pragma: no-cache`, waits for the Dragon Palace canvas and Blockly host, records every HTTP(S) response regardless of origin, and awaits every 2xx body. Any request failure, redirect, 304, 4xx/5xx response, or unreadable 2xx body fails the test. It includes HTML, CSS, JavaScript, Phaser, Blockly, the existing header avatar, all five Dragon Palace WebPs, and the 1,775-byte Blockly sprite response from `https://static.blockly.com`; only non-network `blob:` decoding is ignored.
 
 | Project | Measured bytes | Limit | Headroom |
 | --- | ---: | ---: | ---: |
-| desktop-chromium-1440x1024 | 2,581,347 | 2,621,440 | 40,093 |
-| desktop-firefox-1440x1024 | 2,581,347 | 2,621,440 | 40,093 |
-| tablet-webkit-768x1024 | 2,581,347 | 2,621,440 | 40,093 |
-| mobile-chromium-390x844 | 2,581,347 | 2,621,440 | 40,093 |
-| narrow-chromium-320x844 | 2,581,347 | 2,621,440 | 40,093 |
+| desktop-chromium-1440x1024 | 2,581,479 | 2,621,440 | 39,961 |
+| desktop-firefox-1440x1024 | 2,581,479 | 2,621,440 | 39,961 |
+| tablet-webkit-768x1024 | 2,581,479 | 2,621,440 | 39,961 |
+| mobile-chromium-390x844 | 2,581,479 | 2,621,440 | 39,961 |
+| narrow-chromium-320x844 | 2,581,479 | 2,621,440 | 39,961 |
 
 The five approved Dragon Palace rasters total **257,674 B / 1,310,720 B**. They retain their generated compositions and original dimensions. Sharp 0.35.3 performed only technical WebP re-encoding with `quality: 30`, `alphaQuality: 75`, `effort: 6`, and `smartSubsample: true`; the manifest records the resulting hashes.
 
@@ -62,12 +63,15 @@ The successful, persisted `weapon-tested` state was captured after the same visi
 
 | Evidence | Actual image size | Review |
 | --- | --- | --- |
-| `screenshots/dragon-palace-320.png` | 320×2270 | No horizontal overflow; scene, program list, Blockly workspace, feedback, and controls remain readable in the vertical layout. |
-| `screenshots/dragon-palace-390.png` | 390×2179 | Character and weapon silhouettes remain intact; touch controls and transcript are legible. |
-| `screenshots/dragon-palace-768.png` | 768×1503 | Scene-to-program hierarchy is clear, with no clipped formal asset or placeholder region. |
+| `screenshots/dragon-palace-320.png` | 320×2217 | Unobscured persisted completion after visibly returning to the map and reopening the mission; no horizontal overflow and scene → controls → program → feedback ordering remains readable. |
+| `screenshots/dragon-palace-390.png` | 390×2155 | Character and weapon silhouettes remain intact; touch controls and transcript are legible. |
+| `screenshots/dragon-palace-768.png` | 768×1844 | Scene-to-program hierarchy is clear, with no clipped formal asset or placeholder region. |
 | `screenshots/dragon-palace-1440.png` | 1440×1024 | Full scene, Wukong, Dragon King, weapon/effect art, real Blockly workspace, and completed transcript are visible together. |
+| `screenshots/dragon-palace-runtime-enter-accepted-768.png` | 768×1820 | Real one-block `进入龙宫` program; accepted effect cell is visible before the entered-palace transition. |
+| `screenshots/dragon-palace-runtime-request-blocked-768.png` | 768×1820 | Real request-first program; blocked effect, outside-palace transcript, Blockly block, and failure feedback are visible after playback settles. |
+| `screenshots/dragon-palace-runtime-weapons-all-768.png` | 768×1906 | Real `进入龙宫 → 请求兵器` program; the full three-weapon sheet and first two grid boundaries are visible before final testing. |
 
-All four screenshots were inspected at their original resolution before the five Dragon Palace manifest rows were promoted to `visual-qa-passed`. The gray Blockly trash can is a functional interface icon, not a decorative placeholder. No emoji, CSS/div art, hand-authored SVG, or placeholder box stands in for the Dragon Palace characters, scene, weapons, or effects.
+All seven screenshots were inspected at their original resolution. The gray Blockly trash can is a functional interface icon, not a decorative placeholder. No emoji, CSS/div art, hand-authored SVG, or placeholder box stands in for the Dragon Palace characters, scene, weapons, or effects.
 
 The restored `LegacyGameScene` is only the pre-existing w2–w6 compatibility path and is **not** part of Dragon Palace visual QA. It still uses `world-map.jpg` and `young-hero.jpg`; their original prompts and licenses remain missing, so they are not release-approved and continue to block a whole-site commercial claim.
 
@@ -83,6 +87,10 @@ The gate failed before it passed:
 6. Specification review then rejected the 80-test result because conditional project branches allowed weaker smoke actions to pass under storage, keyboard, parity, and corruption titles. A contract check against commit `d8f63fa` failed on the first forbidden project-return signature; the same check passed after project-level tag filtering removed all four conditional branches. The resulting honest matrix lists 68 tests rather than inflating the count.
 7. The same review found that cold-load collection filtered out non-local origins. After removing that bypass, the test captured Blockly's real external 1,775-byte sprite response and the measured total rose from 2,579,572 B to 2,581,347 B while staying within the unchanged limit.
 8. The `@full` PIN path now waits for the filled value and clicks the visible `进入周报` button. The independent `@legacy` keyboard PIN regression remains intact.
+9. Release-quality review then caught the Phaser canvas stretched from its intrinsic 19:8 ratio to 19:5. The new browser assertion failed with a 0.697 ratio error before CSS adopted 19:8, intrinsic-height scaling, and the ≤900px stacked layout; focused unit tests and the 320px browser path then passed.
+10. The cold gate previously duplicated its 2.5 MiB constant and could ignore non-2xx responses or request failures. Source-contract tests failed before `budget-limits.mjs`, service-worker blocking, no-store headers, and fail-closed response collection were added; the browser gate remains under the unchanged limit with only 39,961 B headroom.
+11. The former mute check muted only after success and replayed persisted events. It was replaced with two visible, fresh progress runs: observable play/request evidence exists only for the unmuted run, while the pre-execution muted run produces identical gameplay evidence and no new audio activity.
+12. Runtime screenshots initially exposed black WebGL compositor tiles when captured during the rejected-event transition. Waiting for the visible blocked state to settle and capturing in the dedicated Chromium 768px project produced a clean inspected frame; the defective image was not accepted as visual QA.
 
 ## Commands and results
 
@@ -107,11 +115,11 @@ git status --short --branch
 
 The fresh results were:
 
-- `npm test`: 24 Vitest files / 400 tests, 15 bundle-script tests, and 26 asset tests passed;
+- `npm test`: 24 Vitest files / 400 tests, 17 bundle-script tests, and 26 asset tests passed;
 - `npm run typecheck`: exit 0;
 - `npm run verify:assets`: 5 files, 257,674 B / 1,310,720 B, all `visual-qa-passed`;
-- `npm run verify:bundle`: entry static JS 107.4 KiB gzip, conservative homepage 415.9 KiB, Phaser 1,168.4 KiB raw, and GameScene closure 1,512.8 KiB raw, all inside their gates;
-- `npm run test:e2e`: 68/68 passed across the five configured projects with zero skips;
+- `npm run verify:bundle`: entry static JS 107.4 KiB gzip, conservative homepage 415.8 KiB, Phaser 1,168.4 KiB raw, and GameScene closure 1,513.0 KiB raw, all inside their gates;
+- `npm run test:e2e`: 69/69 passed across the six configured projects with zero skips;
 - `git diff --check`: no errors;
 - `git status --short --branch`: clean after commit.
 

@@ -113,8 +113,8 @@ h1, h2, .brand strong { font-family: 'Songti SC', 'STSong', serif; }
 .mission-objective > span { color: white; background: var(--cinnabar); border-radius: 8px; padding: 7px 10px; font-weight: 700; }
 .mission-objective h2 { font-size: 22px; margin: 0; }
 .mission-objective p { color: var(--jade-deep); margin: 0; }
-.game-scene { width: 100%; min-height: 180px; aspect-ratio: 19 / 5; overflow: hidden; background-image: url('/assets/world-map.jpg'); background-size: cover; background-position: center; border-bottom: 1px solid var(--line); }
-.game-scene canvas { display: block; width: 100% !important; height: 100% !important; }
+.game-scene { width: 100%; aspect-ratio: 19 / 8; overflow: hidden; background-image: url('/assets/world-map.jpg'); background-size: cover; background-position: center; }
+.game-scene canvas { display: block; width: 100% !important; height: auto !important; }
 
 .dragon-palace-experience { display: grid; grid-template-columns: minmax(280px, .8fr) minmax(360px, 1.2fr); align-items: start; }
 .dragon-palace-scene-region { grid-column: 1; border-right: 1px solid var(--line); }
@@ -245,6 +245,11 @@ progress { width: 100%; accent-color: var(--jade); }
   .mission-header { grid-template-columns: auto 1fr; gap: 12px; padding: 12px 20px; }
   .canon-badge { grid-column: 1 / -1; justify-self: stretch; max-width: none; }
   .mission-layout { width: min(100% - 28px, 780px); grid-template-columns: 1fr; }
+  .dragon-palace-experience { grid-template-columns: 1fr; }
+  .dragon-palace-scene-region, .dragon-palace-program-region, .dragon-palace-feedback-region { grid-column: 1; }
+  .dragon-palace-scene-region { grid-row: 1; border-right: 0; border-bottom: 1px solid var(--line); }
+  .dragon-palace-program-region { grid-row: 2; }
+  .dragon-palace-feedback-region { grid-row: 3; padding: 0 12px 14px; }
   .story-column { position: static; order: 2; }
   .play-column { order: 1; }
   .parent-page { padding: 28px 24px; }
@@ -271,12 +276,6 @@ progress { width: 100%; accent-color: var(--jade); }
   .story-column { padding: 18px; }
   .mission-objective { grid-template-columns: 1fr; gap: 8px; padding: 14px; }
   .mission-objective > span { justify-self: start; }
-  .dragon-palace-experience { grid-template-columns: 1fr; }
-  .dragon-palace-scene-region, .dragon-palace-program-region, .dragon-palace-feedback-region { grid-column: 1; }
-  .dragon-palace-scene-region { grid-row: 1; border-right: 0; border-bottom: 1px solid var(--line); }
-  .dragon-palace-scene-controls { grid-row: 2; }
-  .dragon-palace-program-region { grid-row: 3; }
-  .dragon-palace-feedback-region { grid-row: 4; padding: 0 12px 14px; }
   .block-program-list li { align-items: stretch; flex-direction: column; }
   .block-program-actions { justify-content: flex-start; }
   .code-workspace, .python-workspace, .ai-lab { padding: 12px; min-width: 0; overflow: hidden; }
