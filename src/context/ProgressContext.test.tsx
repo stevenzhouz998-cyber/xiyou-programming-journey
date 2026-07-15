@@ -200,6 +200,37 @@ describe('ProgressContext persistence status', () => {
     expect(latestContext!.progress.learnerName).toBe('B 已保存');
     expect(latestContext!.revision).toBe(2);
   });
+  it('atomically replaces load metadata when an explicit external reload recovers a corrupt current value', async () => {
+    installStorage({
+      [CURRENT_PROGRESS_KEY]: serializeProgress({ ...createInitialProgress(), learnerName: 'A 初始' }),
+      [REVISION_PROGRESS_KEY]: '1',
+    });
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      learnerName: 'A 初始', loadStatus: 'normal', corruptDownload: null, corruptError: null,
+    });
+
+    const recovered = { ...createInitialProgress(), learnerName: 'B 快照' };
+    const corrupt = '{broken external current';
+    localStorage.setItem(CURRENT_PROGRESS_KEY, corrupt);
+    localStorage.setItem(SNAPSHOT_PROGRESS_KEY, serializeProgress(recovered));
+    localStorage.setItem(REVISION_PROGRESS_KEY, '2');
+    window.dispatchEvent(new StorageEvent('storage', { key: REVISION_PROGRESS_KEY, newValue: '2' }));
+    await waitFor(() => expect(latestContext!.saveStatus).toBe('conflict'));
+
+    act(() => latestContext!.reloadExternalProgress());
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      learnerName: 'B 快照',
+      loadStatus: 'recovered-from-snapshot',
+      loadPersistence: 'unsaved',
+      loadError: null,
+      corruptError: null,
+    });
+    expect(JSON.parse(screen.getByTestId('state').textContent!).corruptDownload).toContain(corrupt);
+    await waitFor(() => expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      loadStatus: 'recovered-from-snapshot', loadPersistence: 'saved', saveStatus: 'saved', saveError: null,
+    }));
+  });
   it('starts idle before the first durable mutation and then becomes saved', async () => {
     installStorage({});
     render(<ProgressProvider><Probe /></ProgressProvider>);

@@ -15,6 +15,7 @@ import {
   parseStoredRevision,
   createProgressBackup,
   type LoadStatus,
+  type LoadResult,
   type ProgressBackup,
 } from '../progress/storage';
 import type { CoordinatedSaveResult } from '../progress/storageCoordinator';
@@ -57,6 +58,14 @@ const PROGRESS_CONFLICT_ERROR = '其他标签页已更新，已暂停保存';
 const loadDefaultSaveCoordinator = () => import('../progress/storageCoordinator');
 const loadDefaultStorageRepair = () => import('../progress/storageRepair');
 const loadDefaultParentCoordinator = () => import('../progress/storageCoordinatorParent');
+type LoadState = Pick<LoadResult, 'status' | 'persistence' | 'error' | 'corruptDownload' | 'corruptError'>;
+const loadStateFrom = (loaded: LoadResult): LoadState => ({
+  status: loaded.status,
+  persistence: loaded.persistence,
+  error: loaded.error,
+  corruptDownload: loaded.corruptDownload,
+  corruptError: loaded.corruptError,
+});
 
 interface ProgressProviderProps {
   children: ReactNode;
@@ -79,7 +88,10 @@ export function ProgressProvider({
   const conflictRef = useRef(false);
   const pendingRepairRef = useRef(initialLoad.repair);
   const queueRef = useRef<Promise<unknown>>(Promise.resolve());
-  const [loadPersistence, setLoadPersistence] = useState<'idle' | 'saved' | 'unsaved'>(initialLoad.persistence);
+  const [loadState, setLoadState] = useState<LoadState>(() => loadStateFrom(initialLoad));
+  const setLoadPersistence = (persistence: LoadState['persistence']) => {
+    setLoadState((current) => ({ ...current, persistence }));
+  };
   const [saveStatus, setSaveStatus] = useState<ProgressSaveStatus>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveRetryable, setSaveRetryable] = useState(true);
@@ -214,8 +226,10 @@ export function ProgressProvider({
   const reloadExternalProgress = () => {
     const loaded = loadProgressTransaction();
     if (loaded.status === 'storage-unavailable') {
+      setLoadState(loadStateFrom(loaded));
       setSaveStatus('unsaved');
       setSaveError(loaded.error);
+      setSaveRetryable(false);
       return;
     }
     progressRef.current = loaded.progress;
@@ -226,7 +240,7 @@ export function ProgressProvider({
     setSaveStatus('idle');
     setSaveError(null);
     setSaveRetryable(true);
-    setLoadPersistence(loaded.persistence);
+    setLoadState(loadStateFrom(loaded));
     pendingRepairRef.current = loaded.repair;
     if (loaded.repair) {
       setSaveStatus('pending');
@@ -266,11 +280,11 @@ export function ProgressProvider({
   const value = useMemo<ProgressContextValue>(() => ({
     progress,
     revision,
-    loadStatus: initialLoad.status,
-    loadPersistence,
-    loadError: initialLoad.error,
-    corruptDownload: initialLoad.corruptDownload,
-    corruptError: initialLoad.corruptError,
+    loadStatus: loadState.status,
+    loadPersistence: loadState.persistence,
+    loadError: loadState.error,
+    corruptDownload: loadState.corruptDownload,
+    corruptError: loadState.corruptError,
     saveStatus,
     saveError,
     saveRetryable,
@@ -363,9 +377,8 @@ export function ProgressProvider({
     createBackup: () => createProgressBackup(progressRef.current),
     reloadExternalProgress,
   }), [
-    initialLoad,
+    loadState,
     loadParentCoordinator,
-    loadPersistence,
     loadSaveCoordinator,
     loadStorageRepair,
     progress,
