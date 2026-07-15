@@ -1,5 +1,5 @@
 import * as Blockly from 'blockly'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { RuyiCompileResult } from '../blockly/ruyiStaffCompiler'
 import type { RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft'
@@ -104,5 +104,75 @@ describe('RuyiStaffBlocklyWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: '\u91cd\u8bd5\u4fdd\u5b58' }))
     await waitFor(() => expect(onDraftChange).toHaveBeenCalledTimes(2))
     expect(onDraftChange.mock.calls[1][0]).toEqual(failedDraft)
+  })
+
+  it('shows and focuses a real disconnected block diagnostic', () => {
+    const workspace = new Blockly.Workspace()
+    const onRun = vi.fn<(result: RuyiCompileResult) => void>()
+    const onFocusHandled = vi.fn()
+    const adapter = { create: () => workspace }
+    const view = render(
+      <RuyiStaffBlocklyWorkspaceAdapterProvider adapter={adapter}>
+        <RuyiStaffBlocklyWorkspace draft={EMPTY} onDraftChange={() => ({ status: 'saved' })} onRun={onRun} focusBlockId={null} onFocusHandled={onFocusHandled} />
+      </RuyiStaffBlocklyWorkspaceAdapterProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '加入：查看三件兵器重量' }))
+    const block = workspace.getTopBlocks(false)[0]
+    block.getPreviousBlock = () => block
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }))
+    expect(onRun).toHaveBeenLastCalledWith({ ok: false, trace: [], diagnostics: [
+      { code: 'invalid-connection', sourceBlockId: block.id, concept: 'program-structure' },
+    ] })
+    expect(screen.getByText(/有连接没有接好/)).toBeVisible()
+    view.rerender(
+      <RuyiStaffBlocklyWorkspaceAdapterProvider adapter={adapter}>
+        <RuyiStaffBlocklyWorkspace draft={EMPTY} onDraftChange={() => ({ status: 'saved' })} onRun={onRun} focusBlockId={block.id} onFocusHandled={onFocusHandled} />
+      </RuyiStaffBlocklyWorkspaceAdapterProvider>,
+    )
+    expect(document.activeElement).toHaveTextContent('查看三件兵器重量')
+    expect(onFocusHandled).toHaveBeenCalledOnce()
+  })
+
+  it('shows and focuses a real unknown Blockly block diagnostic', async () => {
+    if (!Blockly.Blocks.xiyou_unknown_ruyi_test) {
+      Blockly.defineBlocksWithJsonArray([{ type: 'xiyou_unknown_ruyi_test', message0: '未知指令', previousStatement: null, nextStatement: null }])
+    }
+    const workspace = new Blockly.Workspace()
+    const onRun = vi.fn<(result: RuyiCompileResult) => void>()
+    const onFocusHandled = vi.fn()
+    const adapter = { create: () => workspace }
+    const view = render(
+      <RuyiStaffBlocklyWorkspaceAdapterProvider adapter={adapter}>
+        <RuyiStaffBlocklyWorkspace draft={EMPTY} onDraftChange={() => ({ status: 'saved' })} onRun={onRun} focusBlockId={null} onFocusHandled={onFocusHandled} />
+      </RuyiStaffBlocklyWorkspaceAdapterProvider>,
+    )
+    act(() => { workspace.newBlock('xiyou_unknown_ruyi_test', 'unknown-source') })
+    await waitFor(() => expect(screen.getByText(/发现无法识别的积木/)).toBeVisible())
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }))
+    expect(onRun).toHaveBeenLastCalledWith({ ok: false, trace: [], diagnostics: [
+      { code: 'unknown-block', sourceBlockId: 'unknown-source', concept: 'program-structure' },
+    ] })
+    view.rerender(
+      <RuyiStaffBlocklyWorkspaceAdapterProvider adapter={adapter}>
+        <RuyiStaffBlocklyWorkspace draft={EMPTY} onDraftChange={() => ({ status: 'saved' })} onRun={onRun} focusBlockId="unknown-source" onFocusHandled={onFocusHandled} />
+      </RuyiStaffBlocklyWorkspaceAdapterProvider>,
+    )
+    expect(document.activeElement).toHaveTextContent('无法识别的积木')
+    expect(onFocusHandled).toHaveBeenCalledOnce()
+  })
+
+  it('uses Enter to add, move, delete and run the same real workspace', () => {
+    const { workspace, onRun } = setup()
+    fireEvent.keyDown(screen.getByRole('button', { name: '加入：查看三件兵器重量' }), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByRole('button', { name: '加入：选择大捍刀（3600斤）' }), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByRole('button', { name: '加入：缩小定海神针' }), { key: 'Enter' })
+    expect(workspace.getAllBlocks(false)).toHaveLength(3)
+    fireEvent.keyDown(screen.getByRole('button', { name: '上移：缩小定海神针' }), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByRole('button', { name: '删除：选择大捍刀（3600斤）' }), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByLabelText('Blockly 积木编辑区'), { key: 'Enter' })
+    expect(onRun).toHaveBeenLastCalledWith({ ok: true, trace: [
+      expect.objectContaining({ opcode: 'inspect_weights' }),
+      expect.objectContaining({ opcode: 'shrink_ruyi_staff' }),
+    ] })
   })
 })

@@ -2,6 +2,22 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { MissionTools, type MissionToolLoaders } from './components/MissionTools';
+import { RuyiStaffExperience } from './components/RuyiStaffExperience';
+import { ProgressProvider } from './context/ProgressContext';
+import './styles.css';
+
+function coarsePointerRules(css: string): CSSStyleRule[] {
+  const style = document.createElement('style');
+  style.textContent = css;
+  document.head.append(style);
+  const sheet = style.sheet as CSSStyleSheet;
+  const media = [...sheet.cssRules].find((rule): rule is CSSMediaRule => (
+    'media' in rule && (rule as CSSMediaRule).media.mediaText.includes('pointer: coarse')
+  ));
+  const rules = media ? [...media.cssRules].filter((rule): rule is CSSStyleRule => 'selectorText' in rule) : [];
+  style.remove();
+  return rules;
+}
 
 describe('commercial responsive shell', () => {
   it('keeps heavy mission tools out of the app entry and declares responsive foundations', () => {
@@ -29,6 +45,42 @@ describe('commercial responsive shell', () => {
     expect(css).toMatch(/@media\s*\([^)]*max-width:\s*900px[\s\S]*\.ruyi-staff-feedback-region[^}]*grid-row:\s*3/s);
     expect(css).toMatch(/\.ruyi-staff-experience\s*\{[^}]*min-width:\s*0/s);
     expect(css).toMatch(/\.ruyi-staff-program-region\s*\{[^}]*min-width:\s*0/s);
+  });
+
+  it('renders the executable w1-m2 mobile structure in scene-controls-program-feedback order with controlled overflow', async () => {
+    localStorage.clear();
+    const view = render(<div style={{ width: '320px' }}><ProgressProvider><RuyiStaffExperience reducedMotion muted onComplete={() => undefined} /></ProgressProvider></div>);
+    await screen.findByRole('button', { name: '执行战斗指令' }, { timeout: 5000 });
+    const experience = view.container.querySelector<HTMLElement>('.ruyi-staff-experience')!;
+    const scene = experience.querySelector<HTMLElement>('.ruyi-staff-scene-frame')!;
+    const controls = experience.querySelector<HTMLElement>('.dragon-palace-scene-controls')!;
+    const program = experience.querySelector<HTMLElement>('.ruyi-staff-program-region')!;
+    const workspace = experience.querySelector<HTMLElement>('.ruyi-staff-workspace')!;
+    const feedback = experience.querySelector<HTMLElement>('.ruyi-staff-feedback-region')!;
+    const comesBefore = (first: Node, second: Node) => Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(comesBefore(scene, controls)).toBe(true);
+    expect(comesBefore(controls, program)).toBe(true);
+    expect(comesBefore(program, feedback)).toBe(true);
+    expect(['0', '0px']).toContain(getComputedStyle(experience).minWidth);
+    expect(['0', '0px']).toContain(getComputedStyle(program).minWidth);
+    expect(['0', '0px']).toContain(getComputedStyle(workspace).minWidth);
+    expect(getComputedStyle(workspace).overflowX).toBe('hidden');
+    expect(getComputedStyle(screen.getByLabelText('Blockly 积木编辑区')).overflowX).toBe('hidden');
+  });
+
+  it('gives Blockly actions, feedback and unsaved recovery exact 44px coarse-pointer targets', () => {
+    const rules = coarsePointerRules(readFileSync('src/styles.css', 'utf8'));
+    const targetSelectors = [
+      '.block-program-actions button',
+      '.battle-feedback button',
+      '.unsaved-session button',
+    ];
+    for (const selector of targetSelectors) {
+      const rule = rules.find((candidate) => candidate.selectorText.split(',').map((item) => item.trim()).includes(selector));
+      expect(rule, `${selector} must be present in the coarse-pointer contract`).toBeDefined();
+      expect(rule?.style.minWidth).toBe('44px');
+      expect(rule?.style.minHeight).toBe('44px');
+    }
   });
 
   it('shows a status while loading and renders the real selected tool', async () => {

@@ -182,6 +182,24 @@ describe('西游编程记', () => {
     expect(audio).toHaveBeenCalledWith('/assets/audio/success.m4a');
   });
 
+  it('completes w1-m2 while muted without constructing or playing success audio', async () => {
+    const progress = completeMission(withParentAccess(createInitialProgress()), 'w1-m1', { stars: 3, hintsUsed: 0 });
+    progress.privacy.localDataNoticeSeen = true;
+    progress.settings.muted = true;
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    window.location.hash = '#/mission/w1-m2';
+    const audio = vi.fn(function MockAudio() { return { play: vi.fn() }; });
+    vi.stubGlobal('Audio', audio);
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: '加入：查看三件兵器重量' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：选择定海神针（13500斤）' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：缩小定海神针' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+    fireEvent.click(screen.getByRole('button', { name: '完成定海神针场景播放' }));
+    expect(screen.getByRole('heading', { name: '闯关成功' })).toBeVisible();
+    expect(audio).not.toHaveBeenCalled();
+  });
+
   it('keeps repeated Dragon Palace success idempotent while still counting the engine run', async () => {
     render(<App />);
     await acknowledgePrivacySuccessfully();

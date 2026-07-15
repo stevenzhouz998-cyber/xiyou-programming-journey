@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ComponentType } from 'react'
 import type { RuyiStaffBattleEvent } from '../battle/types'
 import { ProgressProvider, useProgress } from '../context/ProgressContext'
 import { createInitialProgress, serializeProgress } from '../progress/progress'
@@ -25,12 +26,26 @@ function renderExperience(onComplete = vi.fn()) {
 function stored() { return JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY) ?? '{}') }
 function token() { return Number(screen.getByLabelText('\u6d4b\u8bd5\u5b9a\u6d77\u795e\u9488\u573a\u666f').getAttribute('data-replay-token')) }
 
+type TestLoaders = {
+  scene: () => Promise<{ default: ComponentType<any> }>
+  workspace: () => Promise<{ default: ComponentType<any> }>
+}
+const LoadableExperience = RuyiStaffExperience as ComponentType<{
+  reducedMotion: boolean
+  muted: boolean
+  onComplete: () => void
+  loaders: TestLoaders
+  reloadPage: () => void
+}>
+
 describe('RuyiStaffExperience', () => {
   beforeEach(() => {
     localStorage.clear(); callbacks.clear()
     const progress = createInitialProgress(); progress.privacy.localDataNoticeSeen = true
     localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress))
   })
+
+  afterEach(() => { vi.restoreAllMocks() })
 
   it('records compile failure without recording a battle run and focuses the workspace', async () => {
     renderExperience()
@@ -41,17 +56,32 @@ describe('RuyiStaffExperience', () => {
     expect(screen.getByLabelText('Blockly \u79ef\u6728\u7f16\u8f91\u533a')).toHaveFocus()
   })
 
-  it('runs the visible wrong trace, records its source block and never completes it', async () => {
+  it('corrects one wrong trace in the same real workspace and completes only after playback', async () => {
     const onComplete = renderExperience()
     fireEvent.click(await screen.findByRole('button', { name: '\u52a0\u5165\uff1a\u67e5\u770b\u4e09\u4ef6\u5175\u5668\u91cd\u91cf' }))
     fireEvent.click(screen.getByRole('button', { name: '\u52a0\u5165\uff1a\u9009\u62e9\u5927\u634d\u5200\uff083600\u65a4\uff09' }))
+    fireEvent.click(screen.getByRole('button', { name: '\u52a0\u5165\uff1a\u7f29\u5c0f\u5b9a\u6d77\u795e\u9488' }))
     fireEvent.click(screen.getByRole('button', { name: '\u6267\u884c\u6218\u6597\u6307\u4ee4' }))
     expect(await screen.findByText('3600\u65a4\u6bd413500\u65a4\u8f7b\uff0c\u5927\u634d\u5200\u4e0d\u662f\u6700\u91cd\u7684\u5175\u5668\u3002')).toBeVisible()
     await waitFor(() => expect(stored().sessions['w1-m2']).toMatchObject({ totalRuns: 1, runtimeFailures: 1, lastRun: { finalState: 'wrong-weapon-selected' } }))
     const session = stored().sessions['w1-m2']
     expect(session.lastRun.diagnostic.sourceBlockId).toBe(session.lastTrace[1].sourceBlockId)
-    act(() => callbacks.get(token())?.())
+    const wrongRequest = token()
+    act(() => callbacks.get(wrongRequest)?.())
     expect(onComplete).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(screen.getByRole('button', { name: '\u56de\u5230\u95ee\u9898\u79ef\u6728' }), { key: 'Enter' })
+    expect(document.activeElement).toHaveTextContent('\u9009\u62e9\u5927\u634d\u5200\uff083600\u65a4\uff09')
+    fireEvent.keyDown(screen.getByRole('button', { name: '\u5220\u9664\uff1a\u9009\u62e9\u5927\u634d\u5200\uff083600\u65a4\uff09' }), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByRole('button', { name: '\u52a0\u5165\uff1a\u9009\u62e9\u5b9a\u6d77\u795e\u9488\uff0813500\u65a4\uff09' }), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByRole('button', { name: '\u4e0a\u79fb\uff1a\u9009\u62e9\u5b9a\u6d77\u795e\u9488\uff0813500\u65a4\uff09' }), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByLabelText('Blockly \u79ef\u6728\u7f16\u8f91\u533a'), { key: 'Enter' })
+    const successRequest = token()
+    expect(successRequest).toBeGreaterThan(wrongRequest)
+    expect(onComplete).not.toHaveBeenCalled()
+    act(() => callbacks.get(successRequest)?.())
+    expect(onComplete).toHaveBeenCalledOnce()
+    await waitFor(() => expect(stored().sessions['w1-m2']).toMatchObject({ totalRuns: 2, runtimeFailures: 1, lastRun: { completed: true } }))
   })
 
   it('completes once only after the successful current run playback and snapshots hint tiers', async () => {
@@ -89,10 +119,39 @@ describe('RuyiStaffExperience', () => {
     progress.sessions['w1-m2'].lastRun = runRuyiStaffBattle(progress.sessions['w1-m2'].lastTrace)
     localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress))
     const onComplete = renderExperience()
+    await screen.findByLabelText('\u6d4b\u8bd5\u5b9a\u6d77\u795e\u9488\u573a\u666f')
     act(() => callbacks.get(token())?.())
     fireEvent.click(screen.getByRole('button', { name: '\u91cd\u64ad\u6700\u8fd1\u4e00\u6b21' }))
     act(() => callbacks.get(token())?.())
     expect(onComplete).not.toHaveBeenCalled()
     expect(stored().sessions['w1-m2'].totalRuns).toBe(1)
+  })
+
+  it('isolates a rejected scene lazy chunk, keeps story and workspace visible, and reloads explicitly', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const reloadPage = vi.fn()
+    render(<ProgressProvider><h2>原著故事仍可阅读</h2><LoadableExperience reducedMotion muted onComplete={() => undefined} reloadPage={reloadPage} loaders={{
+      scene: () => Promise.reject(new Error('scene chunk failed')),
+      workspace: () => Promise.resolve({ default: () => <div>编程工作台仍可使用</div> }),
+    }} /></ProgressProvider>)
+    expect(await screen.findByText('定海神针场景加载失败')).toBeVisible()
+    expect(screen.getByRole('heading', { name: '原著故事仍可阅读' })).toBeVisible()
+    expect(screen.getByText('编程工作台仍可使用')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '重新加载页面' }))
+    expect(reloadPage).toHaveBeenCalledOnce()
+  })
+
+  it('isolates a rejected workspace lazy chunk, keeps story and scene visible, and reloads explicitly', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const reloadPage = vi.fn()
+    render(<ProgressProvider><h2>原著故事仍可阅读</h2><LoadableExperience reducedMotion muted onComplete={() => undefined} reloadPage={reloadPage} loaders={{
+      scene: () => Promise.resolve({ default: () => <div>定海神针场景仍可观看</div> }),
+      workspace: () => Promise.reject(new Error('workspace chunk failed')),
+    }} /></ProgressProvider>)
+    expect(await screen.findByText('定海神针编程工作台加载失败')).toBeVisible()
+    expect(screen.getByRole('heading', { name: '原著故事仍可阅读' })).toBeVisible()
+    expect(screen.getByText('定海神针场景仍可观看')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '重新加载页面' }))
+    expect(reloadPage).toHaveBeenCalledOnce()
   })
 })

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useState } from 'react'
+import { lazy, Suspense, useMemo, useRef, useState, type ComponentType, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { runRuyiStaffBattle } from '../battle/ruyiStaff'
 import type { RuyiStaffBattleDiagnostic, RuyiStaffBattleEvent, RuyiStaffBattleRunResult } from '../battle/types'
 import type { RuyiCompileResult } from '../blockly/ruyiStaffCompiler'
@@ -8,13 +8,25 @@ import { createMissionSession, recordCompileFailure, recordRun, updateWorkspaceD
 import { ToolErrorBoundary } from './MissionTools'
 import { RuyiStaffFeedback } from './RuyiStaffFeedback'
 
-const RuyiStaffScene = lazy(() => import('./RuyiStaffScene').then((module) => ({ default: module.RuyiStaffScene })))
-const RuyiStaffBlocklyWorkspace = lazy(() => import('./RuyiStaffBlocklyWorkspace').then((module) => ({ default: module.RuyiStaffBlocklyWorkspace })))
+export interface RuyiStaffExperienceLoaders {
+  scene: () => Promise<{ default: ComponentType<any> }>
+  workspace: () => Promise<{ default: ComponentType<any> }>
+}
+const defaultLoaders: RuyiStaffExperienceLoaders = {
+  scene: () => import('./RuyiStaffScene').then((module) => ({ default: module.RuyiStaffScene })),
+  workspace: () => import('./RuyiStaffBlocklyWorkspace').then((module) => ({ default: module.RuyiStaffBlocklyWorkspace })),
+}
 const MISSION_ID = 'w1-m2' as const
 type CompileDiagnostic = Extract<RuyiCompileResult, { ok: false }>['diagnostics'][number]
 type Diagnostic = CompileDiagnostic | RuyiStaffBattleDiagnostic
 interface Evidence { stars: 1 | 2 | 3; hintsUsed: number }
-interface Props { reducedMotion: boolean; muted: boolean; onComplete: (evidence: Evidence) => void }
+interface Props {
+  reducedMotion: boolean
+  muted: boolean
+  onComplete: (evidence: Evidence) => void
+  loaders?: RuyiStaffExperienceLoaders
+  reloadPage?: () => void
+}
 interface Playback {
   requestId: number; origin: 'empty' | 'restored' | 'run' | 'replay'; events: RuyiStaffBattleEvent[]; result: RuyiStaffBattleRunResult | null;
   eligible: boolean; evidence: Evidence | null
@@ -24,8 +36,16 @@ function restored(result: RuyiStaffBattleRunResult | null): Playback {
   const snapshot = result ? structuredClone(result) : null
   return { requestId: 0, origin: snapshot ? 'restored' : 'empty', events: snapshot?.events ?? [], result: snapshot, eligible: false, evidence: null }
 }
+function reloadExperiencePage() { const url = new URL(window.location.href); url.searchParams.set('tool-retry', String(Date.now())); window.location.replace(url.toString()) }
+function activateButtonOnEnter(event: ReactKeyboardEvent<HTMLElement>) {
+  if (event.key !== 'Enter' || !(event.target instanceof HTMLButtonElement) || event.target.disabled) return
+  event.preventDefault()
+  event.target.click()
+}
 
-export function RuyiStaffExperience({ reducedMotion, muted, onComplete }: Props) {
+export function RuyiStaffExperience({ reducedMotion, muted, onComplete, loaders = defaultLoaders, reloadPage = reloadExperiencePage }: Props) {
+  const RuyiStaffScene = useMemo(() => lazy(loaders.scene), [loaders.scene])
+  const RuyiStaffBlocklyWorkspace = useMemo(() => lazy(loaders.workspace), [loaders.workspace])
   const { progress, saveStatus, retrySave, updateMissionSession } = useProgress()
   const emptyRef = useRef(createMissionSession(MISSION_ID, '1970-01-01T00:00:00.000Z'))
   const session = progress.sessions[MISSION_ID] ?? emptyRef.current
@@ -58,9 +78,7 @@ export function RuyiStaffExperience({ reducedMotion, muted, onComplete }: Props)
     replace({ requestId: ++sequenceRef.current, origin: 'replay', events: snapshot.events, result: snapshot, eligible: false, evidence: null })
   }
   const focusWorkspace = () => regionRef.current?.querySelector<HTMLElement>('[aria-label="Blockly 积木编辑区"]')?.focus()
-  const reloadPage = () => { const url = new URL(window.location.href); url.searchParams.set('tool-retry', String(Date.now())); window.location.replace(url.toString()) }
-
-  return <div className="ruyi-staff-experience">
+  return <div className="ruyi-staff-experience" onKeyDown={activateButtonOnEnter}>
     <div className="ruyi-staff-scene-region"><ToolErrorBoundary label="定海神针场景" reloadPage={reloadPage}><Suspense fallback={<p role="status">龙宫场景加载中，请稍候……</p>}><RuyiStaffScene events={playback.events} replayToken={playback.requestId} reducedMotion={reducedMotion} muted={muted} onPlaybackComplete={() => playbackComplete(playback.requestId)} /></Suspense></ToolErrorBoundary><div className="dragon-palace-scene-controls"><button type="button" className="button button-ghost" disabled={!session.lastRun && !playback.result} onClick={replay}>重播最近一次</button></div></div>
     <div className="ruyi-staff-program-region" ref={regionRef}><ToolErrorBoundary label="定海神针编程工作台" reloadPage={reloadPage}><Suspense fallback={<p role="status">编程工作台加载中，请稍候……</p>}><RuyiStaffBlocklyWorkspace draft={session.workspace} onDraftChange={saveDraft} onRun={run} focusBlockId={focusBlockId} onFocusHandled={() => setFocusBlockId(null)} /></Suspense></ToolErrorBoundary></div>
     <div className="ruyi-staff-feedback-region"><RuyiStaffFeedback diagnostic={diagnostic} occurrenceId={occurrenceId} onFocusBlock={setFocusBlockId} onFocusWorkspace={focusWorkspace} />

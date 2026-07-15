@@ -1,7 +1,7 @@
 import * as Blockly from 'blockly/core'
 import * as zhHans from 'blockly/msg/zh-hans'
 import { ArrowsCounterClockwise, Play } from '@phosphor-icons/react'
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { initializeWorkspaceBlock, renderWorkspaceTopBlocks, RUYI_BLOCK_OPCODE, registerRuyiStaffBlocks, type RuyiBlockType } from '../blockly/ruyiStaffBlocks'
 import { compileRuyiStaffWorkspace, type RuyiCompileResult } from '../blockly/ruyiStaffCompiler'
 import { loadRuyiWorkspaceDraft, saveRuyiWorkspaceDraft, type RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft'
@@ -53,6 +53,13 @@ type Selectable = Blockly.Block & { select(): void }
 type Centerable = Blockly.Workspace & { centerOnBlock(id: string): void }
 function canSelect(block: Blockly.Block): block is Selectable { return typeof (block as unknown as Partial<Selectable>).select === 'function' }
 function canCenter(workspace: Blockly.Workspace): workspace is Centerable { return typeof (workspace as Partial<Centerable>).centerOnBlock === 'function' }
+
+function activateButtonOnEnter(event: ReactKeyboardEvent<HTMLElement>) {
+  if (event.key !== 'Enter' || !(event.target instanceof HTMLButtonElement) || event.target.disabled) return
+  event.preventDefault()
+  event.stopPropagation()
+  event.target.click()
+}
 
 function issue(result: RuyiCompileResult): string | null {
   if (result.ok) return null
@@ -145,7 +152,7 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
   }
   const run = () => { const workspace = workspaceRef.current; if (!workspace) return; const compiled = compileRuyiStaffWorkspace(workspace); setResult(compiled); onRun(compiled) }
 
-  return <section className="code-workspace ruyi-staff-workspace" aria-label="定海神针图形化编程工作台">
+  return <section className="code-workspace ruyi-staff-workspace" aria-label="定海神针图形化编程工作台" onKeyDown={activateButtonOnEnter}>
     <div className="command-palette"><p className="eyebrow">指令匣 · 点击加入卷轴</p><div className="command-buttons">{ACTIONS.map(({ type, label }) => <button type="button" className="command-button" key={type} onClick={() => mutate((workspace) => {
       if (workspace.getTopBlocks(false).length > 1) throw new Error('multiple chains')
       const chain = orderedBlocks(workspace); const block = workspace.newBlock(type); initializeWorkspaceBlock(block)

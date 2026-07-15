@@ -52,6 +52,10 @@ beforeEach(() => {
   vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('test-browser')
 })
 
+async function flushAllTweens() {
+  while (queue.length > 0) await act(async () => queue.shift()?.onComplete?.())
+}
+
 it('loads exactly the five approved Dragon Palace rasters and exposes exact weights', () => {
   render(<RuyiStaffScene events={correct} replayToken={1} reducedMotion muted />)
   expect(loadImage.mock.calls).toEqual([
@@ -83,6 +87,29 @@ it('shrinks the selected staff and reaches success in reduced motion', () => {
   expect(scene).toHaveAttribute('data-motion-mode', 'reduced')
   expect(sound.mute).toBe(false)
   expect(onComplete).toHaveBeenCalledOnce()
+})
+
+it('reaches identical state, weapon, effect and transcript in standard and reduced motion', async () => {
+  const standard = render(<RuyiStaffScene events={correct} replayToken={1} reducedMotion={false} muted />)
+  await flushAllTweens()
+  const standardScene = standard.getByRole('img')
+  const expected = {
+    state: standardScene.getAttribute('data-scene-state'),
+    weapon: standardScene.getAttribute('data-selected-weapon'),
+    effect: standardScene.getAttribute('data-effect-cell'),
+    transcript: standard.getByRole('status').textContent,
+  }
+  expect(tweens.add).toHaveBeenCalled()
+  standard.unmount()
+  const tweenCount = tweens.add.mock.calls.length
+
+  const reduced = render(<RuyiStaffScene events={correct} replayToken={1} reducedMotion muted />)
+  const reducedScene = reduced.getByRole('img')
+  expect(tweens.add).toHaveBeenCalledTimes(tweenCount)
+  expect(reducedScene).toHaveAttribute('data-scene-state', expected.state)
+  expect(reducedScene).toHaveAttribute('data-selected-weapon', expected.weapon)
+  expect(reducedScene).toHaveAttribute('data-effect-cell', expected.effect)
+  expect(reduced.getByRole('status')).toHaveTextContent(expected.transcript ?? '')
 })
 
 it('ignores stale tween callbacks when a newer replay owns playback', async () => {
