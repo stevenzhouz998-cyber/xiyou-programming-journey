@@ -1,5 +1,25 @@
 export type BattleOpcode = 'enter_palace' | 'request_weapon' | 'test_weapon'
 
+export type RuyiStaffOpcode =
+  | 'inspect_weights'
+  | 'choose_sabre'
+  | 'choose_halberd'
+  | 'choose_ruyi_staff'
+  | 'shrink_ruyi_staff'
+
+export type RuyiStaffState =
+  | 'awaiting-inspection'
+  | 'weights-inspected'
+  | 'wrong-weapon-selected'
+  | 'ruyi-staff-selected'
+  | 'ruyi-staff-shrunk'
+
+export interface RuyiStaffInstruction {
+  instructionId: string
+  sourceBlockId: string
+  opcode: RuyiStaffOpcode
+}
+
 export type DragonPalaceState =
   | 'outside-palace'
   | 'entered-palace'
@@ -82,5 +102,71 @@ export type BattleRunResult = BattleRunResultBase &
         completed: false
         finalState: DragonPalaceState
         diagnostic: BattleDiagnostic
+      }
+  )
+
+interface RuyiStaffEventBase {
+  state: RuyiStaffState
+  messageCode: string
+}
+
+type RuyiStaffLifecycleEvent<T extends 'run-started' | 'run-finished'> =
+  RuyiStaffEventBase & {
+    type: T
+    instructionId: null
+    sourceBlockId: null
+    opcode: null
+  }
+
+type RuyiStaffInstructionEvent<
+  T extends 'instruction-accepted' | 'instruction-rejected' | 'state-changed',
+> = RuyiStaffEventBase & {
+  type: T
+  instructionId: string
+  sourceBlockId: string
+  opcode: RuyiStaffOpcode
+}
+
+export type RuyiStaffBattleEvent =
+  | RuyiStaffLifecycleEvent<'run-started'>
+  | RuyiStaffLifecycleEvent<'run-finished'>
+  | RuyiStaffInstructionEvent<'instruction-accepted'>
+  | RuyiStaffInstructionEvent<'instruction-rejected'>
+  | RuyiStaffInstructionEvent<'state-changed'>
+
+export type RuyiStaffBattleDiagnostic =
+  | {
+      type: 'instruction-rejected'
+      concept: 'sequence-precondition' | 'wrong-weapon-selection'
+      state: RuyiStaffState
+      instructionId: string
+      sourceBlockId: string
+      opcode: RuyiStaffOpcode
+      messageCode: string
+    }
+  | {
+      type: 'program-ended-incomplete'
+      concept: 'completeness'
+      state: RuyiStaffState
+      instructionId: null
+      sourceBlockId: string | null
+      opcode: null
+      messageCode: string
+    }
+
+export type RuyiStaffBattleRunResult = {
+  events: RuyiStaffBattleEvent[]
+  penalty: BattlePenalty
+} &
+  (
+    | {
+        completed: true
+        finalState: 'ruyi-staff-shrunk'
+        diagnostic: null
+      }
+    | {
+        completed: false
+        finalState: RuyiStaffState
+        diagnostic: RuyiStaffBattleDiagnostic
       }
   )
