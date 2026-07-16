@@ -66,7 +66,7 @@ Static bundle gates also passed:
 | Phaser | 1,168.4 KiB raw / 1,600 KiB |
 | Blockly workspace closure | 997.7 KiB raw / 287.5 KiB gzip |
 | Ruyi Staff Blockly closure | 994.1 KiB raw / 287.1 KiB gzip |
-| Dragon Palace scene closure | 1,477.3 KiB raw / 423.2 KiB gzip |
+| Dragon Palace scene closure | 1,477.6 KiB raw / 423.3 KiB gzip |
 | Ruyi Staff scene closure | 1,478.6 KiB raw / 423.5 KiB gzip |
 
 ## Asset and screenshot QA
