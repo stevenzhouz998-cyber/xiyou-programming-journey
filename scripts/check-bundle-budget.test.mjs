@@ -34,7 +34,18 @@ test('attaches unified browser-health capture to every independently created Ruy
   const staffE2eSource = readFileSync(new URL('../e2e/ruyi-staff-code-battle.spec.ts', import.meta.url), 'utf8');
   assert.match(staffE2eSource, /attachStaffHealth\(page\)/);
   assert.match(staffE2eSource, /attachStaffHealth\(mapPage\)/);
+  assert.match(staffE2eSource, /attachStaffHealth\(externalPage\)/);
   assert.match(staffE2eSource, /attachStaffHealth\(mutedPage\)/);
+});
+
+test('forbids evaluate-injected completion in the external Ruyi browser scenario', () => {
+  const staffE2eSource = readFileSync(new URL('../e2e/ruyi-staff-code-battle.spec.ts', import.meta.url), 'utf8');
+  const externalScenario = staffE2eSource.match(/test\('@staff-storage external one-star[\s\S]*?\n\}\)\n\ntest\('@staff-parity/)?.[0];
+  assert.ok(externalScenario, 'external one-star scenario must remain present');
+  assert.doesNotMatch(externalScenario, /progress\.missions\[['"]w1-m2['"]\]\s*=/);
+  assert.doesNotMatch(externalScenario, /\.evaluate\([\s\S]*?localStorage\.setItem\(/);
+  assert.match(externalScenario, /page\.context\(\)\.newPage\(\)/);
+  assert.match(externalScenario, /completeCorrectProgram\(externalPage\)/);
 });
 
 test('keeps Dragon Palace budgets in one shared module', () => {

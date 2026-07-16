@@ -368,31 +368,60 @@ test('@staff-storage final completion stays unpublished until its exact CURRENT 
 
 test('@staff-storage external one-star completion is loaded read-only and drives the success display', async ({ page }) => {
   test.setTimeout(90_000)
+  await page.addInitScript((key) => {
+    const native = Storage.prototype.setItem
+    ;(window as Window & { __failStaffCompletionWrite?: boolean }).__failStaffCompletionWrite = false
+    Storage.prototype.setItem = function (storageKey, value) {
+      if (storageKey === key && (window as Window & { __failStaffCompletionWrite?: boolean }).__failStaffCompletionWrite) {
+        const progress = JSON.parse(value)
+        if (progress.missions?.['w1-m2']) throw new Error('intentional external-version race fixture')
+      }
+      native.call(this, storageKey, value)
+    }
+  }, CURRENT_KEY)
   const media = await installMediaObserver(page)
   await openMission(page)
   await add(page, '查看三件兵器重量')
   await add(page, '选择定海神针（13500斤）')
   await add(page, '缩小定海神针')
+  await page.evaluate(() => { (window as Window & { __failStaffCompletionWrite?: boolean }).__failStaffCompletionWrite = true })
   await activate(page, '执行战斗指令')
+  await expect(page.getByText('通关待保存：进度尚未安全写入这台电脑。')).toBeVisible({ timeout: 15_000 })
   await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).sessions['w1-m2']?.lastRun?.completed ?? false, CURRENT_KEY)).toBe(true)
-  const externalRaw = await page.evaluate(({ key, now }) => {
-    const progress = JSON.parse(localStorage.getItem(key)!)
-    progress.missions['w1-m2'] = { status: 'completed', stars: 1, attempts: 1, hintsUsed: 2, completedAt: now }
-    progress.savedAt = now
-    const raw = JSON.stringify(progress)
-    localStorage.setItem(key, raw)
-    localStorage.setItem('xiyou-programming-progress-revision-v3', String(Number(localStorage.getItem('xiyou-programming-progress-revision-v3') ?? '0') + 1))
-    return raw
-  }, { key: CURRENT_KEY, now: NOW })
+  expect((await readEvidence(page)).mission).toBeNull()
 
-  await expect(page.getByRole('button', { name: '载入其他标签页版本' })).toBeVisible({ timeout: 15_000 })
-  await activate(page, '载入其他标签页版本')
+  const externalPage = await page.context().newPage()
+  attachStaffHealth(externalPage)
+  try {
+    await openMission(externalPage)
+    await expect(externalPage.locator('.block-program-list li')).toHaveCount(3)
+    await activate(externalPage, '删除：缩小定海神针')
+    await activate(externalPage, '删除：选择定海神针（13500斤）')
+    await activate(externalPage, '删除：查看三件兵器重量')
+    await expect(externalPage.locator('.block-program-list li')).toHaveCount(0)
+    await activate(externalPage, '观察提示')
+    await activate(externalPage, '思路提示')
+    await completeCorrectProgram(externalPage)
+    await expect(externalPage.getByLabel('1颗星')).toBeVisible()
+    const externalEvidence = await readEvidence(externalPage)
+    expect(externalEvidence.mission).toMatchObject({ status: 'completed', stars: 1, hintsUsed: 2 })
+    const externalSession = await readFullSession(externalPage)
+    const externalRaw = await externalPage.evaluate((key) => localStorage.getItem(key), CURRENT_KEY)
 
-  await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible()
-  await expect(page.getByLabel('1颗星')).toBeVisible()
-  await expect(page.getByLabel('3颗星')).toBeHidden()
-  expect(await page.evaluate((key) => localStorage.getItem(key), CURRENT_KEY)).toBe(externalRaw)
-  await expect.poll(async () => (await media.playCalls()).filter((url) => url.includes('/assets/audio/success.m4a')).length).toBe(1)
+    await page.evaluate(() => { (window as Window & { __failStaffCompletionWrite?: boolean }).__failStaffCompletionWrite = false })
+    await activate(page, '重试保存通关')
+    await expect(page.getByRole('button', { name: '载入其他标签页版本' })).toBeVisible({ timeout: 15_000 })
+    await activate(page, '载入其他标签页版本')
+
+    await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible()
+    await expect(page.getByLabel('1颗星')).toBeVisible()
+    await expect(page.getByLabel('3颗星')).toBeHidden()
+    await expect.poll(() => readFullSession(page)).toEqual(externalSession)
+    expect(await page.evaluate((key) => localStorage.getItem(key), CURRENT_KEY)).toBe(externalRaw)
+    await expect.poll(async () => (await media.playCalls()).filter((url) => url.includes('/assets/audio/success.m4a')).length).toBe(1)
+  } finally {
+    await externalPage.close()
+  }
 })
 
 test('@staff-parity independent standard and reduced-muted runs preserve exact execution semantics without muted success media', async ({ page, browser }) => {
