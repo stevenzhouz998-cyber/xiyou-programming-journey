@@ -175,6 +175,57 @@ describe('RuyiStaffBlocklyWorkspace', () => {
     expect(savedDraft.blocks.find((block) => block.id === 'accepted-root')).toMatchObject({ x: 96, y: 72 })
   })
 
+  it('keeps the lock-entry view coordinates when a narrow unlocked mount is followed by locked viewport callbacks', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(max-width: 600px)',
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })))
+    const draft: RuyiWorkspaceDraftV1 = { version: 1, blocks: [
+      { id: 'narrow-lock-root', type: 'xiyou_inspect_weights', nextId: null, x: 84, y: 66 },
+    ] }
+    let workspace!: Blockly.WorkspaceSvg
+    const onDraftChange = vi.fn<DraftSaver>(() => ({ status: 'saved' as const }))
+    const adapter = { create: (host: HTMLDivElement) => {
+      Object.defineProperties(host, {
+        clientWidth: { configurable: true, value: 800 },
+        clientHeight: { configurable: true, value: 600 },
+        offsetWidth: { configurable: true, value: 800 },
+        offsetHeight: { configurable: true, value: 600 },
+      })
+      host.getBoundingClientRect = () => ({
+        x: 0, y: 0, top: 0, right: 800, bottom: 600, left: 0,
+        width: 800, height: 600, toJSON: () => ({}),
+      })
+      workspace = Blockly.inject(host, { sounds: false })
+      return workspace
+    } }
+    const renderWorkspace = (locked: boolean) => (
+      <RuyiStaffBlocklyWorkspaceAdapterProvider adapter={adapter}>
+        <RuyiStaffBlocklyWorkspace draft={draft} onDraftChange={onDraftChange} onRun={() => undefined} focusBlockId={null} onFocusHandled={() => undefined} locked={locked} />
+      </RuyiStaffBlocklyWorkspaceAdapterProvider>
+    )
+    const view = render(renderWorkspace(false))
+    const positionAtLock = workspace.getBlockById('narrow-lock-root')!.getRelativeToSurfaceXY()
+    expect(positionAtLock).toMatchObject({ x: 12, y: 10 })
+    onDraftChange.mockClear()
+
+    view.rerender(renderWorkspace(true))
+    act(() => {
+      window.dispatchEvent(new Event('resize'))
+      window.dispatchEvent(new Event('orientationchange'))
+    })
+    await act(async () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve())))
+
+    expect(workspace.getBlockById('narrow-lock-root')!.getRelativeToSurfaceXY()).toEqual(positionAtLock)
+    expect(onDraftChange).not.toHaveBeenCalled()
+  })
+
   it('still fits an unlocked workspace when orientation changes to a narrow viewport', () => {
     let narrow = false
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
