@@ -266,7 +266,7 @@ describe('西游编程记', () => {
     expect(screen.getByRole('button', { name: '清空并重新开始' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '执行战斗指令' })).toBeDisabled();
     expect(hint).toBeDisabled();
-    expect(screen.getByText('通关结果正在安全保存，提示会在恢复完成后重新开放。')).toBeVisible();
+    expect(screen.getByText('通关结果尚未保存，请先完成保存恢复。')).toBeVisible();
     fireEvent.click(hint);
     expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
     expect(audio).not.toHaveBeenCalledWith('/assets/audio/success.m4a');
@@ -303,6 +303,7 @@ describe('西游编程记', () => {
     fireEvent.click(screen.getByRole('button', { name: '完成定海神针场景播放' }));
 
     expect(await screen.findByText('正在保存通关结果…')).toBeVisible();
+    expect(screen.getByText('通关结果正在保存，请等保存完成后再使用提示。')).toBeVisible();
     expect(document.querySelectorAll('.completion-save-status')).toHaveLength(1);
     expect(screen.getByRole('button', { name: '执行战斗指令' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '观察提示' })).toBeDisabled();
@@ -312,6 +313,32 @@ describe('西游编程记', () => {
     await waitFor(() => expect(completionDraft).not.toBeNull());
     await act(async () => pendingCompletion.resolve({ status: 'saved', revision: 5, progress: completionDraft! }));
     expect(await screen.findByRole('heading', { name: '闯关成功' })).toBeVisible();
+  });
+
+  it('distinguishes a pending run-session save from playback after that save becomes durable', async () => {
+    const progress = completeMission(withParentAccess(createInitialProgress()), 'w1-m1', { stars: 3, hintsUsed: 0 });
+    progress.privacy.localDataNoticeSeen = true;
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    const pendingRun = deferred<Awaited<ReturnType<SaveCoordinator>>>();
+    let runDraft: Parameters<SaveCoordinator>[0] | null = null;
+    const save = vi.fn<SaveCoordinator>(async (next, expectedRevision) => {
+      if (next.sessions['w1-m2']?.lastRun && !next.missions['w1-m2']) {
+        runDraft = next;
+        return pendingRun.promise;
+      }
+      return { status: 'saved', revision: expectedRevision + 1, progress: next };
+    });
+    window.location.hash = '#/mission/w1-m2';
+    render(<App loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('./progress/storageCoordinator'))} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '加入：查看三件兵器重量' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：选择方天画戟（7200斤）' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+
+    expect(await screen.findByText('运行结果正在保存，提示会在保存完成后恢复。')).toBeVisible();
+    await waitFor(() => expect(runDraft).not.toBeNull());
+    await act(async () => pendingRun.resolve({ status: 'saved', revision: 3, progress: runDraft! }));
+    expect(await screen.findByText('战斗指令正在执行，提示会在本次播放结束后恢复。')).toBeVisible();
   });
 
   it('shows only the local run-session retry in the full w1-m2 page and clears it after recovery', async () => {
@@ -328,6 +355,7 @@ describe('西游编程记', () => {
 
     expect(await screen.findByRole('button', { name: '重试保存本关' })).toBeVisible();
     expect(screen.getByRole('button', { name: '观察提示' })).toBeDisabled();
+    expect(screen.getByText('运行结果尚未保存，请先完成保存恢复。')).toBeVisible();
     await act(async () => { await import('./components/RecoveryNotice'); });
     expect(screen.getAllByRole('button', { name: /重试保存/ })).toHaveLength(1);
     expect(screen.queryByText('本次进度尚未保存')).not.toBeInTheDocument();
@@ -365,6 +393,7 @@ describe('西游编程记', () => {
     expect(screen.queryByRole('button', { name: '重试保存本关' })).not.toBeInTheDocument();
     expect(screen.queryByText(/本关存档与其他标签页冲突|按顶部提示/)).not.toBeInTheDocument();
     expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByText('运行结果尚未保存，请先完成保存恢复。')).toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: '载入其他标签页版本' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: '载入其他标签页版本' })).not.toBeInTheDocument());
@@ -397,6 +426,7 @@ describe('西游编程记', () => {
     fireEvent.click(screen.getByRole('button', { name: '完成定海神针场景播放' }));
 
     expect(await screen.findByText(/通关待保存/)).toBeVisible();
+    expect(screen.getByText('通关结果尚未保存，请先完成保存恢复。')).toBeVisible();
     expect(screen.queryByRole('button', { name: '重试保存本关' })).not.toBeInTheDocument();
     expect(screen.queryByText(/本关存档与其他标签页冲突/)).not.toBeInTheDocument();
     expect(screen.queryAllByRole('button', { name: /重试保存/ })).toHaveLength(0);

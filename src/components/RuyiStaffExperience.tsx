@@ -22,13 +22,14 @@ const MISSION_ID = 'w1-m2' as const
 type CompileDiagnostic = Extract<RuyiCompileResult, { ok: false }>['diagnostics'][number]
 type Diagnostic = CompileDiagnostic | RuyiStaffBattleDiagnostic
 interface Evidence { stars: 1 | 2 | 3; hintsUsed: number }
+export type RuyiHintLockReason = 'idle' | 'playback' | 'session-pending' | 'session-recovery'
 interface Props {
   reducedMotion: boolean
   muted: boolean
   locked?: boolean
   onComplete: (evidence: Evidence) => void | boolean | Promise<boolean>
   onSessionPersistenceActiveChange?: (active: boolean) => void
-  onInteractionLockChange?: (locked: boolean) => void
+  onInteractionLockChange?: (locked: boolean, reason: RuyiHintLockReason) => void
   loaders?: RuyiStaffExperienceLoaders
   reloadPage?: () => void
 }
@@ -72,15 +73,17 @@ export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onCo
   const durableRunRef = useRef<DurableRunIdentity | null>(null)
   const completionHandedOffRequestRef = useRef<number | null>(null); const [completionHandedOffRequestId, setCompletionHandedOffRequestId] = useState<number | null>(null)
   const completeRef = useRef(onComplete); const sessionPersistenceRef = useRef(onSessionPersistenceActiveChange); const missionCompletedRef = useRef(Boolean(progress.missions[MISSION_ID]))
-  const interactionLockCallbackRef = useRef(onInteractionLockChange); const interactionLockedRef = useRef(false)
+  const interactionLockCallbackRef = useRef(onInteractionLockChange); const interactionLockedRef = useRef(false); const interactionLockReasonRef = useRef<RuyiHintLockReason>('idle')
+  const sessionLockStatusRef = useRef<{ requestId: number; status: 'pending' | 'saved' | 'recovery' } | null>(null); const playbackFinishedRequestRef = useRef<number | null>(null)
   const regionRef = useRef<HTMLDivElement>(null); const [diagnostic, setDiagnostic] = useState<Diagnostic | null>(() => session.lastRun?.diagnostic ?? null)
   const [occurrenceId, setOccurrenceId] = useState(0); const [focusBlockId, setFocusBlockId] = useState<string | null>(null); const [sessionSyncTick, setSessionSyncTick] = useState(0)
   const currentSessionIdentity = sessionIdentity(session); const syncedSessionIdentityRef = useRef(currentSessionIdentity)
   completeRef.current = onComplete; sessionPersistenceRef.current = onSessionPersistenceActiveChange; interactionLockCallbackRef.current = onInteractionLockChange; missionCompletedRef.current = Boolean(progress.missions[MISSION_ID])
-  const setInteractionLocked = (active: boolean) => {
-    if (interactionLockedRef.current === active) return
+  const setInteractionLocked = (active: boolean, reason: RuyiHintLockReason = active ? 'playback' : 'idle') => {
+    if (interactionLockedRef.current === active && interactionLockReasonRef.current === reason) return
     interactionLockedRef.current = active
-    interactionLockCallbackRef.current(active)
+    interactionLockReasonRef.current = reason
+    interactionLockCallbackRef.current(active, reason)
   }
   useEffect(() => {
     mountedRef.current = true
@@ -92,13 +95,14 @@ export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onCo
     if (wasCompletionLockedRef.current && !locked) setInteractionLocked(false)
     wasCompletionLockedRef.current = locked
   }, [locked])
-  const replace = (next: Playback) => {
+  const replace = (next: Playback, lockReason: RuyiHintLockReason = next.events.length > 0 ? 'playback' : 'idle') => {
     if (playbackRef.current.requestId !== next.requestId) {
       durableRunRef.current = null
       finishedPlaybackRequestRef.current = null
+      playbackFinishedRequestRef.current = null
       completedRequestRef.current = null
     }
-    playbackRef.current = next; setPlayback(next); setInteractionLocked(next.events.length > 0)
+    playbackRef.current = next; setPlayback(next); setInteractionLocked(next.events.length > 0, lockReason)
   }
   useEffect(() => {
     if (currentSessionIdentity === syncedSessionIdentityRef.current) return
@@ -122,11 +126,11 @@ export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onCo
       return
     }
     const result = runRuyiStaffBattle(compiled.trace); const snapshot = structuredClone(result); const now = new Date().toISOString(); const tiers = [...session.usedHintTiers]
-    setInteractionLocked(true)
     sessionPersistenceRef.current(true)
     const sessionSave = updateMissionSession(MISSION_ID, (current) => recordRun(current, result, compiled.trace, now))
     const next: Playback = { requestId: ++sequenceRef.current, origin: 'run', events: snapshot.events, result: snapshot, eligible: result.completed && !missionCompletedRef.current, evidence: result.completed ? evidence(tiers) : null, runAt: now, sessionSave, sessionIdentity: runIdentity(compiled.trace, result, now) }
-    replace(next); setDiagnostic(result.diagnostic); checkSessionSave(next.requestId, sessionSave)
+    sessionLockStatusRef.current = { requestId: next.requestId, status: 'pending' }
+    replace(next, 'session-pending'); setDiagnostic(result.diagnostic); checkSessionSave(next.requestId, sessionSave)
   }
   const maybeReleaseCompletion = (requestId: number) => {
     const current = playbackRef.current
@@ -139,9 +143,19 @@ export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onCo
   const recordSessionSave = (requestId: number, saved: CoordinatedSaveResult) => {
     const current = playbackRef.current
     if (!mountedRef.current || completedRequestRef.current === requestId || current.requestId !== requestId || current.origin !== 'run') return
-    if (saved.status === 'conflict') { sessionPersistenceRef.current(false); return }
-    if (saved.status !== 'saved' || !current.runAt || saved.progress.sessions[MISSION_ID]?.lastRunAt !== current.runAt) return
-    if (!current.eligible || current.result?.completed !== true) { durableRunRef.current = null; sessionPersistenceRef.current(false); return }
+    if (saved.status !== 'saved') {
+      sessionLockStatusRef.current = { requestId, status: 'recovery' }
+      setInteractionLocked(true, 'session-recovery')
+      if (saved.status === 'conflict') sessionPersistenceRef.current(false)
+      return
+    }
+    if (!current.runAt || saved.progress.sessions[MISSION_ID]?.lastRunAt !== current.runAt) return
+    sessionLockStatusRef.current = { requestId, status: 'saved' }
+    if (playbackFinishedRequestRef.current !== requestId) setInteractionLocked(true, 'playback')
+    if (!current.eligible || current.result?.completed !== true) {
+      if (playbackFinishedRequestRef.current === requestId) setInteractionLocked(false)
+      durableRunRef.current = null; sessionPersistenceRef.current(false); return
+    }
     durableRunRef.current = { requestId, runAt: current.runAt }
     maybeReleaseCompletion(requestId)
   }
@@ -156,8 +170,19 @@ export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onCo
   const playbackComplete = (requestId: number) => {
     const current = playbackRef.current
     if (current.requestId !== requestId) return
-    if (current.origin !== 'run' || current.result?.completed !== true) { setInteractionLocked(false); return }
-    if (!current.eligible || !current.evidence || missionCompletedRef.current || completedRequestRef.current === requestId) { setInteractionLocked(false); return }
+    playbackFinishedRequestRef.current = requestId
+    if (current.origin !== 'run') { setInteractionLocked(false); return }
+    const sessionStatus = sessionLockStatusRef.current?.requestId === requestId ? sessionLockStatusRef.current.status : undefined
+    if (sessionStatus === 'pending') setInteractionLocked(true, 'session-pending')
+    if (sessionStatus === 'recovery') setInteractionLocked(true, 'session-recovery')
+    if (current.result?.completed !== true) {
+      if (sessionStatus === 'saved' || sessionStatus === undefined) setInteractionLocked(false)
+      return
+    }
+    if (!current.eligible || !current.evidence || missionCompletedRef.current || completedRequestRef.current === requestId) {
+      if (sessionStatus === 'saved' || sessionStatus === undefined) setInteractionLocked(false)
+      return
+    }
     finishedPlaybackRequestRef.current = requestId
     maybeReleaseCompletion(requestId)
     if (current.sessionSave && durableRunRef.current?.requestId !== requestId) checkSessionSave(requestId, current.sessionSave)
@@ -170,6 +195,7 @@ export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onCo
     const current = playbackRef.current
     if (current.origin !== 'run' || current.sessionSave === null || completionHandedOffRequestRef.current === current.requestId) return
     const requestId = current.requestId
+    sessionLockStatusRef.current = { requestId, status: 'pending' }; setInteractionLocked(true, 'session-pending')
     const saved = await retrySave()
     recordSessionSave(requestId, saved)
   }

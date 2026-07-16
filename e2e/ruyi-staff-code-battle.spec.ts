@@ -336,7 +336,7 @@ test('@staff-storage final completion stays unpublished until its exact CURRENT 
 
   await expect(page.getByText('通关待保存：进度尚未安全写入这台电脑。')).toBeVisible({ timeout: 15_000 })
   await expect(hint).toBeDisabled()
-  await expect(page.getByText('通关结果正在安全保存，提示会在恢复完成后重新开放。')).toBeVisible()
+  await expect(page.getByText('通关结果尚未保存，请先完成保存恢复。')).toBeVisible()
   const lockMessage = page.getByText('通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。')
   await expect(lockMessage).toBeVisible()
   await expect(lockMessage).toBeFocused()
