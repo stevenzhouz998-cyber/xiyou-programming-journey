@@ -96,6 +96,7 @@ interface UnpublishedTransaction {
   draft: ProgressV3;
   generation: number;
   failure: FailedSaveResult | null;
+  completionMissionIds: Set<string>;
 }
 
 export function ProgressProvider({
@@ -230,11 +231,13 @@ export function ProgressProvider({
     options: ProgressWriteOptions = {},
     retryable = true,
     retainUnpublished = false,
+    completionMissionId: string | null = null,
   ): Promise<CoordinatedSaveResult> => {
     const existingTransaction = pendingUnpublishedRef.current;
     const unpublishedTransaction = retainUnpublished || existingTransaction
-      ? existingTransaction ?? { draft: next, generation: 0, failure: null }
+      ? existingTransaction ?? { draft: next, generation: 0, failure: null, completionMissionIds: new Set<string>() }
       : null;
+    if (unpublishedTransaction && completionMissionId !== null) unpublishedTransaction.completionMissionIds.add(completionMissionId);
     const unpublishedGeneration = unpublishedTransaction ? unpublishedTransaction.generation + 1 : null;
     if (unpublishedGeneration !== null) {
       unpublishedTransaction!.draft = next;
@@ -398,9 +401,15 @@ export function ProgressProvider({
     saveStatus,
     saveError,
     saveRetryable,
-    complete: (missionId, input) => commit(completeMission(workingProgress(), missionId, input), false, {}, true, true),
+    complete: (missionId, input) => commit(completeMission(workingProgress(), missionId, input), false, {}, true, true, missionId),
     updateMissionSession,
     recordMissionHint: (missionId, tier) => {
+      const unpublished = pendingUnpublishedRef.current;
+      if (unpublished?.completionMissionIds.has(missionId)) return Promise.resolve(unpublished.failure ?? {
+        status: 'unsaved',
+        progress: unpublished.draft,
+        error: '通关结果仍在等待保存，提示没有记入本次通关。',
+      });
       const now = new Date().toISOString();
       if (missionId === 'w1-m1') {
         return updateMissionSessionAt(

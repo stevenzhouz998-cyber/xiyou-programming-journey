@@ -170,6 +170,35 @@ describe('西游编程记', () => {
     }));
   });
 
+  it('locks hints for a Ruyi battle playback, restores them after an error, and moves focus to the reason', async () => {
+    const progress = completeMission(withParentAccess(createInitialProgress()), 'w1-m1', { stars: 3, hintsUsed: 0 });
+    progress.privacy.localDataNoticeSeen = true;
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    window.location.hash = '#/mission/w1-m2';
+    render(<App />);
+
+    await fireEvent.click(await screen.findByRole('button', { name: '加入：查看三件兵器重量' }));
+    fireEvent.click(screen.getByRole('button', { name: '加入：选择方天画戟（7200斤）' }));
+    const hint = screen.getByRole('button', { name: '观察提示' });
+    hint.focus();
+    fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+
+    const reason = await screen.findByText('战斗指令正在执行，提示会在本次播放结束后恢复。');
+    expect(hint).toBeDisabled();
+    expect(hint).toHaveAttribute('aria-disabled', 'true');
+    expect(reason).toBeVisible();
+    expect(hint).not.toHaveFocus();
+    expect(document.activeElement).toHaveAttribute('role', 'alert');
+    fireEvent.click(hint);
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).sessions['w1-m2'].usedHintTiers).toEqual([]);
+
+    fireEvent.click(screen.getByRole('button', { name: '完成定海神针场景播放' }));
+    await waitFor(() => expect(hint).toBeEnabled());
+    expect(hint).toHaveAttribute('aria-disabled', 'false');
+    fireEvent.click(hint);
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).sessions['w1-m2'].usedHintTiers).toEqual(['observe']));
+  });
+
   it('keeps the legacy mission background wrapper only after the two formal Blockly missions', async () => {
     let progress = withParentAccess(createInitialProgress());
     progress.privacy.localDataNoticeSeen = true;
@@ -214,9 +243,14 @@ describe('西游编程记', () => {
     fireEvent.click(await screen.findByRole('button', { name: '加入：查看三件兵器重量' }));
     fireEvent.click(screen.getByRole('button', { name: '加入：选择定海神针（13500斤）' }));
     fireEvent.click(screen.getByRole('button', { name: '加入：缩小定海神针' }));
+    const hint = screen.getByRole('button', { name: '观察提示' });
+    hint.focus();
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
+    expect(hint).toBeDisabled();
+    await waitFor(() => expect(screen.getByText('战斗指令正在执行，提示会在本次播放结束后恢复。')).toHaveFocus());
+    fireEvent.click(hint);
     await waitFor(() => expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
-      sessions: { 'w1-m2': { lastRun: { completed: true } } },
+      sessions: { 'w1-m2': { lastRun: { completed: true }, usedHintTiers: [] } },
     }));
     storage.failWrites = true;
     fireEvent.click(screen.getByRole('button', { name: '完成定海神针场景播放' }));
@@ -231,6 +265,9 @@ describe('西游编程记', () => {
     expect(screen.getAllByRole('button', { name: /^(上移|下移|删除)：/ }).every((button) => button.hasAttribute('disabled'))).toBe(true);
     expect(screen.getByRole('button', { name: '清空并重新开始' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '执行战斗指令' })).toBeDisabled();
+    expect(hint).toBeDisabled();
+    expect(screen.getByText('通关结果正在安全保存，提示会在恢复完成后重新开放。')).toBeVisible();
+    fireEvent.click(hint);
     expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
     expect(audio).not.toHaveBeenCalledWith('/assets/audio/success.m4a');
     expect(screen.getByText('1/30 关 · 3 星')).toBeVisible();
@@ -241,7 +278,8 @@ describe('西游编程记', () => {
     expect(await screen.findByRole('heading', { name: '闯关成功' })).toBeVisible();
     expect(audio).toHaveBeenCalledWith('/assets/audio/success.m4a');
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
-      missions: { 'w1-m2': { status: 'completed' } },
+      missions: { 'w1-m2': { status: 'completed', hintsUsed: 0, stars: 3 } },
+      sessions: { 'w1-m2': { usedHintTiers: [] } },
     });
   });
 
@@ -267,6 +305,7 @@ describe('西游编程记', () => {
     expect(await screen.findByText('正在保存通关结果…')).toBeVisible();
     expect(document.querySelectorAll('.completion-save-status')).toHaveLength(1);
     expect(screen.getByRole('button', { name: '执行战斗指令' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '观察提示' })).toBeDisabled();
     expect(screen.getAllByRole('button', { name: /^加入：/ }).every((button) => button.hasAttribute('disabled'))).toBe(true);
     expect(screen.queryByRole('button', { name: /重试保存/ })).not.toBeInTheDocument();
 
@@ -288,6 +327,7 @@ describe('西游编程记', () => {
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
 
     expect(await screen.findByRole('button', { name: '重试保存本关' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '观察提示' })).toBeDisabled();
     await act(async () => { await import('./components/RecoveryNotice'); });
     expect(screen.getAllByRole('button', { name: /重试保存/ })).toHaveLength(1);
     expect(screen.queryByText('本次进度尚未保存')).not.toBeInTheDocument();
@@ -330,6 +370,7 @@ describe('西游编程记', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: '载入其他标签页版本' })).not.toBeInTheDocument());
     expect(screen.getByRole('heading', { name: '定海神针' })).toBeVisible();
     expect(screen.getByRole('button', { name: '执行战斗指令' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '观察提示' })).toBeEnabled();
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).not.toHaveProperty('missions.w1-m2');
   });
 
@@ -385,6 +426,7 @@ describe('西游编程记', () => {
     await waitFor(() => expect(screen.queryByText(/通关待保存/)).not.toBeInTheDocument());
     expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '执行战斗指令' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '观察提示' })).toBeEnabled();
     await waitFor(() => expect(screen.getByRole('button', { name: '加入：查看三件兵器重量' })).toHaveFocus());
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).not.toHaveProperty('missions.w1-m2');
   });

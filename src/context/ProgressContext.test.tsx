@@ -552,6 +552,41 @@ describe('ProgressContext persistence status', () => {
     });
   });
 
+  it('refuses a hint for the same mission while its completion candidate is unpublished', async () => {
+    const unlocked = completeMission(createInitialProgress(), 'w1-m1', { stars: 3, hintsUsed: 0 });
+    installStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(unlocked) });
+    const saveProgressCoordinated = vi.fn<typeof import('../progress/storageCoordinator').saveProgressCoordinated>()
+      .mockImplementationOnce(async (progress) => ({ status: 'unsaved', progress, error: 'final completion failed' }))
+      .mockImplementation(async (progress) => ({ status: 'saved', revision: 1, progress }));
+    render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated } as unknown as typeof import('../progress/storageCoordinator'))}><Probe /></ProgressProvider>);
+
+    let failed!: CoordinatedSaveResult;
+    await act(async () => {
+      failed = await latestContext!.complete('w1-m2', { stars: 3, hintsUsed: 0 });
+    });
+    expect(failed).toMatchObject({ status: 'unsaved' });
+    const candidateBeforeHint = JSON.parse(latestContext!.createBackup().contents);
+
+    let blockedHint!: CoordinatedSaveResult;
+    await act(async () => {
+      blockedHint = await latestContext!.recordMissionHint('w1-m2', 'observe');
+    });
+
+    expect(blockedHint).toMatchObject({ status: 'unsaved' });
+    expect(saveProgressCoordinated).toHaveBeenCalledOnce();
+    expect(JSON.parse(latestContext!.createBackup().contents)).toEqual(candidateBeforeHint);
+    expect(candidateBeforeHint.sessions['w1-m2']?.usedHintTiers ?? []).toEqual([]);
+
+    await act(async () => { await latestContext!.retrySave(); });
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+      missions: { 'w1-m2': { status: 'completed', stars: 3, hintsUsed: 0 } },
+      sessions: {},
+      saveStatus: 'saved',
+    });
+    expect(saveProgressCoordinated.mock.calls[1][0]).toEqual(candidateBeforeHint);
+    expect(JSON.parse(latestContext!.createBackup().contents)).toEqual(candidateBeforeHint);
+  });
+
   it('rejects a parent access mutation while final completion is held without changing its candidate or recovery state', async () => {
     const initial = createInitialProgress();
     installStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(initial) });
