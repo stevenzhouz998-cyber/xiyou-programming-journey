@@ -1,6 +1,6 @@
 import * as Blockly from 'blockly'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuyiCompileResult } from '../blockly/ruyiStaffCompiler'
 import type { RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft'
 import {
@@ -40,8 +40,10 @@ function setup(draft = EMPTY, onDraftChange: DraftSaver = vi.fn(() => ({ status:
 }
 
 describe('RuyiStaffBlocklyWorkspace', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
   it('locks every mutation and run control behind one child-readable final-save message', () => {
-    const onDraftChange = vi.fn(() => ({ status: 'saved' as const }))
+    const onDraftChange = vi.fn<DraftSaver>(() => ({ status: 'saved' as const }))
     const { workspace, onRun } = setup(chainDraft(3), onDraftChange, true)
 
     expect(screen.getByText('通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。')).toBeVisible()
@@ -105,6 +107,134 @@ describe('RuyiStaffBlocklyWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: '加入：查看三件兵器重量' }))
     await waitFor(() => expect(workspace.getAllBlocks(false)).toHaveLength(4))
     expect(onDraftChange).toHaveBeenCalledOnce()
+  })
+
+  it('keeps accepted coordinates unchanged across locked narrow resize and orientation before the next same-session edit', async () => {
+    const draft: RuyiWorkspaceDraftV1 = { version: 1, blocks: [
+      { id: 'accepted-root', type: 'xiyou_inspect_weights', nextId: null, x: 84, y: 66 },
+    ] }
+    let narrow = false
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(max-width: 600px)' && narrow,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })))
+    let workspace!: Blockly.WorkspaceSvg
+    const onDraftChange = vi.fn<DraftSaver>(() => ({ status: 'saved' as const }))
+    const adapter = { create: (host: HTMLDivElement) => {
+      Object.defineProperties(host, {
+        clientWidth: { configurable: true, value: 800 },
+        clientHeight: { configurable: true, value: 600 },
+        offsetWidth: { configurable: true, value: 800 },
+        offsetHeight: { configurable: true, value: 600 },
+      })
+      host.getBoundingClientRect = () => ({
+        x: 0, y: 0, top: 0, right: 800, bottom: 600, left: 0,
+        width: 800, height: 600, toJSON: () => ({}),
+      })
+      workspace = Blockly.inject(host, { sounds: false })
+      return workspace
+    } }
+    const renderWorkspace = (locked: boolean, nextDraft = draft) => (
+      <RuyiStaffBlocklyWorkspaceAdapterProvider adapter={adapter}>
+        <RuyiStaffBlocklyWorkspace draft={nextDraft} onDraftChange={onDraftChange} onRun={() => undefined} focusBlockId={null} onFocusHandled={() => undefined} locked={locked} />
+      </RuyiStaffBlocklyWorkspaceAdapterProvider>
+    )
+    const view = render(renderWorkspace(false))
+    const acceptedPosition = workspace.getBlockById('accepted-root')!.getRelativeToSurfaceXY()
+    onDraftChange.mockClear()
+
+    view.rerender(renderWorkspace(true))
+    narrow = true
+    act(() => {
+      window.dispatchEvent(new Event('resize'))
+      window.dispatchEvent(new Event('orientationchange'))
+    })
+
+    expect(workspace.getBlockById('accepted-root')!.getRelativeToSurfaceXY()).toEqual(acceptedPosition)
+    expect(onDraftChange).not.toHaveBeenCalled()
+
+    const externalDraft: RuyiWorkspaceDraftV1 = { version: 1, blocks: [
+      { id: 'accepted-root', type: 'xiyou_inspect_weights', nextId: null, x: 96, y: 72 },
+    ] }
+    view.rerender(renderWorkspace(true, externalDraft))
+    await act(async () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve())))
+    expect(workspace.getBlockById('accepted-root')!.getRelativeToSurfaceXY()).toMatchObject({ x: 96, y: 72 })
+
+    narrow = false
+    view.rerender(renderWorkspace(false, externalDraft))
+    fireEvent.click(screen.getByRole('button', { name: '加入：选择定海神针（13500斤）' }))
+
+    await waitFor(() => expect(onDraftChange).toHaveBeenCalledOnce())
+    const savedDraft = onDraftChange.mock.calls[0][0]
+    expect(savedDraft.blocks.find((block) => block.id === 'accepted-root')).toMatchObject({ x: 96, y: 72 })
+  })
+
+  it('still fits an unlocked workspace when orientation changes to a narrow viewport', () => {
+    let narrow = false
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(max-width: 600px)' && narrow,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })))
+    const draft: RuyiWorkspaceDraftV1 = { version: 1, blocks: [
+      { id: 'narrow-root', type: 'xiyou_inspect_weights', nextId: null, x: 84, y: 66 },
+    ] }
+    const onDraftChange = vi.fn<DraftSaver>(() => ({ status: 'saved' as const }))
+    const { workspace } = setup(draft, onDraftChange)
+    onDraftChange.mockClear()
+
+    narrow = true
+    act(() => window.dispatchEvent(new Event('orientationchange')))
+
+    expect(workspace.getBlockById('narrow-root')!.getRelativeToSurfaceXY()).toMatchObject({ x: 12, y: 10 })
+    expect(onDraftChange).not.toHaveBeenCalled()
+  })
+
+  it('defers narrow coordinate fitting until a locked workspace is unlocked', () => {
+    let narrow = false
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(max-width: 600px)' && narrow,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })))
+    const draft: RuyiWorkspaceDraftV1 = { version: 1, blocks: [
+      { id: 'unlock-fit-root', type: 'xiyou_inspect_weights', nextId: null, x: 84, y: 66 },
+    ] }
+    const workspace = new Blockly.Workspace()
+    const onDraftChange = vi.fn(() => ({ status: 'saved' as const }))
+    const adapter = { create: () => workspace }
+    const renderWorkspace = (locked: boolean) => (
+      <RuyiStaffBlocklyWorkspaceAdapterProvider adapter={adapter}>
+        <RuyiStaffBlocklyWorkspace draft={draft} onDraftChange={onDraftChange} onRun={() => undefined} focusBlockId={null} onFocusHandled={() => undefined} locked={locked} />
+      </RuyiStaffBlocklyWorkspaceAdapterProvider>
+    )
+    const view = render(renderWorkspace(false))
+    onDraftChange.mockClear()
+
+    view.rerender(renderWorkspace(true))
+    narrow = true
+    act(() => window.dispatchEvent(new Event('orientationchange')))
+    expect(workspace.getBlockById('unlock-fit-root')!.getRelativeToSurfaceXY()).toMatchObject({ x: 84, y: 66 })
+
+    view.rerender(renderWorkspace(false))
+    expect(workspace.getBlockById('unlock-fit-root')!.getRelativeToSurfaceXY()).toMatchObject({ x: 12, y: 10 })
+    expect(onDraftChange).not.toHaveBeenCalled()
   })
 
   it.each([

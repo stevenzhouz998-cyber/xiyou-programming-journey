@@ -62,24 +62,26 @@ function canCenter(workspace: Blockly.Workspace): workspace is Centerable { retu
 function canHideFlyout(workspace: Blockly.Workspace): workspace is FlyoutWorkspace { return typeof (workspace as Partial<FlyoutWorkspace>).getFlyout === 'function' }
 function canResizeSvg(workspace: Blockly.Workspace): workspace is SvgWorkspace { return typeof (workspace as Partial<SvgWorkspace>).getParentSvg === 'function' }
 
-function fitNarrowWorkspace(workspace: Blockly.Workspace) {
+function fitNarrowWorkspace(workspace: Blockly.Workspace, repositionBlocks = true) {
   if (typeof window.matchMedia !== 'function' || !window.matchMedia('(max-width: 600px)').matches) return
   if (canHideFlyout(workspace)) {
     const flyout = workspace.getFlyout()
     if (flyout) { if (flyout.setAutoClose) flyout.setAutoClose(true); else flyout.autoClose = true; flyout.hide() }
   }
   const topBlock = workspace.getTopBlocks(false)[0]
-  if (topBlock) {
+  if (topBlock && repositionBlocks) {
     const position = topBlock.getRelativeToSurfaceXY()
     withoutEvents(() => topBlock.moveBy(12 - position.x, 10 - position.y))
   }
   if (canResizeSvg(workspace)) {
     Blockly.svgResize(workspace as Blockly.WorkspaceSvg)
-    workspace.resizeContents()
-    if (workspace.getTopBlocks(false).length > 0) workspace.zoomToFit()
-    workspace.scrollX = 0
-    workspace.scrollY = 0
-    workspace.translate(0, 0)
+    if (repositionBlocks) {
+      workspace.resizeContents()
+      if (workspace.getTopBlocks(false).length > 0) workspace.zoomToFit()
+      workspace.scrollX = 0
+      workspace.scrollY = 0
+      workspace.translate(0, 0)
+    }
   }
 }
 
@@ -208,6 +210,11 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
     setWorkspaceBlocksLocked(workspace, lockedRef.current)
   }
 
+  const fitWorkspaceForViewport = (workspace: Blockly.Workspace) => {
+    fitNarrowWorkspace(workspace, !lockedRef.current)
+    if (lockedRef.current) restoreAcceptedDraft(workspace)
+  }
+
   const scheduleLockedRestore = (workspace: Blockly.Workspace) => {
     setWorkspaceBlocksLocked(workspace, true)
     if (lockedRestoreTimerRef.current !== null) return
@@ -245,10 +252,10 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
       }
       refresh(true)
     }
-    const fit = () => fitNarrowWorkspace(workspace)
-    fit(); const fitFrame = window.requestAnimationFrame(fit); const fitAfterFlyout = window.setTimeout(fit, 50); window.addEventListener('resize', fit)
+    const fit = () => fitWorkspaceForViewport(workspace)
+    fit(); const fitFrame = window.requestAnimationFrame(fit); const fitAfterFlyout = window.setTimeout(fit, 50); window.addEventListener('resize', fit); window.addEventListener('orientationchange', fit)
     workspace.addChangeListener(listener); setReady(true)
-    return () => { mountedRef.current = false; saveRequestRef.current.generation += 1; setReady(false); window.cancelAnimationFrame(fitFrame); window.clearTimeout(fitAfterFlyout); if (lockedRestoreTimerRef.current !== null) { window.clearTimeout(lockedRestoreTimerRef.current); lockedRestoreTimerRef.current = null }; if (focusRestoreTimerRef.current !== null) { window.clearTimeout(focusRestoreTimerRef.current); focusRestoreTimerRef.current = null }; window.removeEventListener('resize', fit); workspace.removeChangeListener(listener); workspace.dispose(); if (workspaceRef.current === workspace) workspaceRef.current = null; itemRefs.current.clear() }
+    return () => { mountedRef.current = false; saveRequestRef.current.generation += 1; setReady(false); window.cancelAnimationFrame(fitFrame); window.clearTimeout(fitAfterFlyout); if (lockedRestoreTimerRef.current !== null) { window.clearTimeout(lockedRestoreTimerRef.current); lockedRestoreTimerRef.current = null }; if (focusRestoreTimerRef.current !== null) { window.clearTimeout(focusRestoreTimerRef.current); focusRestoreTimerRef.current = null }; window.removeEventListener('resize', fit); window.removeEventListener('orientationchange', fit); workspace.removeChangeListener(listener); workspace.dispose(); if (workspaceRef.current === workspace) workspaceRef.current = null; itemRefs.current.clear() }
   }, [adapter])
 
   useEffect(() => {
@@ -256,7 +263,7 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
     const incoming = JSON.stringify(draft); if (incoming === lastPropRef.current) return
     if (incoming === lastDraftRef.current) { lastPropRef.current = incoming; return }
     let fitFrame = 0
-    try { withoutEvents(() => loadRuyiWorkspaceDraft(workspace, draft)); acceptedDraftRef.current = structuredClone(draft); lastDraftRef.current = incoming; lastPropRef.current = incoming; refresh(false); setWorkspaceBlocksLocked(workspace, lockedRef.current); fitNarrowWorkspace(workspace); fitFrame = window.requestAnimationFrame(() => fitNarrowWorkspace(workspace)); setWorkspaceError(null) }
+    try { withoutEvents(() => loadRuyiWorkspaceDraft(workspace, draft)); acceptedDraftRef.current = structuredClone(draft); lastDraftRef.current = incoming; lastPropRef.current = incoming; refresh(false); setWorkspaceBlocksLocked(workspace, lockedRef.current); fitWorkspaceForViewport(workspace); fitFrame = window.requestAnimationFrame(() => fitWorkspaceForViewport(workspace)); setWorkspaceError(null) }
     catch { setWorkspaceError('传入的积木草稿无法安全恢复，当前工作区保持不变。') }
     return () => { if (fitFrame) window.cancelAnimationFrame(fitFrame) }
   }, [draft, ready])
@@ -276,6 +283,7 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
       restoreAcceptedDraft(workspace)
     }
     setWorkspaceBlocksLocked(workspace, false)
+    fitNarrowWorkspace(workspace)
     if (restoreFocusAfterUnlockRef.current && focusRestoreTimerRef.current === null) {
       focusRestoreTimerRef.current = window.setTimeout(() => {
         focusRestoreTimerRef.current = null
