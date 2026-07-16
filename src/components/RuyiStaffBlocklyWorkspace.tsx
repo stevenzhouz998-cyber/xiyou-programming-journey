@@ -333,7 +333,7 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
       const chain = orderedBlocks(workspace); const block = workspace.newBlock(type); initializeWorkspaceBlock(block)
       const tail = chain.at(-1); if (tail) tail.nextConnection?.connect(block.previousConnection!); rebuild(workspace, [...chain, block])
     })}>{`\u52a0\u5165\uff1a${label}`}</button>)}</div>{capacityMessage || atCapacity ? <p role="status">{capacityMessage ?? '指令卷轴已经装满500块积木。先删除一些积木，才能继续加入。'}</p> : null}</div>
-    <div ref={hostRef} className={`blockly-host${locked ? ' blockly-host-locked' : ''}`} aria-label="Blockly 积木编辑区" aria-disabled={locked || undefined} inert={locked ? true : undefined} tabIndex={locked ? -1 : 0} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); run() } }} />
+    <div ref={hostRef} className="blockly-host" style={locked ? { pointerEvents: 'none' } : undefined} aria-label="Blockly 积木编辑区" aria-disabled={locked || undefined} inert={locked ? true : undefined} tabIndex={locked ? -1 : 0} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); run() } }} />
     <div className="command-scroll"><span className="eyebrow">当前指令卷轴</span>
       {!result.ok ? <p role="status">{issue(result)}</p> : null}
       {blocks.length > 0 ? <ol className="block-program-list" aria-label={result.ok ? '已连接的指令顺序' : '工作区积木（尚未形成唯一顺序）'}>{blocks.map((block, index) => <li key={block.id} tabIndex={-1} ref={(node) => { if (node) itemRefs.current.set(block.id, node); else itemRefs.current.delete(block.id) }}><span>{block.label}</span><span className="block-program-actions">

@@ -71,6 +71,7 @@ export interface ProgressContextValue {
 
 const ProgressContext = createContext<ProgressContextValue | null>(null);
 const PROGRESS_CONFLICT_ERROR = '其他标签页已更新，已暂停保存';
+const storageFailure = (error: unknown) => `存储操作无法完成：${error instanceof Error ? error.message : String(error)}`;
 const loadDefaultSaveCoordinator = () => import('../progress/storageCoordinator');
 const loadDefaultStorageRepair = () => import('../progress/storageRepair');
 const loadDefaultParentCoordinator = () => import('../progress/storageCoordinatorParent');
@@ -92,7 +93,6 @@ interface ProgressProviderProps {
 
 type FailedSaveResult = Extract<CoordinatedSaveResult, { status: 'unsaved' | 'conflict' }>;
 interface UnpublishedTransaction {
-  id: number;
   draft: ProgressV3;
   generation: number;
   failure: FailedSaveResult | null;
@@ -112,7 +112,6 @@ export function ProgressProvider({
   const conflictRef = useRef(false);
   const pendingRepairRef = useRef(initialLoad.repair);
   const pendingUnpublishedRef = useRef<UnpublishedTransaction | null>(null);
-  const unpublishedTransactionSequenceRef = useRef(0);
   const queueRef = useRef<Promise<unknown>>(Promise.resolve());
   const [loadState, setLoadState] = useState<LoadState>(() => loadStateFrom(initialLoad));
   const setLoadPersistence = (persistence: LoadState['persistence']) => {
@@ -131,7 +130,7 @@ export function ProgressProvider({
       try {
         return await operation();
       } catch (error) {
-        const detail = `存储操作无法完成：${error instanceof Error ? error.message : String(error)}`;
+        const detail = storageFailure(error);
         conflictRef.current = false;
         setSaveStatus('unsaved');
         setSaveError(detail);
@@ -175,12 +174,12 @@ export function ProgressProvider({
     publishDraft: boolean,
     retryable = true,
     unpublishedGeneration: number | null = null,
-    unpublishedTransactionId: number | null = null,
+    unpublishedTransaction: UnpublishedTransaction | null = null,
   ) => {
     if (result.status === 'saved') {
       if (unpublishedGeneration !== null) {
         const transaction = pendingUnpublishedRef.current;
-        if (!transaction || transaction.id !== unpublishedTransactionId) return result;
+        if (!transaction || transaction !== unpublishedTransaction) return result;
         if (transaction.generation !== unpublishedGeneration) {
           publishRevision(result.revision);
           setLoadPersistence('saved');
@@ -199,7 +198,7 @@ export function ProgressProvider({
     else {
       if (unpublishedGeneration !== null) {
         const transaction = pendingUnpublishedRef.current;
-        if (transaction && transaction.id === unpublishedTransactionId && transaction.generation >= unpublishedGeneration && !transaction.failure) {
+        if (transaction && transaction === unpublishedTransaction && transaction.generation >= unpublishedGeneration && !transaction.failure) {
           transaction.failure = result;
         }
       }
@@ -222,7 +221,7 @@ export function ProgressProvider({
   const normalizeSaveFailure = (error: unknown, draft: ProgressV3): FailedSaveResult => ({
     status: 'unsaved',
     progress: draft,
-    error: `存储操作无法完成：${error instanceof Error ? error.message : String(error)}`,
+    error: storageFailure(error),
   });
 
   const commit = (
@@ -233,18 +232,14 @@ export function ProgressProvider({
     retainUnpublished = false,
   ): Promise<CoordinatedSaveResult> => {
     const existingTransaction = pendingUnpublishedRef.current;
-    const holdUntilSaved = retainUnpublished || existingTransaction !== null;
-    const unpublishedGeneration = holdUntilSaved ? (existingTransaction?.generation ?? 0) + 1 : null;
-    const unpublishedTransactionId = holdUntilSaved
-      ? existingTransaction?.id ?? ++unpublishedTransactionSequenceRef.current
+    const unpublishedTransaction = retainUnpublished || existingTransaction
+      ? existingTransaction ?? { draft: next, generation: 0, failure: null }
       : null;
+    const unpublishedGeneration = unpublishedTransaction ? unpublishedTransaction.generation + 1 : null;
     if (unpublishedGeneration !== null) {
-      pendingUnpublishedRef.current = {
-        id: unpublishedTransactionId!,
-        draft: next,
-        generation: unpublishedGeneration,
-        failure: existingTransaction?.failure ?? null,
-      };
+      unpublishedTransaction!.draft = next;
+      unpublishedTransaction!.generation = unpublishedGeneration;
+      pendingUnpublishedRef.current = unpublishedTransaction;
       publishDraft = false;
     }
     const blocked = currentConflict(next);
@@ -264,7 +259,7 @@ export function ProgressProvider({
     return enqueue(async () => {
       if (unpublishedGeneration !== null) {
         const transaction = pendingUnpublishedRef.current;
-        if (!transaction || transaction.id !== unpublishedTransactionId) {
+        if (!transaction || transaction !== unpublishedTransaction) {
           return { status: 'saved', revision: revisionRef.current, progress: progressRef.current };
         }
         const failure = transaction.failure;
@@ -273,7 +268,7 @@ export function ProgressProvider({
       let result: CoordinatedSaveResult;
       try { result = await saveCoordinated(next, revisionRef.current, options); }
       catch (error) { result = normalizeSaveFailure(error, next); }
-      return markResult(result, next, publishDraft, retryable, unpublishedGeneration, unpublishedTransactionId);
+      return markResult(result, next, publishDraft, retryable, unpublishedGeneration, unpublishedTransaction);
     }, 'unsaved', retryable);
   };
 
@@ -474,11 +469,10 @@ export function ProgressProvider({
         const transaction = pendingUnpublishedRef.current;
         const draft = transaction?.draft ?? progressRef.current;
         const generation = transaction?.generation ?? null;
-        const transactionId = transaction?.id ?? null;
         let result: CoordinatedSaveResult;
         try { result = await saveCoordinated(draft, revisionRef.current); }
         catch (error) { result = normalizeSaveFailure(error, draft); }
-        return markResult(result, draft, transaction === null, true, generation, transactionId);
+        return markResult(result, draft, transaction === null, true, generation, transaction);
       });
     },
     importProgressFile: (raw) => {

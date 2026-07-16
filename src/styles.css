@@ -150,7 +150,6 @@ h1, h2, .brand strong { font-family: 'Songti SC', 'STSong', serif; }
 .command-button:hover { transform: translateY(-1px); }
 .ruyi-staff-workspace { min-width: 0; overflow-x: hidden; }
 .blockly-host { height: 145px; margin: 12px 0; border: 1px solid var(--line); border-radius: 12px; overflow-x: hidden; overflow-y: hidden; background: var(--paper-light); }
-.blockly-host-locked { pointer-events: none; }
 .command-scroll { min-height: 62px; padding: 10px 14px; border: 1px solid rgba(170,124,53,.35); background: #f7edda; border-radius: 12px; }
 .command-scroll ol { margin: 8px 0 0; display: flex; gap: 24px; flex-wrap: wrap; padding-left: 22px; }
 .workspace-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
