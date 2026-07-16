@@ -1,5 +1,7 @@
 # Dragon Palace code battle browser verification
 
+> Historical evidence notice: this document records the 2026-07-15 Dragon Palace state. Its `w1-m2` compatibility-shell statements are superseded by [`ruyi-staff-code-battle.md`](./ruyi-staff-code-battle.md). The historical metrics and original RED→GREEN narrative below are intentionally unchanged.
+
 - Date: 2026-07-15 (Asia/Shanghai)
 - Tested implementation commit: `7a213d3`; the commit containing this document is evidence-only.
 - Runner: Playwright against the local production Vite preview, with five configured projects and one worker

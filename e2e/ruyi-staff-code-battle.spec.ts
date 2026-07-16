@@ -28,14 +28,18 @@ function isExactInjectedChunkFailure(event: StaffHealthEvent, targetUrl: string 
   return event.detail === failure || event.detail === `TypeError: ${failure}`
 }
 
-test.beforeEach(async ({ page }) => {
-  staffHealthEvents = []
-  allowStaffHealth = expectedNavigationAbort
+function attachStaffHealth(page: Page) {
   page.on('console', message => {
     if (message.type() === 'error') staffHealthEvents.push({ kind: 'console', url: message.location().url || page.url(), detail: message.text() })
   })
   page.on('pageerror', error => staffHealthEvents.push({ kind: 'pageerror', url: page.url(), detail: error.message }))
   page.on('requestfailed', request => staffHealthEvents.push({ kind: 'requestfailed', url: request.url(), detail: request.failure()?.errorText ?? 'unknown' }))
+}
+
+test.beforeEach(async ({ page }) => {
+  staffHealthEvents = []
+  allowStaffHealth = expectedNavigationAbort
+  attachStaffHealth(page)
 })
 
 test.afterEach(() => {
@@ -263,6 +267,25 @@ test('@staff-keyboard keyboard buttons edit the same workspace and complete', as
   expect((await readEvidence(page)).finalState).toBe('ruyi-staff-shrunk')
 })
 
+test('@staff-storage standalone broad sabre drives the visible 3600-jin wrong action', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 })
+  const loadedSabre: string[] = []
+  page.on('response', (response) => {
+    if (response.url().includes('/assets/dragon-palace/sabre.webp') && response.ok()) loadedSabre.push(response.url())
+  })
+  await openMission(page)
+  await add(page, '查看三件兵器重量')
+  await add(page, '选择大捍刀（3600斤）')
+  await add(page, '缩小定海神针')
+  await activate(page, '执行战斗指令')
+  const scene = page.locator('.ruyi-staff-scene-frame .game-scene')
+  await expect(scene).toHaveAttribute('data-selected-weapon', 'sabre')
+  await expect(scene).toHaveAttribute('data-effect-cell', 'blocked')
+  await expect(page.getByRole('alert').filter({ hasText: '3600斤比13500斤轻' })).toBeVisible()
+  expect(loadedSabre).toHaveLength(1)
+  if (updateEvidence) await page.screenshot({ path: path.resolve('docs/verification/screenshots/ruyi-staff-sabre-768.png'), fullPage: true, animations: 'disabled' })
+})
+
 test('@staff-storage failed coordinated draft save stays visible and retry persists it', async ({ page }) => {
   await page.addInitScript((key) => {
     const native = Storage.prototype.setItem
@@ -324,6 +347,7 @@ test('@staff-storage final completion stays unpublished until its exact CURRENT 
   await expect.poll(() => media.playCalls()).not.toContainEqual(expect.stringContaining('/assets/audio/success.m4a'))
 
   const mapPage = await page.context().newPage()
+  attachStaffHealth(mapPage)
   try {
     await mapPage.goto(new URL('./#/', page.url()).toString())
     await expect(mapPage.getByRole('button', { name: '四海披挂，未解锁' })).toBeDisabled()
@@ -389,6 +413,7 @@ test('@staff-parity independent standard and reduced-muted runs preserve exact e
   })
   try {
     const mutedPage = await mutedContext.newPage()
+    attachStaffHealth(mutedPage)
     const mutedMedia = await installMediaObserver(mutedPage)
     await openMission(mutedPage)
     await activate(mutedPage, '减弱动画')

@@ -9,7 +9,7 @@ function node() {
   Object.values(value).forEach((method) => method.mockReturnValue(value))
   return value
 }
-const nodes = { background: node(), dragonKing: node(), effects: node(), weapons: node(), wukong: node() }
+const nodes = { background: node(), dragonKing: node(), effects: node(), halberd: node(), sabre: node(), staff: node(), weapons: node(), wukong: node() }
 const loadImage = vi.fn()
 const queue: Tween[] = []
 const tweens = { add: vi.fn((config: Tween) => { queue.push(config); return config }), killAll: vi.fn() }
@@ -56,13 +56,14 @@ async function flushAllTweens() {
   while (queue.length > 0) await act(async () => queue.shift()?.onComplete?.())
 }
 
-it('loads exactly the five approved Dragon Palace rasters and exposes exact weights', () => {
+it('loads the approved broad sabre separately instead of presenting the spear cell as a sabre', () => {
   render(<RuyiStaffScene events={correct} replayToken={1} reducedMotion muted />)
   expect(loadImage.mock.calls).toEqual([
     ['background', '/assets/dragon-palace/background.webp'],
     ['wukong', '/assets/dragon-palace/wukong.webp'],
     ['dragonKing', '/assets/dragon-palace/dragon-king.webp'],
     ['weapons', '/assets/dragon-palace/weapons.webp'],
+    ['sabre', '/assets/dragon-palace/sabre.webp'],
     ['effects', '/assets/dragon-palace/effects.webp'],
   ])
   const weights = screen.getByLabelText('\u4e09\u4ef6\u5175\u5668\u91cd\u91cf')
@@ -84,6 +85,8 @@ it('shows the selected wrong weapon and blocked effect from real events', () => 
   expect(scene).toHaveAttribute('data-selected-weapon', 'sabre')
   expect(scene).toHaveAttribute('data-effect-cell', 'blocked')
   expect(screen.getByRole('status')).toHaveTextContent('3600\u65a4')
+  expect(nodes.sabre.setDisplaySize).toHaveBeenCalledWith(132, 198)
+  expect(nodes.sabre.setVisible).toHaveBeenLastCalledWith(true)
 })
 
 it('shrinks the selected staff and reaches success in reduced motion', () => {
@@ -137,5 +140,5 @@ it('retries a local asset failure with the same approved asset set', async () =>
   await act(async () => failHandler?.())
   expect(screen.getByRole('alert')).toHaveTextContent('\u9f99\u5bab\u573a\u666f\u8d44\u6e90\u52a0\u8f7d\u5931\u8d25')
   fireEvent.click(screen.getByRole('button', { name: '\u91cd\u65b0\u52a0\u8f7d\u9f99\u5bab\u573a\u666f' }))
-  expect(loadImage).toHaveBeenCalledTimes(10)
+  expect(loadImage).toHaveBeenCalledTimes(12)
 })

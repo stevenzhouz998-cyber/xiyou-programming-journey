@@ -178,12 +178,13 @@ test('rejects a structurally valid VP8 header that cannot be fully decoded', asy
   }
 });
 
-test('fully decodes all five shipping WebP files at their expected dimensions', async () => {
+test('fully decodes all six shipping WebP files including the standalone broad sabre', async () => {
   const assetRoot = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'assets', 'dragon-palace');
   const expectedDimensions = new Map([
     ['background.webp', { width: 1600, height: 900 }],
     ['dragon-king.webp', { width: 640, height: 640 }],
     ['effects.webp', { width: 1024, height: 512 }],
+    ['sabre.webp', { width: 256, height: 384 }],
     ['weapons.webp', { width: 1024, height: 512 }],
     ['wukong.webp', { width: 640, height: 640 }],
   ]);
@@ -193,15 +194,18 @@ test('fully decodes all five shipping WebP files at their expected dimensions', 
   }
 });
 
-test('traces every approved Dragon Palace raster to real w1-m1 and w1-m2 scene slots', async () => {
+test('traces every approved Dragon Palace raster to a real formal scene slot', async () => {
   const manifestPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'assets', 'asset-manifest.md');
   const parsed = parseAssetManifest(await readFile(manifestPath, 'utf8'));
-  assert.equal(parsed.manifestRows.length, 5);
+  assert.equal(parsed.manifestRows.length, 6);
   for (const manifestRow of parsed.manifestRows) {
-    assert.match(manifestRow.screenSlots, /\bw1-m1\b/, manifestRow.assetId);
-    assert.match(manifestRow.screenSlots, /\bw1-m2\b/, manifestRow.assetId);
+    assert.match(manifestRow.screenSlots, /\bw1-m[12]\b/, manifestRow.assetId);
     assert.equal(manifestRow.qaStatus, 'visual-qa-passed');
   }
+  const sabre = parsed.manifestRows.find((row) => row.assetId === 'assets/dragon-palace/sabre.webp');
+  assert.ok(sabre, 'standalone broad sabre manifest row');
+  assert.match(sabre.purpose, /broad.*sabre|\u5927\u634d\u5200/i);
+  assert.match(sabre.screenSlots, /w1-m2.*wrong-weapon/i);
 });
 
 test('rejects truncated WebP chunks, RIFF size mismatches, and trailing junk', () => {

@@ -30,6 +30,13 @@ test('keeps both formal Phaser scene roots bounded and browser cold gates shared
   assert.doesNotMatch(staffE2eSource, /url\.origin\s*!==/);
 });
 
+test('attaches unified browser-health capture to every independently created Ruyi page', () => {
+  const staffE2eSource = readFileSync(new URL('../e2e/ruyi-staff-code-battle.spec.ts', import.meta.url), 'utf8');
+  assert.match(staffE2eSource, /attachStaffHealth\(page\)/);
+  assert.match(staffE2eSource, /attachStaffHealth\(mapPage\)/);
+  assert.match(staffE2eSource, /attachStaffHealth\(mutedPage\)/);
+});
+
 test('keeps Dragon Palace budgets in one shared module', () => {
   const budgetSource = readFileSync(new URL('./budget-limits.mjs', import.meta.url), 'utf8');
   const bundleSource = readFileSync(new URL('./check-bundle-budget.mjs', import.meta.url), 'utf8');

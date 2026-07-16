@@ -1,18 +1,19 @@
 # Asset manifest
 
-This manifest gates the formal Dragon Palace media in `public/assets/dragon-palace`. Task 7 verifies generation provenance, real file hashes, dimensions, and media budgets. Task 10 supplied and inspected successful real-browser screenshots at 320, 390, 768, and 1440 pixels before promoting the five approved rows to `visual-qa-passed`.
+This manifest gates the formal Dragon Palace media in `public/assets/dragon-palace`. Task 7 verifies generation provenance, real file hashes, dimensions, and media budgets. Real-browser screenshots at 320, 390, 768, and 1440 pixels were inspected before promoting each approved row to `visual-qa-passed`. The sixth row corrects the later `w1-m2` broad-sabre semantic requirement without altering the original three-weapon sheet.
 
 | Asset ID | SHA-256 | Purpose | Tool or source | Prompt or source reference | Dimensions | License/provenance | Screen slots | QA status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | assets/dragon-palace/background.webp | f6400e2f443ad9403beedbeb1c074abe66fa5dad34faa9db5505891b775ea2f0 | Layered Dragon Palace trial hall and readable three-zone battle floor | OpenAI built-in image_gen | [Prompt DP-001](#prompt-dp-001-background) | 1600x900 | generated in-project with built-in image_gen; provenance verified | w1-m1 and w1-m2 Phaser battle scene background | visual-qa-passed |
 | assets/dragon-palace/wukong.webp | af13ee6c8f6fe827add3f515245a3dfac4c6a8489bd07a101e905e3fdddee22e | Young Wukong player actor cutout | OpenAI built-in image_gen | [Prompt DP-002](#prompt-dp-002-wukong) | 640x640 | generated in-project with built-in image_gen; provenance verified | w1-m1 and w1-m2 left hero actor and instruction-event states | visual-qa-passed |
 | assets/dragon-palace/dragon-king.webp | 8b9fe59c2fad5bb99b7a87f0dabcedbc9fa69c81c452b5e803dbfba58e3b78c8 | Friendly-authority Dragon King actor cutout | OpenAI built-in image_gen | [Prompt DP-003](#prompt-dp-003-dragon-king) | 640x640 | generated in-project with built-in image_gen; provenance verified | w1-m1 and w1-m2 right-side guide and trial authority actor | visual-qa-passed |
-| assets/dragon-palace/weapons.webp | 5b967dbeb97efd7f33f909bc215b3b8c315e1c9d2ce6e14713c9c9a917c00bc0 | Three separated trial weapons: spear, halberd, and heavy staff | OpenAI built-in image_gen | [Prompt DP-004](#prompt-dp-004-weapons) | 1024x512 | generated in-project with built-in image_gen; provenance verified | w1-m1 center weapon states; w1-m2 three-weight, wrong-weapon, and Ruyi Staff states | visual-qa-passed |
+| assets/dragon-palace/weapons.webp | 5b967dbeb97efd7f33f909bc215b3b8c315e1c9d2ce6e14713c9c9a917c00bc0 | Three separated trial weapons: spear, halberd, and heavy staff | OpenAI built-in image_gen | [Prompt DP-004](#prompt-dp-004-weapons) | 1024x512 | generated in-project with built-in image_gen; provenance verified | w1-m1 center weapon states; w1-m2 halberd and Ruyi Staff states | visual-qa-passed |
+| assets/dragon-palace/sabre.webp | 2adc8aba6d92794030ec3dd863fadd7378cf3f6f279ed2ef5c833bf5f909159c | Standalone broad single-edged Chinese battle sabre (大捍刀), visually distinct from the original spear | OpenAI built-in image_gen | [Prompt DP-006](#prompt-dp-006-sabre) | 256x384 | generated in-project with built-in image_gen; provenance verified | w1-m2 three-weight and wrong-weapon sabre states | visual-qa-passed |
 | assets/dragon-palace/effects.webp | 8bb99312a61a085f65a5e4384dc2c2f57a14771b8653cb3e9ea53cc2185a0230 | Three separated feedback clusters: accepted, blocked, and success | OpenAI built-in image_gen | [Prompt DP-005](#prompt-dp-005-effects) | 1024x512 | generated in-project with built-in image_gen; provenance verified | w1-m1 and w1-m2 instruction accepted, instruction rejected, and mission success feedback | visual-qa-passed |
 
 ## Prompt records
 
-All five source illustrations were generated through separate calls to the environment's built-in `image_gen` tool. Generation sources remain outside `public` and outside this repository. The four keyed sources were processed with the official imagegen Skill helper `remove_chroma_key.py` using border auto-key sampling, soft matte, thresholds 12/220, and despill. Pillow then performed only technical crop-to-content, resize, transparent-canvas placement, and initial WebP encoding. Task 10 re-encoded the same generated compositions at their original dimensions with Sharp 0.35.3 (`quality: 30`, `alphaQuality: 75`, `effort: 6`, `smartSubsample: true`) to satisfy the fixed cold-load budget; no artwork was redrawn or replaced.
+All six source illustrations were generated through separate calls to the environment's built-in `image_gen` tool. Generation sources remain outside `public` and outside this repository. The five keyed sources were processed with the official imagegen Skill helper `remove_chroma_key.py` using border auto-key sampling, soft matte, thresholds 12/220, and despill. Pillow/Sharp then performed only technical crop-to-content, resize, transparent-canvas placement, and WebP encoding. Existing compositions retain their prior encoding; DP-006 is a 256x384 transparent WebP encoded by Sharp 0.35.3 (`quality: 30`, `alphaQuality: 75`, `effort: 6`, `smartSubsample: true`) to preserve the fixed cold-load budget. No artwork was redrawn in code.
 
 ### Prompt DP-001 background
 
@@ -82,6 +83,21 @@ Style/medium: commercial children’s learning game, refined Chinese ink-and-col
 Composition/framing: exact 2:1 horizontal composition intended for 1024x512; three equal imaginary cells, one centered effect cluster per third, equal scale, generous separation, complete cutout shapes, no overlap and no merging
 Lighting/mood: responsive, encouraging, energetic, child-safe
 Constraints: effects must be predominantly opaque crisp cutout shapes, not translucent smoke or mist; the background must be one uniform #ff00ff color with no shadows, gradients, texture, reflections, floor plane, or lighting variation; do not use magenta or #ff00ff anywhere in the effects; exactly three clusters only; no characters, no weapons, no words, no letters, no numbers, no checkmarks, no crosses as UI icons, no badges, no symbols, no dividers, no boxes, no cell borders, no watermark
+```
+
+### Prompt DP-006 sabre
+
+```text
+Use case: stylized-concept
+Asset type: transparent game weapon cutout source, final raster illustration for a children's coding battle scene
+Primary request: create exactly one clearly recognizable Chinese broad giant battle sabre (大捍刀), not a spear, not a straight double-edged sword, not a halberd, and not a staff
+Scene/backdrop: perfectly flat solid #ff00ff chroma-key background for local background removal
+Subject: one complete upright Chinese single-edged broad battle sabre with a visibly wide heavy curved blade, blunt spine, one cutting edge, compact ornate gold dragon guard, short red-wrapped hand grip, and a gold pommel; the blade is jade-green metal with restrained engraved dragon-cloud details and pale gold edge trim
+Style/medium: commercial children’s learning game, refined Chinese ink-and-color illustration, Journey to the West Dragon Palace, warm jade/cinnabar/gold palette, readable silhouettes, no text, no logo, no emoji, no UI frame.
+Composition/framing: centered single weapon, vertical from blade tip to pommel, full object visible, generous even padding, opaque crisp silhouette, sized to remain readable around 132x198 in a Phaser scene
+Lighting/mood: polished collectible game art, adventurous, child-friendly, high readability
+Constraints: the background must be one perfectly uniform #ff00ff color with no shadows, gradients, texture, reflections, floor plane, or lighting variation; no cast shadow, no contact shadow, no reflection; do not use magenta or #ff00ff anywhere in the weapon; exactly one weapon only; broad single-edged sabre anatomy must be unmistakable; no scabbard, no hands, no characters, no detached pieces, no magical effects, no watermark, no text
+Avoid: spear points, spear shafts, symmetric double-edged straight-sword anatomy, polearm-length handles, crescent halberd blades, multiple objects
 ```
 
 ## Existing global asset residual risks

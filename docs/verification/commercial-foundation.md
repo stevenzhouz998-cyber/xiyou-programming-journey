@@ -1,5 +1,7 @@
 # Commercial foundation browser verification
 
+> Historical evidence notice: this document records the 2026-07-15 foundation state. Its former `w1-m2` compatibility-shell boundary is superseded by [`ruyi-staff-code-battle.md`](./ruyi-staff-code-battle.md). The historical metrics below are intentionally unchanged and do not describe the later Ruyi Staff implementation.
+
 ## Current verified evidence — 2026-07-15
 
 - Tested implementation commit: `7a213d3`; the commit containing this document is evidence-only and does not change product behavior.

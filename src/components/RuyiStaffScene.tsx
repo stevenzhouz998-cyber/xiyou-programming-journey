@@ -4,7 +4,7 @@ import type { RuyiStaffBattleEvent, RuyiStaffOpcode, RuyiStaffState } from '../b
 import { assetUrl } from '../utils/assets'
 
 interface Props { events: RuyiStaffBattleEvent[]; replayToken: number; reducedMotion: boolean; muted: boolean; onPlaybackComplete?: () => void }
-interface Nodes { background: Phaser.GameObjects.Image; dragonKing: Phaser.GameObjects.Image; effects: Phaser.GameObjects.Image; weapons: Phaser.GameObjects.Image; wukong: Phaser.GameObjects.Image }
+interface Nodes { background: Phaser.GameObjects.Image; dragonKing: Phaser.GameObjects.Image; effects: Phaser.GameObjects.Image; halberd: Phaser.GameObjects.Image; sabre: Phaser.GameObjects.Image; staff: Phaser.GameObjects.Image; wukong: Phaser.GameObjects.Image }
 type Effect = 'none' | 'accepted' | 'blocked' | 'success'
 type Selected = 'none' | 'all' | 'sabre' | 'halberd' | 'ruyi-staff' | 'ruyi-staff-shrunk'
 const STARTS = [0, 341, 682] as const; const WIDTHS = [341, 341, 342] as const; const SHEET_HEIGHT = 512
@@ -13,6 +13,12 @@ const opcodeLabels: Record<RuyiStaffOpcode, string> = {
 }
 function showCell(image: Phaser.GameObjects.Image, cell: 0 | 1 | 2, width = 132, height = 198) {
   image.setCrop(STARTS[cell], 0, WIDTHS[cell], SHEET_HEIGHT).setScale(width / WIDTHS[cell], height / SHEET_HEIGHT).setVisible(true)
+}
+function showSabre(image: Phaser.GameObjects.Image, width = 132, height = 198) {
+  image.setCrop().setDisplaySize(width, height).setVisible(true)
+}
+function hideWeapons(nodes: Nodes) {
+  nodes.sabre.setVisible(false); nodes.halberd.setVisible(false); nodes.staff.setVisible(false)
 }
 function transcript(event: RuyiStaffBattleEvent): string {
   if (event.type === 'run-started') return '挑选兵器开始'
@@ -60,7 +66,7 @@ export function RuyiStaffScene({ events, replayToken, reducedMotion, muted, onPl
     const { width, height } = scene.scale
     nodes.wukong.setX(xFor('awaiting-inspection', width)).setY(height * .69).setVisible(true)
     nodes.dragonKing.setX(width * .82).setY(height * .55).setVisible(true)
-    nodes.weapons.setX(width * .55).setY(height * .6).setCrop().setDisplaySize(396, 198).setVisible(false)
+    nodes.sabre.setX(width * .55).setY(height * .6); nodes.halberd.setX(width * .55).setY(height * .6); nodes.staff.setX(width * .55).setY(height * .6); hideWeapons(nodes)
     nodes.effects.setX(width * .55).setY(height * .44).setCrop().setVisible(false)
     setEffect('none'); setSelected('none')
   }
@@ -70,14 +76,19 @@ export function RuyiStaffScene({ events, replayToken, reducedMotion, muted, onPl
     if (event.type === 'instruction-accepted') { showCell(nodes.effects, 0, 150, 120); setEffect('accepted') }
     if (event.type === 'state-changed') {
       nodes.wukong.setX(xFor(event.state, scene.scale.width)); nodes.effects.setVisible(false); setEffect('none')
-      if (event.state === 'weights-inspected') { nodes.weapons.setCrop().setDisplaySize(396, 198).setVisible(true); setSelected('all') }
-      if (event.state === 'ruyi-staff-selected') { showCell(nodes.weapons, 2); setSelected('ruyi-staff') }
-      if (event.state === 'ruyi-staff-shrunk') { showCell(nodes.weapons, 2, 52, 78); setSelected('ruyi-staff-shrunk') }
+      if (event.state === 'weights-inspected') {
+        hideWeapons(nodes)
+        showSabre(nodes.sabre, 90, 135); showCell(nodes.halberd, 1, 90, 135); showCell(nodes.staff, 2, 90, 135)
+        nodes.sabre.setX(scene.scale.width * .43); nodes.halberd.setX(scene.scale.width * .55); nodes.staff.setX(scene.scale.width * .67)
+        setSelected('all')
+      }
+      if (event.state === 'ruyi-staff-selected') { hideWeapons(nodes); nodes.staff.setX(scene.scale.width * .55); showCell(nodes.staff, 2); setSelected('ruyi-staff') }
+      if (event.state === 'ruyi-staff-shrunk') { hideWeapons(nodes); nodes.staff.setX(scene.scale.width * .55); showCell(nodes.staff, 2, 52, 78); setSelected('ruyi-staff-shrunk') }
     }
     if (event.type === 'instruction-rejected') {
       showCell(nodes.effects, 1, 150, 120); setEffect('blocked')
-      if (event.opcode === 'choose_sabre') { showCell(nodes.weapons, 0); setSelected('sabre') }
-      if (event.opcode === 'choose_halberd') { showCell(nodes.weapons, 1); setSelected('halberd') }
+      if (event.opcode === 'choose_sabre') { hideWeapons(nodes); nodes.sabre.setX(scene.scale.width * .55); showSabre(nodes.sabre); setSelected('sabre') }
+      if (event.opcode === 'choose_halberd') { hideWeapons(nodes); nodes.halberd.setX(scene.scale.width * .55); showCell(nodes.halberd, 1); setSelected('halberd') }
     }
     if (event.type === 'run-finished' && event.messageCode.endsWith('.completed')) { showCell(nodes.effects, 2, 150, 120); setEffect('success') }
     setState(event.state); setMessages((current) => [...current, transcript(event)])
@@ -108,16 +119,18 @@ export function RuyiStaffScene({ events, replayToken, reducedMotion, muted, onPl
       preload() {
         if (!owns()) return
         this.load.once('loaderror', () => { if (!owns()) return; failed = true; generationRef.current += 1; activeRef.current = false; if (sceneRef.current?.owner === owner) sceneRef.current = null; if (nodesRef.current?.owner === owner) nodesRef.current = null; setMessages([]); setLoadError('龙宫场景资源加载失败，请重试。') })
-        this.load.image('background', assetUrl('/assets/dragon-palace/background.webp')); this.load.image('wukong', assetUrl('/assets/dragon-palace/wukong.webp')); this.load.image('dragonKing', assetUrl('/assets/dragon-palace/dragon-king.webp')); this.load.image('weapons', assetUrl('/assets/dragon-palace/weapons.webp')); this.load.image('effects', assetUrl('/assets/dragon-palace/effects.webp'))
+        this.load.image('background', assetUrl('/assets/dragon-palace/background.webp')); this.load.image('wukong', assetUrl('/assets/dragon-palace/wukong.webp')); this.load.image('dragonKing', assetUrl('/assets/dragon-palace/dragon-king.webp')); this.load.image('weapons', assetUrl('/assets/dragon-palace/weapons.webp')); this.load.image('sabre', assetUrl('/assets/dragon-palace/sabre.webp')); this.load.image('effects', assetUrl('/assets/dragon-palace/effects.webp'))
       }
       create() {
         if (!owns()) return; const { width, height } = this.scale
         const background = this.add.image(width / 2, height / 2, 'background').setDisplaySize(width, height)
         const wukong = this.add.image(width * .18, height * .69, 'wukong').setDisplaySize(150, 150).setOrigin(.5, .5)
         const dragonKing = this.add.image(width * .82, height * .55, 'dragonKing').setDisplaySize(175, 175).setOrigin(.5, .5)
-        const weapons = this.add.image(width * .55, height * .6, 'weapons').setOrigin(.5, .5).setVisible(false)
+        const sabre = this.add.image(width * .55, height * .6, 'sabre').setOrigin(.5, .5).setVisible(false)
+        const halberd = this.add.image(width * .55, height * .6, 'weapons').setOrigin(.5, .5).setVisible(false)
+        const staff = this.add.image(width * .55, height * .6, 'weapons').setOrigin(.5, .5).setVisible(false)
         const effects = this.add.image(width * .55, height * .44, 'effects').setOrigin(.5, .5).setVisible(false)
-        if (!owns()) return; sceneRef.current = { owner, scene: this }; nodesRef.current = { owner, nodes: { background, wukong, dragonKing, weapons, effects } }; this.sound.mute = mutedRef.current; startRef.current()
+        if (!owns()) return; sceneRef.current = { owner, scene: this }; nodesRef.current = { owner, nodes: { background, wukong, dragonKing, sabre, halberd, staff, effects } }; this.sound.mute = mutedRef.current; startRef.current()
       }
     }
     game = new Phaser.Game({ type: Phaser.AUTO, parent: id, width: 760, height: 320, transparent: true, scene: Scene, render: { antialias: true, pixelArt: false } })
