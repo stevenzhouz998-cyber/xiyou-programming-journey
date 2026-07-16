@@ -1,10 +1,10 @@
 # Ruyi Staff code battle browser verification
 
 - Date: 2026-07-16 (Asia/Shanghai)
-- Tested implementation and strengthened browser-evidence commit: `0c027d58c47da4fe455ae302e806ba89fa08b79d`; the commit containing this document is evidence-only.
+- Tested implementation: `cb4e0ca29a68e588795de41fb775fc4a9869261c`; the commit containing this document is evidence-only and does not alter the tested product, tests, or budgets.
 - Runner: Playwright against the local production Vite preview, with five configured projects and one worker
 - Projects: Chromium 1440×1024, Firefox 1440×1024, WebKit 768×1024, touch Chromium 390×844, and touch Chromium 320×844
-- Full result: **112/112 passed in 6.2 minutes; zero failures, zero skipped tests, and zero skipped projects**
+- Final full result: **112/112 passed in 6.1 minutes; zero failures, zero skipped tests, and zero skipped projects**. The immediately preceding complete run was **111/112 passed in 8.2 minutes**: one legacy Parent PIN recovery checkbox wait timed out on tablet WebKit while every `w1-m2` scenario passed. That transient is retained and investigated below rather than being hidden by the final green run.
 
 ## What the real-browser path proves
 
@@ -50,8 +50,8 @@ Every final project measured the same cold response-body total:
 
 | Route | Measured bytes | Limit | Headroom |
 | --- | ---: | ---: | ---: |
-| `w1-m1 龙宫求兵` | 2,600,688 | 2,621,440 | 20,752 |
-| `w1-m2 定海神针` | 2,604,951 | 2,621,440 | 16,489 |
+| `w1-m1 龙宫求兵` | 2,601,898 | 2,621,440 | 19,542 |
+| `w1-m2 定海神针` | 2,607,187 | 2,621,440 | 14,253 |
 
 The final desktop Chromium homepage measurement was 656,381 B / 665,600 B, leaving 9,219 B of headroom; transferred bytes were 256,269 B. The same fixed gate passed in all five projects. These are narrow margins, not permission to add eager route code.
 
@@ -61,17 +61,17 @@ Static bundle gates also passed:
 
 | Gate | Final result |
 | --- | ---: |
-| Entry static JS | 104.8 KiB gzip / 180 KiB |
-| Conservative homepage | 417.3 KiB / 650 KiB |
+| Entry static JS | 105.0 KiB gzip / 180 KiB |
+| Conservative homepage | 417.4 KiB / 650 KiB |
 | Phaser | 1,168.4 KiB raw / 1,600 KiB |
 | Blockly workspace closure | 997.7 KiB raw / 287.5 KiB gzip |
 | Ruyi Staff Blockly closure | 994.1 KiB raw / 287.1 KiB gzip |
 | Dragon Palace scene closure | 1,477.3 KiB raw / 423.2 KiB gzip |
-| Ruyi Staff scene closure | 1,478.4 KiB raw / 423.4 KiB gzip |
+| Ruyi Staff scene closure | 1,478.6 KiB raw / 423.5 KiB gzip |
 
 ## Asset and screenshot QA
 
-Six approved generated Dragon Palace assets are used by the formal battle screens. The new standalone broad sabre replaces the old semantic mismatch in which the source prompt and pixels were a spear while the UI called it a sabre. Its manifest records the built-in image-generation source, exact accepted prompt, 256×384 dimensions, SHA-256 `2adc8aba6d92794030ec3dd863fadd7378cf3f6f279ed2ef5c833bf5f909159c`, real scene slots, and `visual-qa-passed`. The original weapon sheet remains unchanged for its genuine halberd and staff cells. All six files total **264,450 B / 1,310,720 B**; no unproven character, beast, scene, equipment, magic-item, effect, collectible, or decorative asset was added.
+Six approved generated Dragon Palace assets are used by the formal battle screens. The new standalone broad sabre replaces the old semantic mismatch in which the source prompt and pixels were a spear while the UI called it a sabre. Its manifest records the built-in image-generation source, exact accepted prompt, 256×384 dimensions, SHA-256 `2adc8aba6d92794030ec3dd863fadd7378cf3f6f279ed2ef5c833bf5f909159c`, real scene slots, and `visual-qa-passed`. The original weapon sheet remains unchanged for its genuine halberd and staff cells. The standalone sabre contributes **6,776 B** to the measured `w1-m2` cold-load total. All six files total **264,450 B / 1,310,720 B**; no unproven character, beast, scene, equipment, magic-item, effect, collectible, or decorative asset was added.
 
 The persisted `w1-m2` success state was captured after the visible wrong-program-to-correct-program child path:
 
@@ -109,6 +109,7 @@ The gate failed before it passed:
 18. The first bundle graph after that structural split failed because `MissionPageContent` statically imported the application entry through shared icon/chunk placement. Explicit route-shared and shared icon chunking removed the reverse entry edge and all dependency cycles. The final real homepage is 656,381 B, 9,219 B under the unchanged gate.
 19. The full unit suite then passed 571/572: one old source contract still required `App.tsx` to lazy-load `RuyiStaffExperience` directly. The assertion was updated to enforce the stronger architecture—`App.tsx` lazy-loads `MissionPageContent`, which independently lazy-loads Dragon Palace, Ruyi Staff, and legacy mission tools. The focused test passed 8/8, the full unit suite passed 572/572, and the final five-project run passed **112/112** in 6.0 minutes.
 20. Final specification review rejected the external one-star scenario and this document's former no-injection claim: the test used `page.evaluate` to assign `progress.missions['w1-m2']`, write CURRENT, and increment the revision directly. A new source contract first passed only 22/24, failing on both that injected completion and the missing health listener for a required second page. The replacement uses the two real pages described above; `page.evaluate` only toggles the explicit failure switch or reads evidence. The focused Chromium scenario passed 1/1, the source contracts passed 24/24, and the complete five-project matrix passed **112/112** in 6.2 minutes. The no-injection claim now rests on real product behavior plus a regression gate rather than the removed synthetic write.
+21. The controller's first fresh complete run against tested implementation `cb4e0ca29a68e588795de41fb775fc4a9869261c` passed **111/112 in 8.2 minutes**. The sole failure was a timeout waiting for the legacy Parent PIN recovery checkbox in the tablet WebKit project; all 26 assigned `w1-m2` scenarios passed. No product, test, or budget was changed during investigation. The exact target then passed alone 1/1, with `--repeat-each=5` at 5/5, as part of the full WebKit `commercial-foundation` file at 11/11, and with `--repeat-each=20` at 20/20: **27 targeted successes** in total. A second complete five-project run then passed **112/112 in 6.1 minutes**. This evidence supports classifying the first timeout as transient while preserving it in the record.
 
 ## Commands and final results
 
@@ -123,12 +124,13 @@ npm audit --registry=https://registry.npmjs.org --audit-level=high
 git diff --check
 ```
 
-- `npm test`: 36 Vitest files / 572 tests, 24 bundle tests, and 27 asset tests passed;
+- `npm test`: 36 Vitest files / 575 tests, 24 bundle-script tests, and 27 asset tests passed;
 - `npm run typecheck`: exit 0;
 - `npm run verify:assets`: 6 files, 264,450 B / 1,310,720 B, all approved manifest checks passed;
 - `npm run verify:bundle`: all fixed entry, homepage, Phaser, Blockly, Ruyi Staff and scene closure gates passed;
 - `npx playwright test --list`: exactly 112 tests across the five projects listed above;
-- `npx playwright test`: 112/112 passed in 6.2 minutes, with zero failures and zero skips;
+- first controller `npx playwright test`: 111/112 passed in 8.2 minutes; the sole tablet WebKit legacy Parent PIN recovery timeout was followed by 27/27 targeted successes without implementation or test changes;
+- second controller `npx playwright test`: 112/112 passed in 6.1 minutes, with zero failures and zero skips;
 - official npm registry audit: zero known vulnerabilities;
 - `git diff --check`: no errors;
 - secret scan: no credential/key patterns found;
@@ -148,4 +150,4 @@ The product scan found only intentional occurrences: five `no emoji` prompt cons
 
 `整站：not complete`
 
-The cold-load headroom remains small: 20,752 B for `w1-m1`, 16,489 B for `w1-m2`, and 9,219 B for the measured homepage. The formal Blockly route also depends on an external Blockly sprite. Existing global JPEG/audio provenance is incomplete; the untouched legacy world map remains outside release approval. Public deployment, production 404 behavior, deployed version matching, and public-network performance were not verified. The optional GStack browser wrapper was unavailable because it required setup, so no tool installation was performed; all claimed browser evidence comes from the project's real Chromium, Firefox, and WebKit Playwright runs plus original-resolution screenshot inspection.
+The cold-load headroom remains small: 19,542 B for `w1-m1`, 14,253 B for `w1-m2`, and 9,219 B for the measured homepage. The formal Blockly route also depends on an external Blockly sprite. Existing global JPEG/audio provenance is incomplete; the untouched legacy world map remains outside release approval. Public deployment, production 404 behavior, deployed version matching, and public-network performance were not verified. The optional GStack browser wrapper was unavailable because it required setup, so no tool installation was performed; all claimed browser evidence comes from the project's real Chromium, Firefox, and WebKit Playwright runs plus original-resolution screenshot inspection.
