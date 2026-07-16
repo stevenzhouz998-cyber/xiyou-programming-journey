@@ -21,6 +21,17 @@ function chainDraft(count: number): RuyiWorkspaceDraftV1 {
 type DraftSaveResult = { status: 'saved' | 'unsaved' | 'conflict' }
 type DraftSaver = (draft: RuyiWorkspaceDraftV1) => DraftSaveResult | Promise<DraftSaveResult>
 
+function stubBlocklySvgMetrics() {
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800)
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600)
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(800)
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(600)
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0, y: 0, top: 0, right: 800, bottom: 600, left: 0,
+    width: 800, height: 600, toJSON: () => ({}),
+  })
+}
+
 function setup(draft = EMPTY, onDraftChange: DraftSaver = vi.fn(() => ({ status: 'saved' as const })), locked = false) {
   const workspace = new Blockly.Workspace()
   const onRun = vi.fn<(result: RuyiCompileResult) => void>()
@@ -40,7 +51,7 @@ function setup(draft = EMPTY, onDraftChange: DraftSaver = vi.fn(() => ({ status:
 }
 
 describe('RuyiStaffBlocklyWorkspace', () => {
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
   it('locks every mutation and run control behind one child-readable final-save message', () => {
     const onDraftChange = vi.fn<DraftSaver>(() => ({ status: 'saved' as const }))
@@ -124,19 +135,10 @@ describe('RuyiStaffBlocklyWorkspace', () => {
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
     })))
+    stubBlocklySvgMetrics()
     let workspace!: Blockly.WorkspaceSvg
     const onDraftChange = vi.fn<DraftSaver>(() => ({ status: 'saved' as const }))
     const adapter = { create: (host: HTMLDivElement) => {
-      Object.defineProperties(host, {
-        clientWidth: { configurable: true, value: 800 },
-        clientHeight: { configurable: true, value: 600 },
-        offsetWidth: { configurable: true, value: 800 },
-        offsetHeight: { configurable: true, value: 600 },
-      })
-      host.getBoundingClientRect = () => ({
-        x: 0, y: 0, top: 0, right: 800, bottom: 600, left: 0,
-        width: 800, height: 600, toJSON: () => ({}),
-      })
       workspace = Blockly.inject(host, { sounds: false })
       return workspace
     } }
@@ -189,19 +191,10 @@ describe('RuyiStaffBlocklyWorkspace', () => {
     const draft: RuyiWorkspaceDraftV1 = { version: 1, blocks: [
       { id: 'narrow-lock-root', type: 'xiyou_inspect_weights', nextId: null, x: 84, y: 66 },
     ] }
+    stubBlocklySvgMetrics()
     let workspace!: Blockly.WorkspaceSvg
     const onDraftChange = vi.fn<DraftSaver>(() => ({ status: 'saved' as const }))
     const adapter = { create: (host: HTMLDivElement) => {
-      Object.defineProperties(host, {
-        clientWidth: { configurable: true, value: 800 },
-        clientHeight: { configurable: true, value: 600 },
-        offsetWidth: { configurable: true, value: 800 },
-        offsetHeight: { configurable: true, value: 600 },
-      })
-      host.getBoundingClientRect = () => ({
-        x: 0, y: 0, top: 0, right: 800, bottom: 600, left: 0,
-        width: 800, height: 600, toJSON: () => ({}),
-      })
       workspace = Blockly.inject(host, { sounds: false })
       return workspace
     } }
