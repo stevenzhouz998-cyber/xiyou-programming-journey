@@ -22,6 +22,7 @@ function coarsePointerRules(css: string): CSSStyleRule[] {
 describe('commercial responsive shell', () => {
   it('keeps heavy mission tools out of the app entry and declares responsive foundations', () => {
     const app = readFileSync('src/App.tsx', 'utf8');
+    const missionPage = readFileSync('src/components/MissionPageContent.tsx', 'utf8');
     const css = readFileSync('src/styles.css', 'utf8');
     const html = readFileSync('index.html', 'utf8');
     expect(html).toContain('<html lang="zh-CN">');
@@ -30,7 +31,11 @@ describe('commercial responsive shell', () => {
     expect(app).not.toMatch(/from ['"].*AiLab/);
     expect(app).not.toMatch(/from ['"].*GameScene/);
     expect(app).not.toMatch(/from ['"].*RuyiStaffExperience/);
-    expect(app).toMatch(/lazy\(\(\) => import\(['"]\.\/components\/RuyiStaffExperience['"]\)/);
+    expect(app).not.toMatch(/from ['"].*MissionPageContent/);
+    expect(app).toMatch(/lazy\(\(\) => import\(['"]\.\/components\/MissionPageContent['"]\)/);
+    expect(missionPage).toMatch(/lazy\(\(\) => import\(['"]\.\/DragonPalaceExperience['"]\)/);
+    expect(missionPage).toMatch(/lazy\(\(\) => import\(['"]\.\/MissionTools['"]\)/);
+    expect(missionPage).toMatch(/lazy\(\(\) => import\(['"]\.\/RuyiStaffExperience['"]\)/);
     expect(css).not.toMatch(/(?:html|body)\s*\{[^}]*min-width:\s*1180px/s);
     expect(css).toMatch(/@media\s*\([^)]*max-width:\s*900px/);
     expect(css).toMatch(/@media\s*\([^)]*max-width:\s*600px/);
