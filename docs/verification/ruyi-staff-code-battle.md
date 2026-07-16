@@ -1,10 +1,10 @@
 # Ruyi Staff code battle browser verification
 
 - Date: 2026-07-16 (Asia/Shanghai)
-- Tested implementation and strengthened browser-evidence commit: `50cfcf0eb4e756caa6ff924dd94cb76a196d11c0`; the commit containing this document is evidence-only.
+- Tested implementation and strengthened browser-evidence commit: `0c027d58c47da4fe455ae302e806ba89fa08b79d`; the commit containing this document is evidence-only.
 - Runner: Playwright against the local production Vite preview, with five configured projects and one worker
 - Projects: Chromium 1440×1024, Firefox 1440×1024, WebKit 768×1024, touch Chromium 390×844, and touch Chromium 320×844
-- Full result: **112/112 passed in 6.0 minutes; zero failures, zero skipped tests, and zero skipped projects**
+- Full result: **112/112 passed in 6.2 minutes; zero failures, zero skipped tests, and zero skipped projects**
 
 ## What the real-browser path proves
 
@@ -18,6 +18,7 @@ Additional matrix coverage includes:
 - a standalone generated broad sabre path: the visible Blockly graph selects the 3,600-jin sabre and shrinks it, the formal scene shows that exact approved sabre asset and a blocked action, and the child sees `3,600 < 13,500` instead of hidden success;
 - two independent visible runs created from only the completed `w1-m1` fixture: a standard-motion, unmuted baseline and a separate reduced-motion, muted-before-execution page. Both build and execute the real Blockly program; after normalizing independently generated block IDs, their complete trace, events, and final state are exactly equal. The baseline observes the success-audio request and media play, while the muted page observes zero success-audio requests and zero `HTMLMediaElement.play` calls;
 - intentional storage failure with a visible retry path, without falsely reporting an unsaved result as persisted;
+- a real two-page external-completion race: the first page reaches a visible completion-save failure using only the approved failure switch; a second health-monitored browser page visibly deletes the inherited three-block program, opens two hint tiers, rebuilds the real Blockly graph, executes the formal battle, and earns one star through product logic. The first page then retries through revision CAS, receives the normal external conflict, visibly loads that version, and shows the same one-star result and complete session identity without rewriting CURRENT;
 - corrupt V3 recovery, snapshot recovery, stable recovered block IDs, and byte-preserving damaged-source download;
 - parent aggregate plus export/import through the visible parent flow: the complete exported `w1-m2` session exactly matches storage, a visible mission edit removes the shrink block and persists a different two-block session, and visible parent import restores the complete exported session exactly;
 - exact 503 paths for the outer Ruyi Staff experience, the formal Ruyi scene, and the real Ruyi Blockly workspace. Inner failures leave the unaffected half usable, while every failure retains the story, objective, local error, and explicit reload action;
@@ -107,6 +108,7 @@ The gate failed before it passed:
 17. The first complete run after adding the real sabre was stopped by a genuine homepage budget failure: **665,900 B / 665,600 B**, 300 B over the fixed ceiling. Tiny trimming reached the ceiling exactly but was rejected as zero headroom. The mission page shell, mission-specific experience code, and mission tools were therefore moved behind a route-level dynamic boundary.
 18. The first bundle graph after that structural split failed because `MissionPageContent` statically imported the application entry through shared icon/chunk placement. Explicit route-shared and shared icon chunking removed the reverse entry edge and all dependency cycles. The final real homepage is 656,381 B, 9,219 B under the unchanged gate.
 19. The full unit suite then passed 571/572: one old source contract still required `App.tsx` to lazy-load `RuyiStaffExperience` directly. The assertion was updated to enforce the stronger architecture—`App.tsx` lazy-loads `MissionPageContent`, which independently lazy-loads Dragon Palace, Ruyi Staff, and legacy mission tools. The focused test passed 8/8, the full unit suite passed 572/572, and the final five-project run passed **112/112** in 6.0 minutes.
+20. Final specification review rejected the external one-star scenario and this document's former no-injection claim: the test used `page.evaluate` to assign `progress.missions['w1-m2']`, write CURRENT, and increment the revision directly. A new source contract first passed only 22/24, failing on both that injected completion and the missing health listener for a required second page. The replacement uses the two real pages described above; `page.evaluate` only toggles the explicit failure switch or reads evidence. The focused Chromium scenario passed 1/1, the source contracts passed 24/24, and the complete five-project matrix passed **112/112** in 6.2 minutes. The no-injection claim now rests on real product behavior plus a regression gate rather than the removed synthetic write.
 
 ## Commands and final results
 
@@ -121,12 +123,12 @@ npm audit --registry=https://registry.npmjs.org --audit-level=high
 git diff --check
 ```
 
-- `npm test`: 36 Vitest files / 572 tests, 23 bundle tests, and 27 asset tests passed;
+- `npm test`: 36 Vitest files / 572 tests, 24 bundle tests, and 27 asset tests passed;
 - `npm run typecheck`: exit 0;
 - `npm run verify:assets`: 6 files, 264,450 B / 1,310,720 B, all approved manifest checks passed;
 - `npm run verify:bundle`: all fixed entry, homepage, Phaser, Blockly, Ruyi Staff and scene closure gates passed;
 - `npx playwright test --list`: exactly 112 tests across the five projects listed above;
-- `npx playwright test`: 112/112 passed in 6.0 minutes, with zero failures and zero skips;
+- `npx playwright test`: 112/112 passed in 6.2 minutes, with zero failures and zero skips;
 - official npm registry audit: zero known vulnerabilities;
 - `git diff --check`: no errors;
 - secret scan: no credential/key patterns found;
