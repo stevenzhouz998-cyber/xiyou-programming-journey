@@ -183,11 +183,13 @@ describe('FourSeasRegaliaExperience', () => {
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:compile-conflict')
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
     const downloadClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    const persistence = vi.fn()
     render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('../progress/storageCoordinator'))}>
-      <FourSeasRegaliaExperience reducedMotion muted onComplete={() => undefined} /><LearnerName />
+      <FourSeasRegaliaExperience reducedMotion muted onComplete={() => undefined} onSessionPersistenceActiveChange={persistence} /><LearnerName />
     </ProgressProvider>)
     fireEvent.click(await screen.findByRole('button', { name: '执行披挂指令' }, { timeout: 5000 }))
     expect(await screen.findByText('编译失败记录与其他标签页冲突。')).toBeVisible()
+    expect(persistence).toHaveBeenLastCalledWith(true)
     expect(screen.getAllByRole('button', { name: '下载本页备份' })).toHaveLength(1)
     expect(screen.getAllByRole('button', { name: '载入其他标签页版本' })).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: '下载本页备份' }))
@@ -197,7 +199,27 @@ describe('FourSeasRegaliaExperience', () => {
     fireEvent.click(screen.getByRole('button', { name: '载入其他标签页版本' }))
     await waitFor(() => expect(screen.getByTestId('learner-name')).toHaveTextContent('外部标签页版本'))
     expect(screen.queryByText('编译失败记录与其他标签页冲突。')).not.toBeInTheDocument()
+    expect(persistence).toHaveBeenLastCalledWith(false)
     expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeEnabled()
+  })
+
+  it('releases a retained compile-session conflict owner when the Experience unmounts', async () => {
+    const save = vi.fn<SaveCoordinator>(async (progress, expectedRevision) => ({
+      status: 'conflict',
+      progress,
+      expectedRevision,
+      actualRevision: expectedRevision + 1,
+      error: 'compile owner unmount conflict',
+    }))
+    const persistence = vi.fn()
+    const view = render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('../progress/storageCoordinator'))}>
+      <FourSeasRegaliaExperience reducedMotion muted onComplete={() => undefined} onSessionPersistenceActiveChange={persistence} />
+    </ProgressProvider>)
+    fireEvent.click(await screen.findByRole('button', { name: '执行披挂指令' }, { timeout: 5000 }))
+    expect(await screen.findByText('编译失败记录与其他标签页冲突。')).toBeVisible()
+    expect(persistence).toHaveBeenLastCalledWith(true)
+    view.unmount()
+    expect(persistence).toHaveBeenLastCalledWith(false)
   })
 
   it('persists and visibly plays the exact wrong nested trace without completing', async () => {

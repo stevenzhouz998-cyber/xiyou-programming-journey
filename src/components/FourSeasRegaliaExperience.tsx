@@ -250,7 +250,6 @@ export function FourSeasRegaliaExperience({
       || sessionOperationRef.current.kind !== operation.kind) return
     setSessionOperation({ ...operation, status })
     setInteractionLocked(true, 'session-recovery')
-    if (status === 'conflict') sessionPersistenceRef.current(false)
   }
 
   const recordCompileSessionSave = (requestId: number, saved: CoordinatedSaveResult) => {

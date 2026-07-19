@@ -318,6 +318,78 @@ describe('西游编程记', () => {
     expect(screen.getByRole('button', { name: '观察提示' })).toBeEnabled();
   });
 
+  it('keeps a w1-m3 run-session CAS conflict under exactly one Experience recovery owner until external load', async () => {
+    await import('./components/RecoveryNotice');
+    const progress = unlockedW1M3Progress();
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    const external = structuredClone(progress);
+    external.learnerName = '四海外部标签页';
+    const save = vi.fn<SaveCoordinator>(async (next, expectedRevision) => {
+      if (next.sessions['w1-m3']?.lastRun?.completed && !next.missions['w1-m3']) {
+        localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(external));
+        return { status: 'conflict', progress: next, expectedRevision, actualRevision: expectedRevision + 1, error: 'w1-m3 run conflict' };
+      }
+      return { status: 'saved', revision: expectedRevision + 1, progress: next };
+    });
+    window.location.hash = '#/mission/w1-m3';
+    render(<App loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('./progress/storageCoordinator'))} />);
+
+    await buildCorrectFourSeasProgram();
+    fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }));
+
+    expect(await screen.findByText('本关运行记录与其他标签页冲突。')).toBeVisible();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    expect(screen.getAllByRole('button', { name: '下载本页备份' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: '载入其他标签页版本' })).toHaveLength(1);
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.queryByText(/其他标签页已更新，已暂停保存/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重试保存通关' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeDisabled();
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).learnerName).toBe('四海外部标签页');
+
+    fireEvent.click(screen.getByRole('button', { name: '载入其他标签页版本' }));
+    await waitFor(() => expect(screen.queryByText('本关运行记录与其他标签页冲突。')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: '下载本页备份' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '载入其他标签页版本' })).not.toBeInTheDocument();
+    expect(screen.getByText('四海外部标签页')).toBeVisible();
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).learnerName).toBe('四海外部标签页');
+    expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeEnabled();
+  });
+
+  it('releases the w1-m3 compile-conflict owner on route unmount so the same external CURRENT stays recoverable', async () => {
+    await import('./components/RecoveryNotice');
+    const progress = unlockedW1M3Progress();
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    const external = structuredClone(progress);
+    external.learnerName = '卸载后的外部版本';
+    const save = vi.fn<SaveCoordinator>(async (next, expectedRevision) => {
+      if (next.sessions['w1-m3']?.compileFailures === 1) {
+        localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(external));
+        return { status: 'conflict', progress: next, expectedRevision, actualRevision: expectedRevision + 1, error: 'w1-m3 compile conflict' };
+      }
+      return { status: 'saved', revision: expectedRevision + 1, progress: next };
+    });
+    window.location.hash = '#/mission/w1-m3';
+    render(<App loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('./progress/storageCoordinator'))} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '执行披挂指令' }, { timeout: 5000 }));
+    expect(await screen.findByText('编译失败记录与其他标签页冲突。')).toBeVisible();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    expect(screen.getAllByRole('button', { name: '下载本页备份' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: '载入其他标签页版本' })).toHaveLength(1);
+    expect(screen.queryByText(/其他标签页已更新，已暂停保存/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: '成长地图' })[0]);
+    expect(await screen.findByText(/其他标签页已更新，已暂停保存/)).toBeVisible();
+    expect(screen.getAllByRole('button', { name: '下载本页备份' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: '载入其他标签页版本' })).toHaveLength(1);
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).learnerName).toBe('卸载后的外部版本');
+    fireEvent.click(screen.getByRole('button', { name: '载入其他标签页版本' }));
+    await waitFor(() => expect(screen.queryByText(/其他标签页已更新，已暂停保存/)).not.toBeInTheDocument());
+    expect(screen.getByText('卸载后的外部版本')).toBeVisible();
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).learnerName).toBe('卸载后的外部版本');
+  });
+
   it('isolates the outer Four Seas experience chunk and keeps story and objective with explicit retry', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const reloadPage = vi.fn();
