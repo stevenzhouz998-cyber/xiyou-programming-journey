@@ -7,6 +7,18 @@ export type RuyiStaffOpcode =
   | 'choose_ruyi_staff'
   | 'shrink_ruyi_staff'
 
+export type FourSeasOpcode =
+  | 'request_regalia'
+  | 'collect_gifts'
+  | 'receive_cloud_boots'
+  | 'receive_golden_armor'
+  | 'receive_purple_crown'
+  | 'equip_regalia'
+  | 'wear_crown'
+  | 'wear_armor'
+  | 'wear_boots'
+  | 'verify_regalia'
+
 export type BattleOpcode = DragonPalaceOpcode | RuyiStaffOpcode
 
 export type RuyiStaffState =
@@ -22,7 +34,20 @@ export type DragonPalaceState =
   | 'weapon-requested'
   | 'weapon-tested'
 
-export type BattleState = DragonPalaceState | RuyiStaffState
+export type FourSeasState =
+  | 'awaiting-request'
+  | 'regalia-requested'
+  | 'collecting-gifts'
+  | 'cloud-boots-received'
+  | 'golden-armor-received'
+  | 'all-gifts-received'
+  | 'equipping-regalia'
+  | 'crown-equipped'
+  | 'armor-equipped'
+  | 'regalia-equipped'
+  | 'regalia-verified'
+
+export type BattleState = DragonPalaceState | RuyiStaffState | FourSeasState
 
 interface MissionBattleInstruction<TOpcode extends BattleOpcode> {
   instructionId: string
@@ -33,6 +58,13 @@ interface MissionBattleInstruction<TOpcode extends BattleOpcode> {
 export type DragonPalaceInstruction = MissionBattleInstruction<DragonPalaceOpcode>
 
 export type RuyiStaffInstruction = MissionBattleInstruction<RuyiStaffOpcode>
+
+export interface FourSeasInstruction {
+  instructionId: string
+  sourceBlockId: string
+  parentBlockId: string | null
+  opcode: FourSeasOpcode
+}
 
 export type BattleInstruction = DragonPalaceInstruction | RuyiStaffInstruction
 
@@ -172,5 +204,75 @@ export type RuyiStaffBattleRunResult = {
         completed: false
         finalState: RuyiStaffState
         diagnostic: RuyiStaffBattleDiagnostic
+      }
+  )
+
+interface FourSeasEventBase {
+  state: FourSeasState
+  messageCode: string
+}
+
+type FourSeasLifecycleEvent<T extends 'run-started' | 'run-finished'> =
+  FourSeasEventBase & {
+    type: T
+    instructionId: null
+    sourceBlockId: null
+    parentBlockId: null
+    opcode: null
+  }
+
+type FourSeasInstructionEvent<
+  T extends 'instruction-accepted' | 'instruction-rejected' | 'state-changed',
+> = FourSeasEventBase & {
+  type: T
+  instructionId: string
+  sourceBlockId: string
+  parentBlockId: string | null
+  opcode: FourSeasOpcode
+}
+
+export type FourSeasBattleEvent =
+  | FourSeasLifecycleEvent<'run-started'>
+  | FourSeasLifecycleEvent<'run-finished'>
+  | FourSeasInstructionEvent<
+      'instruction-accepted' | 'instruction-rejected' | 'state-changed'
+    >
+
+export type FourSeasBattleDiagnostic =
+  | {
+      type: 'instruction-rejected'
+      concept: 'sequence-precondition' | 'container-scope'
+      state: FourSeasState
+      instructionId: string
+      sourceBlockId: string
+      parentBlockId: string | null
+      opcode: FourSeasOpcode
+      messageCode: string
+    }
+  | {
+      type: 'program-ended-incomplete'
+      concept: 'completeness'
+      state: FourSeasState
+      instructionId: null
+      sourceBlockId: string | null
+      parentBlockId: null
+      opcode: null
+      messageCode: string
+    }
+
+export type FourSeasBattleRunResult = {
+  events: FourSeasBattleEvent[]
+  penalty: BattlePenalty
+} &
+  (
+    | {
+        completed: true
+        finalState: 'regalia-verified'
+        diagnostic: null
+      }
+    | {
+        completed: false
+        finalState: FourSeasState
+        diagnostic: FourSeasBattleDiagnostic
       }
   )
