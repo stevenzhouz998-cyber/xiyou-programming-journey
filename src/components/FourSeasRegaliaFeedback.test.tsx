@@ -1,0 +1,97 @@
+import { fireEvent, render, screen } from '@testing-library/react'
+import { expect, it, vi } from 'vitest'
+import type { FourSeasBattleDiagnostic } from '../battle/types'
+import type { FourSeasCompileResult } from '../blockly/fourSeasRegaliaCompiler'
+import { FourSeasRegaliaFeedback } from './FourSeasRegaliaFeedback'
+
+type CompileDiagnostic = Extract<FourSeasCompileResult, { ok: false }>['diagnostics'][number]
+
+function runtime(
+  messageCode: string,
+  sourceBlockId: string | null = 'problem-block',
+): FourSeasBattleDiagnostic {
+  if (messageCode.includes('incomplete')) {
+    return {
+      type: 'program-ended-incomplete',
+      concept: 'completeness',
+      state: 'all-gifts-received',
+      instructionId: null,
+      sourceBlockId,
+      parentBlockId: 'collect-block',
+      opcode: null,
+      messageCode,
+    }
+  }
+  return {
+    type: 'instruction-rejected',
+    concept: messageCode.includes('wrong-scope') ? 'container-scope' : 'sequence-precondition',
+    state: 'collecting-gifts',
+    instructionId: 'instruction:problem-block',
+    sourceBlockId: sourceBlockId ?? 'problem-block',
+    parentBlockId: 'collect-block',
+    opcode: messageCode.includes('wear_crown') ? 'wear_crown' : 'receive_purple_crown',
+    messageCode,
+  }
+}
+
+it.each([
+  ['four-seas.wrong-order.receive_purple_crown', '北海龙王还没有送来云履，现在不能先收金冠。'],
+  ['four-seas.wrong-scope.wear_crown', '“戴上金冠”应放在“穿戴整副披挂”任务组中。'],
+  ['four-seas.incomplete.all-gifts-received', '三件宝物已收齐，还要把穿戴步骤分解完整。'],
+])('shows exact child-facing copy for %s and focuses the alert', (messageCode, copy) => {
+  render(
+    <FourSeasRegaliaFeedback
+      diagnostic={runtime(messageCode)}
+      occurrenceId={1}
+      onFocusBlock={() => undefined}
+      onFocusWorkspace={() => undefined}
+    />,
+  )
+  expect(screen.getByRole('alert')).toHaveTextContent(copy)
+  expect(screen.getByRole('alert')).toHaveFocus()
+  expect(screen.getByRole('alert')).not.toHaveTextContent(messageCode)
+})
+
+it('routes the action to the exact source block or to the workspace', () => {
+  const onFocusBlock = vi.fn()
+  const onFocusWorkspace = vi.fn()
+  const view = render(
+    <FourSeasRegaliaFeedback
+      diagnostic={runtime('four-seas.wrong-order.receive_purple_crown')}
+      occurrenceId={1}
+      onFocusBlock={onFocusBlock}
+      onFocusWorkspace={onFocusWorkspace}
+    />,
+  )
+  fireEvent.click(screen.getByRole('button', { name: '回到问题积木' }))
+  expect(onFocusBlock).toHaveBeenCalledWith('problem-block')
+
+  view.rerender(
+    <FourSeasRegaliaFeedback
+      diagnostic={runtime('four-seas.incomplete.all-gifts-received', null)}
+      occurrenceId={2}
+      onFocusBlock={onFocusBlock}
+      onFocusWorkspace={onFocusWorkspace}
+    />,
+  )
+  fireEvent.click(screen.getByRole('button', { name: '回到编程工作台' }))
+  expect(onFocusWorkspace).toHaveBeenCalledOnce()
+})
+
+it('explains structural compiler failures without exposing internal codes', () => {
+  const diagnostic: CompileDiagnostic = {
+    code: 'missing-child-chain',
+    sourceBlockId: 'collect-block',
+    concept: 'program-structure',
+  }
+  render(
+    <FourSeasRegaliaFeedback
+      diagnostic={diagnostic}
+      occurrenceId={1}
+      onFocusBlock={() => undefined}
+      onFocusWorkspace={() => undefined}
+    />,
+  )
+  expect(screen.getByRole('alert')).toHaveTextContent('任务组里还没有子任务')
+  expect(screen.getByRole('alert')).not.toHaveTextContent('missing-child-chain')
+})

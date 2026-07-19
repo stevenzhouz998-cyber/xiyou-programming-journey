@@ -50,6 +50,8 @@ describe('commercial responsive shell', () => {
     expect(css).toMatch(/@media\s*\([^)]*max-width:\s*900px[\s\S]*\.ruyi-staff-feedback-region[^}]*grid-row:\s*3/s);
     expect(css).toMatch(/\.ruyi-staff-experience\s*\{[^}]*min-width:\s*0/s);
     expect(css).toMatch(/\.ruyi-staff-program-region\s*\{[^}]*min-width:\s*0/s);
+    expect(css).toMatch(/\.four-seas-regalia-workspace\s*\{[^}]*min-width:\s*0[^}]*overflow-x:\s*hidden/s);
+    expect(css).toMatch(/@media\s*\([^)]*max-width:\s*600px[\s\S]*\.four-seas-regalia-workspace\s+\.blockly-host\s*\{[^}]*height:\s*260px/s);
   });
 
   it('keeps only a minimal current-run durability latch instead of retaining saved progress snapshots', () => {
@@ -87,6 +89,7 @@ describe('commercial responsive shell', () => {
       '.block-program-actions button',
       '.battle-feedback button',
       '.unsaved-session button',
+      '.four-seas-helper button',
     ];
     for (const selector of targetSelectors) {
       const rule = rules.find((candidate) => candidate.selectorText.split(',').map((item) => item.trim()).includes(selector));
