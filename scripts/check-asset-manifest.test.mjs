@@ -337,6 +337,54 @@ test('binds slots to one configured Phaser Scene and fails closed on duplicate o
   assert.deepEqual(acceptedInvalidVariants, []);
 });
 
+test('requires exact loader imports and rejects every hidden or untracked image load', async () => {
+  const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const manifestPath = join(sourceRoot, 'docs', 'assets', 'asset-manifest.md');
+  const parsed = parseAssetManifest(await readFile(manifestPath, 'utf8'));
+  const publicFiles = await collectAssetFiles(join(sourceRoot, 'public', 'assets', 'dragon-palace'));
+  const sourceFiles = new Map([
+    ['src/components/GameScene.tsx', await readFile(join(sourceRoot, 'src', 'components', 'GameScene.tsx'), 'utf8')],
+    ['src/components/RuyiStaffScene.tsx', await readFile(join(sourceRoot, 'src', 'components', 'RuyiStaffScene.tsx'), 'utf8')],
+    ['src/components/FourSeasRegaliaScene.tsx', await readFile(join(sourceRoot, 'src', 'components', 'FourSeasRegaliaScene.tsx'), 'utf8')],
+  ]);
+  const sourcePath = 'src/components/FourSeasRegaliaScene.tsx';
+  const source = sourceFiles.get(sourcePath);
+  const exactLoad = "this.load.image('regalia', assetUrl('/assets/dragon-palace/regalia.webp'))";
+  const assetImport = "import { assetUrl } from '../utils/assets'";
+  for (const needle of [exactLoad, assetImport, "import * as Phaser from 'phaser'"]) assert.match(source, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
+  const variants = new Map([
+    ['extra ninth direct image', source.replace(exactLoad, `${exactLoad}\n        this.load.image('worldMap', assetUrl('/assets/world-map.jpg'))`)],
+    ['computed same-key conflict', source.replace(exactLoad, `${exactLoad}\n        this.load['image']('regalia', assetUrl('/assets/dragon-palace/wrong.webp'))`)],
+    ['runtime nested-if conflict', source.replace(exactLoad, `${exactLoad}\n        if (globalThis) { this.load.image('regalia', assetUrl('/assets/dragon-palace/wrong.webp')) }`)],
+    ['local assetUrl replacement', source.replace(assetImport, "const assetUrl = () => '/assets/world-map.jpg'")],
+    ['wrong assetUrl import source', source.replace(assetImport, "import { assetUrl } from '../utils/wrong-assets'")],
+    ['aliased assetUrl import', source.replace(assetImport, "import { assetUrl as assetUrl } from '../utils/assets'")],
+    ['extra loader argument', source.replace(exactLoad, "this.load.image('regalia', assetUrl('/assets/dragon-palace/regalia.webp'), 'extra')")],
+    ['optional loader access', source.replace(exactLoad, "this.load?.image('regalia', assetUrl('/assets/dragon-palace/regalia.webp'))")],
+    ['aliased image loader', source.replace(exactLoad, `${exactLoad}\n        const loadImageLater = this.load.image\n        loadImageLater('regalia', assetUrl('/assets/dragon-palace/wrong.webp'))`)],
+    ['wrong Phaser import source', source.replace("import * as Phaser from 'phaser'", "import * as Phaser from 'fake-phaser'")],
+  ]);
+
+  const acceptedInvalidVariants = [];
+  for (const [name, mutatedSource] of variants) {
+    const mutatedSources = new Map(sourceFiles);
+    mutatedSources.set(sourcePath, mutatedSource);
+    try {
+      verifyRequiredDragonPalaceInventory({
+        manifestRows: parsed.manifestRows,
+        publicFiles,
+        promptRecords: parsed.promptRecords,
+        sourceFiles: mutatedSources,
+      });
+      acceptedInvalidVariants.push(name);
+    } catch {
+      // Expected: imports and every selected preload image load are fail-closed.
+    }
+  }
+  assert.deepEqual(acceptedInvalidVariants, []);
+});
+
 test('rejects a Dragon Palace inventory that drops an existing row or lacks the exact Four Seas scene slot', () => {
   const sourceFiles = new Map([
     ['src/components/GameScene.tsx', "assetUrl('/assets/dragon-palace/background.webp') assetUrl('/assets/dragon-palace/wukong.webp') assetUrl('/assets/dragon-palace/dragon-king.webp') assetUrl('/assets/dragon-palace/weapons.webp') assetUrl('/assets/dragon-palace/effects.webp')"],

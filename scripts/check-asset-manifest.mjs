@@ -103,6 +103,146 @@ function propertyNameText(name) {
   return null;
 }
 
+function bindingIdentifiers(name, identifiers = []) {
+  if (!name) return identifiers;
+  if (ts.isIdentifier(name)) {
+    identifiers.push(name);
+    return identifiers;
+  }
+  if (ts.isObjectBindingPattern(name) || ts.isArrayBindingPattern(name)) {
+    for (const element of name.elements) {
+      if (ts.isBindingElement(element)) bindingIdentifiers(element.name, identifiers);
+    }
+  }
+  return identifiers;
+}
+
+function exactSceneImports(sourcePath, sourceFile) {
+  const bindings = new Map([['Phaser', []], ['assetUrl', []]]);
+  const phaserModuleImports = [];
+  const assetModuleImports = [];
+  const phaserImports = [];
+  const assetUrlImports = [];
+  let forbiddenModuleReference = false;
+
+  const recordBinding = (identifier) => {
+    if (identifier && bindings.has(identifier.text)) bindings.get(identifier.text).push(identifier);
+  };
+  const recordBindingName = (name) => {
+    for (const identifier of bindingIdentifiers(name)) recordBinding(identifier);
+  };
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+      const modulePath = node.moduleSpecifier.text;
+      if (modulePath === 'phaser') phaserModuleImports.push(node);
+      if (modulePath === '../utils/assets') assetModuleImports.push(node);
+      const clause = node.importClause;
+      if (clause?.name) recordBinding(clause.name);
+      const namedBindings = clause?.namedBindings;
+      if (namedBindings && ts.isNamespaceImport(namedBindings)) recordBinding(namedBindings.name);
+      if (namedBindings && ts.isNamedImports(namedBindings)) {
+        for (const specifier of namedBindings.elements) recordBinding(specifier.name);
+      }
+      if (modulePath === 'phaser' && clause && !clause.isTypeOnly && !clause.name
+        && namedBindings && ts.isNamespaceImport(namedBindings) && namedBindings.name.text === 'Phaser') {
+        phaserImports.push(namedBindings.name);
+      }
+      if (modulePath === '../utils/assets' && clause && !clause.isTypeOnly && !clause.name
+        && namedBindings && ts.isNamedImports(namedBindings) && namedBindings.elements.length === 1) {
+        const [specifier] = namedBindings.elements;
+        if (!specifier.isTypeOnly && !specifier.propertyName && specifier.name.text === 'assetUrl') {
+          assetUrlImports.push(specifier.name);
+        }
+      }
+    } else if (ts.isImportEqualsDeclaration(node)) {
+      recordBinding(node.name);
+      const referencedModule = ts.isExternalModuleReference(node.moduleReference)
+        && node.moduleReference.expression && ts.isStringLiteral(node.moduleReference.expression)
+        ? node.moduleReference.expression.text
+        : null;
+      if (['Phaser', 'assetUrl'].includes(node.name.text)
+        || ['phaser', '../utils/assets'].includes(referencedModule)) {
+        forbiddenModuleReference = true;
+      }
+    } else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)
+      && ['phaser', '../utils/assets'].includes(node.moduleSpecifier.text)) {
+      forbiddenModuleReference = true;
+    } else if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'require'
+      && node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0])
+      && ['phaser', '../utils/assets'].includes(node.arguments[0].text)) {
+      forbiddenModuleReference = true;
+    }
+
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isBindingElement(node)) {
+      recordBindingName(node.name);
+    } else if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)
+      || ts.isEnumDeclaration(node) || ts.isModuleDeclaration(node)) && node.name) {
+      recordBinding(node.name);
+    } else if (ts.isCatchClause(node) && node.variableDeclaration) {
+      recordBindingName(node.variableDeclaration.name);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+
+  const phaserBindings = bindings.get('Phaser');
+  const assetUrlBindings = bindings.get('assetUrl');
+  if (forbiddenModuleReference || phaserModuleImports.length !== 1
+    || phaserImports.length !== 1 || phaserBindings.length !== 1
+    || phaserBindings[0] !== phaserImports[0]) {
+    throw new Error(`Asset manifest: ${sourcePath} must bind Phaser exactly once with import * as Phaser from 'phaser'.`);
+  }
+  if (assetModuleImports.length !== 1 || assetUrlImports.length !== 1 || assetUrlBindings.length !== 1
+    || assetUrlBindings[0] !== assetUrlImports[0]) {
+    throw new Error(`Asset manifest: ${sourcePath} must bind assetUrl exactly once as an unaliased named import from ../utils/assets.`);
+  }
+}
+
+function staticElementName(node) {
+  if (!ts.isElementAccessExpression(node) || !node.argumentExpression) return null;
+  return ts.isStringLiteralLike(node.argumentExpression) ? node.argumentExpression.text : null;
+}
+
+function isThisLoadAccess(node) {
+  if (ts.isPropertyAccessExpression(node)) {
+    return node.expression.kind === ts.SyntaxKind.ThisKeyword && node.name.text === 'load';
+  }
+  if (ts.isElementAccessExpression(node)) {
+    return node.expression.kind === ts.SyntaxKind.ThisKeyword && staticElementName(node) === 'load';
+  }
+  return false;
+}
+
+function isImageAccessFromThisLoad(node) {
+  if (ts.isPropertyAccessExpression(node)) {
+    return node.name.text === 'image' && isThisLoadAccess(node.expression);
+  }
+  if (ts.isElementAccessExpression(node)) {
+    return staticElementName(node) === 'image' && isThisLoadAccess(node.expression);
+  }
+  return false;
+}
+
+function isPotentialDynamicImageAccess(node) {
+  if (!ts.isPropertyAccessExpression(node) && !ts.isElementAccessExpression(node)) return false;
+  const memberName = ts.isPropertyAccessExpression(node) ? node.name.text : staticElementName(node);
+  if (memberName !== 'image') return false;
+  const receiver = node.expression;
+  return ts.isElementAccessExpression(receiver)
+    && receiver.expression.kind === ts.SyntaxKind.ThisKeyword
+    && staticElementName(receiver) === null;
+}
+
+function isExactDirectImageAccess(node) {
+  return ts.isPropertyAccessExpression(node)
+    && !node.questionDotToken
+    && node.name.text === 'image'
+    && ts.isPropertyAccessExpression(node.expression)
+    && !node.expression.questionDotToken
+    && node.expression.name.text === 'load'
+    && node.expression.expression.kind === ts.SyntaxKind.ThisKeyword;
+}
+
 function configuredPhaserPreloadAssets(sourcePath, source) {
   const sourceFile = ts.createSourceFile(
     sourcePath,
@@ -114,6 +254,7 @@ function configuredPhaserPreloadAssets(sourcePath, source) {
   if (sourceFile.parseDiagnostics.length > 0) {
     throw new Error(`Asset manifest: ${sourcePath} cannot be parsed as TypeScript for preload verification.`);
   }
+  exactSceneImports(sourcePath, sourceFile);
   const gameConstructors = [];
   const classes = [];
 
@@ -153,18 +294,18 @@ function configuredPhaserPreloadAssets(sourcePath, source) {
     throw new Error(`Asset manifest: ${sourcePath} configured Phaser.Scene must declare exactly one preload method.`);
   }
 
+  const preloadBody = preloadMethods[0].body;
   const keyToPath = new Map();
   const pathToKey = new Map();
-  for (const preloadStatement of preloadMethods[0].body.statements) {
+  const allowedImageAccesses = new Set();
+  for (const preloadStatement of preloadBody.statements) {
     if (!ts.isExpressionStatement(preloadStatement)) continue;
     const loaderCall = preloadStatement.expression;
     if (!ts.isCallExpression(loaderCall)) continue;
     const imageAccess = loaderCall.expression;
-    if (!ts.isPropertyAccessExpression(imageAccess) || imageAccess.name.text !== 'image') continue;
-    const loadAccess = imageAccess.expression;
-    if (!ts.isPropertyAccessExpression(loadAccess) || loadAccess.name.text !== 'load'
-      || loadAccess.expression.kind !== ts.SyntaxKind.ThisKeyword) continue;
-    if (loaderCall.arguments.length !== 2) {
+    if (!isImageAccessFromThisLoad(imageAccess) && !isPotentialDynamicImageAccess(imageAccess)) continue;
+    if (!isExactDirectImageAccess(imageAccess) || loaderCall.questionDotToken
+      || loaderCall.arguments.length !== 2 || loaderCall.arguments.some(ts.isSpreadElement)) {
       throw new Error(`Asset manifest: ${sourcePath} preload image calls require exactly two direct arguments.`);
     }
     const [loaderKeyNode, assetUrlCall] = loaderCall.arguments;
@@ -173,6 +314,7 @@ function configuredPhaserPreloadAssets(sourcePath, source) {
       || assetUrlCall.arguments.length !== 1 || !ts.isStringLiteral(assetUrlCall.arguments[0])) {
       throw new Error(`Asset manifest: ${sourcePath} preload image calls require literal key and direct assetUrl(literal path).`);
     }
+    allowedImageAccesses.add(imageAccess);
     const loaderKey = loaderKeyNode.text;
     const assetPath = assetUrlCall.arguments[0].text;
     if (keyToPath.has(loaderKey)) {
@@ -184,6 +326,26 @@ function configuredPhaserPreloadAssets(sourcePath, source) {
     keyToPath.set(loaderKey, assetPath);
     pathToKey.set(assetPath, loaderKey);
   }
+
+  const verifyPreloadNode = (node) => {
+    if ((isImageAccessFromThisLoad(node) || isPotentialDynamicImageAccess(node))
+      && !allowedImageAccesses.has(node)) {
+      throw new Error(`Asset manifest: ${sourcePath} every preload image access must be one direct top-level this.load.image(literal key, assetUrl(literal path)) call.`);
+    }
+    if (isThisLoadAccess(node)) {
+      const parent = node.parent;
+      if (ts.isElementAccessExpression(parent) && parent.expression === node && staticElementName(parent) === null) {
+        throw new Error(`Asset manifest: ${sourcePath} preload cannot use a dynamic this.load member.`);
+      }
+      const usedAsStaticMember = (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent))
+        && parent.expression === node;
+      if (!usedAsStaticMember) {
+        throw new Error(`Asset manifest: ${sourcePath} preload cannot alias or pass this.load as a value.`);
+      }
+    }
+    ts.forEachChild(node, verifyPreloadNode);
+  };
+  verifyPreloadNode(preloadBody);
   return keyToPath;
 }
 
@@ -372,17 +534,38 @@ export function verifyRequiredDragonPalaceInventory({
     if (!REQUIRED_DRAGON_PALACE_SLOTS.has(assetId)) throw new Error(`Asset manifest: unexpected Dragon Palace asset ${assetId}.`);
   }
   if (!(sourceFiles instanceof Map)) throw new Error('Asset manifest: formal scene source files are required for slot verification.');
+  const expectedAssetsBySource = new Map();
+  for (const [assetId, slots] of REQUIRED_DRAGON_PALACE_SLOTS) {
+    for (const { sourcePath, loaderKey } of slots) {
+      if (!expectedAssetsBySource.has(sourcePath)) expectedAssetsBySource.set(sourcePath, new Map());
+      const expectedAssets = expectedAssetsBySource.get(sourcePath);
+      if (expectedAssets.has(loaderKey)) {
+        throw new Error(`Asset manifest: required Dragon Palace slots contain duplicate loader key ${loaderKey} for ${sourcePath}.`);
+      }
+      expectedAssets.set(loaderKey, `/${assetId}`);
+    }
+  }
   const parsedSources = new Map();
   for (const [sourcePath, source] of sourceFiles) {
     if (typeof source !== 'string') throw new Error(`Asset manifest: formal scene source ${sourcePath} must be text.`);
     parsedSources.set(sourcePath, configuredPhaserPreloadAssets(sourcePath, source));
   }
-  for (const [assetId, slots] of REQUIRED_DRAGON_PALACE_SLOTS) {
-    const publicPath = `/${assetId}`;
-    for (const { sourcePath, loaderKey } of slots) {
-      const preloadAssets = parsedSources.get(sourcePath);
-      if (!(preloadAssets instanceof Map) || preloadAssets.get(loaderKey) !== publicPath) {
-        throw new Error(`Asset manifest: ${assetId} is missing its exact Phaser preload slot ${sourcePath} with loader key ${loaderKey}.`);
+  for (const [sourcePath, expectedAssets] of expectedAssetsBySource) {
+    const preloadAssets = parsedSources.get(sourcePath);
+    if (!(preloadAssets instanceof Map)) {
+      throw new Error(`Asset manifest: required formal scene source ${sourcePath} is missing.`);
+    }
+    if (preloadAssets.size !== expectedAssets.size) {
+      throw new Error(`Asset manifest: ${sourcePath} preload must contain exactly ${expectedAssets.size} approved Dragon Palace image loads; found ${preloadAssets.size}.`);
+    }
+    for (const [loaderKey, publicPath] of expectedAssets) {
+      if (preloadAssets.get(loaderKey) !== publicPath) {
+        throw new Error(`Asset manifest: ${publicPath.slice(1)} is missing its exact Phaser preload slot ${sourcePath} with loader key ${loaderKey}.`);
+      }
+    }
+    for (const [loaderKey, publicPath] of preloadAssets) {
+      if (expectedAssets.get(loaderKey) !== publicPath) {
+        throw new Error(`Asset manifest: ${sourcePath} contains unapproved Phaser image load ${loaderKey} -> ${publicPath}.`);
       }
     }
   }
