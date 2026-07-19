@@ -5,6 +5,7 @@ import { completeMission, createInitialProgress, serializeProgress } from './pro
 import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, REVISION_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from './progress/storage';
 import type { BattleEvent } from './battle/types';
 import { createMissionSession } from './progress/session';
+import { FourSeasRegaliaRouteBoundary } from './components/MissionPageContent';
 
 vi.mock('./components/GameScene', () => ({
   GameScene: ({ events, onPlaybackComplete }: { events: BattleEvent[]; onPlaybackComplete?: () => void }) => <section aria-label="测试龙宫场景"><output data-testid="app-scene-events">{JSON.stringify(events)}</output><button type="button" onClick={onPlaybackComplete}>完成场景播放</button></section>,
@@ -12,6 +13,10 @@ vi.mock('./components/GameScene', () => ({
 
 vi.mock('./components/RuyiStaffScene', () => ({
   RuyiStaffScene: ({ events, onPlaybackComplete }: { events: BattleEvent[]; onPlaybackComplete?: () => void }) => <section aria-label="测试定海神针场景"><output data-testid="app-ruyi-events">{JSON.stringify(events)}</output><button type="button" onClick={onPlaybackComplete}>完成定海神针场景播放</button></section>,
+}));
+
+vi.mock('./components/FourSeasRegaliaScene', () => ({
+  FourSeasRegaliaScene: ({ events, onPlaybackComplete }: { events: BattleEvent[]; onPlaybackComplete?: () => void }) => <section aria-label="测试四海披挂场景"><output data-testid="app-regalia-events">{JSON.stringify(events)}</output><button type="button" onClick={onPlaybackComplete}>完成四海披挂场景播放</button></section>,
 }));
 
 const originalStorage = localStorage;
@@ -199,16 +204,46 @@ describe('西游编程记', () => {
     await waitFor(() => expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).sessions['w1-m2'].usedHintTiers).toEqual(['observe']));
   });
 
-  it('keeps the legacy mission background wrapper only after the two formal Blockly missions', async () => {
+  it('routes only w1-m3 to the formal lazy Four Seas experience while later missions remain compatible', async () => {
     let progress = withParentAccess(createInitialProgress());
     progress.privacy.localDataNoticeSeen = true;
     progress = completeMission(progress, 'w1-m1', { stars: 3, hintsUsed: 0 });
     progress = completeMission(progress, 'w1-m2', { stars: 3, hintsUsed: 0 });
     localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
     window.location.hash = '#/mission/w1-m3';
-    const { container } = render(<App />);
+    const firstView = render(<App />);
+    const { container } = firstView;
     expect(await screen.findByRole('heading', { name: '四海披挂', level: 1 })).toBeVisible();
-    await waitFor(() => expect(container.querySelector('.legacy-mission-tools')).toHaveAttribute('data-mission-id', 'w1-m3'));
+    expect(await screen.findByRole('button', { name: '加入主任务：向东海龙王请求披挂' })).toBeVisible();
+    expect(container.querySelector('.legacy-mission-tools')).not.toBeInTheDocument();
+
+    const completed = completeMission(progress, 'w1-m3', { stars: 3, hintsUsed: 0 });
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(completed));
+    firstView.unmount();
+    window.location.hash = '#/mission/w1-m4';
+    const secondView = render(<App />);
+    expect(await screen.findByRole('heading', { name: '幽冥勾名', level: 1 })).toBeVisible();
+    await waitFor(() => expect(secondView.container.querySelector('.legacy-mission-tools')).toHaveAttribute('data-mission-id', 'w1-m4'));
+  });
+
+  it('isolates the outer Four Seas experience chunk and keeps story and objective with explicit retry', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const reloadPage = vi.fn();
+    render(<><h2>再求披挂的原著故事</h2><h2>按原著顺序整理披挂</h2><FourSeasRegaliaRouteBoundary
+      loader={() => Promise.reject(new Error('outer chunk failed'))}
+      reloadPage={reloadPage}
+      reducedMotion
+      muted
+      locked={false}
+      onComplete={() => undefined}
+      onSessionPersistenceActiveChange={() => undefined}
+      onInteractionLockChange={() => undefined}
+    /></>);
+    expect(await screen.findByText('四海披挂任务加载失败')).toBeVisible();
+    expect(screen.getByRole('heading', { name: '再求披挂的原著故事' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: '按原著顺序整理披挂' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '重新加载页面' }));
+    expect(reloadPage).toHaveBeenCalledOnce();
   });
 
   it('passes w1-m2 through the same delayed scene-completion and success-audio path', async () => {

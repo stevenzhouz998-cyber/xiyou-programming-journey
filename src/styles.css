@@ -90,7 +90,7 @@ h1, h2, .brand strong { font-family: 'Songti SC', 'STSong', serif; }
 
 .mission-page { min-height: calc(100vh - 70px); background: #e9e0ca; padding-bottom: 22px; }
 .mission-page:has(.legacy-mission-tools) { background-image: url('/assets/world-map.jpg'); background-size: cover; background-position: center; }
-.mission-page:has(.dragon-palace-experience), .mission-page:has(.ruyi-staff-experience) { background-image: none; }
+.mission-page:has(.dragon-palace-experience), .mission-page:has(.ruyi-staff-experience), .mission-page:has(.four-seas-regalia-experience) { background-image: none; }
 .mission-header { min-height: 78px; display: grid; grid-template-columns: 190px 1fr minmax(330px, auto); align-items: center; padding: 9px 34px; background: rgba(247,240,223,.93); border-bottom: 1px solid var(--line); }
 .mission-header h1 { margin: 2px 0 0; font-size: 27px; }
 .mission-header > div > span { color: var(--cinnabar); font-weight: 700; }
@@ -126,6 +126,14 @@ h1, h2, .brand strong { font-family: 'Songti SC', 'STSong', serif; }
 .ruyi-staff-scene-region { grid-column: 1; min-width: 0; border-right: 1px solid var(--line); }
 .ruyi-staff-program-region { grid-column: 2; min-width: 0; }
 .ruyi-staff-feedback-region { grid-column: 1 / -1; min-width: 0; padding: 0 22px 18px; }
+.four-seas-regalia-experience { display: grid; grid-template-columns: minmax(280px, .8fr) minmax(360px, 1.2fr); align-items: start; min-width: 0; }
+.four-seas-regalia-scene-region { grid-column: 1; min-width: 0; border-right: 1px solid var(--line); }
+.four-seas-regalia-program-region { grid-column: 2; min-width: 0; }
+.four-seas-regalia-feedback-region { grid-column: 1 / -1; min-width: 0; padding: 0 22px 18px; }
+.execution-provenance { margin-top: 12px; padding: 10px 12px; border: 1px solid rgba(47,115,91,.22); border-radius: 9px; background: rgba(255,255,255,.5); color: var(--ink-muted); }
+.execution-provenance summary { cursor: pointer; color: var(--jade-deep); font-weight: 700; }
+.execution-provenance ol { margin: 8px 0 0; padding-left: 22px; }
+.execution-provenance code { overflow-wrap: anywhere; }
 .ruyi-weight-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 9px 12px; color: var(--ink-muted); background: var(--paper-light); border-top: 1px solid var(--line); font-size: 13px; text-align: center; }
 .ruyi-weight-list > div { min-width: 0; }
 .ruyi-weight-list dt { font-weight: 700; }
@@ -139,7 +147,7 @@ h1, h2, .brand strong { font-family: 'Songti SC', 'STSong', serif; }
 .battle-feedback { border-left: 4px solid var(--cinnabar); background: #f8e6d9; color: #58271f; }
 .battle-feedback p, .unsaved-session p { margin-bottom: 9px; }
 .unsaved-session { border-left: 4px solid var(--gold); background: #fff0d8; color: #5d3c16; }
-.dragon-palace-experience button:focus-visible, .ruyi-staff-experience button:focus-visible, .block-program-list li:focus-visible, .battle-feedback:focus-visible { outline: 3px solid #d28f2c; outline-offset: 3px; }
+.dragon-palace-experience button:focus-visible, .ruyi-staff-experience button:focus-visible, .four-seas-regalia-experience button:focus-visible, .block-program-list li:focus-visible, .battle-feedback:focus-visible { outline: 3px solid #d28f2c; outline-offset: 3px; }
 .mission-session-summary { margin-top: 8px !important; color: var(--jade-deep) !important; font-weight: 700; }
 
 .code-workspace, .python-workspace, .ai-lab { padding: 14px 22px 18px; }
@@ -287,6 +295,11 @@ progress { width: 100%; accent-color: var(--jade); }
   .ruyi-staff-scene-region { grid-row: 1; border-right: 0; border-bottom: 1px solid var(--line); }
   .ruyi-staff-program-region { grid-row: 2; }
   .ruyi-staff-feedback-region { grid-row: 3; padding: 0 12px 14px; }
+  .four-seas-regalia-experience { grid-template-columns: 1fr; }
+  .four-seas-regalia-scene-region, .four-seas-regalia-program-region, .four-seas-regalia-feedback-region { grid-column: 1; }
+  .four-seas-regalia-scene-region { grid-row: 1; border-right: 0; border-bottom: 1px solid var(--line); }
+  .four-seas-regalia-program-region { grid-row: 2; }
+  .four-seas-regalia-feedback-region { grid-row: 3; padding: 0 12px 14px; }
   .story-column { position: static; order: 2; }
   .play-column { order: 1; }
   .parent-page { padding: 28px 24px; }
