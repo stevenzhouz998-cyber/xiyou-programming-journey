@@ -308,6 +308,19 @@ describe('progress schema', () => {
       .toThrow(/sessions\.w1-m3.*(?:lastTrace|成功|失败|概念|运行)/);
   });
 
+  it('rejects a positive w1-m3 run count with an empty canonical trace', () => {
+    const session = validFourSeasSession();
+    session.totalRuns = 1;
+    session.lastTrace = [];
+    session.lastRun = runFourSeasRegalia([]);
+    session.runtimeFailures = 1;
+    session.conceptFailures.sequencePrecondition = 0;
+    session.conceptFailures.completeness = 1;
+
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m3': session } }))
+      .toThrow(/sessions\.w1-m3.*lastTrace.*不得为空/);
+  });
+
   it('rejects every forged w1-m3 provenance and canonical-run field', () => {
     const cases: Array<[string, (session: FourSeasRegaliaMissionSession) => void]> = [
       ['foreign block type', (session) => { session.workspace.blocks[0].type = 'xiyou_enter_palace' as never; }],

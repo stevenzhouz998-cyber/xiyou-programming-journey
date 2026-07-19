@@ -1242,8 +1242,11 @@ function validateFourSeasSessionEvidence(
   if (session.totalRuns === 0) {
     if (hasRun || hasRunTime) invalid(`${field}零次运行不得包含lastRun或lastRunAt证据`);
     if (session.lastTrace.length > 0) invalid(`${field}零次运行时lastTrace必须为空`);
-  } else if (!hasRun || !hasRunTime) {
-    invalid(`${field}有运行计数时lastRun与lastRunAt必须同时存在`);
+  } else {
+    if (!hasRun || !hasRunTime) {
+      invalid(`${field}有运行计数时lastRun与lastRunAt必须同时存在`);
+    }
+    if (session.lastTrace.length === 0) invalid(`${field}有运行计数时lastTrace不得为空`);
   }
   if (session.runtimeFailures > session.totalRuns) {
     invalid(`${field}.runtimeFailures运行失败次数不得超过totalRuns`);
