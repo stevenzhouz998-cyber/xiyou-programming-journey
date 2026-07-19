@@ -1,10 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { FourSeasBattleDiagnostic } from '../battle/types'
 import type { FourSeasCompileResult } from '../blockly/fourSeasRegaliaCompiler'
 import { FourSeasRegaliaFeedback } from './FourSeasRegaliaFeedback'
 
 type CompileDiagnostic = Extract<FourSeasCompileResult, { ok: false }>['diagnostics'][number]
+
+afterEach(() => vi.restoreAllMocks())
 
 function runtime(
   messageCode: string,
@@ -94,4 +96,42 @@ it('explains structural compiler failures without exposing internal codes', () =
   )
   expect(screen.getByRole('alert')).toHaveTextContent('任务组里还没有子任务')
   expect(screen.getByRole('alert')).not.toHaveTextContent('missing-child-chain')
+})
+
+it('focuses only for a new error occurrence, not an equivalent diagnostic object', () => {
+  const focus = vi.spyOn(HTMLElement.prototype, 'focus')
+  const props = {
+    onFocusBlock: () => undefined,
+    onFocusWorkspace: () => undefined,
+  }
+  const view = render(
+    <FourSeasRegaliaFeedback
+      diagnostic={runtime('four-seas.wrong-order.receive_purple_crown')}
+      occurrenceId={7}
+      {...props}
+    />,
+  )
+  expect(focus).toHaveBeenCalledTimes(1)
+
+  view.rerender(
+    <FourSeasRegaliaFeedback
+      diagnostic={runtime('four-seas.wrong-order.receive_purple_crown')}
+      occurrenceId={7}
+      {...props}
+    />,
+  )
+  expect(focus).toHaveBeenCalledTimes(1)
+
+  view.rerender(
+    <FourSeasRegaliaFeedback diagnostic={null} occurrenceId={7} {...props} />,
+  )
+  view.rerender(
+    <FourSeasRegaliaFeedback
+      diagnostic={runtime('four-seas.wrong-scope.wear_crown')}
+      occurrenceId={8}
+      {...props}
+    />,
+  )
+  expect(focus).toHaveBeenCalledTimes(2)
+  expect(screen.getByRole('alert')).toHaveFocus()
 })

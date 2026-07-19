@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  FOUR_SEAS_BLOCK_LABELS,
   initializeWorkspaceBlock,
   isFourSeasBlockType,
   isFourSeasChildBlockType,
@@ -54,16 +55,16 @@ const ACTIONS: ReadonlyArray<{
   scope: Exclude<Scope, 'orphan'>
   label: string
 }> = [
-  { type: 'xiyou_request_regalia', scope: 'top', label: '向东海龙王请求披挂' },
-  { type: 'xiyou_collect_gifts', scope: 'top', label: '收齐三海宝物' },
-  { type: 'xiyou_equip_regalia', scope: 'top', label: '穿戴整副披挂' },
-  { type: 'xiyou_verify_regalia', scope: 'top', label: '检查披挂是否齐全' },
-  { type: 'xiyou_receive_cloud_boots', scope: 'collect', label: '收下北海的藕丝步云履' },
-  { type: 'xiyou_receive_golden_armor', scope: 'collect', label: '收下西海的锁子黄金甲' },
-  { type: 'xiyou_receive_purple_crown', scope: 'collect', label: '收下南海的凤翅紫金冠' },
-  { type: 'xiyou_wear_crown', scope: 'equip', label: '戴上凤翅紫金冠' },
-  { type: 'xiyou_wear_armor', scope: 'equip', label: '穿上锁子黄金甲' },
-  { type: 'xiyou_wear_boots', scope: 'equip', label: '踏上藕丝步云履' },
+  { type: 'xiyou_request_regalia', scope: 'top', label: FOUR_SEAS_BLOCK_LABELS.xiyou_request_regalia },
+  { type: 'xiyou_collect_gifts', scope: 'top', label: FOUR_SEAS_BLOCK_LABELS.xiyou_collect_gifts },
+  { type: 'xiyou_equip_regalia', scope: 'top', label: FOUR_SEAS_BLOCK_LABELS.xiyou_equip_regalia },
+  { type: 'xiyou_verify_regalia', scope: 'top', label: FOUR_SEAS_BLOCK_LABELS.xiyou_verify_regalia },
+  { type: 'xiyou_receive_cloud_boots', scope: 'collect', label: FOUR_SEAS_BLOCK_LABELS.xiyou_receive_cloud_boots },
+  { type: 'xiyou_receive_golden_armor', scope: 'collect', label: FOUR_SEAS_BLOCK_LABELS.xiyou_receive_golden_armor },
+  { type: 'xiyou_receive_purple_crown', scope: 'collect', label: FOUR_SEAS_BLOCK_LABELS.xiyou_receive_purple_crown },
+  { type: 'xiyou_wear_crown', scope: 'equip', label: FOUR_SEAS_BLOCK_LABELS.xiyou_wear_crown },
+  { type: 'xiyou_wear_armor', scope: 'equip', label: FOUR_SEAS_BLOCK_LABELS.xiyou_wear_armor },
+  { type: 'xiyou_wear_boots', scope: 'equip', label: FOUR_SEAS_BLOCK_LABELS.xiyou_wear_boots },
 ]
 
 const LABEL_BY_TYPE = Object.fromEntries(ACTIONS.map(({ type, label }) => [type, label])) as Record<FourSeasBlockType, string>
@@ -147,8 +148,12 @@ function canResizeSvg(workspace: Blockly.Workspace): workspace is SvgWorkspace {
   return typeof (workspace as Partial<SvgWorkspace>).getParentSvg === 'function'
 }
 
-function fitNarrowWorkspace(workspace: Blockly.Workspace) {
-  if (typeof window.matchMedia !== 'function' || !window.matchMedia('(max-width: 600px)').matches) return
+function fitNarrowWorkspace(workspace: Blockly.Workspace, host: HTMLElement | null) {
+  const hostRect = host?.getBoundingClientRect()
+  const hostWidth = hostRect?.width || host?.clientWidth || 0
+  const mediaNarrow = typeof window.matchMedia === 'function'
+    && window.matchMedia('(max-width: 600px)').matches
+  if (!mediaNarrow && !(hostWidth > 0 && hostWidth <= 600)) return
   if (canHideFlyout(workspace)) {
     const flyout = workspace.getFlyout()
     if (flyout !== null) {
@@ -387,6 +392,7 @@ export function FourSeasRegaliaBlocklyWorkspace({
   const lastPropRef = useRef<string | null>(null)
   const acceptedDraftRef = useRef<FourSeasWorkspaceDraftV1>(structuredClone(draft))
   const lockedRef = useRef(locked)
+  const recoveryFailedRef = useRef(false)
   const previousLockedRef = useRef(locked)
   const focusBeforeLockRef = useRef<HTMLElement | null>(null)
   const restoreFocusAfterUnlockRef = useRef(false)
@@ -409,20 +415,34 @@ export function FourSeasRegaliaBlocklyWorkspace({
   const [workspaceError, setWorkspaceError] = useState<string | null>(null)
   const [capacityMessage, setCapacityMessage] = useState<string | null>(null)
   const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'pending' | 'saved' | 'unsaved' | 'conflict'>('idle')
+  const [recoveryFailed, setRecoveryFailed] = useState(false)
+  const interactionLocked = locked || recoveryFailed
 
   onDraftRef.current = onDraftChange
   onFocusHandledRef.current = onFocusHandled
-  lockedRef.current = locked
-  if (locked !== previousLockedRef.current) {
+  lockedRef.current = interactionLocked
+  recoveryFailedRef.current = recoveryFailed
+  if (interactionLocked !== previousLockedRef.current) {
     const active = document.activeElement
-    if (locked) {
+    if (interactionLocked) {
       focusBeforeLockRef.current = active instanceof HTMLElement && regionRef.current?.contains(active) ? active : null
       restoreFocusAfterUnlockRef.current = false
     } else {
       restoreFocusAfterUnlockRef.current = active === lockMessageRef.current
+        || (active instanceof HTMLElement && active.closest('.workspace-recovery-error') !== null)
         || (active instanceof HTMLElement && active.closest('.completion-save-status') !== null)
     }
-    previousLockedRef.current = locked
+    previousLockedRef.current = interactionLocked
+  }
+
+  const invalidatePendingSave = () => {
+    saveRequestRef.current = {
+      generation: saveRequestRef.current.generation + 1,
+      bytes: null,
+      status: 'idle',
+    }
+    pendingDraftRef.current = null
+    setDraftSaveStatus('idle')
   }
 
   const persistDraft = (next: FourSeasWorkspaceDraftV1) => {
@@ -467,28 +487,63 @@ export function FourSeasRegaliaBlocklyWorkspace({
     setWorkspaceError(null)
   }
 
+  const enterFailClosedRecovery = (workspace: Blockly.Workspace) => {
+    invalidatePendingSave()
+    lastDraftRef.current = null
+    try {
+      refresh(false)
+    } catch {
+      setTree(deriveTree(workspace))
+    }
+    setRecoveryFailed(true)
+    setWorkspaceBlocksLocked(workspace, true)
+    setWorkspaceError('工作区可能已改变，现在不可执行。请重新载入一份合法草稿。')
+  }
+
+  const recoverAcceptedAfterAggregateFailure = (workspace: Blockly.Workspace) => {
+    invalidatePendingSave()
+    const accepted = structuredClone(acceptedDraftRef.current)
+    try {
+      withoutEvents(() => {
+        workspace.clear()
+        loadFourSeasWorkspaceDraft(workspace, accepted)
+      })
+      lastDraftRef.current = JSON.stringify(accepted)
+      refresh(false)
+      setRecoveryFailed(false)
+      setWorkspaceBlocksLocked(workspace, locked)
+      setWorkspaceError('外部草稿载入中断，已恢复到上一份安全草稿。')
+    } catch {
+      enterFailClosedRecovery(workspace)
+    }
+  }
+
   const restoreAcceptedDraft = (workspace: Blockly.Workspace) => {
     if (!mountedRef.current || workspaceRef.current !== workspace) return
     const accepted = structuredClone(acceptedDraftRef.current)
-    withoutEvents(() => {
-      // A locked native paste/delete can make the current graph intentionally
-      // unsnapshotable. The accepted draft is already validated, so discard the
-      // rejected mutation before restoring it instead of asking the draft loader
-      // to snapshot invalid bytes for its ordinary incoming-draft rollback path.
-      workspace.clear()
-      loadFourSeasWorkspaceDraft(workspace, accepted)
-    })
-    lastDraftRef.current = JSON.stringify(accepted)
-    refresh(false)
-    setWorkspaceBlocksLocked(workspace, lockedRef.current)
+    try {
+      withoutEvents(() => {
+        // A locked native paste/delete can make the current graph intentionally
+        // unsnapshotable. Discard that rejected graph before restoring the
+        // already validated accepted draft.
+        workspace.clear()
+        loadFourSeasWorkspaceDraft(workspace, accepted)
+      })
+      lastDraftRef.current = JSON.stringify(accepted)
+      refresh(false)
+      setWorkspaceBlocksLocked(workspace, lockedRef.current)
+    } catch {
+      enterFailClosedRecovery(workspace)
+    }
   }
 
   const fitWorkspaceForViewport = (workspace: Blockly.Workspace) => {
-    if (!lockedRef.current) fitNarrowWorkspace(workspace)
+    if (!lockedRef.current) fitNarrowWorkspace(workspace, hostRef.current)
   }
 
   const scheduleLockedRestore = (workspace: Blockly.Workspace) => {
     setWorkspaceBlocksLocked(workspace, true)
+    if (recoveryFailedRef.current) return
     if (lockedRestoreTimerRef.current !== null) return
     lockedRestoreTimerRef.current = window.setTimeout(() => {
       lockedRestoreTimerRef.current = null
@@ -570,17 +625,28 @@ export function FourSeasRegaliaBlocklyWorkspace({
     }
     let fitFrame = 0
     try {
-      withoutEvents(() => loadFourSeasWorkspaceDraft(workspace, draft))
+      withoutEvents(() => {
+        if (recoveryFailed) workspace.clear()
+        loadFourSeasWorkspaceDraft(workspace, draft)
+      })
+      invalidatePendingSave()
       acceptedDraftRef.current = structuredClone(draft)
       lastDraftRef.current = incoming
       lastPropRef.current = incoming
       refresh(false)
-      setWorkspaceBlocksLocked(workspace, lockedRef.current)
+      setRecoveryFailed(false)
+      setWorkspaceBlocksLocked(workspace, locked)
       fitWorkspaceForViewport(workspace)
       fitFrame = window.requestAnimationFrame(() => fitWorkspaceForViewport(workspace))
       setWorkspaceError(null)
-    } catch {
-      setWorkspaceError('传入的积木草稿无法安全恢复，当前工作区保持不变。')
+    } catch (error) {
+      if (error instanceof AggregateError) {
+        recoverAcceptedAfterAggregateFailure(workspace)
+      } else if (recoveryFailed) {
+        enterFailClosedRecovery(workspace)
+      } else {
+        setWorkspaceError('传入的积木草稿无法安全恢复，当前工作区保持不变。')
+      }
     }
     return () => { if (fitFrame !== 0) window.cancelAnimationFrame(fitFrame) }
   }, [draft, ready])
@@ -589,7 +655,7 @@ export function FourSeasRegaliaBlocklyWorkspace({
     const workspace = workspaceRef.current
     const host = hostRef.current
     if (!ready || workspace === null || host === null) return
-    if (locked) {
+    if (interactionLocked) {
       if (focusRestoreTimerRef.current !== null) window.clearTimeout(focusRestoreTimerRef.current)
       setWorkspaceBlocksLocked(workspace, true)
       const active = document.activeElement
@@ -604,7 +670,7 @@ export function FourSeasRegaliaBlocklyWorkspace({
       restoreAcceptedDraft(workspace)
     }
     setWorkspaceBlocksLocked(workspace, false)
-    fitNarrowWorkspace(workspace)
+    fitNarrowWorkspace(workspace, host)
     if (restoreFocusAfterUnlockRef.current && focusRestoreTimerRef.current === null) {
       focusRestoreTimerRef.current = window.setTimeout(() => {
         focusRestoreTimerRef.current = null
@@ -619,7 +685,7 @@ export function FourSeasRegaliaBlocklyWorkspace({
         restoreFocusAfterUnlockRef.current = false
       }, 0)
     }
-  }, [locked, ready])
+  }, [interactionLocked, ready])
 
   useEffect(() => {
     if (!ready || focusBlockId === null) return
@@ -635,19 +701,17 @@ export function FourSeasRegaliaBlocklyWorkspace({
 
   useEffect(() => {
     if (!saveRecoverySuperseded) return
-    saveRequestRef.current.generation += 1
-    pendingDraftRef.current = null
-    setDraftSaveStatus('idle')
+    invalidatePendingSave()
   }, [saveRecoverySuperseded])
 
   const mutate = (operation: (workspace: Blockly.Workspace) => void) => {
-    if (locked) return
+    if (interactionLocked) return
     const workspace = workspaceRef.current
     if (workspace === null) return
     try {
       withoutEvents(() => operation(workspace))
       refresh(true)
-      fitNarrowWorkspace(workspace)
+      fitNarrowWorkspace(workspace, hostRef.current)
     } catch {
       setWorkspaceError('当前积木结构需要先在编辑区连成一棵嵌套任务树。')
       setCompileResult(compileFourSeasRegaliaWorkspace(workspace))
@@ -655,7 +719,7 @@ export function FourSeasRegaliaBlocklyWorkspace({
   }
 
   const run = () => {
-    if (locked) return
+    if (interactionLocked) return
     const workspace = workspaceRef.current
     if (workspace === null) return
     const compiled = compileFourSeasRegaliaWorkspace(workspace)
@@ -680,7 +744,7 @@ export function FourSeasRegaliaBlocklyWorkspace({
         type="button"
         className="command-button"
         key={action.type}
-        disabled={locked || atCapacity}
+        disabled={interactionLocked || atCapacity}
         onClick={() => mutate((workspace) => appendBlock(workspace, action.type, action.scope))}
       >
         {`${prefix}：${action.label}`}
@@ -706,11 +770,11 @@ export function FourSeasRegaliaBlocklyWorkspace({
           <div className="command-buttons">{TOP_ACTIONS.map(actionButton)}</div>
         </div>
         <div className="four-seas-helper-group">
-          <p className="eyebrow">收集子任务 · 放入“收齐三海宝物”</p>
+          <p className="eyebrow">收集子任务 · 放入收集任务组</p>
           <div className="command-buttons">{COLLECT_ACTIONS.map(actionButton)}</div>
         </div>
         <div className="four-seas-helper-group">
-          <p className="eyebrow">穿戴子任务 · 放入“穿戴整副披挂”</p>
+          <p className="eyebrow">穿戴子任务 · 放入穿戴任务组</p>
           <div className="command-buttons">{EQUIP_ACTIONS.map(actionButton)}</div>
         </div>
         {capacityMessage || atCapacity ? (
@@ -722,11 +786,11 @@ export function FourSeasRegaliaBlocklyWorkspace({
       <div
         ref={hostRef}
         className="blockly-host"
-        style={locked ? { pointerEvents: 'none' } : undefined}
+        style={interactionLocked ? { pointerEvents: 'none' } : undefined}
         aria-label="Blockly 积木编辑区"
-        aria-disabled={locked || undefined}
-        inert={locked ? true : undefined}
-        tabIndex={locked ? -1 : 0}
+        aria-disabled={interactionLocked || undefined}
+        inert={interactionLocked ? true : undefined}
+        tabIndex={interactionLocked ? -1 : 0}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
             event.preventDefault()
@@ -756,11 +820,11 @@ export function FourSeasRegaliaBlocklyWorkspace({
                 >
                   <span><strong>{scopeName(scope)}</strong><span>{block.label}</span></span>
                   <span className="block-program-actions">
-                    <button type="button" aria-label={`上移${scopeName(scope)}：${block.label}`} disabled={locked || !canReorder || index === 0} onClick={() => mutate((workspace) => moveWithinScope(workspace, block.id, -1))}>上移</button>
-                    <button type="button" aria-label={`下移${scopeName(scope)}：${block.label}`} disabled={locked || !canReorder || index === chain.length - 1} onClick={() => mutate((workspace) => moveWithinScope(workspace, block.id, 1))}>下移</button>
-                    {scope === 'collect' ? <button type="button" aria-label={`移到穿戴任务组：${block.label}`} disabled={locked || containerForScope(workspaceRef.current!, 'equip') === null} onClick={() => mutate((workspace) => moveAcrossScope(workspace, block.id, 'equip'))}>移到穿戴组</button> : null}
-                    {scope === 'equip' ? <button type="button" aria-label={`移到收集任务组：${block.label}`} disabled={locked || containerForScope(workspaceRef.current!, 'collect') === null} onClick={() => mutate((workspace) => moveAcrossScope(workspace, block.id, 'collect'))}>移到收集组</button> : null}
-                    <button type="button" aria-label={`删除：${block.label}`} disabled={locked} onClick={() => mutate((workspace) => deleteBlock(workspace, block.id))}>删除</button>
+                    <button type="button" aria-label={`上移${scopeName(scope)}：${block.label}`} disabled={interactionLocked || !canReorder || index === 0} onClick={() => mutate((workspace) => moveWithinScope(workspace, block.id, -1))}>上移</button>
+                    <button type="button" aria-label={`下移${scopeName(scope)}：${block.label}`} disabled={interactionLocked || !canReorder || index === chain.length - 1} onClick={() => mutate((workspace) => moveWithinScope(workspace, block.id, 1))}>下移</button>
+                    {scope === 'collect' ? <button type="button" aria-label={`移到穿戴任务组：${block.label}`} disabled={interactionLocked || containerForScope(workspaceRef.current!, 'equip') === null} onClick={() => mutate((workspace) => moveAcrossScope(workspace, block.id, 'equip'))}>移到穿戴组</button> : null}
+                    {scope === 'equip' ? <button type="button" aria-label={`移到收集任务组：${block.label}`} disabled={interactionLocked || containerForScope(workspaceRef.current!, 'collect') === null} onClick={() => mutate((workspace) => moveAcrossScope(workspace, block.id, 'collect'))}>移到收集组</button> : null}
+                    <button type="button" aria-label={`删除：${block.label}`} disabled={interactionLocked} onClick={() => mutate((workspace) => deleteBlock(workspace, block.id))}>删除</button>
                   </span>
                 </li>
               )
@@ -768,21 +832,21 @@ export function FourSeasRegaliaBlocklyWorkspace({
           </ol>
         ) : null}
       </div>
-      {workspaceError ? <p role="alert">{workspaceError}</p> : null}
-      {!locked && draftSaveStatus === 'unsaved' ? (
+      {workspaceError ? <p className={recoveryFailed ? 'workspace-recovery-error' : undefined} role="alert" tabIndex={recoveryFailed ? -1 : undefined}>{workspaceError}</p> : null}
+      {!interactionLocked && draftSaveStatus === 'unsaved' ? (
         <div className="unsaved-session" role="alert">
           <p>这次积木更改还没有保存。</p>
           <button type="button" onClick={retryDraftSave}>重试保存积木</button>
         </div>
       ) : null}
-      {!locked && draftSaveStatus === 'conflict' ? (
+      {!interactionLocked && draftSaveStatus === 'conflict' ? (
         <p role="alert">其他标签页已经更新，这次积木更改暂停保存。</p>
       ) : null}
       <div className="workspace-actions">
-        <button type="button" className="button button-ghost" disabled={locked} onClick={() => mutate((workspace) => workspace.clear())}>
+        <button type="button" className="button button-ghost" disabled={interactionLocked} onClick={() => mutate((workspace) => workspace.clear())}>
           <ArrowsCounterClockwise size={20} />清空并重新开始
         </button>
-        <button type="button" className="button button-primary" disabled={locked} onClick={run}>
+        <button type="button" className="button button-primary" disabled={interactionLocked} onClick={run}>
           <Play size={20} weight="fill" />执行披挂指令
         </button>
       </div>

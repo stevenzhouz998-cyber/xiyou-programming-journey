@@ -33,7 +33,7 @@ export const FOUR_SEAS_CHILD_BLOCK_TYPES = [
   'xiyou_wear_boots',
 ] as const satisfies readonly FourSeasBlockType[]
 
-const labels: Record<FourSeasBlockType, string> = {
+export const FOUR_SEAS_BLOCK_LABELS: Readonly<Record<FourSeasBlockType, string>> = {
   xiyou_request_regalia: '请求四海龙王赐下披挂',
   xiyou_collect_gifts: '收取三件礼物',
   xiyou_receive_cloud_boots: '收下藕丝步云履',
@@ -69,7 +69,7 @@ export function registerFourSeasRegaliaBlocks(): void {
     Blockly.defineBlocksWithJsonArray([
       {
         type,
-        message0: inputName === null ? labels[type] : `${labels[type]} %1`,
+        message0: inputName === null ? FOUR_SEAS_BLOCK_LABELS[type] : `${FOUR_SEAS_BLOCK_LABELS[type]} %1`,
         ...(inputName === null
           ? {}
           : {
@@ -84,7 +84,7 @@ export function registerFourSeasRegaliaBlocks(): void {
         previousStatement: child ? 'FourSeasSubtask' : 'FourSeasTop',
         nextStatement: child ? 'FourSeasSubtask' : 'FourSeasTop',
         colour: child ? 210 : 260,
-        tooltip: labels[type],
+        tooltip: FOUR_SEAS_BLOCK_LABELS[type],
       },
     ])
   }

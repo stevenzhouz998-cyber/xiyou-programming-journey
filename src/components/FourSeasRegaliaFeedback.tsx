@@ -65,7 +65,7 @@ export function FourSeasRegaliaFeedback({
   const alertRef = useRef<HTMLElement>(null)
   useEffect(() => {
     if (diagnostic !== null) alertRef.current?.focus()
-  }, [diagnostic, occurrenceId])
+  }, [occurrenceId])
   if (diagnostic === null) return null
   return (
     <section ref={alertRef} className="battle-feedback" role="alert" tabIndex={-1}>
