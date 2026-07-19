@@ -83,6 +83,15 @@ async function visibleTracePairs(page: Page) {
   return pairs
 }
 
+async function readOnlyW1M3CompletionIdentity(page: Page) {
+  // Read-only persistence evidence: this never writes CURRENT or injects completion.
+  return page.evaluate((key) => {
+    const raw = localStorage.getItem(key)
+    const mission = raw ? JSON.parse(raw).missions?.['w1-m3'] : undefined
+    return mission ? { attempts: mission.attempts, completedAt: mission.completedAt } : null
+  }, CURRENT_KEY)
+}
+
 test('@regalia-full visible wrong nested order is corrected, persisted, and unlocks w1-m4', async ({ page }) => {
   test.setTimeout(90_000)
   await page.goto('./')
@@ -129,7 +138,7 @@ test('@regalia-full visible wrong nested order is corrected, persisted, and unlo
 
   await page.reload()
   await expect(page.getByRole('heading', { name: '四海披挂', level: 1 })).toBeVisible()
-  await expect(page.getByRole('button', { name: '重播最近一次' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '重播最近一次' })).toBeDisabled()
   expect(await visibleTracePairs(page)).toEqual(traceBefore)
   await expect(page.getByRole('region', { name: '本次执行来源' })).toContainText('parent=')
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toHaveCount(0)
@@ -138,12 +147,17 @@ test('@regalia-full visible wrong nested order is corrected, persisted, and unlo
   const observeHint = page.getByRole('button', { name: '观察提示' })
   await expect(scene).toHaveAttribute('data-scene-state', 'regalia-verified', { timeout: 15_000 })
   await expect(observeHint).toBeEnabled({ timeout: 15_000 })
+  await expect(page.getByRole('button', { name: '重播最近一次' })).toBeEnabled()
+  const completionBeforeReplay = await readOnlyW1M3CompletionIdentity(page)
+  expect(completionBeforeReplay).toMatchObject({ attempts: 1 })
+  expect(completionBeforeReplay?.completedAt).toEqual(expect.any(String))
   await page.getByRole('button', { name: '重播最近一次' }).click()
   await expect(observeHint).toBeDisabled()
   await expect(scene).toHaveAttribute('data-scene-state', 'regalia-verified', { timeout: 15_000 })
   await expect(observeHint).toBeEnabled({ timeout: 15_000 })
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toHaveCount(0)
   expect(await visibleTracePairs(page)).toEqual(traceBefore)
+  expect(await readOnlyW1M3CompletionIdentity(page)).toEqual(completionBeforeReplay)
 
   await page.getByRole('button', { name: '成长地图' }).first().click()
   await expect(page.getByRole('button', { name: '幽冥勾名' })).toBeEnabled()

@@ -59,7 +59,7 @@ function renderExperience({
 }
 
 async function add(label: string) {
-  fireEvent.click(await screen.findByRole('button', { name: label }))
+  fireEvent.click(await screen.findByRole('button', { name: label }, { timeout: 5000 }))
 }
 
 async function buildMainAndEquip() {
@@ -229,6 +229,7 @@ describe('FourSeasRegaliaExperience', () => {
     await add('加入收集子任务：收下西海的锁子黄金甲')
     await add('加入收集子任务：收下北海的藕丝步云履')
     fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }))
+    expect(screen.getByRole('button', { name: '重播最近一次' })).toBeDisabled()
 
     expect(await screen.findByRole('alert')).toHaveTextContent('北海龙王还没有送来云履')
     await waitFor(() => expect(stored().sessions['w1-m3']).toMatchObject({ totalRuns: 1, runtimeFailures: 1, lastRun: { completed: false } }))
@@ -248,8 +249,13 @@ describe('FourSeasRegaliaExperience', () => {
     await buildCorrect()
     fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }))
     const request = token()
+    const replay = screen.getByRole('button', { name: '重播最近一次' })
+    expect(replay).toBeDisabled()
+    fireEvent.click(replay)
+    expect(token()).toBe(request)
     act(() => { callbacks.get(request)?.(); callbacks.get(request)?.() })
     expect(onComplete).not.toHaveBeenCalled()
+    expect(replay).toBeDisabled()
     await waitFor(() => expect(save.mock.calls.some(([progress]) => progress.sessions['w1-m3']?.lastRun?.completed === true)).toBe(true))
     const exact = save.mock.calls.find(([progress]) => progress.sessions['w1-m3']?.lastRun?.completed === true)![0]
     expect(exact.sessions['w1-m3']?.lastRun?.completed).toBe(true)
@@ -287,6 +293,7 @@ describe('FourSeasRegaliaExperience', () => {
     act(() => callbacks.get(request)?.())
     expect(await screen.findByText('本关尚未保存，请重试。')).toBeVisible()
     expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '重播最近一次' })).toBeDisabled()
     expect(screen.getByRole('list', { name: '四海披挂程序树' }).querySelectorAll(':scope > li')).toHaveLength(10)
     expect(onComplete).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: '重试保存通关' })).not.toBeInTheDocument()
@@ -364,6 +371,9 @@ describe('FourSeasRegaliaExperience', () => {
     renderExperience({ onComplete: restoredComplete, reducedMotion })
     expect(await screen.findByTestId('regalia-events')).toHaveTextContent('regalia-verified')
     expect(screen.getByTestId('regalia-events').textContent).toBe(events)
+    expect(screen.getByRole('button', { name: '重播最近一次' })).toBeDisabled()
+    act(() => callbacks.get(token())?.())
+    expect(screen.getByRole('button', { name: '重播最近一次' })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: '重播最近一次' }))
     act(() => callbacks.get(token())?.())
     expect(restoredComplete).not.toHaveBeenCalled()

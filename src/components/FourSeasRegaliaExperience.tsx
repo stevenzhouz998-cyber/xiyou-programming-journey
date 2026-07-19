@@ -369,6 +369,7 @@ export function FourSeasRegaliaExperience({
   }
 
   const replay = () => {
+    if (locked || interactionLockedRef.current || sessionOperationRef.current !== null) return
     const result = session.lastRun ?? playbackRef.current.result
     const trace = session.lastRun ? session.lastTrace : playbackRef.current.trace
     if (result === null) return
@@ -418,6 +419,7 @@ export function FourSeasRegaliaExperience({
 
   const focusWorkspace = () => regionRef.current?.querySelector<HTMLElement>('[aria-label="Blockly 积木编辑区"]')?.focus()
   const sessionRecoveryActive = sessionOperation !== null && completionHandedOffRequest !== sessionOperation.requestId
+  const replayLocked = locked || interactionLocked || sessionOperation !== null
 
   return <div className="four-seas-regalia-experience" onKeyDown={activateButtonOnEnter}>
     <div className="four-seas-regalia-scene-region">
@@ -426,7 +428,7 @@ export function FourSeasRegaliaExperience({
           <FourSeasRegaliaScene events={playback.events} replayToken={playback.requestId} reducedMotion={reducedMotion} muted={muted} onPlaybackComplete={() => playbackComplete(playback.requestId)} />
         </Suspense>
       </ToolErrorBoundary>
-      <div className="dragon-palace-scene-controls"><button type="button" className="button button-ghost" disabled={!session.lastRun && !playback.result} onClick={replay}>重播最近一次</button></div>
+      <div className="dragon-palace-scene-controls"><button type="button" className="button button-ghost" disabled={replayLocked || (!session.lastRun && !playback.result)} onClick={replay}>重播最近一次</button></div>
     </div>
     <div className="four-seas-regalia-program-region" ref={regionRef}>
       <ToolErrorBoundary label="四海披挂编程工作台" reloadPage={reloadPage}>

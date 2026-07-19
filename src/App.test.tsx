@@ -267,6 +267,7 @@ describe('西游编程记', () => {
     expect(screen.queryByRole('button', { name: '重试保存编译记录' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '重播最近一次' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '观察提示' })).toBeDisabled();
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).not.toHaveProperty('missions.w1-m3');
 
@@ -305,6 +306,7 @@ describe('西游编程记', () => {
     expect(screen.queryByRole('button', { name: '重试保存通关' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '重播最近一次' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '观察提示' })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: '下载本页备份' }));
@@ -345,6 +347,7 @@ describe('西游编程记', () => {
     expect(screen.queryByText(/其他标签页已更新，已暂停保存/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '重试保存通关' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '重播最近一次' })).toBeDisabled();
     expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).learnerName).toBe('四海外部标签页');
 
     fireEvent.click(screen.getByRole('button', { name: '载入其他标签页版本' }));
