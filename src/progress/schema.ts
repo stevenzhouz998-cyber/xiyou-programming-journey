@@ -1198,24 +1198,33 @@ function fourSeasTrace(value: unknown, field: string): ParsedFourSeasTrace {
     sourceIds.add(item.sourceBlockId);
     provenance.set(item.instructionId, item);
   }
-  let activeContainerId: string | null = null;
+  let activeContainer: { id: string; consumedChild: boolean } | null = null;
+  const closeActiveContainer = () => {
+    if (activeContainer !== null && !activeContainer.consumedChild) {
+      invalid(`${field}容器 ${activeContainer.id} 必须至少包含一个child指令`);
+    }
+    activeContainer = null;
+  };
   for (const item of instructions) {
     if (fourSeasOpcodePlacement[item.opcode] === 'top') {
+      closeActiveContainer();
       if (item.parentBlockId !== null) {
         invalid(`${field}顶层指令 ${item.sourceBlockId} 的parentBlockId必须为null`);
       }
-      activeContainerId = item.opcode === 'collect_gifts' || item.opcode === 'equip_regalia'
-        ? item.sourceBlockId
+      activeContainer = item.opcode === 'collect_gifts' || item.opcode === 'equip_regalia'
+        ? { id: item.sourceBlockId, consumedChild: false }
         : null;
       continue;
     }
     if (item.parentBlockId === null) {
       invalid(`${field}子指令 ${item.sourceBlockId} 必须有parentBlockId`);
     }
-    if (activeContainerId === null || item.parentBlockId !== activeContainerId) {
+    if (activeContainer === null || item.parentBlockId !== activeContainer.id) {
       invalid(`${field}子指令 ${item.sourceBlockId} 必须引用当前已开始的容器作用域`);
     }
+    activeContainer.consumedChild = true;
   }
+  closeActiveContainer();
   return { instructions, provenance };
 }
 
@@ -1232,6 +1241,7 @@ function validateFourSeasSessionEvidence(
   const hasRunTime = session.lastRunAt !== null;
   if (session.totalRuns === 0) {
     if (hasRun || hasRunTime) invalid(`${field}零次运行不得包含lastRun或lastRunAt证据`);
+    if (session.lastTrace.length > 0) invalid(`${field}零次运行时lastTrace必须为空`);
   } else if (!hasRun || !hasRunTime) {
     invalid(`${field}有运行计数时lastRun与lastRunAt必须同时存在`);
   }
@@ -1248,6 +1258,17 @@ function validateFourSeasSessionEvidence(
   );
   if (session.runtimeFailures !== expectedRuntimeFailures) {
     invalid(`${field}.runtimeFailures必须等于运行概念失败计数之和`);
+  }
+  if (session.lastRun?.completed === true) {
+    if (session.runtimeFailures >= session.totalRuns) {
+      invalid(`${field}最后一次运行成功时累计失败次数必须小于totalRuns`);
+    }
+  } else if (session.lastRun?.completed === false) {
+    if (session.runtimeFailures < 1) invalid(`${field}最后一次运行失败必须有累计失败证据`);
+    const latestConceptCount = session.lastRun.diagnostic.type === 'instruction-rejected'
+      ? session.conceptFailures.sequencePrecondition
+      : session.conceptFailures.completeness;
+    if (latestConceptCount < 1) invalid(`${field}最后一次失败的概念计数必须至少为1`);
   }
   return session;
 }

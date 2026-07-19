@@ -197,6 +197,8 @@ describe('progress schema', () => {
       const oldCollectChildren = lastTrace.splice(2, 3);
       lastTrace.push(...oldCollectChildren);
     }],
+    ['empty collect container', (lastTrace) => { lastTrace.splice(2, 3); }],
+    ['empty equip container', (lastTrace) => { lastTrace.splice(6, 3); }],
   ];
   const compilerImpossibleRunCases: Array<[
     string,
@@ -240,6 +242,17 @@ describe('progress schema', () => {
       .not.toThrow();
   });
 
+  it('accepts a real multi-run w1-m3 session whose latest run succeeds after an earlier failure', () => {
+    const fixture = validFourSeasSession();
+    const rejectedTrace = [fixture.lastTrace.at(-1)!];
+    let session = createMissionSession('w1-m3', NOW);
+    session = recordRun(session, runFourSeasRegalia(rejectedTrace), rejectedTrace, NOW);
+    session = recordRun(session, runFourSeasRegalia(fixture.lastTrace), fixture.lastTrace, NOW);
+    expect(session).toMatchObject({ totalRuns: 2, runtimeFailures: 1, lastRun: { completed: true } });
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m3': session } }))
+      .not.toThrow();
+  });
+
   it.each([
     ['zero runs with stored run evidence', (session: FourSeasRegaliaMissionSession) => { session.totalRuns = 0; }],
     ['runs with only lastRunAt', (session: FourSeasRegaliaMissionSession) => { session.lastRun = null; }],
@@ -262,6 +275,37 @@ describe('progress schema', () => {
     mutate(session);
     expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m3': session } }))
       .toThrow(/sessions\.w1-m3.*(?:运行|时间|失败|计数|证据|安全)/);
+  });
+
+  it.each([
+    ['successful latest run but every run counted as failed', (session: FourSeasRegaliaMissionSession) => {
+      session.runtimeFailures = session.totalRuns;
+      session.conceptFailures.sequencePrecondition = session.totalRuns;
+    }],
+    ['latest rejected run recorded under the wrong concept', (session: FourSeasRegaliaMissionSession) => {
+      const rejectedTrace = [session.lastTrace.at(-1)!];
+      session.lastTrace = rejectedTrace;
+      session.lastRun = runFourSeasRegalia(rejectedTrace);
+      session.runtimeFailures = 1;
+      session.conceptFailures.sequencePrecondition = 0;
+      session.conceptFailures.completeness = 1;
+    }],
+    ['zero runs retaining a historical trace', (session: FourSeasRegaliaMissionSession) => {
+      session.totalRuns = 0;
+      session.runtimeFailures = 0;
+      session.lastRun = null;
+      session.lastRunAt = null;
+      session.conceptFailures.sequencePrecondition = 0;
+      session.conceptFailures.completeness = 0;
+    }],
+  ] as const)('rejects latest-run evidence inconsistent with cumulative w1-m3 statistics: %s', (
+    _label,
+    mutate,
+  ) => {
+    const session = validFourSeasSession();
+    mutate(session);
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m3': session } }))
+      .toThrow(/sessions\.w1-m3.*(?:lastTrace|成功|失败|概念|运行)/);
   });
 
   it('rejects every forged w1-m3 provenance and canonical-run field', () => {
