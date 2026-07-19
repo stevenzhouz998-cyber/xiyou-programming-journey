@@ -14,6 +14,13 @@ import {
 } from '../blockly/fourSeasRegaliaDraft';
 import { createInitialProgress } from './progress';
 import { migrateProgress, parseProgress, PROGRESS_SCHEMA_LIMITS } from './schema';
+import {
+  createMissionSession,
+  recordCompileFailure,
+  recordHint,
+  recordRun,
+  updateWorkspaceDraft,
+} from './session';
 import type {
   DragonPalaceMissionSession,
   FourSeasRegaliaMissionSession,
@@ -47,18 +54,12 @@ function validFourSeasSession(
     const persistedDraft = saveFourSeasWorkspaceDraft(workspace);
     const compiled = compileFourSeasRegaliaWorkspace(workspace);
     if (!compiled.ok) throw new Error(`fixture did not compile: ${compiled.diagnostics[0]?.code}`);
-    return {
-      workspace: persistedDraft,
-      lastTrace: compiled.trace,
-      lastRun: runFourSeasRegalia(compiled.trace),
-      totalRuns: 7,
-      runtimeFailures: 2,
-      compileFailures: 3,
-      usedHintTiers: ['observe', 'think'],
-      conceptFailures: { programStructure: 2, sequencePrecondition: 2, completeness: 2 },
-      lastRunAt: NOW,
-      savedAt: NOW,
-    };
+    let session = updateWorkspaceDraft(createMissionSession('w1-m3', NOW), persistedDraft, NOW);
+    session = recordCompileFailure(session, 'program-structure', NOW);
+    session = recordCompileFailure(session, 'program-structure', NOW);
+    session = recordRun(session, runFourSeasRegalia(compiled.trace), compiled.trace, NOW);
+    session = recordHint(session, 'observe', NOW);
+    return recordHint(session, 'think', NOW);
   } finally {
     workspace.dispose();
   }
@@ -182,6 +183,85 @@ describe('progress schema', () => {
       diagnostic: { type: 'instruction-rejected', concept: 'container-scope' },
     });
     expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m3': session } })).not.toThrow();
+  });
+
+  const compilerImpossibleCases: Array<[
+    string,
+    (trace: FourSeasRegaliaMissionSession['lastTrace']) => void,
+  ]> = [
+    ['top opcode with a parent', (lastTrace) => { lastTrace[0].parentBlockId = 'collect'; }],
+    ['child opcode without a parent', (lastTrace) => { lastTrace[2].parentBlockId = null; }],
+    ['child referencing a later container', (lastTrace) => { lastTrace[2].parentBlockId = 'equip'; }],
+    ['nested container opcode', (lastTrace) => { lastTrace[5].parentBlockId = 'collect'; }],
+    ['child returning to a closed container scope', (lastTrace) => {
+      const oldCollectChildren = lastTrace.splice(2, 3);
+      lastTrace.push(...oldCollectChildren);
+    }],
+  ];
+  const compilerImpossibleRunCases: Array<[
+    string,
+    (trace: FourSeasRegaliaMissionSession['lastTrace']) => void,
+    'without a stored run' | 'with its canonical stored failure',
+  ]> = compilerImpossibleCases.flatMap(([label, mutate]) => ([
+    [label, mutate, 'without a stored run' as const],
+    [label, mutate, 'with its canonical stored failure' as const],
+  ]));
+
+  it.each(compilerImpossibleRunCases)(
+    'rejects compiler-impossible w1-m3 trace provenance: %s %s',
+    (_label, mutate, runMode) => {
+      const session = validFourSeasSession();
+      mutate(session.lastTrace);
+      if (runMode === 'without a stored run') {
+        session.lastRun = null;
+        session.lastRunAt = null;
+        session.totalRuns = 0;
+        session.runtimeFailures = 0;
+        session.conceptFailures.sequencePrecondition = 0;
+        session.conceptFailures.completeness = 0;
+      } else {
+        const canonical = runFourSeasRegalia(session.lastTrace);
+        session.lastRun = canonical;
+        session.lastRunAt = NOW;
+        session.totalRuns = 1;
+        session.runtimeFailures = canonical.completed ? 0 : 1;
+        session.conceptFailures.sequencePrecondition = canonical.completed
+          || canonical.diagnostic.type !== 'instruction-rejected' ? 0 : 1;
+        session.conceptFailures.completeness = canonical.completed
+          || canonical.diagnostic.type !== 'program-ended-incomplete' ? 0 : 1;
+      }
+      expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m3': session } }))
+        .toThrow(/lastTrace.*(?:parentBlockId|容器|作用域|顺序)/);
+    },
+  );
+
+  it('accepts w1-m3 evidence accumulated through the session API', () => {
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m3': validFourSeasSession() } }))
+      .not.toThrow();
+  });
+
+  it.each([
+    ['zero runs with stored run evidence', (session: FourSeasRegaliaMissionSession) => { session.totalRuns = 0; }],
+    ['runs with only lastRunAt', (session: FourSeasRegaliaMissionSession) => { session.lastRun = null; }],
+    ['runs with only lastRun', (session: FourSeasRegaliaMissionSession) => { session.lastRunAt = null; }],
+    ['runs with neither last evidence field', (session: FourSeasRegaliaMissionSession) => {
+      session.lastRun = null;
+      session.lastRunAt = null;
+    }],
+    ['more runtime failures than runs', (session: FourSeasRegaliaMissionSession) => { session.runtimeFailures = 2; }],
+    ['compile failures disagree with structure failures', (session: FourSeasRegaliaMissionSession) => { session.compileFailures = 3; }],
+    ['runtime failures disagree with diagnostic concepts', (session: FourSeasRegaliaMissionSession) => { session.runtimeFailures = 1; }],
+    ['runtime concept sum overflows a safe integer', (session: FourSeasRegaliaMissionSession) => {
+      session.totalRuns = Number.MAX_SAFE_INTEGER;
+      session.runtimeFailures = Number.MAX_SAFE_INTEGER;
+      session.conceptFailures.sequencePrecondition = Number.MAX_SAFE_INTEGER;
+      session.conceptFailures.completeness = 1;
+    }],
+  ] as const)('rejects impossible w1-m3 session evidence: %s', (_label, mutate) => {
+    const session = validFourSeasSession();
+    mutate(session);
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m3': session } }))
+      .toThrow(/sessions\.w1-m3.*(?:运行|时间|失败|计数|证据|安全)/);
   });
 
   it('rejects every forged w1-m3 provenance and canonical-run field', () => {

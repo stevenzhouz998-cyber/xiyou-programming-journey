@@ -52,6 +52,27 @@ function recordedFourSeasSession() {
 }
 
 describe('progress rules', () => {
+  it('fails closed when weekly stars or hints overflow the safe integer range', () => {
+    const progress = createInitialProgress();
+    progress.missions['w1-m1'] = {
+      status: 'completed',
+      stars: Number.MAX_SAFE_INTEGER as never,
+      attempts: 1,
+      hintsUsed: Number.MAX_SAFE_INTEGER,
+      completedAt: NOW,
+    };
+    progress.missions['w1-m2'] = {
+      status: 'completed',
+      stars: 1,
+      attempts: 1,
+      hintsUsed: 1,
+      completedAt: NOW,
+    };
+    expect(() => getWeeklyReport(progress, 1)).toThrow('任务进度计数超出安全范围');
+
+    progress.missions['w1-m1'].stars = 1;
+    expect(() => getWeeklyReport(progress, 1)).toThrow('任务进度计数超出安全范围');
+  });
   it('persists completed w1-m3 and unlocks w1-m4 across export-import without replay attempts', () => {
     let progress = createInitialProgress();
     progress = completeMission(progress, 'w1-m1', { stars: 2, hintsUsed: 0 });

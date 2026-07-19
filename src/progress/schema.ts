@@ -105,6 +105,18 @@ const fourSeasOpcodes = new Set<FourSeasOpcode>([
   'receive_purple_crown', 'equip_regalia', 'wear_crown', 'wear_armor', 'wear_boots',
   'verify_regalia',
 ]);
+const fourSeasOpcodePlacement = {
+  request_regalia: 'top',
+  collect_gifts: 'top',
+  receive_cloud_boots: 'child',
+  receive_golden_armor: 'child',
+  receive_purple_crown: 'child',
+  equip_regalia: 'top',
+  wear_crown: 'child',
+  wear_armor: 'child',
+  wear_boots: 'child',
+  verify_regalia: 'top',
+} as const satisfies Record<FourSeasOpcode, 'top' | 'child'>;
 const fourSeasEventTypes = new Set<FourSeasBattleEvent['type']>([
   'run-started', 'instruction-accepted', 'instruction-rejected', 'state-changed', 'run-finished',
 ]);
@@ -1186,14 +1198,58 @@ function fourSeasTrace(value: unknown, field: string): ParsedFourSeasTrace {
     sourceIds.add(item.sourceBlockId);
     provenance.set(item.instructionId, item);
   }
+  let activeContainerId: string | null = null;
   for (const item of instructions) {
-    if (item.parentBlockId === null) continue;
-    const parent = provenance.get(`${INSTRUCTION_ID_PREFIX}${item.parentBlockId}`);
-    if (!parent || (parent.opcode !== 'collect_gifts' && parent.opcode !== 'equip_regalia')) {
-      invalid(`${field}包含伪造parentBlockId ${item.parentBlockId}`);
+    if (fourSeasOpcodePlacement[item.opcode] === 'top') {
+      if (item.parentBlockId !== null) {
+        invalid(`${field}顶层指令 ${item.sourceBlockId} 的parentBlockId必须为null`);
+      }
+      activeContainerId = item.opcode === 'collect_gifts' || item.opcode === 'equip_regalia'
+        ? item.sourceBlockId
+        : null;
+      continue;
+    }
+    if (item.parentBlockId === null) {
+      invalid(`${field}子指令 ${item.sourceBlockId} 必须有parentBlockId`);
+    }
+    if (activeContainerId === null || item.parentBlockId !== activeContainerId) {
+      invalid(`${field}子指令 ${item.sourceBlockId} 必须引用当前已开始的容器作用域`);
     }
   }
   return { instructions, provenance };
+}
+
+function safeSessionEvidenceSum(left: number, right: number, field: string): number {
+  if (left > Number.MAX_SAFE_INTEGER - right) invalid(`${field}计数求和超出安全范围`);
+  return left + right;
+}
+
+function validateFourSeasSessionEvidence(
+  session: FourSeasRegaliaMissionSession,
+  field: string,
+): FourSeasRegaliaMissionSession {
+  const hasRun = session.lastRun !== null;
+  const hasRunTime = session.lastRunAt !== null;
+  if (session.totalRuns === 0) {
+    if (hasRun || hasRunTime) invalid(`${field}零次运行不得包含lastRun或lastRunAt证据`);
+  } else if (!hasRun || !hasRunTime) {
+    invalid(`${field}有运行计数时lastRun与lastRunAt必须同时存在`);
+  }
+  if (session.runtimeFailures > session.totalRuns) {
+    invalid(`${field}.runtimeFailures运行失败次数不得超过totalRuns`);
+  }
+  if (session.compileFailures !== session.conceptFailures.programStructure) {
+    invalid(`${field}.compileFailures必须等于programStructure失败计数`);
+  }
+  const expectedRuntimeFailures = safeSessionEvidenceSum(
+    session.conceptFailures.sequencePrecondition,
+    session.conceptFailures.completeness,
+    `${field}.conceptFailures`,
+  );
+  if (session.runtimeFailures !== expectedRuntimeFailures) {
+    invalid(`${field}.runtimeFailures必须等于运行概念失败计数之和`);
+  }
+  return session;
 }
 
 function sameFourSeasInstruction(
@@ -1475,7 +1531,7 @@ function fourSeasSession(value: unknown, field: string): FourSeasRegaliaMissionS
   exactKeys(failures, `${field}.conceptFailures`, [
     'programStructure', 'sequencePrecondition', 'completeness',
   ]);
-  return {
+  const parsed: FourSeasRegaliaMissionSession = {
     workspace: fourSeasWorkspace(source.workspace, `${field}.workspace`),
     lastTrace: lastTrace.instructions,
     lastRun: fourSeasRunResult(source.lastRun, `${field}.lastRun`, lastTrace),
@@ -1491,6 +1547,7 @@ function fourSeasSession(value: unknown, field: string): FourSeasRegaliaMissionS
     lastRunAt: nullableDate(source.lastRunAt, `${field}.lastRunAt`),
     savedAt: date(source.savedAt, `${field}.savedAt`),
   };
+  return validateFourSeasSessionEvidence(parsed, field);
 }
 
 function sessions(value: unknown): MissionSessions {

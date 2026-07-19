@@ -29,6 +29,13 @@ import {
 import { repairLoadedProgressTransaction } from './storageRepair';
 import { clearProgressTransaction, importProgressTransaction } from './storageParent';
 import type { ProgressV3 } from './types';
+import {
+  createMissionSession,
+  recordCompileFailure,
+  recordHint,
+  recordRun,
+  updateWorkspaceDraft,
+} from './session';
 
 const NOW = new Date('2026-07-12T08:09:10.000Z');
 const clock = () => NOW;
@@ -174,22 +181,23 @@ function progressWithFourSeasSession(name: string): ProgressV3 {
     loadFourSeasWorkspaceDraft(workspace, draft);
     const compiled = compileFourSeasRegaliaWorkspace(workspace);
     if (!compiled.ok) throw new Error('expected real w1-m3 fixture to compile');
+    let session = updateWorkspaceDraft(
+      createMissionSession('w1-m3', '2026-07-12T08:00:00.000Z'),
+      saveFourSeasWorkspaceDraft(workspace),
+      '2026-07-12T08:00:00.000Z',
+    );
+    session = recordCompileFailure(session, 'program-structure', '2026-07-12T08:00:00.000Z');
+    session = recordCompileFailure(session, 'program-structure', '2026-07-12T08:00:00.000Z');
+    session = recordRun(
+      session,
+      runFourSeasRegalia(compiled.trace),
+      compiled.trace,
+      '2026-07-12T08:01:00.000Z',
+    );
+    session = recordHint(session, 'observe', '2026-07-12T08:01:00.000Z');
     return {
       ...progress(name),
-      sessions: {
-        'w1-m3': {
-          workspace: saveFourSeasWorkspaceDraft(workspace),
-          lastTrace: compiled.trace,
-          lastRun: runFourSeasRegalia(compiled.trace),
-          totalRuns: 4,
-          runtimeFailures: 1,
-          compileFailures: 2,
-          usedHintTiers: ['observe'],
-          conceptFailures: { programStructure: 1, sequencePrecondition: 1, completeness: 0 },
-          lastRunAt: '2026-07-12T08:00:00.000Z',
-          savedAt: '2026-07-12T08:01:00.000Z',
-        },
-      },
+      sessions: { 'w1-m3': session },
     };
   } finally {
     workspace.dispose();
@@ -519,7 +527,7 @@ describe('progress storage transactions', () => {
     expect(recovered).toMatchObject({
       status: 'recovered-from-snapshot',
       persistence: 'saved',
-      progress: { sessions: { 'w1-m3': { totalRuns: 4 } } },
+      progress: { sessions: { 'w1-m3': { totalRuns: 1 } } },
     });
     expect(JSON.parse(recovered.corruptDownload!).current).toBe(damagedBytes);
     const session = recovered.progress.sessions['w1-m3']!;
