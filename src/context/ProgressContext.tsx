@@ -4,6 +4,7 @@ import {
   type CompletionInput,
   type DragonPalaceMissionSession,
   type ExecutableMissionId,
+  type FourSeasRegaliaMissionSession,
   type MissionSession,
   type ProgressV3,
   type RuyiStaffMissionSession,
@@ -27,10 +28,12 @@ export type ProgressSaveStatus = 'idle' | 'pending' | 'saved' | 'unsaved' | 'con
 export interface ProgressWriteOptions { legacyWorkspaceKey?: string }
 type MissionSessionUpdateArgs =
   | [missionId: 'w1-m1', update: (session: DragonPalaceMissionSession) => DragonPalaceMissionSession, options?: ProgressWriteOptions]
-  | [missionId: 'w1-m2', update: (session: RuyiStaffMissionSession) => RuyiStaffMissionSession, options?: ProgressWriteOptions];
+  | [missionId: 'w1-m2', update: (session: RuyiStaffMissionSession) => RuyiStaffMissionSession, options?: ProgressWriteOptions]
+  | [missionId: 'w1-m3', update: (session: FourSeasRegaliaMissionSession) => FourSeasRegaliaMissionSession, options?: ProgressWriteOptions];
 type MissionSessionUpdateAtArgs =
   | [missionId: 'w1-m1', update: (session: DragonPalaceMissionSession) => DragonPalaceMissionSession, now: string, options?: ProgressWriteOptions]
-  | [missionId: 'w1-m2', update: (session: RuyiStaffMissionSession) => RuyiStaffMissionSession, now: string, options?: ProgressWriteOptions];
+  | [missionId: 'w1-m2', update: (session: RuyiStaffMissionSession) => RuyiStaffMissionSession, now: string, options?: ProgressWriteOptions]
+  | [missionId: 'w1-m3', update: (session: FourSeasRegaliaMissionSession) => FourSeasRegaliaMissionSession, now: string, options?: ProgressWriteOptions];
 interface UpdateMissionSession {
   (
     missionId: 'w1-m1',
@@ -42,6 +45,18 @@ interface UpdateMissionSession {
     update: (session: RuyiStaffMissionSession) => RuyiStaffMissionSession,
     options?: ProgressWriteOptions,
   ): Promise<CoordinatedSaveResult>;
+  (
+    missionId: 'w1-m3',
+    update: (session: FourSeasRegaliaMissionSession) => FourSeasRegaliaMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
+}
+type MissionHintTier = MissionSession['usedHintTiers'][number];
+interface RecordMissionHint {
+  (missionId: 'w1-m1', tier: MissionHintTier): Promise<CoordinatedSaveResult>;
+  (missionId: 'w1-m2', tier: MissionHintTier): Promise<CoordinatedSaveResult>;
+  (missionId: 'w1-m3', tier: MissionHintTier): Promise<CoordinatedSaveResult>;
+  (missionId: ExecutableMissionId, tier: MissionHintTier): Promise<CoordinatedSaveResult>;
 }
 
 export interface ProgressContextValue {
@@ -57,7 +72,7 @@ export interface ProgressContextValue {
   saveRetryable: boolean;
   complete: (missionId: string, input: CompletionInput) => Promise<CoordinatedSaveResult>;
   updateMissionSession: UpdateMissionSession;
-  recordMissionHint: (missionId: ExecutableMissionId, tier: MissionSession['usedHintTiers'][number]) => Promise<CoordinatedSaveResult>;
+  recordMissionHint: RecordMissionHint;
   replaceProgress: (progress: ProgressV3) => Promise<CoordinatedSaveResult>;
   updateSettings: (settings: Partial<ProgressV3['settings']>) => Promise<CoordinatedSaveResult>;
   commitParentAccess: (parentPin: string) => Promise<CoordinatedSaveResult>;
@@ -306,10 +321,17 @@ export function ProgressProvider({
         : createMissionSession('w1-m1', now);
       return persistMissionSession(missionId, update(current), now, options);
     }
+    if (missionId === 'w1-m2') {
+      const currentProgress = workingProgress();
+      const current = currentProgress.sessions['w1-m2']
+        ? structuredClone(currentProgress.sessions['w1-m2'])
+        : createMissionSession('w1-m2', now);
+      return persistMissionSession(missionId, update(current), now, options);
+    }
     const currentProgress = workingProgress();
-    const current = currentProgress.sessions['w1-m2']
-      ? structuredClone(currentProgress.sessions['w1-m2'])
-      : createMissionSession('w1-m2', now);
+    const current = currentProgress.sessions['w1-m3']
+      ? structuredClone(currentProgress.sessions['w1-m3'])
+      : createMissionSession('w1-m3', now);
     return persistMissionSession(missionId, update(current), now, options);
   };
 
@@ -323,12 +345,20 @@ export function ProgressProvider({
     update: (session: RuyiStaffMissionSession) => RuyiStaffMissionSession,
     options?: ProgressWriteOptions,
   ): Promise<CoordinatedSaveResult>;
+  function updateMissionSession(
+    missionId: 'w1-m3',
+    update: (session: FourSeasRegaliaMissionSession) => FourSeasRegaliaMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
   function updateMissionSession(...args: MissionSessionUpdateArgs) {
     const now = new Date().toISOString();
     if (args[0] === 'w1-m1') {
       return updateMissionSessionAt(args[0], args[1], now, args[2]);
     }
     if (args[0] === 'w1-m2') {
+      return updateMissionSessionAt(args[0], args[1], now, args[2]);
+    }
+    if (args[0] === 'w1-m3') {
       return updateMissionSessionAt(args[0], args[1], now, args[2]);
     }
     throw new Error('任务编号无效');
@@ -418,9 +448,16 @@ export function ProgressProvider({
           now,
         );
       }
+      if (missionId === 'w1-m2') {
+        return updateMissionSessionAt(
+          missionId,
+          (session: RuyiStaffMissionSession) => recordHint(session, tier, now),
+          now,
+        );
+      }
       return updateMissionSessionAt(
         missionId,
-        (session: RuyiStaffMissionSession) => recordHint(session, tier, now),
+        (session: FourSeasRegaliaMissionSession) => recordHint(session, tier, now),
         now,
       );
     },

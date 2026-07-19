@@ -1,8 +1,15 @@
 import { allMissions } from '../course/course';
 import type { DragonBlockType } from '../blockly/dragonPalaceBlocks';
 import type { RuyiBlockType } from '../blockly/ruyiStaffBlocks';
+import { isFourSeasBlockType, isFourSeasChildBlockType, type FourSeasBlockType } from '../blockly/fourSeasRegaliaBlocks';
+import {
+  findFourSeasWorkspaceBoundaryViolation,
+  FOUR_SEAS_WORKSPACE_LIMITS,
+  type FourSeasWorkspaceDraftV1,
+} from '../blockly/fourSeasRegaliaDraft';
 import { runDragonPalaceBattle } from '../battle/dragonPalace';
 import { runRuyiStaffBattle } from '../battle/ruyiStaff';
+import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import type {
   BattleDiagnostic,
   BattleEvent,
@@ -11,6 +18,12 @@ import type {
   DragonPalaceInstruction,
   DragonPalaceOpcode,
   DragonPalaceState,
+  FourSeasBattleDiagnostic,
+  FourSeasBattleEvent,
+  FourSeasBattleRunResult,
+  FourSeasInstruction,
+  FourSeasOpcode,
+  FourSeasState,
   RuyiStaffBattleDiagnostic,
   RuyiStaffBattleEvent,
   RuyiStaffBattleRunResult,
@@ -26,6 +39,7 @@ import type {
   MissionSession,
   MissionSessions,
   DragonPalaceMissionSession,
+  FourSeasRegaliaMissionSession,
   RuyiStaffMissionSession,
   ProgressSettings,
   ProgressV1,
@@ -34,13 +48,13 @@ import type {
 } from './types';
 
 const INSTRUCTION_ID_PREFIX = 'instruction:';
-const MAX_BLOCK_OR_SOURCE_ID_LENGTH = 256;
+const MAX_BLOCK_OR_SOURCE_ID_LENGTH = FOUR_SEAS_WORKSPACE_LIMITS.maxBlockOrSourceIdLength;
 
 export const PROGRESS_SCHEMA_LIMITS = {
   maxRawJsonBytes: 1024 * 1024,
-  maxWorkspaceBlocks: 500,
-  maxTraceInstructions: 500,
-  maxBattleEvents: 1002,
+  maxWorkspaceBlocks: FOUR_SEAS_WORKSPACE_LIMITS.maxWorkspaceBlocks,
+  maxTraceInstructions: FOUR_SEAS_WORKSPACE_LIMITS.maxWorkspaceBlocks,
+  maxBattleEvents: FOUR_SEAS_WORKSPACE_LIMITS.maxWorkspaceBlocks * 2 + 2,
   maxBlockOrSourceIdLength: MAX_BLOCK_OR_SOURCE_ID_LENGTH,
   maxInstructionIdLength: INSTRUCTION_ID_PREFIX.length + MAX_BLOCK_OR_SOURCE_ID_LENGTH,
   maxMessageCodeLength: 256,
@@ -81,12 +95,41 @@ const ruyiStates = new Set<RuyiStaffState>([
 const ruyiEventTypes = new Set<RuyiStaffBattleEvent['type']>([
   'run-started', 'instruction-accepted', 'instruction-rejected', 'state-changed', 'run-finished',
 ]);
+const fourSeasStates = new Set<FourSeasState>([
+  'awaiting-request', 'regalia-requested', 'collecting-gifts', 'cloud-boots-received',
+  'golden-armor-received', 'all-gifts-received', 'equipping-regalia', 'crown-equipped',
+  'armor-equipped', 'regalia-equipped', 'regalia-verified',
+]);
+const fourSeasOpcodes = new Set<FourSeasOpcode>([
+  'request_regalia', 'collect_gifts', 'receive_cloud_boots', 'receive_golden_armor',
+  'receive_purple_crown', 'equip_regalia', 'wear_crown', 'wear_armor', 'wear_boots',
+  'verify_regalia',
+]);
+const fourSeasEventTypes = new Set<FourSeasBattleEvent['type']>([
+  'run-started', 'instruction-accepted', 'instruction-rejected', 'state-changed', 'run-finished',
+]);
 const hintTiers = new Set<MissionSession['usedHintTiers'][number]>(['observe', 'think', 'partial']);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object'
     && value !== null
     && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function deeplyEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left)
+      && Array.isArray(right)
+      && left.length === right.length
+      && left.every((item, index) => deeplyEqual(item, right[index]));
+  }
+  if (!isPlainObject(left) || !isPlainObject(right)) return false;
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key) => Object.prototype.hasOwnProperty.call(right, key)
+      && deeplyEqual(left[key], right[key]));
 }
 
 function invalid(detail: string): never {
@@ -424,6 +467,107 @@ function ruyiWorkspace(value: unknown, field: string): RuyiWorkspaceDraftV1 {
     if (incomingEdges.get(next) === 0) queue.push(next);
   }
   if (visited !== blocks.length) invalid(`${field}包含cycle`);
+  return { version: 1, blocks };
+}
+
+function fourSeasWorkspace(value: unknown, field: string): FourSeasWorkspaceDraftV1 {
+  const source = object(value, field);
+  exactKeys(source, field, ['version', 'blocks']);
+  if (source.version !== 1) invalid(`${field}.version必须是1`);
+  const rawBlocks = boundedArray(
+    source.blocks,
+    `${field}.blocks`,
+    FOUR_SEAS_WORKSPACE_LIMITS.maxWorkspaceBlocks,
+  );
+  const boundaryViolation = findFourSeasWorkspaceBoundaryViolation(
+    rawBlocks.map((item) => {
+      const block = object(item, `${field}.blocks`);
+      return { id: block.id, x: block.x, y: block.y };
+    }),
+  );
+  if (boundaryViolation?.reason === 'block-id') {
+    invalid(`${field}.blocks.id最多${FOUR_SEAS_WORKSPACE_LIMITS.maxBlockOrSourceIdLength}个字符`);
+  }
+  if (boundaryViolation?.reason === 'coordinate') invalid(`${field}.blocks必须是安全的有限坐标`);
+
+  const blocks = rawBlocks.map((rawBlock, index) => {
+    const blockField = `${field}.blocks[${index}]`;
+    const block = object(rawBlock, blockField);
+    exactKeys(block, blockField, ['id', 'type', 'nextId', 'parentBlockId', 'x', 'y']);
+    const id = nonEmptyBoundedString(
+      block.id,
+      `${blockField}.id`,
+      FOUR_SEAS_WORKSPACE_LIMITS.maxBlockOrSourceIdLength,
+    );
+    if (typeof block.type !== 'string' || !isFourSeasBlockType(block.type)) {
+      invalid(`${blockField}.type不是已知workspace积木`);
+    }
+    const nextId = block.nextId === null ? null : nonEmptyBoundedString(
+      block.nextId,
+      `${blockField}.nextId`,
+      FOUR_SEAS_WORKSPACE_LIMITS.maxBlockOrSourceIdLength,
+    );
+    const parentBlockId = block.parentBlockId === null ? null : nonEmptyBoundedString(
+      block.parentBlockId,
+      `${blockField}.parentBlockId`,
+      FOUR_SEAS_WORKSPACE_LIMITS.maxBlockOrSourceIdLength,
+    );
+    return {
+      id,
+      type: block.type as FourSeasBlockType,
+      nextId,
+      parentBlockId,
+      x: coordinate(block.x, `${blockField}.x`),
+      y: coordinate(block.y, `${blockField}.y`),
+    };
+  });
+
+  const byId = new Map<string, FourSeasWorkspaceDraftV1['blocks'][number]>();
+  for (const block of blocks) {
+    if (byId.has(block.id)) invalid(`${field}包含重复block id ${block.id}`);
+    byId.set(block.id, block);
+  }
+  const predecessors = new Set<string>();
+  for (const block of blocks) {
+    if (isFourSeasChildBlockType(block.type)) {
+      if (block.parentBlockId === null) invalid(`${field}子积木 ${block.id}缺少parentBlockId`);
+      const parent = byId.get(block.parentBlockId);
+      if (!parent) invalid(`${field}包含未知parentBlockId ${block.parentBlockId}`);
+      if (parent.type !== 'xiyou_collect_gifts' && parent.type !== 'xiyou_equip_regalia') {
+        invalid(`${field}积木 ${block.id}的容器类型无效`);
+      }
+    } else if (block.parentBlockId !== null) {
+      invalid(`${field}顶层积木 ${block.id}不得有parentBlockId`);
+    }
+    if (block.nextId === null) continue;
+    const next = byId.get(block.nextId);
+    if (!next) invalid(`${field}包含未知nextId ${block.nextId}`);
+    if (block.nextId === block.id) invalid(`${field}包含自环 ${block.id}`);
+    if (next.parentBlockId !== block.parentBlockId) invalid(`${field}包含跨容器nextId ${block.nextId}`);
+    if (predecessors.has(block.nextId)) invalid(`${field}中的 ${block.nextId} 有多个前驱`);
+    predecessors.add(block.nextId);
+  }
+
+  const scopes = new Map<string | null, string[]>();
+  for (const block of blocks) {
+    const ids = scopes.get(block.parentBlockId) ?? [];
+    ids.push(block.id);
+    scopes.set(block.parentBlockId, ids);
+  }
+  for (const [parentBlockId, ids] of scopes) {
+    if (ids.filter((id) => !predecessors.has(id)).length !== 1) {
+      invalid(`${field}容器 ${String(parentBlockId)}必须恰有一个链头`);
+    }
+  }
+  for (const start of byId.keys()) {
+    const path = new Set<string>();
+    let current: string | null = start;
+    while (current !== null) {
+      if (path.has(current)) invalid(`${field}包含cycle ${current}`);
+      path.add(current);
+      current = byId.get(current)?.nextId ?? null;
+    }
+  }
   return { version: 1, blocks };
 }
 
@@ -977,6 +1121,270 @@ function ruyiRunResult(
   }, field, lastTrace.instructions);
 }
 
+function fourSeasState(value: unknown, field: string): FourSeasState {
+  if (typeof value !== 'string' || !fourSeasStates.has(value as FourSeasState)) {
+    invalid(`${field}状态无效`);
+  }
+  return value as FourSeasState;
+}
+
+function fourSeasOpcode(value: unknown, field: string): FourSeasOpcode {
+  if (typeof value !== 'string' || !fourSeasOpcodes.has(value as FourSeasOpcode)) {
+    invalid(`${field}操作码无效`);
+  }
+  return value as FourSeasOpcode;
+}
+
+function nullableSourceId(value: unknown, field: string): string | null {
+  return value === null ? null : nonEmptyBoundedString(
+    value,
+    field,
+    FOUR_SEAS_WORKSPACE_LIMITS.maxBlockOrSourceIdLength,
+  );
+}
+
+function fourSeasInstruction(value: unknown, field: string): FourSeasInstruction {
+  const source = object(value, field);
+  exactKeys(source, field, ['instructionId', 'sourceBlockId', 'parentBlockId', 'opcode']);
+  const sourceBlockId = nonEmptyBoundedString(
+    source.sourceBlockId,
+    `${field}.sourceBlockId`,
+    FOUR_SEAS_WORKSPACE_LIMITS.maxBlockOrSourceIdLength,
+  );
+  const instructionId = nonEmptyBoundedString(
+    source.instructionId,
+    `${field}.instructionId`,
+    PROGRESS_SCHEMA_LIMITS.maxInstructionIdLength,
+  );
+  if (instructionId !== `${INSTRUCTION_ID_PREFIX}${sourceBlockId}`) {
+    invalid(`${field}.instructionId必须由sourceBlockId派生`);
+  }
+  return {
+    instructionId,
+    sourceBlockId,
+    parentBlockId: nullableSourceId(source.parentBlockId, `${field}.parentBlockId`),
+    opcode: fourSeasOpcode(source.opcode, `${field}.opcode`),
+  };
+}
+
+interface ParsedFourSeasTrace {
+  instructions: FourSeasInstruction[];
+  provenance: ReadonlyMap<string, FourSeasInstruction>;
+}
+
+function fourSeasTrace(value: unknown, field: string): ParsedFourSeasTrace {
+  const instructions = boundedArray(
+    value,
+    field,
+    FOUR_SEAS_WORKSPACE_LIMITS.maxWorkspaceBlocks,
+  ).map((item, index) => fourSeasInstruction(item, `${field}[${index}]`));
+  const sourceIds = new Set<string>();
+  const provenance = new Map<string, FourSeasInstruction>();
+  for (const item of instructions) {
+    if (sourceIds.has(item.sourceBlockId)) invalid(`${field}包含重复sourceBlockId ${item.sourceBlockId}`);
+    if (provenance.has(item.instructionId)) invalid(`${field}包含重复instructionId ${item.instructionId}`);
+    sourceIds.add(item.sourceBlockId);
+    provenance.set(item.instructionId, item);
+  }
+  for (const item of instructions) {
+    if (item.parentBlockId === null) continue;
+    const parent = provenance.get(`${INSTRUCTION_ID_PREFIX}${item.parentBlockId}`);
+    if (!parent || (parent.opcode !== 'collect_gifts' && parent.opcode !== 'equip_regalia')) {
+      invalid(`${field}包含伪造parentBlockId ${item.parentBlockId}`);
+    }
+  }
+  return { instructions, provenance };
+}
+
+function sameFourSeasInstruction(
+  left: FourSeasInstruction,
+  right: FourSeasInstruction,
+): boolean {
+  return left.instructionId === right.instructionId
+    && left.sourceBlockId === right.sourceBlockId
+    && left.parentBlockId === right.parentBlockId
+    && left.opcode === right.opcode;
+}
+
+function fourSeasEvent(
+  value: unknown,
+  field: string,
+  provenance: ReadonlyMap<string, FourSeasInstruction>,
+): FourSeasBattleEvent {
+  const source = object(value, field);
+  exactKeys(source, field, [
+    'type', 'state', 'instructionId', 'sourceBlockId', 'parentBlockId', 'opcode', 'messageCode',
+  ]);
+  if (typeof source.type !== 'string'
+    || !fourSeasEventTypes.has(source.type as FourSeasBattleEvent['type'])) {
+    invalid(`${field}.type无效`);
+  }
+  const type = source.type as FourSeasBattleEvent['type'];
+  const parsedState = fourSeasState(source.state, `${field}.state`);
+  const messageCode = nonEmptyBoundedString(
+    source.messageCode,
+    `${field}.messageCode`,
+    PROGRESS_SCHEMA_LIMITS.maxMessageCodeLength,
+  );
+  if (type === 'run-started' || type === 'run-finished') {
+    if (
+      source.instructionId !== null
+      || source.sourceBlockId !== null
+      || source.parentBlockId !== null
+      || source.opcode !== null
+    ) invalid(`${field}生命周期事件不得携带指令来源`);
+    return {
+      type,
+      state: parsedState,
+      instructionId: null,
+      sourceBlockId: null,
+      parentBlockId: null,
+      opcode: null,
+      messageCode,
+    };
+  }
+  const parsedInstruction = fourSeasInstruction({
+    instructionId: source.instructionId,
+    sourceBlockId: source.sourceBlockId,
+    parentBlockId: source.parentBlockId,
+    opcode: source.opcode,
+  }, field);
+  const traced = provenance.get(parsedInstruction.instructionId);
+  if (!traced || !sameFourSeasInstruction(parsedInstruction, traced)) {
+    invalid(`${field}的指令来源不在lastTrace中`);
+  }
+  return { type, state: parsedState, ...parsedInstruction, messageCode };
+}
+
+function fourSeasDiagnostic(
+  value: unknown,
+  field: string,
+  provenance: ReadonlyMap<string, FourSeasInstruction>,
+  events: readonly FourSeasBattleEvent[],
+): FourSeasBattleDiagnostic {
+  const source = object(value, field);
+  exactKeys(source, field, [
+    'type', 'concept', 'state', 'instructionId', 'sourceBlockId', 'parentBlockId', 'opcode', 'messageCode',
+  ]);
+  const parsedState = fourSeasState(source.state, `${field}.state`);
+  const messageCode = nonEmptyBoundedString(
+    source.messageCode,
+    `${field}.messageCode`,
+    PROGRESS_SCHEMA_LIMITS.maxMessageCodeLength,
+  );
+  if (source.type === 'instruction-rejected') {
+    if (source.concept !== 'sequence-precondition' && source.concept !== 'container-scope') {
+      invalid(`${field}.concept无效`);
+    }
+    const parsedInstruction = fourSeasInstruction({
+      instructionId: source.instructionId,
+      sourceBlockId: source.sourceBlockId,
+      parentBlockId: source.parentBlockId,
+      opcode: source.opcode,
+    }, field);
+    const traced = provenance.get(parsedInstruction.instructionId);
+    if (!traced || !sameFourSeasInstruction(parsedInstruction, traced)) {
+      invalid(`${field}的指令来源不在lastTrace中`);
+    }
+    const parsed: FourSeasBattleDiagnostic = {
+      type: 'instruction-rejected',
+      concept: source.concept,
+      state: parsedState,
+      ...parsedInstruction,
+      messageCode,
+    };
+    if (!events.some((event) => event.type === 'instruction-rejected'
+      && event.state === parsed.state
+      && event.messageCode === parsed.messageCode
+      && sameFourSeasInstruction(event, parsed))) {
+      invalid(`${field}必须对应instruction-rejected事件`);
+    }
+    return parsed;
+  }
+  if (source.type !== 'program-ended-incomplete' || source.concept !== 'completeness') {
+    invalid(`${field}.type或concept无效`);
+  }
+  if (source.instructionId !== null || source.opcode !== null) {
+    invalid(`${field}不完整诊断的instructionId/opcode必须为null`);
+  }
+  const sourceBlockId = nullableSourceId(source.sourceBlockId, `${field}.sourceBlockId`);
+  const parentBlockId = nullableSourceId(source.parentBlockId, `${field}.parentBlockId`);
+  const lastChanged = [...events].reverse().find((event) => event.type === 'state-changed');
+  if (
+    sourceBlockId !== (lastChanged?.sourceBlockId ?? null)
+    || parentBlockId !== (lastChanged?.parentBlockId ?? null)
+  ) invalid(`${field}必须对应最后有效指令来源及容器`);
+  return {
+    type: 'program-ended-incomplete',
+    concept: 'completeness',
+    state: parsedState,
+    instructionId: null,
+    sourceBlockId,
+    parentBlockId,
+    opcode: null,
+    messageCode,
+  };
+}
+
+function fourSeasRunResult(
+  value: unknown,
+  field: string,
+  lastTrace: ParsedFourSeasTrace,
+): FourSeasBattleRunResult | null {
+  if (value === null) return null;
+  const source = object(value, field);
+  exactKeys(source, field, ['completed', 'finalState', 'events', 'diagnostic', 'penalty']);
+  const events = boundedArray(
+    source.events,
+    `${field}.events`,
+    PROGRESS_SCHEMA_LIMITS.maxBattleEvents,
+  ).map((item, index) => fourSeasEvent(
+    item,
+    `${field}.events[${index}]`,
+    lastTrace.provenance,
+  ));
+  if (events.length < 2 || events[0].type !== 'run-started' || events.at(-1)?.type !== 'run-finished') {
+    invalid(`${field}.events必须以run-started开始并以run-finished结束`);
+  }
+  if (events[0].state !== 'awaiting-request') invalid(`${field}.events起始状态必须是awaiting-request`);
+  const finalState = fourSeasState(source.finalState, `${field}.finalState`);
+  const parsedPenalty = penalty(source.penalty, `${field}.penalty`);
+  let parsed: FourSeasBattleRunResult;
+  if (source.completed === true) {
+    if (finalState !== 'regalia-verified' || source.diagnostic !== null) {
+      invalid(`${field}完成运行必须到达regalia-verified且diagnostic为null`);
+    }
+    parsed = {
+      completed: true,
+      finalState: 'regalia-verified',
+      events,
+      diagnostic: null,
+      penalty: parsedPenalty,
+    };
+  } else {
+    if (source.completed !== false || source.diagnostic === null) {
+      invalid(`${field}未完成运行必须包含diagnostic`);
+    }
+    parsed = {
+      completed: false,
+      finalState,
+      events,
+      diagnostic: fourSeasDiagnostic(
+        source.diagnostic,
+        `${field}.diagnostic`,
+        lastTrace.provenance,
+        events,
+      ),
+      penalty: parsedPenalty,
+    };
+  }
+  const canonical = runFourSeasRegalia(lastTrace.instructions);
+  if (!deeplyEqual(parsed, canonical)) {
+    invalid(`${field}与lastTrace确定性运行结果不一致`);
+  }
+  return parsed;
+}
+
 function dragonSession(value: unknown, field: string): DragonPalaceMissionSession {
   const source = object(value, field);
   exactKeys(source, field, [
@@ -1049,6 +1457,42 @@ function ruyiSession(value: unknown, field: string): RuyiStaffMissionSession {
   };
 }
 
+function fourSeasSession(value: unknown, field: string): FourSeasRegaliaMissionSession {
+  const source = object(value, field);
+  exactKeys(source, field, [
+    'workspace', 'lastTrace', 'lastRun', 'totalRuns', 'runtimeFailures', 'compileFailures',
+    'usedHintTiers', 'conceptFailures', 'lastRunAt', 'savedAt',
+  ]);
+  const lastTrace = fourSeasTrace(source.lastTrace, `${field}.lastTrace`);
+  const tiers = array(source.usedHintTiers, `${field}.usedHintTiers`).map((item, index) => {
+    if (typeof item !== 'string' || !hintTiers.has(item as MissionSession['usedHintTiers'][number])) {
+      invalid(`${field}.usedHintTiers[${index}]提示层级无效`);
+    }
+    return item as MissionSession['usedHintTiers'][number];
+  });
+  if (new Set(tiers).size !== tiers.length) invalid(`${field}.usedHintTiers提示层级不得重复`);
+  const failures = object(source.conceptFailures, `${field}.conceptFailures`);
+  exactKeys(failures, `${field}.conceptFailures`, [
+    'programStructure', 'sequencePrecondition', 'completeness',
+  ]);
+  return {
+    workspace: fourSeasWorkspace(source.workspace, `${field}.workspace`),
+    lastTrace: lastTrace.instructions,
+    lastRun: fourSeasRunResult(source.lastRun, `${field}.lastRun`, lastTrace),
+    totalRuns: nonNegativeInteger(source.totalRuns, `${field}.totalRuns`),
+    runtimeFailures: nonNegativeInteger(source.runtimeFailures, `${field}.runtimeFailures`),
+    compileFailures: nonNegativeInteger(source.compileFailures, `${field}.compileFailures`),
+    usedHintTiers: tiers,
+    conceptFailures: {
+      programStructure: nonNegativeInteger(failures.programStructure, `${field}.conceptFailures.programStructure`),
+      sequencePrecondition: nonNegativeInteger(failures.sequencePrecondition, `${field}.conceptFailures.sequencePrecondition`),
+      completeness: nonNegativeInteger(failures.completeness, `${field}.conceptFailures.completeness`),
+    },
+    lastRunAt: nullableDate(source.lastRunAt, `${field}.lastRunAt`),
+    savedAt: date(source.savedAt, `${field}.savedAt`),
+  };
+}
+
 function sessions(value: unknown): MissionSessions {
   const source = object(value, 'sessions');
   const result: MissionSessions = {};
@@ -1058,6 +1502,8 @@ function sessions(value: unknown): MissionSessions {
       result['w1-m1'] = dragonSession(rawSession, `sessions.${missionId}`);
     } else if (missionId === 'w1-m2') {
       result['w1-m2'] = ruyiSession(rawSession, `sessions.${missionId}`);
+    } else if (missionId === 'w1-m3') {
+      result['w1-m3'] = fourSeasSession(rawSession, `sessions.${missionId}`);
     } else {
       invalid(`任务 ${missionId} 尚不支持可执行会话`);
     }

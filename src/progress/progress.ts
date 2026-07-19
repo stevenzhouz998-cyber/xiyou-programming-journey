@@ -8,6 +8,7 @@ export type {
   MissionSessions,
   ExecutableMissionId,
   DragonPalaceMissionSession,
+  FourSeasRegaliaMissionSession,
   RuyiStaffMissionSession,
   ProgressDocument,
   ProgressSettings,
@@ -106,23 +107,25 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
     .map((mission) => mission.knowledge);
   const dragonSession = week === 1 ? progress.sessions['w1-m1'] : undefined;
   const ruyiSession = week === 1 ? progress.sessions['w1-m2'] : undefined;
+  const fourSeasSession = week === 1 ? progress.sessions['w1-m3'] : undefined;
   const sessionSupport = [
     ...(dragonSession ? getSessionSupport(dragonSession, 'w1-m1') : []),
     ...(ruyiSession ? getSessionSupport(ruyiSession, 'w1-m2') : []),
+    ...(fourSeasSession ? getSessionSupport(fourSeasSession, 'w1-m3') : []),
   ];
-  const sessionRuns = safeCount(
-    dragonSession?.totalRuns ?? 0,
-    ruyiSession?.totalRuns ?? 0,
+  const sessionRecords = [dragonSession, ruyiSession, fourSeasSession].filter(
+    (session): session is NonNullable<typeof session> => session !== undefined,
   );
-  const sessionAdjustments = safeCount(
-    safeCount(
-      safeCount(
-        dragonSession?.compileFailures ?? 0,
-        dragonSession?.runtimeFailures ?? 0,
-      ),
-      ruyiSession?.compileFailures ?? 0,
+  const sessionRuns = sessionRecords.reduce(
+    (total, session) => safeCount(total, session.totalRuns),
+    0,
+  );
+  const sessionAdjustments = sessionRecords.reduce(
+    (total, session) => safeCount(
+      safeCount(total, session.compileFailures),
+      session.runtimeFailures,
     ),
-    ruyiSession?.runtimeFailures ?? 0,
+    0,
   );
   return {
     week,

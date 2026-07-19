@@ -1,14 +1,18 @@
 import type {
   BattleRunResult,
   DragonPalaceInstruction,
+  FourSeasBattleRunResult,
+  FourSeasInstruction,
   RuyiStaffBattleRunResult,
   RuyiStaffInstruction,
 } from '../battle/types';
 import type { WorkspaceDraftV1 } from '../blockly/draft';
+import type { FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft';
 import type { RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft';
 import type {
   DragonPalaceMissionSession,
   ExecutableMissionId,
+  FourSeasRegaliaMissionSession,
   MissionSession,
   MissionSessionById,
   RuyiStaffMissionSession,
@@ -50,13 +54,20 @@ export function createMissionSession(
   now: string,
 ): RuyiStaffMissionSession;
 export function createMissionSession(
+  missionId: 'w1-m3',
+  now: string,
+): FourSeasRegaliaMissionSession;
+export function createMissionSession(
   missionIdOrNow: ExecutableMissionId | string,
   suppliedNow?: string,
 ): MissionSession {
   const missionIdOnly = suppliedNow === undefined
-    && (missionIdOrNow === 'w1-m1' || missionIdOrNow === 'w1-m2');
+    && (missionIdOrNow === 'w1-m1' || missionIdOrNow === 'w1-m2' || missionIdOrNow === 'w1-m3');
   const now = suppliedNow ?? (missionIdOnly ? new Date(0).toISOString() : missionIdOrNow);
-  if (suppliedNow !== undefined && missionIdOrNow !== 'w1-m1' && missionIdOrNow !== 'w1-m2') {
+  if (suppliedNow !== undefined
+    && missionIdOrNow !== 'w1-m1'
+    && missionIdOrNow !== 'w1-m2'
+    && missionIdOrNow !== 'w1-m3') {
     throw new Error('任务编号无效');
   }
   assertCanonicalIso(now);
@@ -86,8 +97,13 @@ export function updateWorkspaceDraft(
   now: string,
 ): RuyiStaffMissionSession;
 export function updateWorkspaceDraft(
+  session: FourSeasRegaliaMissionSession,
+  workspace: FourSeasWorkspaceDraftV1,
+  now: string,
+): FourSeasRegaliaMissionSession;
+export function updateWorkspaceDraft(
   session: MissionSession,
-  workspace: WorkspaceDraftV1 | RuyiWorkspaceDraftV1,
+  workspace: WorkspaceDraftV1 | RuyiWorkspaceDraftV1 | FourSeasWorkspaceDraftV1,
   now: string,
 ): MissionSession {
   assertCanonicalIso(now);
@@ -124,9 +140,15 @@ export function recordRun(
   now: string,
 ): RuyiStaffMissionSession;
 export function recordRun(
+  session: FourSeasRegaliaMissionSession,
+  result: FourSeasBattleRunResult,
+  trace: FourSeasInstruction[],
+  now: string,
+): FourSeasRegaliaMissionSession;
+export function recordRun(
   session: MissionSession,
-  result: BattleRunResult | RuyiStaffBattleRunResult,
-  trace: DragonPalaceInstruction[] | RuyiStaffInstruction[],
+  result: BattleRunResult | RuyiStaffBattleRunResult | FourSeasBattleRunResult,
+  trace: DragonPalaceInstruction[] | RuyiStaffInstruction[] | FourSeasInstruction[],
   now: string,
 ): MissionSession {
   assertCanonicalIso(now);
@@ -175,10 +197,23 @@ export function getSessionSupport(
   missionId: 'w1-m2',
 ): string[];
 export function getSessionSupport(
+  session: FourSeasRegaliaMissionSession,
+  missionId: 'w1-m3',
+): string[];
+export function getSessionSupport(
   session: MissionSession,
   missionId: ExecutableMissionId = 'w1-m1',
 ): string[] {
   const support: string[] = [];
+  if (missionId === 'w1-m3') {
+    if (
+      session.conceptFailures.programStructure >= 2
+      || session.conceptFailures.sequencePrecondition >= 2
+      || session.conceptFailures.completeness >= 2
+    ) support.push('任务分解');
+    if (new Set(session.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
+    return support;
+  }
   if (session.conceptFailures.programStructure >= 2) support.push('程序结构');
   if (session.conceptFailures.sequencePrecondition >= 2) {
     support.push(missionId === 'w1-m2' ? '数值比较' : '顺序与前置条件');

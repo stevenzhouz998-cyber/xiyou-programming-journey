@@ -1,10 +1,13 @@
 import type {
   BattleRunResult,
   DragonPalaceInstruction,
+  FourSeasBattleRunResult,
+  FourSeasInstruction,
   RuyiStaffBattleRunResult,
   RuyiStaffInstruction,
 } from '../battle/types';
 import type { WorkspaceDraftV1 } from '../blockly/draft';
+import type { FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft';
 import type { RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft';
 
 export interface MissionProgress {
@@ -73,9 +76,16 @@ export type RuyiStaffMissionSession = MissionSessionData<
   RuyiStaffBattleRunResult
 >;
 
+export type FourSeasRegaliaMissionSession = MissionSessionData<
+  FourSeasWorkspaceDraftV1,
+  FourSeasInstruction,
+  FourSeasBattleRunResult
+>;
+
 export interface MissionSessionById {
   'w1-m1': DragonPalaceMissionSession;
   'w1-m2': RuyiStaffMissionSession;
+  'w1-m3': FourSeasRegaliaMissionSession;
 }
 
 export type ExecutableMissionId = keyof MissionSessionById;

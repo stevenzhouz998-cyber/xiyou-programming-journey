@@ -10,7 +10,13 @@ import {
   recordRun,
 } from '../progress/session';
 import { runRuyiStaffBattle } from '../battle/ruyiStaff';
+import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import type { RuyiStaffInstruction } from '../battle/types';
+import * as Blockly from 'blockly';
+import { registerFourSeasRegaliaBlocks } from '../blockly/fourSeasRegaliaBlocks';
+import { compileFourSeasRegaliaWorkspace } from '../blockly/fourSeasRegaliaCompiler';
+import { loadFourSeasWorkspaceDraft, type FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft';
+import { updateWorkspaceDraft } from '../progress/session';
 import type { CoordinatedSaveResult } from '../progress/storageCoordinator';
 
 const originalStorage = localStorage;
@@ -21,6 +27,34 @@ const ruyiTrace: RuyiStaffInstruction[] = [
   { instructionId: 'instruction:choose', sourceBlockId: 'choose', opcode: 'choose_ruyi_staff' },
   { instructionId: 'instruction:shrink', sourceBlockId: 'shrink', opcode: 'shrink_ruyi_staff' },
 ];
+
+function realFourSeasFixture() {
+  const draft: FourSeasWorkspaceDraftV1 = {
+    version: 1,
+    blocks: [
+      { id: 'request', type: 'xiyou_request_regalia', nextId: 'collect', parentBlockId: null, x: 0, y: 0 },
+      { id: 'collect', type: 'xiyou_collect_gifts', nextId: 'equip', parentBlockId: null, x: 10, y: 10 },
+      { id: 'boots-gift', type: 'xiyou_receive_cloud_boots', nextId: 'armor-gift', parentBlockId: 'collect', x: 20, y: 20 },
+      { id: 'armor-gift', type: 'xiyou_receive_golden_armor', nextId: 'crown-gift', parentBlockId: 'collect', x: 30, y: 30 },
+      { id: 'crown-gift', type: 'xiyou_receive_purple_crown', nextId: null, parentBlockId: 'collect', x: 40, y: 40 },
+      { id: 'equip', type: 'xiyou_equip_regalia', nextId: 'verify', parentBlockId: null, x: 50, y: 50 },
+      { id: 'crown-wear', type: 'xiyou_wear_crown', nextId: 'armor-wear', parentBlockId: 'equip', x: 60, y: 60 },
+      { id: 'armor-wear', type: 'xiyou_wear_armor', nextId: 'boots-wear', parentBlockId: 'equip', x: 70, y: 70 },
+      { id: 'boots-wear', type: 'xiyou_wear_boots', nextId: null, parentBlockId: 'equip', x: 80, y: 80 },
+      { id: 'verify', type: 'xiyou_verify_regalia', nextId: null, parentBlockId: null, x: 90, y: 90 },
+    ],
+  };
+  registerFourSeasRegaliaBlocks();
+  const workspace = new Blockly.Workspace();
+  try {
+    loadFourSeasWorkspaceDraft(workspace, draft);
+    const compiled = compileFourSeasRegaliaWorkspace(workspace);
+    if (!compiled.ok) throw new Error('expected real w1-m3 fixture to compile');
+    return { draft, trace: compiled.trace, run: runFourSeasRegalia(compiled.trace) };
+  } finally {
+    workspace.dispose();
+  }
+}
 let latestContext: ProgressContextValue | null = null;
 
 function installImmediateLocks() {
@@ -445,6 +479,101 @@ describe('ProgressContext persistence status', () => {
     expect(stored.missions['w1-m2']).toMatchObject({ attempts: 1, stars: 3 });
     expect(stored.sessions['w1-m2']).toMatchObject({ totalRuns: 1 });
     expect(localStorage.getItem(REVISION_PROGRESS_KEY)).toBe('2');
+  });
+
+  it('coordinates typed w1-m3 draft, canonical run, and hint through the existing V3 coordinator', async () => {
+    installStorage({});
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    const fixture = realFourSeasFixture();
+
+    await act(async () => {
+      await latestContext!.updateMissionSession('w1-m3', (session) => recordHint(
+        recordRun(updateWorkspaceDraft(session, fixture.draft, SESSION_NOW), fixture.run, fixture.trace, SESSION_NOW),
+        'observe',
+        SESSION_NOW,
+      ));
+    });
+
+    const stored = JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!);
+    expect(stored.sessions['w1-m3']).toMatchObject({ totalRuns: 1, usedHintTiers: ['observe'] });
+    expect(stored.sessions['w1-m3'].workspace.blocks.find((block: { id: string }) => block.id === 'boots-gift'))
+      .toMatchObject({ parentBlockId: 'collect' });
+    expect(stored.missions['w1-m3']).toBeUndefined();
+  });
+
+  it('keeps an unsaved w1-m3 edit in memory and retries the exact session after storage recovers', async () => {
+    const controls = installStorage({}, true);
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    const fixture = realFourSeasFixture();
+
+    let failed!: CoordinatedSaveResult;
+    await act(async () => {
+      failed = await latestContext!.updateMissionSession('w1-m3', (session) => (
+        recordRun(session, fixture.run, fixture.trace, SESSION_NOW)
+      ));
+    });
+    expect(failed).toMatchObject({ status: 'unsaved' });
+    expect(latestContext!.progress.sessions['w1-m3']).toMatchObject({ totalRuns: 1 });
+    expect(localStorage.getItem(CURRENT_PROGRESS_KEY)).toBeNull();
+
+    controls.failWrites = false;
+    await act(async () => { await latestContext!.retrySave(); });
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).sessions['w1-m3'])
+      .toMatchObject({ totalRuns: 1, lastTrace: fixture.trace });
+  });
+
+  it('fails closed on a CAS conflict before a w1-m3 write can replace external progress', async () => {
+    installStorage({
+      [CURRENT_PROGRESS_KEY]: serializeProgress(createInitialProgress()),
+      [REVISION_PROGRESS_KEY]: '1',
+    });
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    const external = { ...createInitialProgress(), learnerName: '外部已保存' };
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(external));
+    localStorage.setItem(REVISION_PROGRESS_KEY, '2');
+    window.dispatchEvent(new StorageEvent('storage', { key: REVISION_PROGRESS_KEY, newValue: '2' }));
+    await waitFor(() => expect(latestContext!.saveStatus).toBe('conflict'));
+
+    const result = await latestContext!.updateMissionSession('w1-m3', (session) => (
+      recordCompileFailure(session, 'program-structure', SESSION_NOW)
+    ));
+    expect(result).toMatchObject({ status: 'conflict' });
+    expect(latestContext!.progress.sessions['w1-m3']).toBeUndefined();
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).learnerName).toBe('外部已保存');
+  });
+
+  it('merges a w1-m3 session into an unpublished completion transaction without extra attempts', async () => {
+    installStorage({});
+    const pending: Array<{
+      progress: Parameters<typeof import('../progress/storageCoordinator').saveProgressCoordinated>[0];
+      resolve: (result: CoordinatedSaveResult) => void;
+    }> = [];
+    const saveProgressCoordinated = vi.fn<typeof import('../progress/storageCoordinator').saveProgressCoordinated>((progress) => (
+      new Promise<CoordinatedSaveResult>((resolve) => pending.push({ progress, resolve }))
+    ));
+    render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated } as unknown as typeof import('../progress/storageCoordinator'))}><Probe /></ProgressProvider>);
+
+    let completion!: Promise<CoordinatedSaveResult>;
+    let sessionWrite!: Promise<CoordinatedSaveResult>;
+    act(() => {
+      completion = latestContext!.complete('w1-m3', { stars: 3, hintsUsed: 0 });
+      sessionWrite = latestContext!.updateMissionSession('w1-m3', (session) => (
+        recordCompileFailure(session, 'program-structure', SESSION_NOW)
+      ));
+    });
+    await waitFor(() => expect(pending).toHaveLength(1));
+    await act(async () => pending[0].resolve({ status: 'saved', revision: 1, progress: pending[0].progress }));
+    await waitFor(() => expect(pending).toHaveLength(2));
+    expect(pending[1].progress).toMatchObject({
+      missions: { 'w1-m3': { attempts: 1 } },
+      sessions: { 'w1-m3': { compileFailures: 1 } },
+    });
+    await act(async () => pending[1].resolve({ status: 'saved', revision: 2, progress: pending[1].progress }));
+    await act(async () => { await Promise.all([completion, sessionWrite]); });
+    expect(latestContext!.progress).toMatchObject({
+      missions: { 'w1-m3': { attempts: 1 } },
+      sessions: { 'w1-m3': { compileFailures: 1 } },
+    });
   });
 
   it('keeps one unpublished completion transaction across settings, hints, sessions and another completion', async () => {

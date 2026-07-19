@@ -1,12 +1,18 @@
+import * as Blockly from 'blockly';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import { runDragonPalaceBattle } from '../battle/dragonPalace';
 import { runRuyiStaffBattle } from '../battle/ruyiStaff';
-import type { DragonPalaceInstruction, RuyiStaffInstruction } from '../battle/types';
+import type { DragonPalaceInstruction, FourSeasInstruction, RuyiStaffInstruction } from '../battle/types';
+import { registerFourSeasRegaliaBlocks } from '../blockly/fourSeasRegaliaBlocks';
+import { compileFourSeasRegaliaWorkspace } from '../blockly/fourSeasRegaliaCompiler';
+import { loadFourSeasWorkspaceDraft, type FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft';
 import type { WorkspaceDraftV1 } from '../blockly/draft';
 import type { RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft';
 import type {
   DragonPalaceMissionSession,
   ExecutableMissionId,
+  FourSeasRegaliaMissionSession,
   MissionSession,
   RuyiStaffMissionSession,
 } from './types';
@@ -47,7 +53,65 @@ const wrongWeaponTrace: RuyiStaffInstruction[] = [
   { instructionId: 'instruction:sabre', sourceBlockId: 'sabre', opcode: 'choose_sabre' },
 ];
 
+function realFourSeasFixture(): { draft: FourSeasWorkspaceDraftV1; trace: FourSeasInstruction[] } {
+  const draft: FourSeasWorkspaceDraftV1 = {
+    version: 1,
+    blocks: [
+      { id: 'request', type: 'xiyou_request_regalia', nextId: 'collect', parentBlockId: null, x: 0, y: 0 },
+      { id: 'collect', type: 'xiyou_collect_gifts', nextId: 'equip', parentBlockId: null, x: 10, y: 10 },
+      { id: 'boots-gift', type: 'xiyou_receive_cloud_boots', nextId: 'armor-gift', parentBlockId: 'collect', x: 20, y: 20 },
+      { id: 'armor-gift', type: 'xiyou_receive_golden_armor', nextId: 'crown-gift', parentBlockId: 'collect', x: 30, y: 30 },
+      { id: 'crown-gift', type: 'xiyou_receive_purple_crown', nextId: null, parentBlockId: 'collect', x: 40, y: 40 },
+      { id: 'equip', type: 'xiyou_equip_regalia', nextId: 'verify', parentBlockId: null, x: 50, y: 50 },
+      { id: 'crown-wear', type: 'xiyou_wear_crown', nextId: 'armor-wear', parentBlockId: 'equip', x: 60, y: 60 },
+      { id: 'armor-wear', type: 'xiyou_wear_armor', nextId: 'boots-wear', parentBlockId: 'equip', x: 70, y: 70 },
+      { id: 'boots-wear', type: 'xiyou_wear_boots', nextId: null, parentBlockId: 'equip', x: 80, y: 80 },
+      { id: 'verify', type: 'xiyou_verify_regalia', nextId: null, parentBlockId: null, x: 90, y: 90 },
+    ],
+  };
+  registerFourSeasRegaliaBlocks();
+  const workspace = new Blockly.Workspace();
+  try {
+    loadFourSeasWorkspaceDraft(workspace, draft);
+    const compiled = compileFourSeasRegaliaWorkspace(workspace);
+    if (!compiled.ok) throw new Error('expected real w1-m3 fixture to compile');
+    return { draft, trace: compiled.trace };
+  } finally {
+    workspace.dispose();
+  }
+}
+
 describe('mission session rules', () => {
+  it('creates and updates a strongly typed w1-m3 session from a real compiled workspace', () => {
+    const { draft, trace } = realFourSeasFixture();
+    const created = createMissionSession('w1-m3', NOW);
+    expectTypeOf(created).toEqualTypeOf<FourSeasRegaliaMissionSession>();
+    expect(created).toMatchObject({ workspace: { version: 1, blocks: [] }, totalRuns: 0 });
+
+    const withDraft = updateWorkspaceDraft(created, draft, NOW);
+    const recorded = recordRun(withDraft, runFourSeasRegalia(trace), trace, LATER);
+    const hinted = recordHint(recordCompileFailure(recorded, 'program-structure', LATER), 'think', LATER);
+    expect(hinted).toMatchObject({
+      workspace: draft,
+      lastTrace: trace,
+      totalRuns: 1,
+      runtimeFailures: 0,
+      compileFailures: 1,
+      usedHintTiers: ['think'],
+    });
+  });
+
+  it('maps repeated w1-m3 sequence and completeness failures to task decomposition support', () => {
+    const { trace } = realFourSeasFixture();
+    const incomplete = trace.slice(0, 4);
+    const rejected = [trace[1]];
+    let session = createMissionSession('w1-m3', NOW);
+    session = recordRun(session, runFourSeasRegalia(incomplete), incomplete, NOW);
+    session = recordRun(session, runFourSeasRegalia(incomplete), incomplete, LATER);
+    session = recordRun(session, runFourSeasRegalia(rejected), rejected, LATER);
+    session = recordRun(session, runFourSeasRegalia(rejected), rejected, LATER);
+    expect(getSessionSupport(session, 'w1-m3')).toContain('任务分解');
+  });
   it('creates a mission-specific empty ruyi session without changing V3 JSON field names', () => {
     const session = createMissionSession('w1-m2', NOW);
     expectTypeOf(session).toEqualTypeOf<RuyiStaffMissionSession>();

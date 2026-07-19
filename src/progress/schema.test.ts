@@ -1,14 +1,68 @@
+import * as Blockly from 'blockly';
 import { describe, expect, it } from 'vitest';
+import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import { runDragonPalaceBattle } from '../battle/dragonPalace';
 import { runRuyiStaffBattle } from '../battle/ruyiStaff';
 import type { RuyiStaffInstruction } from '../battle/types';
+import { registerFourSeasRegaliaBlocks } from '../blockly/fourSeasRegaliaBlocks';
+import { compileFourSeasRegaliaWorkspace } from '../blockly/fourSeasRegaliaCompiler';
+import {
+  loadFourSeasWorkspaceDraft,
+  saveFourSeasWorkspaceDraft,
+  FOUR_SEAS_WORKSPACE_LIMITS,
+  type FourSeasWorkspaceDraftV1,
+} from '../blockly/fourSeasRegaliaDraft';
 import { createInitialProgress } from './progress';
 import { migrateProgress, parseProgress, PROGRESS_SCHEMA_LIMITS } from './schema';
 import type {
   DragonPalaceMissionSession,
+  FourSeasRegaliaMissionSession,
   ProgressV3,
   RuyiStaffMissionSession,
 } from './types';
+
+const fourSeasDraft = (): FourSeasWorkspaceDraftV1 => ({
+  version: 1,
+  blocks: [
+    { id: 'armor-gift', type: 'xiyou_receive_golden_armor', nextId: 'crown-gift', parentBlockId: 'collect', x: 31.5, y: 62.25 },
+    { id: 'armor-wear', type: 'xiyou_wear_armor', nextId: 'boots-wear', parentBlockId: 'equip', x: 44.5, y: 78.25 },
+    { id: 'boots-gift', type: 'xiyou_receive_cloud_boots', nextId: 'armor-gift', parentBlockId: 'collect', x: 21.5, y: 42.25 },
+    { id: 'boots-wear', type: 'xiyou_wear_boots', nextId: null, parentBlockId: 'equip', x: 54.5, y: 98.25 },
+    { id: 'collect', type: 'xiyou_collect_gifts', nextId: 'equip', parentBlockId: null, x: 10.5, y: 20.25 },
+    { id: 'crown-gift', type: 'xiyou_receive_purple_crown', nextId: null, parentBlockId: 'collect', x: 41.5, y: 82.25 },
+    { id: 'crown-wear', type: 'xiyou_wear_crown', nextId: 'armor-wear', parentBlockId: 'equip', x: 34.5, y: 58.25 },
+    { id: 'equip', type: 'xiyou_equip_regalia', nextId: 'verify', parentBlockId: null, x: 20.5, y: 40.25 },
+    { id: 'request', type: 'xiyou_request_regalia', nextId: 'collect', parentBlockId: null, x: -12.5, y: -3.25 },
+    { id: 'verify', type: 'xiyou_verify_regalia', nextId: null, parentBlockId: null, x: 30.5, y: 60.25 },
+  ],
+});
+
+function validFourSeasSession(
+  draft: FourSeasWorkspaceDraftV1 = fourSeasDraft(),
+): FourSeasRegaliaMissionSession {
+  registerFourSeasRegaliaBlocks();
+  const workspace = new Blockly.Workspace();
+  try {
+    loadFourSeasWorkspaceDraft(workspace, draft);
+    const persistedDraft = saveFourSeasWorkspaceDraft(workspace);
+    const compiled = compileFourSeasRegaliaWorkspace(workspace);
+    if (!compiled.ok) throw new Error(`fixture did not compile: ${compiled.diagnostics[0]?.code}`);
+    return {
+      workspace: persistedDraft,
+      lastTrace: compiled.trace,
+      lastRun: runFourSeasRegalia(compiled.trace),
+      totalRuns: 7,
+      runtimeFailures: 2,
+      compileFailures: 3,
+      usedHintTiers: ['observe', 'think'],
+      conceptFailures: { programStructure: 2, sequencePrecondition: 2, completeness: 2 },
+      lastRunAt: NOW,
+      savedAt: NOW,
+    };
+  } finally {
+    workspace.dispose();
+  }
+}
 
 const NOW = '2026-07-12T00:00:00.000Z';
 const {
@@ -107,6 +161,90 @@ const validRuyiSession = (): RuyiStaffMissionSession => ({
 });
 
 describe('progress schema', () => {
+  it('round-trips a real compiled w1-m3 nested draft, trace, canonical run, ids, parents, and counters', () => {
+    const session = validFourSeasSession();
+    const value = { ...validV3(), sessions: { 'w1-m3': session } };
+
+    expect(parseProgress(JSON.stringify(value))).toEqual(value);
+    expect(session.lastTrace.some((item) => item.parentBlockId === 'collect')).toBe(true);
+    expect(session.lastRun?.events.some((item) => item.parentBlockId === 'equip')).toBe(true);
+  });
+
+  it('accepts a persistable wrong-container graph but keeps its canonical container-scope rejection', () => {
+    const draft = fourSeasDraft();
+    const gift = draft.blocks.find((block) => block.id === 'boots-gift')!;
+    const wear = draft.blocks.find((block) => block.id === 'crown-wear')!;
+    gift.type = 'xiyou_wear_crown';
+    wear.type = 'xiyou_receive_cloud_boots';
+    const session = validFourSeasSession(draft);
+    expect(session.lastRun).toMatchObject({
+      completed: false,
+      diagnostic: { type: 'instruction-rejected', concept: 'container-scope' },
+    });
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m3': session } })).not.toThrow();
+  });
+
+  it('rejects every forged w1-m3 provenance and canonical-run field', () => {
+    const cases: Array<[string, (session: FourSeasRegaliaMissionSession) => void]> = [
+      ['foreign block type', (session) => { session.workspace.blocks[0].type = 'xiyou_enter_palace' as never; }],
+      ['forged parent id', (session) => { session.workspace.blocks[0].parentBlockId = 'foreign-parent'; }],
+      ['wrong opcode', (session) => { session.lastTrace[0].opcode = 'verify_regalia'; }],
+      ['foreign state', (session) => { session.lastRun!.events[0].state = 'weapon-tested' as never; }],
+      ['event source outside trace', (session) => {
+        const event = session.lastRun!.events.find((item) => item.instructionId !== null)!;
+        event.instructionId = 'instruction:foreign';
+        event.sourceBlockId = 'foreign';
+      }],
+      ['event parent mismatch', (session) => {
+        const event = session.lastRun!.events.find((item) => item.parentBlockId === 'collect')!;
+        event.parentBlockId = 'equip';
+      }],
+      ['noncanonical run', (session) => { session.lastRun!.events[0].messageCode = 'forged'; }],
+      ['mismatched final state', (session) => { session.lastRun!.finalState = 'awaiting-request' as never; }],
+      ['duplicate workspace ids', (session) => { session.workspace.blocks[1].id = session.workspace.blocks[0].id; }],
+      ['duplicate trace ids', (session) => { session.lastTrace[1] = structuredClone(session.lastTrace[0]); }],
+    ];
+    for (const [label, mutate] of cases) {
+      const session = validFourSeasSession();
+      mutate(session);
+      expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m3': session } }), label)
+        .toThrow(/\u8fdb\u5ea6\u6587\u4ef6\u683c\u5f0f\u65e0\u6548/);
+    }
+
+    const rejected = validFourSeasSession();
+    rejected.lastTrace = rejected.lastTrace.slice(0, 7);
+    rejected.lastRun = runFourSeasRegalia(rejected.lastTrace);
+    if (!rejected.lastRun.diagnostic) throw new Error('expected diagnostic fixture');
+    rejected.lastRun.diagnostic.parentBlockId = 'collect';
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m3': rejected } }))
+      .toThrow(/\u8fdb\u5ea6\u6587\u4ef6\u683c\u5f0f\u65e0\u6548/);
+  });
+
+  it('locks w1-m3 to Task 1 workspace and trace boundaries and rejects w1-m4 sessions', () => {
+    expect(PROGRESS_SCHEMA_LIMITS.maxWorkspaceBlocks).toBe(FOUR_SEAS_WORKSPACE_LIMITS.maxWorkspaceBlocks);
+    expect(PROGRESS_SCHEMA_LIMITS.maxBlockOrSourceIdLength).toBe(FOUR_SEAS_WORKSPACE_LIMITS.maxBlockOrSourceIdLength);
+
+    const overBlocks = validFourSeasSession();
+    overBlocks.workspace.blocks = Array.from({ length: FOUR_SEAS_WORKSPACE_LIMITS.maxWorkspaceBlocks + 1 }, (_, index) => ({
+      id: `block-${index}`,
+      type: 'xiyou_request_regalia' as const,
+      nextId: null,
+      parentBlockId: null,
+      x: 0,
+      y: 0,
+    }));
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m3': overBlocks } })).toThrow(/\u6700\u591a500\u9879/);
+
+    const overId = validFourSeasSession();
+    overId.workspace.blocks[0].id = 'x'.repeat(FOUR_SEAS_WORKSPACE_LIMITS.maxBlockOrSourceIdLength + 1);
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m3': overId } })).toThrow(/\u6700\u591a256\u4e2a\u5b57\u7b26/);
+
+    const unsafeCoordinate = validFourSeasSession();
+    unsafeCoordinate.workspace.blocks[0].x = Number.MAX_SAFE_INTEGER + 1;
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m3': unsafeCoordinate } })).toThrow(/\u5b89\u5168\u7684\u6709\u9650\u5750\u6807/);
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m4': validFourSeasSession() } }))
+      .toThrow(/w1-m4.*\u5c1a\u4e0d\u652f\u6301\u53ef\u6267\u884c\u4f1a\u8bdd/);
+  });
   it('round-trips a fresh V3 document through JSON parsing', () => {
     const progress = createInitialProgress();
     expect(progress).toMatchObject({ version: 3, schemaRevision: 1, sessions: {} });
@@ -126,8 +264,8 @@ describe('progress schema', () => {
     const ruyiInDragon = { ...validV3(), sessions: { 'w1-m1': validRuyiSession() } };
     expect(() => migrateProgress(ruyiInDragon)).toThrow(/w1-m1.*(?:workspace|lastTrace)/);
 
-    const configuredButUnimplemented = { ...validV3(), sessions: { 'w1-m3': validRuyiSession() } };
-    expect(() => migrateProgress(configuredButUnimplemented)).toThrow(/w1-m3.*会话/);
+    const configuredButUnimplemented = { ...validV3(), sessions: { 'w1-m4': validRuyiSession() } };
+    expect(() => migrateProgress(configuredButUnimplemented)).toThrow(/w1-m4.*会话/);
   });
 
   it('rejects a dragon block inside an otherwise valid w1-m2 draft', () => {

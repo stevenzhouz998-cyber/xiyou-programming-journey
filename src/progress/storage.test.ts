@@ -1,6 +1,11 @@
+import * as Blockly from 'blockly';
 import { describe, expect, it, vi } from 'vitest';
+import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import { runRuyiStaffBattle } from '../battle/ruyiStaff';
 import type { RuyiStaffInstruction } from '../battle/types';
+import { registerFourSeasRegaliaBlocks } from '../blockly/fourSeasRegaliaBlocks';
+import { compileFourSeasRegaliaWorkspace } from '../blockly/fourSeasRegaliaCompiler';
+import { loadFourSeasWorkspaceDraft, saveFourSeasWorkspaceDraft, type FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft';
 import { createInitialProgress, serializeProgress } from './progress';
 import { PROGRESS_SCHEMA_LIMITS } from './schema';
 import {
@@ -145,6 +150,50 @@ function progressWithRuyiSession(name: string): ProgressV3 {
       },
     },
   };
+}
+
+function progressWithFourSeasSession(name: string): ProgressV3 {
+  const draft: FourSeasWorkspaceDraftV1 = {
+    version: 1,
+    blocks: [
+      { id: 'request-stable', type: 'xiyou_request_regalia', nextId: 'collect-stable', parentBlockId: null, x: 0, y: 0 },
+      { id: 'collect-stable', type: 'xiyou_collect_gifts', nextId: 'equip-stable', parentBlockId: null, x: 10, y: 10 },
+      { id: 'boots-gift-stable', type: 'xiyou_receive_cloud_boots', nextId: 'armor-gift-stable', parentBlockId: 'collect-stable', x: 20, y: 20 },
+      { id: 'armor-gift-stable', type: 'xiyou_receive_golden_armor', nextId: 'crown-gift-stable', parentBlockId: 'collect-stable', x: 30, y: 30 },
+      { id: 'crown-gift-stable', type: 'xiyou_receive_purple_crown', nextId: null, parentBlockId: 'collect-stable', x: 40, y: 40 },
+      { id: 'equip-stable', type: 'xiyou_equip_regalia', nextId: 'verify-stable', parentBlockId: null, x: 50, y: 50 },
+      { id: 'crown-wear-stable', type: 'xiyou_wear_crown', nextId: 'armor-wear-stable', parentBlockId: 'equip-stable', x: 60, y: 60 },
+      { id: 'armor-wear-stable', type: 'xiyou_wear_armor', nextId: 'boots-wear-stable', parentBlockId: 'equip-stable', x: 70, y: 70 },
+      { id: 'boots-wear-stable', type: 'xiyou_wear_boots', nextId: null, parentBlockId: 'equip-stable', x: 80, y: 80 },
+      { id: 'verify-stable', type: 'xiyou_verify_regalia', nextId: null, parentBlockId: null, x: 90, y: 90 },
+    ],
+  };
+  registerFourSeasRegaliaBlocks();
+  const workspace = new Blockly.Workspace();
+  try {
+    loadFourSeasWorkspaceDraft(workspace, draft);
+    const compiled = compileFourSeasRegaliaWorkspace(workspace);
+    if (!compiled.ok) throw new Error('expected real w1-m3 fixture to compile');
+    return {
+      ...progress(name),
+      sessions: {
+        'w1-m3': {
+          workspace: saveFourSeasWorkspaceDraft(workspace),
+          lastTrace: compiled.trace,
+          lastRun: runFourSeasRegalia(compiled.trace),
+          totalRuns: 4,
+          runtimeFailures: 1,
+          compileFailures: 2,
+          usedHintTiers: ['observe'],
+          conceptFailures: { programStructure: 1, sequencePrecondition: 1, completeness: 0 },
+          lastRunAt: '2026-07-12T08:00:00.000Z',
+          savedAt: '2026-07-12T08:01:00.000Z',
+        },
+      },
+    };
+  } finally {
+    workspace.dispose();
+  }
 }
 
 describe('progress storage transactions', () => {
@@ -455,6 +504,38 @@ describe('progress storage transactions', () => {
       .toEqual(['inspect', 'choose', 'shrink']);
     expect(reopened.progress.sessions['w1-m2']?.lastTrace).toEqual(ruyiTrace);
     expect(reopened.progress.sessions['w1-m2']?.lastRun).toEqual(runRuyiStaffBattle(ruyiTrace));
+  });
+
+  it('preserves damaged nested w1-m3 bytes and recovers exact ids and parent links that remain runnable', () => {
+    const storage = new MemoryStorage();
+    const snapshot = progressWithFourSeasSession('四海快照');
+    const damaged = structuredClone(snapshot);
+    damaged.sessions['w1-m3']!.workspace.blocks[2].parentBlockId = 'forged-parent';
+    const damagedBytes = serializeProgress(damaged);
+    storage.setItem(CURRENT_PROGRESS_KEY, damagedBytes);
+    storage.setItem(SNAPSHOT_PROGRESS_KEY, serializeProgress(snapshot));
+
+    const recovered = loadAndRepair(storage);
+    expect(recovered).toMatchObject({
+      status: 'recovered-from-snapshot',
+      persistence: 'saved',
+      progress: { sessions: { 'w1-m3': { totalRuns: 4 } } },
+    });
+    expect(JSON.parse(recovered.corruptDownload!).current).toBe(damagedBytes);
+    const session = recovered.progress.sessions['w1-m3']!;
+    expect(session.workspace.blocks.map((block) => [block.id, block.parentBlockId]))
+      .toEqual(snapshot.sessions['w1-m3']!.workspace.blocks.map((block) => [block.id, block.parentBlockId]));
+
+    const workspace = new Blockly.Workspace();
+    try {
+      loadFourSeasWorkspaceDraft(workspace, session.workspace);
+      const compiled = compileFourSeasRegaliaWorkspace(workspace);
+      expect(compiled).toMatchObject({ ok: true });
+      if (!compiled.ok) throw new Error('recovered fixture no longer compiles');
+      expect(runFourSeasRegalia(compiled.trace)).toEqual(session.lastRun);
+    } finally {
+      workspace.dispose();
+    }
   });
 
   it('preserves both corrupt sources and resets when snapshot is invalid', () => {
