@@ -1,12 +1,14 @@
 import { allMissions } from '../course/course';
 import type { DragonBlockType } from '../blockly/dragonPalaceBlocks';
 import type { RuyiBlockType } from '../blockly/ruyiStaffBlocks';
-import { isFourSeasBlockType, isFourSeasChildBlockType, type FourSeasBlockType } from '../blockly/fourSeasRegaliaBlocks';
 import {
   findFourSeasWorkspaceBoundaryViolation,
   FOUR_SEAS_WORKSPACE_LIMITS,
-  type FourSeasWorkspaceDraftV1,
-} from '../blockly/fourSeasRegaliaDraft';
+  isFourSeasBlockType,
+  isFourSeasChildBlockType,
+  type FourSeasBlockType,
+} from '../blockly/fourSeasRegaliaCatalogue';
+import type { FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft';
 import { runDragonPalaceBattle } from '../battle/dragonPalace';
 import { runRuyiStaffBattle } from '../battle/ruyiStaff';
 import { runFourSeasRegalia } from '../battle/fourSeasRegalia';

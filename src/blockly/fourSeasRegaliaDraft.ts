@@ -1,61 +1,22 @@
 import type { Block, Workspace } from 'blockly/core'
 import {
   initializeWorkspaceBlock,
+  renderWorkspaceTopBlocks,
+} from './fourSeasRegaliaBlocks'
+import {
+  findFourSeasWorkspaceBoundaryViolation,
+  FOUR_SEAS_WORKSPACE_LIMITS,
   isFourSeasBlockType,
   isFourSeasChildBlockType,
-  renderWorkspaceTopBlocks,
   type FourSeasBlockType,
-} from './fourSeasRegaliaBlocks'
+} from './fourSeasRegaliaCatalogue'
 
-export const FOUR_SEAS_WORKSPACE_LIMITS = {
-  maxWorkspaceBlocks: 500,
-  maxBlockOrSourceIdLength: 256,
-  maxCoordinateMagnitude: Number.MAX_SAFE_INTEGER,
-} as const
-
-export interface FourSeasWorkspaceBoundaryItem {
-  id: unknown
-  x: unknown
-  y: unknown
-}
-
-export interface FourSeasWorkspaceBoundaryViolation {
-  reason: 'block-count' | 'block-id' | 'coordinate'
-  sourceBlockId: string | null
-}
-
-export function findFourSeasWorkspaceBoundaryViolation(
-  blocks: readonly FourSeasWorkspaceBoundaryItem[],
-): FourSeasWorkspaceBoundaryViolation | null {
-  if (blocks.length > FOUR_SEAS_WORKSPACE_LIMITS.maxWorkspaceBlocks) {
-    const firstOverBoundary = blocks[FOUR_SEAS_WORKSPACE_LIMITS.maxWorkspaceBlocks]
-    return {
-      reason: 'block-count',
-      sourceBlockId:
-        typeof firstOverBoundary?.id === 'string' ? firstOverBoundary.id : null,
-    }
-  }
-  for (const block of blocks) {
-    const sourceBlockId = typeof block.id === 'string' ? block.id : null
-    if (
-      typeof block.id === 'string'
-      && block.id.length > FOUR_SEAS_WORKSPACE_LIMITS.maxBlockOrSourceIdLength
-    ) {
-      return { reason: 'block-id', sourceBlockId }
-    }
-    if (
-      typeof block.x !== 'number'
-      || typeof block.y !== 'number'
-      || !Number.isFinite(block.x)
-      || !Number.isFinite(block.y)
-      || Math.abs(block.x) > FOUR_SEAS_WORKSPACE_LIMITS.maxCoordinateMagnitude
-      || Math.abs(block.y) > FOUR_SEAS_WORKSPACE_LIMITS.maxCoordinateMagnitude
-    ) {
-      return { reason: 'coordinate', sourceBlockId }
-    }
-  }
-  return null
-}
+export {
+  findFourSeasWorkspaceBoundaryViolation,
+  FOUR_SEAS_WORKSPACE_LIMITS,
+  type FourSeasWorkspaceBoundaryItem,
+  type FourSeasWorkspaceBoundaryViolation,
+} from './fourSeasRegaliaCatalogue'
 
 export interface FourSeasWorkspaceDraftV1 {
   version: 1
