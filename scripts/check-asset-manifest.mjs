@@ -4,6 +4,7 @@ import { lstat, open, readFile, readdir, realpath } from 'node:fs/promises';
 import { dirname, isAbsolute, join, posix, relative, resolve, sep, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import ts from 'typescript';
 import { DRAGON_PALACE_MEDIA_BYTES, SINGLE_RASTER_BYTES } from './budget-limits.mjs';
 
 export const MAX_RASTER_BYTES = SINGLE_RASTER_BYTES;
@@ -49,15 +50,87 @@ const REQUIRED_METADATA = [
 const QA_STATUSES = new Set(['planned', 'generated', 'provenance-verified', 'visual-qa-passed', 'rejected']);
 
 const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
-  ['assets/dragon-palace/background.webp', ['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx', 'src/components/FourSeasRegaliaScene.tsx']],
-  ['assets/dragon-palace/wukong.webp', ['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx', 'src/components/FourSeasRegaliaScene.tsx']],
-  ['assets/dragon-palace/dragon-king.webp', ['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx', 'src/components/FourSeasRegaliaScene.tsx']],
-  ['assets/dragon-palace/weapons.webp', ['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx']],
-  ['assets/dragon-palace/sabre.webp', ['src/components/RuyiStaffScene.tsx']],
-  ['assets/dragon-palace/effects.webp', ['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx', 'src/components/FourSeasRegaliaScene.tsx']],
-  ['assets/dragon-palace/regalia.webp', ['src/components/FourSeasRegaliaScene.tsx']],
-  ['assets/dragon-palace/wukong-regalia.webp', ['src/components/FourSeasRegaliaScene.tsx']],
+  ['assets/dragon-palace/background.webp', [
+    { sourcePath: 'src/components/GameScene.tsx', loaderKey: 'background' },
+    { sourcePath: 'src/components/RuyiStaffScene.tsx', loaderKey: 'background' },
+    { sourcePath: 'src/components/FourSeasRegaliaScene.tsx', loaderKey: 'background' },
+  ]],
+  ['assets/dragon-palace/wukong.webp', [
+    { sourcePath: 'src/components/GameScene.tsx', loaderKey: 'wukong' },
+    { sourcePath: 'src/components/RuyiStaffScene.tsx', loaderKey: 'wukong' },
+    { sourcePath: 'src/components/FourSeasRegaliaScene.tsx', loaderKey: 'wukong' },
+  ]],
+  ['assets/dragon-palace/dragon-king.webp', [
+    { sourcePath: 'src/components/GameScene.tsx', loaderKey: 'dragonKing' },
+    { sourcePath: 'src/components/RuyiStaffScene.tsx', loaderKey: 'dragonKing' },
+    { sourcePath: 'src/components/FourSeasRegaliaScene.tsx', loaderKey: 'dragonKing' },
+  ]],
+  ['assets/dragon-palace/weapons.webp', [
+    { sourcePath: 'src/components/GameScene.tsx', loaderKey: 'weapons' },
+    { sourcePath: 'src/components/RuyiStaffScene.tsx', loaderKey: 'weapons' },
+  ]],
+  ['assets/dragon-palace/sabre.webp', [
+    { sourcePath: 'src/components/RuyiStaffScene.tsx', loaderKey: 'sabre' },
+  ]],
+  ['assets/dragon-palace/effects.webp', [
+    { sourcePath: 'src/components/GameScene.tsx', loaderKey: 'effects' },
+    { sourcePath: 'src/components/RuyiStaffScene.tsx', loaderKey: 'effects' },
+    { sourcePath: 'src/components/FourSeasRegaliaScene.tsx', loaderKey: 'effects' },
+  ]],
+  ['assets/dragon-palace/regalia.webp', [
+    { sourcePath: 'src/components/FourSeasRegaliaScene.tsx', loaderKey: 'regalia' },
+  ]],
+  ['assets/dragon-palace/wukong-regalia.webp', [
+    { sourcePath: 'src/components/FourSeasRegaliaScene.tsx', loaderKey: 'wukongRegalia' },
+  ]],
 ]);
+
+function isPhaserSceneClass(node, sourceFile) {
+  return ts.isClassDeclaration(node) && node.heritageClauses?.some(
+    (clause) => clause.token === ts.SyntaxKind.ExtendsKeyword
+      && clause.types.some((type) => type.expression.getText(sourceFile) === 'Phaser.Scene'),
+  );
+}
+
+function directPhaserPreloadAssets(sourcePath, source) {
+  const sourceFile = ts.createSourceFile(
+    sourcePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  if (sourceFile.parseDiagnostics.length > 0) {
+    throw new Error(`Asset manifest: ${sourcePath} cannot be parsed as TypeScript for preload verification.`);
+  }
+  const assets = new Set();
+
+  const visit = (node) => {
+    if (isPhaserSceneClass(node, sourceFile)) {
+      for (const member of node.members) {
+        if (!ts.isMethodDeclaration(member) || member.name?.getText(sourceFile) !== 'preload' || !member.body) continue;
+        for (const preloadStatement of member.body.statements) {
+          if (!ts.isExpressionStatement(preloadStatement)) continue;
+          const loaderCall = preloadStatement.expression;
+          if (!ts.isCallExpression(loaderCall) || loaderCall.arguments.length !== 2) continue;
+          const imageAccess = loaderCall.expression;
+          if (!ts.isPropertyAccessExpression(imageAccess) || imageAccess.name.text !== 'image') continue;
+          const loadAccess = imageAccess.expression;
+          if (!ts.isPropertyAccessExpression(loadAccess) || loadAccess.name.text !== 'load'
+            || loadAccess.expression.kind !== ts.SyntaxKind.ThisKeyword) continue;
+          const [loaderKeyNode, assetUrlCall] = loaderCall.arguments;
+          if (!ts.isStringLiteral(loaderKeyNode) || !ts.isCallExpression(assetUrlCall)
+            || !ts.isIdentifier(assetUrlCall.expression) || assetUrlCall.expression.text !== 'assetUrl'
+            || assetUrlCall.arguments.length !== 1 || !ts.isStringLiteral(assetUrlCall.arguments[0])) continue;
+          assets.add(`${loaderKeyNode.text}\0${assetUrlCall.arguments[0].text}`);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return assets;
+}
 
 function splitMarkdownRow(line) {
   return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
@@ -244,13 +317,17 @@ export function verifyRequiredDragonPalaceInventory({
     if (!REQUIRED_DRAGON_PALACE_SLOTS.has(assetId)) throw new Error(`Asset manifest: unexpected Dragon Palace asset ${assetId}.`);
   }
   if (!(sourceFiles instanceof Map)) throw new Error('Asset manifest: formal scene source files are required for slot verification.');
+  const parsedSources = new Map();
+  for (const [sourcePath, source] of sourceFiles) {
+    if (typeof source !== 'string') throw new Error(`Asset manifest: formal scene source ${sourcePath} must be text.`);
+    parsedSources.set(sourcePath, directPhaserPreloadAssets(sourcePath, source));
+  }
   for (const [assetId, slots] of REQUIRED_DRAGON_PALACE_SLOTS) {
     const publicPath = `/${assetId}`;
-    const exactReference = `assetUrl('${publicPath}')`;
-    for (const slot of slots) {
-      const source = sourceFiles.get(slot);
-      if (typeof source !== 'string' || !source.includes(exactReference)) {
-        throw new Error(`Asset manifest: ${assetId} is missing its exact real scene slot ${slot}.`);
+    for (const { sourcePath, loaderKey } of slots) {
+      const preloadAssets = parsedSources.get(sourcePath);
+      if (!(preloadAssets instanceof Set) || !preloadAssets.has(`${loaderKey}\0${publicPath}`)) {
+        throw new Error(`Asset manifest: ${assetId} is missing its exact Phaser preload slot ${sourcePath} with loader key ${loaderKey}.`);
       }
     }
   }

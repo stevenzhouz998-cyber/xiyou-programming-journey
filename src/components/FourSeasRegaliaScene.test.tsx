@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { runFourSeasRegalia } from '../battle/fourSeasRegalia'
 import type { FourSeasInstruction, FourSeasOpcode } from '../battle/types'
 
-type Tween = { onComplete?: () => void }
+type Tween = { onComplete?: () => void; targets?: unknown }
 
 function node() {
   const value = {
@@ -146,10 +146,15 @@ it('maps a wrong first gift to the real blocked state without inventing collecte
 
   const scene = screen.getByRole('img', { name: '龙宫四海披挂代码执行场景' })
   expect(scene).toHaveAttribute('data-scene-state', 'collecting-gifts')
-  expect(scene).toHaveAttribute('data-visible-regalia', 'none')
+  expect(scene).toHaveAttribute('data-collected-regalia', 'none')
+  expect(scene).toHaveAttribute('data-visible-regalia', 'rejected-crown')
   expect(scene).toHaveAttribute('data-effect-cell', 'blocked')
   expect(scene).toHaveAttribute('data-motion-mode', 'reduced')
   expect(screen.getByRole('status')).toHaveTextContent('紫金冠')
+  expect(nodes.crown.setVisible).toHaveBeenLastCalledWith(true)
+  expect(nodes.crown.setCrop).toHaveBeenLastCalledWith(0, 0, 341, 512)
+  expect(nodes.armor.setVisible).toHaveBeenLastCalledWith(false)
+  expect(nodes.boots.setVisible).toHaveBeenLastCalledWith(false)
   expect(nodes.wukongRegalia.setVisible).not.toHaveBeenLastCalledWith(true)
 })
 
@@ -169,13 +174,50 @@ it('shows all three collected gifts before dressing while keeping base Wukong vi
   expect(nodes.wukongRegalia.setVisible).toHaveBeenLastCalledWith(false)
 })
 
+it('moves approved crown and armor crops onto Wukong in wear order before switching actor', () => {
+  const crownWorn = runFourSeasRegalia(correctTrace.slice(0, 7)).events
+  const view = render(
+    <FourSeasRegaliaScene events={crownWorn} replayToken={1} reducedMotion muted />,
+  )
+  const scene = view.getByRole('img')
+  expect(scene).toHaveAttribute('data-scene-state', 'crown-equipped')
+  expect(scene).toHaveAttribute('data-visible-regalia', 'crown-equipped')
+  expect(nodes.crown.setVisible).toHaveBeenLastCalledWith(true)
+  expect(nodes.crown.setX).toHaveBeenLastCalledWith(760 * 0.17)
+  expect(nodes.crown.setY).toHaveBeenLastCalledWith(320 * 0.46)
+  expect(nodes.armor.setVisible).toHaveBeenLastCalledWith(true)
+  expect(nodes.armor.setX).toHaveBeenLastCalledWith(760 * 0.56)
+  expect(nodes.boots.setVisible).toHaveBeenLastCalledWith(true)
+  expect(nodes.boots.setX).toHaveBeenLastCalledWith(760 * 0.70)
+  expect(nodes.wukongRegalia.setVisible).toHaveBeenLastCalledWith(false)
+
+  const crownAndArmorWorn = runFourSeasRegalia(correctTrace.slice(0, 8)).events
+  view.rerender(
+    <FourSeasRegaliaScene
+      events={crownAndArmorWorn}
+      replayToken={2}
+      reducedMotion
+      muted
+    />,
+  )
+  expect(scene).toHaveAttribute('data-scene-state', 'armor-equipped')
+  expect(scene).toHaveAttribute('data-visible-regalia', 'crown-armor-equipped')
+  expect(nodes.crown.setX).toHaveBeenLastCalledWith(760 * 0.17)
+  expect(nodes.armor.setVisible).toHaveBeenLastCalledWith(true)
+  expect(nodes.armor.setX).toHaveBeenLastCalledWith(760 * 0.17)
+  expect(nodes.armor.setY).toHaveBeenLastCalledWith(320 * 0.68)
+  expect(nodes.boots.setVisible).toHaveBeenLastCalledWith(true)
+  expect(nodes.boots.setX).toHaveBeenLastCalledWith(760 * 0.70)
+  expect(nodes.wukongRegalia.setVisible).toHaveBeenLastCalledWith(false)
+})
+
 it('uses equipped Wukong only after the complete wear sequence', () => {
   const beforeLastWear = runFourSeasRegalia(correctTrace.slice(0, 8)).events
   const view = render(
     <FourSeasRegaliaScene events={beforeLastWear} replayToken={1} reducedMotion muted />,
   )
   expect(view.getByRole('img')).toHaveAttribute('data-scene-state', 'armor-equipped')
-  expect(view.getByRole('img')).toHaveAttribute('data-visible-regalia', 'all-collected')
+  expect(view.getByRole('img')).toHaveAttribute('data-visible-regalia', 'crown-armor-equipped')
   expect(nodes.wukongRegalia.setVisible).toHaveBeenLastCalledWith(false)
 
   const afterLastWear = runFourSeasRegalia(correctTrace.slice(0, 9)).events
@@ -212,6 +254,65 @@ it('reaches the identical transcript and visual state in standard and reduced mo
   expect(reduced.getByRole('img')).toHaveAttribute('data-visible-regalia', expected.regalia)
   expect(reduced.getByRole('img')).toHaveAttribute('data-effect-cell', expected.effect)
   expect(reduced.getByRole('status')).toHaveTextContent(expected.transcript ?? '')
+})
+
+it('moves the currently visible equipped actor during final verification playback', async () => {
+  render(
+    <FourSeasRegaliaScene events={correct} replayToken={1} reducedMotion={false} muted />,
+  )
+  await flushAllTweens()
+
+  const finalTween = tweens.add.mock.calls.at(-1)?.[0] as Tween | undefined
+  expect(finalTween?.targets).toEqual(expect.arrayContaining([nodes.wukongRegalia]))
+  expect(screen.getByRole('img')).toHaveAttribute('data-scene-state', 'regalia-verified')
+  expect(screen.getByRole('img')).toHaveAttribute('data-visible-regalia', 'equipped')
+})
+
+it('finishes an active standard replay immediately when reduced motion is enabled', async () => {
+  const pure = render(
+    <FourSeasRegaliaScene events={correct} replayToken={1} reducedMotion muted />,
+  )
+  const expected = {
+    state: pure.getByRole('img').getAttribute('data-scene-state'),
+    regalia: pure.getByRole('img').getAttribute('data-visible-regalia'),
+    effect: pure.getByRole('img').getAttribute('data-effect-cell'),
+    transcript: pure.getByRole('status').textContent,
+  }
+  pure.unmount()
+
+  const onPlaybackComplete = vi.fn()
+  const view = render(
+    <FourSeasRegaliaScene
+      events={correct}
+      replayToken={1}
+      reducedMotion={false}
+      muted
+      onPlaybackComplete={onPlaybackComplete}
+    />,
+  )
+  const staleTween = queue[0]
+  expect(staleTween).toBeDefined()
+  expect(onPlaybackComplete).not.toHaveBeenCalled()
+
+  view.rerender(
+    <FourSeasRegaliaScene
+      events={correct}
+      replayToken={1}
+      reducedMotion
+      muted
+      onPlaybackComplete={onPlaybackComplete}
+    />,
+  )
+  expect(view.getByRole('img')).toHaveAttribute('data-scene-state', expected.state)
+  expect(view.getByRole('img')).toHaveAttribute('data-visible-regalia', expected.regalia)
+  expect(view.getByRole('img')).toHaveAttribute('data-effect-cell', expected.effect)
+  expect(view.getByRole('status')).toHaveTextContent(expected.transcript ?? '')
+  expect(onPlaybackComplete).toHaveBeenCalledOnce()
+
+  await act(async () => staleTween?.onComplete?.())
+  expect(view.getByRole('img')).toHaveAttribute('data-scene-state', expected.state)
+  expect(view.getByRole('status')).toHaveTextContent(expected.transcript ?? '')
+  expect(onPlaybackComplete).toHaveBeenCalledOnce()
 })
 
 it('ignores stale tween callbacks when a newer replay owns playback', async () => {
@@ -319,4 +420,28 @@ it('invalidates delayed tween and load-error callbacks when the owner unmounts',
   })
   expect(onPlaybackComplete).not.toHaveBeenCalled()
   expect(destroys[0]).toHaveBeenCalledOnce()
+})
+
+it('syncs mute changes and gives a retry replacement the latest muted value', async () => {
+  const view = render(
+    <FourSeasRegaliaScene events={correct} replayToken={1} reducedMotion muted={false} />,
+  )
+  expect(sound.mute).toBe(false)
+  view.rerender(
+    <FourSeasRegaliaScene events={correct} replayToken={1} reducedMotion muted />,
+  )
+  expect(sound.mute).toBe(true)
+  view.rerender(
+    <FourSeasRegaliaScene events={correct} replayToken={1} reducedMotion muted={false} />,
+  )
+  expect(sound.mute).toBe(false)
+
+  await act(async () => sceneInstances[0]?.emitLoadError())
+  view.rerender(
+    <FourSeasRegaliaScene events={correct} replayToken={1} reducedMotion muted />,
+  )
+  fireEvent.click(screen.getByRole('button', { name: '重新加载四海披挂场景' }))
+  expect(sound.mute).toBe(true)
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(sceneInstances).toHaveLength(2)
 })

@@ -243,6 +243,45 @@ test('traces every approved Dragon Palace raster to a real formal scene slot', a
   }
 });
 
+test('rejects comments, strings, unused values/functions, dead branches, wrong keys, and wrong arguments as formal preload slots', async () => {
+  const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const manifestPath = join(sourceRoot, 'docs', 'assets', 'asset-manifest.md');
+  const parsed = parseAssetManifest(await readFile(manifestPath, 'utf8'));
+  const publicFiles = await collectAssetFiles(join(sourceRoot, 'public', 'assets', 'dragon-palace'));
+  const sourceFiles = new Map([
+    ['src/components/GameScene.tsx', await readFile(join(sourceRoot, 'src', 'components', 'GameScene.tsx'), 'utf8')],
+    ['src/components/RuyiStaffScene.tsx', await readFile(join(sourceRoot, 'src', 'components', 'RuyiStaffScene.tsx'), 'utf8')],
+    ['src/components/FourSeasRegaliaScene.tsx', await readFile(join(sourceRoot, 'src', 'components', 'FourSeasRegaliaScene.tsx'), 'utf8')],
+  ]);
+  const exactLoad = "this.load.image('regalia', assetUrl('/assets/dragon-palace/regalia.webp'))";
+  const fourSeasSource = sourceFiles.get('src/components/FourSeasRegaliaScene.tsx');
+  assert.match(fourSeasSource, new RegExp(exactLoad.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
+  const invalidStatements = new Map([
+    ['comment-only', `// ${exactLoad}`],
+    ['ordinary string', `const regaliaDescription = "${exactLoad}"`],
+    ['unused assetUrl', "const unusedRegalia = assetUrl('/assets/dragon-palace/regalia.webp')"],
+    ['uncalled loader function', `const loadRegaliaLater = () => ${exactLoad}`],
+    ['dead conditional branch', `if (false) ${exactLoad}`],
+    ['wrong loader key', "this.load.image('wrongRegalia', assetUrl('/assets/dragon-palace/regalia.webp'))"],
+    ['wrong loader argument', "this.load.image('regalia', '/assets/dragon-palace/regalia.webp')"],
+  ]);
+
+  for (const [name, invalidStatement] of invalidStatements) {
+    const mutatedSources = new Map(sourceFiles);
+    mutatedSources.set(
+      'src/components/FourSeasRegaliaScene.tsx',
+      fourSeasSource.replace(exactLoad, invalidStatement),
+    );
+    assert.throws(() => verifyRequiredDragonPalaceInventory({
+      manifestRows: parsed.manifestRows,
+      publicFiles,
+      promptRecords: parsed.promptRecords,
+      sourceFiles: mutatedSources,
+    }), /preload|scene slot|loader|regalia/i, name);
+  }
+});
+
 test('rejects a Dragon Palace inventory that drops an existing row or lacks the exact Four Seas scene slot', () => {
   const sourceFiles = new Map([
     ['src/components/GameScene.tsx', "assetUrl('/assets/dragon-palace/background.webp') assetUrl('/assets/dragon-palace/wukong.webp') assetUrl('/assets/dragon-palace/dragon-king.webp') assetUrl('/assets/dragon-palace/weapons.webp') assetUrl('/assets/dragon-palace/effects.webp')"],

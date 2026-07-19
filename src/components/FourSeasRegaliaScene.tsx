@@ -23,7 +23,12 @@ interface Nodes {
 }
 
 type Effect = 'none' | 'accepted' | 'blocked' | 'success'
-type VisibleRegalia = 'none' | 'cloud-boots' | 'boots-armor' | 'all-collected' | 'equipped'
+type CollectedRegalia = 'none' | 'cloud-boots' | 'boots-armor' | 'all-collected'
+type VisibleRegalia = CollectedRegalia
+  | 'rejected-crown'
+  | 'crown-equipped'
+  | 'crown-armor-equipped'
+  | 'equipped'
 
 const CELL_STARTS = [0, 341, 682] as const
 const CELL_WIDTHS = [341, 341, 342] as const
@@ -74,9 +79,19 @@ function transcript(event: FourSeasBattleEvent): string {
 function visibleForState(state: FourSeasState): VisibleRegalia {
   if (state === 'cloud-boots-received') return 'cloud-boots'
   if (state === 'golden-armor-received') return 'boots-armor'
-  if (state === 'all-gifts-received' || state === 'equipping-regalia'
-    || state === 'crown-equipped' || state === 'armor-equipped') return 'all-collected'
+  if (state === 'all-gifts-received' || state === 'equipping-regalia') return 'all-collected'
+  if (state === 'crown-equipped') return 'crown-equipped'
+  if (state === 'armor-equipped') return 'crown-armor-equipped'
   if (state === 'regalia-equipped' || state === 'regalia-verified') return 'equipped'
+  return 'none'
+}
+
+function collectedForState(state: FourSeasState): CollectedRegalia {
+  if (state === 'cloud-boots-received') return 'cloud-boots'
+  if (state === 'golden-armor-received') return 'boots-armor'
+  if (state === 'all-gifts-received' || state === 'equipping-regalia'
+    || state === 'crown-equipped' || state === 'armor-equipped'
+    || state === 'regalia-equipped' || state === 'regalia-verified') return 'all-collected'
   return 'none'
 }
 
@@ -87,10 +102,18 @@ function showCell(image: Phaser.GameObjects.Image, cell: 0 | 1 | 2, width: numbe
     .setVisible(true)
 }
 
-function setRegaliaVisibility(nodes: Nodes, visible: VisibleRegalia) {
+function setRegaliaVisibility(
+  nodes: Nodes,
+  visible: VisibleRegalia,
+  width: number,
+  height: number,
+) {
   nodes.crown.setVisible(false)
   nodes.armor.setVisible(false)
   nodes.boots.setVisible(false)
+  nodes.crown.setX(width * 0.42).setY(height * 0.61)
+  nodes.armor.setX(width * 0.56).setY(height * 0.61)
+  nodes.boots.setX(width * 0.70).setY(height * 0.61)
   nodes.wukong.setVisible(visible !== 'equipped')
   nodes.wukongRegalia.setVisible(visible === 'equipped')
   if (visible === 'cloud-boots' || visible === 'boots-armor' || visible === 'all-collected') {
@@ -98,6 +121,24 @@ function setRegaliaVisibility(nodes: Nodes, visible: VisibleRegalia) {
   }
   if (visible === 'boots-armor' || visible === 'all-collected') showCell(nodes.armor, 1, 112, 168)
   if (visible === 'all-collected') showCell(nodes.crown, 0, 112, 168)
+  if (visible === 'rejected-crown') {
+    nodes.crown.setX(width * 0.56).setY(height * 0.61)
+    showCell(nodes.crown, 0, 112, 168)
+  }
+  if (visible === 'crown-equipped' || visible === 'crown-armor-equipped') {
+    nodes.crown.setX(width * 0.17).setY(height * 0.46)
+    showCell(nodes.crown, 0, 64, 76)
+    nodes.boots.setX(width * 0.70).setY(height * 0.61)
+    showCell(nodes.boots, 2, 112, 168)
+  }
+  if (visible === 'crown-equipped') {
+    nodes.armor.setX(width * 0.56).setY(height * 0.61)
+    showCell(nodes.armor, 1, 112, 168)
+  }
+  if (visible === 'crown-armor-equipped') {
+    nodes.armor.setX(width * 0.17).setY(height * 0.68)
+    showCell(nodes.armor, 1, 96, 132)
+  }
 }
 
 export function FourSeasRegaliaScene({
@@ -126,6 +167,7 @@ export function FourSeasRegaliaScene({
   const [attempt, setAttempt] = useState(0)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [sceneState, setSceneState] = useState<FourSeasState>('awaiting-request')
+  const [collectedRegalia, setCollectedRegalia] = useState<CollectedRegalia>('none')
   const [visibleRegalia, setVisibleRegalia] = useState<VisibleRegalia>('none')
   const [effect, setEffect] = useState<Effect>('none')
   const [messages, setMessages] = useState<string[]>([])
@@ -147,12 +189,10 @@ export function FourSeasRegaliaScene({
     nodes.wukong.setX(width * 0.17).setY(height * 0.68).setVisible(true)
     nodes.wukongRegalia.setX(width * 0.17).setY(height * 0.68).setVisible(false)
     nodes.dragonKing.setX(width * 0.84).setY(height * 0.55).setVisible(true)
-    nodes.crown.setX(width * 0.42).setY(height * 0.61)
-    nodes.armor.setX(width * 0.56).setY(height * 0.61)
-    nodes.boots.setX(width * 0.70).setY(height * 0.61)
-    setRegaliaVisibility(nodes, 'none')
+    setRegaliaVisibility(nodes, 'none', width, height)
     nodes.effects.setX(width * 0.56).setY(height * 0.39).setCrop().setVisible(false)
     setVisibleRegalia('none')
+    setCollectedRegalia('none')
     setEffect('none')
   }
 
@@ -165,14 +205,23 @@ export function FourSeasRegaliaScene({
     }
     if (event.type === 'state-changed') {
       const visible = visibleForState(event.state)
-      setRegaliaVisibility(nodes, visible)
+      setRegaliaVisibility(nodes, visible, scene.scale.width, scene.scale.height)
       setVisibleRegalia(visible)
+      setCollectedRegalia(collectedForState(event.state))
+      if (event.state === 'regalia-verified') {
+        nodes.wukong.setX(scene.scale.width * 0.28)
+        nodes.wukongRegalia.setX(scene.scale.width * 0.28)
+      }
       nodes.effects.setVisible(false)
       setEffect('none')
     }
     if (event.type === 'instruction-rejected') {
       showCell(nodes.effects, 1, 150, 120)
       setEffect('blocked')
+      if (event.state === 'collecting-gifts' && event.opcode === 'receive_purple_crown') {
+        setRegaliaVisibility(nodes, 'rejected-crown', scene.scale.width, scene.scale.height)
+        setVisibleRegalia('rejected-crown')
+      }
     }
     if (event.type === 'run-finished' && event.messageCode.endsWith('.completed')) {
       showCell(nodes.effects, 2, 150, 120)
@@ -219,7 +268,7 @@ export function FourSeasRegaliaScene({
       }
       index += 1
       scene.tweens.add({
-        targets: nodes.wukong,
+        targets: [nodes.wukong, nodes.wukongRegalia],
         x: scene.scale.width * (event.state === 'regalia-verified' ? 0.28 : 0.17),
         duration: event.type === 'state-changed' ? 360 : 140,
         ease: 'Sine.inOut',
@@ -325,6 +374,7 @@ export function FourSeasRegaliaScene({
     activeRef.current = false
     setLoadError(null)
     setSceneState('awaiting-request')
+    setCollectedRegalia('none')
     setVisibleRegalia('none')
     setEffect('none')
     setMessages([])
@@ -341,6 +391,7 @@ export function FourSeasRegaliaScene({
         aria-label="龙宫四海披挂代码执行场景"
         data-motion-mode={reducedMotion ? 'reduced' : 'standard'}
         data-scene-state={loadError ? undefined : sceneState}
+        data-collected-regalia={loadError ? undefined : collectedRegalia}
         data-visible-regalia={loadError ? undefined : visibleRegalia}
         data-effect-cell={loadError ? undefined : effect}
       />
