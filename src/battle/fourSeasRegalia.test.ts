@@ -177,6 +177,25 @@ describe('four seas regalia battle domain', () => {
         concept: 'completeness',
         instructionId: null,
         sourceBlockId: 'armor-gift',
+        parentBlockId: 'collect',
+        opcode: null,
+      },
+      penalty: zeroPenalty,
+    })
+  })
+
+  it('preserves the equip container provenance when its child chain ends early', () => {
+    const result = runFourSeasRegalia(correctTrace().slice(0, 8))
+
+    expect(result).toMatchObject({
+      completed: false,
+      finalState: 'armor-equipped',
+      diagnostic: {
+        type: 'program-ended-incomplete',
+        concept: 'completeness',
+        instructionId: null,
+        sourceBlockId: 'armor-wear',
+        parentBlockId: 'equip',
         opcode: null,
       },
       penalty: zeroPenalty,

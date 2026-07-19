@@ -255,7 +255,7 @@ export type FourSeasBattleDiagnostic =
       state: FourSeasState
       instructionId: null
       sourceBlockId: string | null
-      parentBlockId: null
+      parentBlockId: string | null
       opcode: null
       messageCode: string
     }

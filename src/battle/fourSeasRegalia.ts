@@ -60,6 +60,7 @@ export function runFourSeasRegalia(
 ): FourSeasBattleRunResult {
   let state: FourSeasState = 'awaiting-request'
   let lastAcceptedSourceBlockId: string | null = null
+  let lastAcceptedParentBlockId: string | null = null
   let collectBlockId: string | null = null
   let equipBlockId: string | null = null
   const events: FourSeasBattleEvent[] = [
@@ -113,6 +114,7 @@ export function runFourSeasRegalia(
     )
     state = nextState
     lastAcceptedSourceBlockId = instruction.sourceBlockId
+    lastAcceptedParentBlockId = instruction.parentBlockId
     if (instruction.opcode === 'collect_gifts') collectBlockId = instruction.sourceBlockId
     if (instruction.opcode === 'equip_regalia') equipBlockId = instruction.sourceBlockId
     events.push(
@@ -148,7 +150,7 @@ export function runFourSeasRegalia(
     state,
     instructionId: null,
     sourceBlockId: lastAcceptedSourceBlockId,
-    parentBlockId: null,
+    parentBlockId: lastAcceptedParentBlockId,
     opcode: null,
     messageCode: `four-seas-regalia.program-ended-incomplete.${state}`,
   }
