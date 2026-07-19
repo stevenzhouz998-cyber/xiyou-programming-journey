@@ -337,6 +337,72 @@ test('binds slots to one configured Phaser Scene and fails closed on duplicate o
   assert.deepEqual(acceptedInvalidVariants, []);
 });
 
+test('binds the configured Scene identifier to its exact lexical TypeScript symbol', async () => {
+  const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const parsed = parseAssetManifest(await readFile(join(sourceRoot, 'docs', 'assets', 'asset-manifest.md'), 'utf8'));
+  const publicFiles = await collectAssetFiles(join(sourceRoot, 'public', 'assets', 'dragon-palace'));
+  const sourceFiles = new Map([
+    ['src/components/GameScene.tsx', await readFile(join(sourceRoot, 'src', 'components', 'GameScene.tsx'), 'utf8')],
+    ['src/components/RuyiStaffScene.tsx', await readFile(join(sourceRoot, 'src', 'components', 'RuyiStaffScene.tsx'), 'utf8')],
+    ['src/components/FourSeasRegaliaScene.tsx', await readFile(join(sourceRoot, 'src', 'components', 'FourSeasRegaliaScene.tsx'), 'utf8')],
+  ]);
+  const sourcePath = 'src/components/FourSeasRegaliaScene.tsx';
+  const source = sourceFiles.get(sourcePath);
+  const classStart = '    class Scene extends Phaser.Scene {';
+  const gameStart = '    game = new Phaser.Game({';
+  for (const needle of [classStart, gameStart, '      scene: Scene,']) {
+    assert.match(source, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+  const approvedLoads = [
+    "this.load.image('background', assetUrl('/assets/dragon-palace/background.webp'))",
+    "this.load.image('wukong', assetUrl('/assets/dragon-palace/wukong.webp'))",
+    "this.load.image('wukongRegalia', assetUrl('/assets/dragon-palace/wukong-regalia.webp'))",
+    "this.load.image('dragonKing', assetUrl('/assets/dragon-palace/dragon-king.webp'))",
+    "this.load.image('regalia', assetUrl('/assets/dragon-palace/regalia.webp'))",
+    "this.load.image('effects', assetUrl('/assets/dragon-palace/effects.webp'))",
+  ].join('\n          ');
+  const deadBlockScene = `    if (false) {\n      class Scene extends Phaser.Scene {\n        preload() {\n          ${approvedLoads}\n        }\n      }\n    }\n`;
+  const deadFunctionScene = `    function unusedSceneScope() {\n      class Scene extends Phaser.Scene {\n        preload() {\n          ${approvedLoads}\n        }\n      }\n      return Scene\n    }\n`;
+  const variants = new Map([
+    ['block shadow cannot validate configured class expression', source
+      .replace(classStart, '    class ApprovedScene extends Phaser.Scene {')
+      .replace(gameStart, `    const Scene = class extends Phaser.Scene {}\n${deadBlockScene}${gameStart}`)],
+    ['block shadow cannot validate configured class alias', source
+      .replace(classStart, '    class ApprovedScene extends Phaser.Scene {')
+      .replace(gameStart, `    const Scene = ApprovedScene\n${deadBlockScene}${gameStart}`)],
+    ['function shadow cannot validate configured class expression', source
+      .replace(classStart, '    class ApprovedScene extends Phaser.Scene {')
+      .replace(gameStart, `    const Scene = class extends Phaser.Scene {}\n${deadFunctionScene}${gameStart}`)],
+  ]);
+
+  const acceptedInvalidVariants = [];
+  for (const [name, mutatedSource] of variants) {
+    const mutatedSources = new Map(sourceFiles);
+    mutatedSources.set(sourcePath, mutatedSource);
+    try {
+      verifyRequiredDragonPalaceInventory({
+        manifestRows: parsed.manifestRows,
+        publicFiles,
+        promptRecords: parsed.promptRecords,
+        sourceFiles: mutatedSources,
+      });
+      acceptedInvalidVariants.push(name);
+    } catch {
+      // Expected: only the exact lexical class declaration may own the approved preload.
+    }
+  }
+  assert.deepEqual(acceptedInvalidVariants, []);
+
+  const nestedSameNameSources = new Map(sourceFiles);
+  nestedSameNameSources.set(sourcePath, source.replace(gameStart, `${deadBlockScene}${gameStart}`));
+  assert.doesNotThrow(() => verifyRequiredDragonPalaceInventory({
+    manifestRows: parsed.manifestRows,
+    publicFiles,
+    promptRecords: parsed.promptRecords,
+    sourceFiles: nestedSameNameSources,
+  }), 'a nested same-name class must not replace the configured outer Scene symbol');
+});
+
 test('requires exact loader imports and rejects every hidden or untracked image load', async () => {
   const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
   const manifestPath = join(sourceRoot, 'docs', 'assets', 'asset-manifest.md');

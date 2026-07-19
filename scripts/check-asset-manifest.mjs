@@ -243,24 +243,53 @@ function isExactDirectImageAccess(node) {
     && node.expression.expression.kind === ts.SyntaxKind.ThisKeyword;
 }
 
-function configuredPhaserPreloadAssets(sourcePath, source) {
+function createBoundSource(sourcePath, source) {
+  const compilerOptions = {
+    target: ts.ScriptTarget.Latest,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    jsx: ts.JsxEmit.Preserve,
+    noLib: true,
+    noResolve: true,
+    skipLibCheck: true,
+  };
   const sourceFile = ts.createSourceFile(
     sourcePath,
     source,
-    ts.ScriptTarget.Latest,
+    compilerOptions.target,
     true,
     ts.ScriptKind.TSX,
   );
+  const host = {
+    getSourceFile: (fileName) => fileName === sourcePath ? sourceFile : undefined,
+    getDefaultLibFileName: () => 'lib.d.ts',
+    writeFile: () => { throw new Error('Asset manifest: in-memory TypeScript verification cannot write files.'); },
+    getCurrentDirectory: () => '.',
+    getDirectories: () => [],
+    fileExists: (fileName) => fileName === sourcePath,
+    readFile: (fileName) => fileName === sourcePath ? source : undefined,
+    getCanonicalFileName: (fileName) => fileName,
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => '\n',
+  };
+  const program = ts.createProgram({ rootNames: [sourcePath], options: compilerOptions, host });
+  const boundSourceFile = program.getSourceFile(sourcePath);
+  if (!boundSourceFile) {
+    throw new Error(`Asset manifest: ${sourcePath} could not be bound for TypeScript scene verification.`);
+  }
+  return { sourceFile: boundSourceFile, checker: program.getTypeChecker(), program };
+}
+
+function configuredPhaserPreloadAssets(sourcePath, source) {
+  const { sourceFile, checker, program } = createBoundSource(sourcePath, source);
   if (sourceFile.parseDiagnostics.length > 0) {
     throw new Error(`Asset manifest: ${sourcePath} cannot be parsed as TypeScript for preload verification.`);
   }
   exactSceneImports(sourcePath, sourceFile);
   const gameConstructors = [];
-  const classes = [];
 
   const visit = (node) => {
     if (isPhaserGameConstructor(node, sourceFile)) gameConstructors.push(node);
-    if (ts.isClassDeclaration(node)) classes.push(node);
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
@@ -279,12 +308,21 @@ function configuredPhaserPreloadAssets(sourcePath, source) {
   if (sceneProperties.length !== 1 || !ts.isIdentifier(sceneProperties[0].initializer)) {
     throw new Error(`Asset manifest: ${sourcePath} Phaser.Game config must select one Scene class by direct identifier.`);
   }
-  const sceneIdentifier = sceneProperties[0].initializer.text;
-  const matchingClasses = classes.filter((candidate) => candidate.name?.text === sceneIdentifier);
-  if (matchingClasses.length !== 1 || !isPhaserSceneClass(matchingClasses[0], sourceFile)) {
+  const sceneInitializer = sceneProperties[0].initializer;
+  const sceneIdentifier = sceneInitializer.text;
+  const sceneSymbol = checker.getSymbolAtLocation(sceneInitializer);
+  const sceneDeclarations = sceneSymbol?.declarations ?? [];
+  const redeclarationDiagnostics = program.getSemanticDiagnostics(sourceFile).filter((diagnostic) => (
+    diagnostic.code === 2300 || diagnostic.code === 2451
+  ) && ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n').includes(`'${sceneIdentifier}'`));
+  if (redeclarationDiagnostics.length > 0 || sceneDeclarations.length !== 1
+    || !ts.isClassDeclaration(sceneDeclarations[0])
+    || !sceneDeclarations[0].name || sceneDeclarations[0].name.text !== sceneIdentifier
+    || checker.getSymbolAtLocation(sceneDeclarations[0].name) !== sceneSymbol
+    || !isPhaserSceneClass(sceneDeclarations[0], sourceFile)) {
     throw new Error(`Asset manifest: ${sourcePath} must bind the configured scene identifier ${sceneIdentifier} to exactly one Phaser.Scene class.`);
   }
-  const [selectedClass] = matchingClasses;
+  const [selectedClass] = sceneDeclarations;
   const preloadMethods = selectedClass.members.filter(
     (member) => ts.isMethodDeclaration(member)
       && ts.isIdentifier(member.name)
