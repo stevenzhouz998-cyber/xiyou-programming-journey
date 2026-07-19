@@ -263,6 +263,9 @@ test('rejects comments, strings, unused values/functions, dead branches, wrong k
     ['unused assetUrl', "const unusedRegalia = assetUrl('/assets/dragon-palace/regalia.webp')"],
     ['uncalled loader function', `const loadRegaliaLater = () => ${exactLoad}`],
     ['dead conditional branch', `if (false) ${exactLoad}`],
+    ['nested block', `{ ${exactLoad} }`],
+    ['aliased loader', "const loadImage = this.load.image; loadImage('regalia', assetUrl('/assets/dragon-palace/regalia.webp'))"],
+    ['computed loader', "this.load['image']('regalia', assetUrl('/assets/dragon-palace/regalia.webp'))"],
     ['wrong loader key', "this.load.image('wrongRegalia', assetUrl('/assets/dragon-palace/regalia.webp'))"],
     ['wrong loader argument', "this.load.image('regalia', '/assets/dragon-palace/regalia.webp')"],
   ]);
@@ -280,6 +283,58 @@ test('rejects comments, strings, unused values/functions, dead branches, wrong k
       sourceFiles: mutatedSources,
     }), /preload|scene slot|loader|regalia/i, name);
   }
+});
+
+test('binds slots to one configured Phaser Scene and fails closed on duplicate or conflicting loads', async () => {
+  const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const manifestPath = join(sourceRoot, 'docs', 'assets', 'asset-manifest.md');
+  const parsed = parseAssetManifest(await readFile(manifestPath, 'utf8'));
+  const publicFiles = await collectAssetFiles(join(sourceRoot, 'public', 'assets', 'dragon-palace'));
+  const sourceFiles = new Map([
+    ['src/components/GameScene.tsx', await readFile(join(sourceRoot, 'src', 'components', 'GameScene.tsx'), 'utf8')],
+    ['src/components/RuyiStaffScene.tsx', await readFile(join(sourceRoot, 'src', 'components', 'RuyiStaffScene.tsx'), 'utf8')],
+    ['src/components/FourSeasRegaliaScene.tsx', await readFile(join(sourceRoot, 'src', 'components', 'FourSeasRegaliaScene.tsx'), 'utf8')],
+  ]);
+  const sourcePath = 'src/components/FourSeasRegaliaScene.tsx';
+  const source = sourceFiles.get(sourcePath);
+  const exactLoad = "this.load.image('regalia', assetUrl('/assets/dragon-palace/regalia.webp'))";
+  const classStart = '    class Scene extends Phaser.Scene {';
+  const gameStart = '    game = new Phaser.Game({';
+  const sceneProperty = '      scene: Scene,';
+  for (const needle of [exactLoad, classStart, gameStart, sceneProperty]) assert.match(source, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
+  const variants = new Map([
+    ['unselected DeadScene', source
+      .replace(exactLoad, '')
+      .replace(gameStart, `    if (false) {\n      class DeadScene extends Phaser.Scene {\n        preload() { ${exactLoad} }\n      }\n    }\n${gameStart}`)],
+    ['same key conflicting path', source.replace(exactLoad, `${exactLoad}\n        this.load.image('regalia', assetUrl('/assets/dragon-palace/wrong.webp'))`)],
+    ['duplicate correct load', source.replace(exactLoad, `${exactLoad}\n        ${exactLoad}`)],
+    ['same path different key', source.replace(exactLoad, `${exactLoad}\n        this.load.image('regaliaCopy', assetUrl('/assets/dragon-palace/regalia.webp'))`)],
+    ['multiple Phaser.Game configs', source.replace(gameStart, `    const duplicateGame = new Phaser.Game({ scene: Scene })\n${gameStart}`)],
+    ['dynamic scene initializer', source.replace(sceneProperty, '      scene: chooseScene(),')],
+    ['scene array initializer', source.replace(sceneProperty, '      scene: [Scene],')],
+    ['multiple preload methods', source.replace(classStart, `${classStart}\n      preload() {}`)],
+    ['multiple bindable Scene classes', source.replace(gameStart, `    class Scene extends Phaser.Scene { preload() {} }\n${gameStart}`)],
+    ['no Phaser.Game config', source.replace('new Phaser.Game({', 'new Other.Game({')],
+  ]);
+
+  const acceptedInvalidVariants = [];
+  for (const [name, mutatedSource] of variants) {
+    const mutatedSources = new Map(sourceFiles);
+    mutatedSources.set(sourcePath, mutatedSource);
+    try {
+      verifyRequiredDragonPalaceInventory({
+        manifestRows: parsed.manifestRows,
+        publicFiles,
+        promptRecords: parsed.promptRecords,
+        sourceFiles: mutatedSources,
+      });
+      acceptedInvalidVariants.push(name);
+    } catch {
+      // Expected: every invalid binding or mapping must fail closed.
+    }
+  }
+  assert.deepEqual(acceptedInvalidVariants, []);
 });
 
 test('rejects a Dragon Palace inventory that drops an existing row or lacks the exact Four Seas scene slot', () => {

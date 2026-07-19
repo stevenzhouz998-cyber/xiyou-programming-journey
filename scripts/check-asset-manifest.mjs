@@ -92,7 +92,18 @@ function isPhaserSceneClass(node, sourceFile) {
   );
 }
 
-function directPhaserPreloadAssets(sourcePath, source) {
+function isPhaserGameConstructor(node, sourceFile) {
+  return ts.isNewExpression(node)
+    && ts.isPropertyAccessExpression(node.expression)
+    && node.expression.getText(sourceFile) === 'Phaser.Game';
+}
+
+function propertyNameText(name) {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name)) return name.text;
+  return null;
+}
+
+function configuredPhaserPreloadAssets(sourcePath, source) {
   const sourceFile = ts.createSourceFile(
     sourcePath,
     source,
@@ -103,33 +114,77 @@ function directPhaserPreloadAssets(sourcePath, source) {
   if (sourceFile.parseDiagnostics.length > 0) {
     throw new Error(`Asset manifest: ${sourcePath} cannot be parsed as TypeScript for preload verification.`);
   }
-  const assets = new Set();
+  const gameConstructors = [];
+  const classes = [];
 
   const visit = (node) => {
-    if (isPhaserSceneClass(node, sourceFile)) {
-      for (const member of node.members) {
-        if (!ts.isMethodDeclaration(member) || member.name?.getText(sourceFile) !== 'preload' || !member.body) continue;
-        for (const preloadStatement of member.body.statements) {
-          if (!ts.isExpressionStatement(preloadStatement)) continue;
-          const loaderCall = preloadStatement.expression;
-          if (!ts.isCallExpression(loaderCall) || loaderCall.arguments.length !== 2) continue;
-          const imageAccess = loaderCall.expression;
-          if (!ts.isPropertyAccessExpression(imageAccess) || imageAccess.name.text !== 'image') continue;
-          const loadAccess = imageAccess.expression;
-          if (!ts.isPropertyAccessExpression(loadAccess) || loadAccess.name.text !== 'load'
-            || loadAccess.expression.kind !== ts.SyntaxKind.ThisKeyword) continue;
-          const [loaderKeyNode, assetUrlCall] = loaderCall.arguments;
-          if (!ts.isStringLiteral(loaderKeyNode) || !ts.isCallExpression(assetUrlCall)
-            || !ts.isIdentifier(assetUrlCall.expression) || assetUrlCall.expression.text !== 'assetUrl'
-            || assetUrlCall.arguments.length !== 1 || !ts.isStringLiteral(assetUrlCall.arguments[0])) continue;
-          assets.add(`${loaderKeyNode.text}\0${assetUrlCall.arguments[0].text}`);
-        }
-      }
-    }
+    if (isPhaserGameConstructor(node, sourceFile)) gameConstructors.push(node);
+    if (ts.isClassDeclaration(node)) classes.push(node);
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  return assets;
+
+  if (gameConstructors.length !== 1) {
+    throw new Error(`Asset manifest: ${sourcePath} must contain exactly one new Phaser.Game configuration; found ${gameConstructors.length}.`);
+  }
+  const [gameConstructor] = gameConstructors;
+  if (gameConstructor.arguments?.length !== 1 || !ts.isObjectLiteralExpression(gameConstructor.arguments[0])) {
+    throw new Error(`Asset manifest: ${sourcePath} Phaser.Game must receive one direct object-literal configuration.`);
+  }
+  const config = gameConstructor.arguments[0];
+  const sceneProperties = config.properties.filter(
+    (property) => ts.isPropertyAssignment(property) && propertyNameText(property.name) === 'scene',
+  );
+  if (sceneProperties.length !== 1 || !ts.isIdentifier(sceneProperties[0].initializer)) {
+    throw new Error(`Asset manifest: ${sourcePath} Phaser.Game config must select one Scene class by direct identifier.`);
+  }
+  const sceneIdentifier = sceneProperties[0].initializer.text;
+  const matchingClasses = classes.filter((candidate) => candidate.name?.text === sceneIdentifier);
+  if (matchingClasses.length !== 1 || !isPhaserSceneClass(matchingClasses[0], sourceFile)) {
+    throw new Error(`Asset manifest: ${sourcePath} must bind the configured scene identifier ${sceneIdentifier} to exactly one Phaser.Scene class.`);
+  }
+  const [selectedClass] = matchingClasses;
+  const preloadMethods = selectedClass.members.filter(
+    (member) => ts.isMethodDeclaration(member)
+      && ts.isIdentifier(member.name)
+      && member.name.text === 'preload',
+  );
+  if (preloadMethods.length !== 1 || !preloadMethods[0].body) {
+    throw new Error(`Asset manifest: ${sourcePath} configured Phaser.Scene must declare exactly one preload method.`);
+  }
+
+  const keyToPath = new Map();
+  const pathToKey = new Map();
+  for (const preloadStatement of preloadMethods[0].body.statements) {
+    if (!ts.isExpressionStatement(preloadStatement)) continue;
+    const loaderCall = preloadStatement.expression;
+    if (!ts.isCallExpression(loaderCall)) continue;
+    const imageAccess = loaderCall.expression;
+    if (!ts.isPropertyAccessExpression(imageAccess) || imageAccess.name.text !== 'image') continue;
+    const loadAccess = imageAccess.expression;
+    if (!ts.isPropertyAccessExpression(loadAccess) || loadAccess.name.text !== 'load'
+      || loadAccess.expression.kind !== ts.SyntaxKind.ThisKeyword) continue;
+    if (loaderCall.arguments.length !== 2) {
+      throw new Error(`Asset manifest: ${sourcePath} preload image calls require exactly two direct arguments.`);
+    }
+    const [loaderKeyNode, assetUrlCall] = loaderCall.arguments;
+    if (!ts.isStringLiteral(loaderKeyNode) || !ts.isCallExpression(assetUrlCall)
+      || !ts.isIdentifier(assetUrlCall.expression) || assetUrlCall.expression.text !== 'assetUrl'
+      || assetUrlCall.arguments.length !== 1 || !ts.isStringLiteral(assetUrlCall.arguments[0])) {
+      throw new Error(`Asset manifest: ${sourcePath} preload image calls require literal key and direct assetUrl(literal path).`);
+    }
+    const loaderKey = loaderKeyNode.text;
+    const assetPath = assetUrlCall.arguments[0].text;
+    if (keyToPath.has(loaderKey)) {
+      throw new Error(`Asset manifest: ${sourcePath} preload has duplicate or conflicting loader key ${loaderKey}.`);
+    }
+    if (pathToKey.has(assetPath)) {
+      throw new Error(`Asset manifest: ${sourcePath} preload has duplicate or conflicting asset path ${assetPath}.`);
+    }
+    keyToPath.set(loaderKey, assetPath);
+    pathToKey.set(assetPath, loaderKey);
+  }
+  return keyToPath;
 }
 
 function splitMarkdownRow(line) {
@@ -320,13 +375,13 @@ export function verifyRequiredDragonPalaceInventory({
   const parsedSources = new Map();
   for (const [sourcePath, source] of sourceFiles) {
     if (typeof source !== 'string') throw new Error(`Asset manifest: formal scene source ${sourcePath} must be text.`);
-    parsedSources.set(sourcePath, directPhaserPreloadAssets(sourcePath, source));
+    parsedSources.set(sourcePath, configuredPhaserPreloadAssets(sourcePath, source));
   }
   for (const [assetId, slots] of REQUIRED_DRAGON_PALACE_SLOTS) {
     const publicPath = `/${assetId}`;
     for (const { sourcePath, loaderKey } of slots) {
       const preloadAssets = parsedSources.get(sourcePath);
-      if (!(preloadAssets instanceof Set) || !preloadAssets.has(`${loaderKey}\0${publicPath}`)) {
+      if (!(preloadAssets instanceof Map) || preloadAssets.get(loaderKey) !== publicPath) {
         throw new Error(`Asset manifest: ${assetId} is missing its exact Phaser preload slot ${sourcePath} with loader key ${loaderKey}.`);
       }
     }
