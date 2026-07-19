@@ -487,14 +487,29 @@ export function FourSeasRegaliaBlocklyWorkspace({
     setWorkspaceError(null)
   }
 
+  const syncReadOnlyWorkspace = (workspace: Blockly.Workspace) => {
+    try {
+      setCompileResult(compileFourSeasRegaliaWorkspace(workspace))
+    } catch {
+      setCompileResult({
+        ok: false,
+        trace: [],
+        diagnostics: [{ code: 'invalid-connection', sourceBlockId: null, concept: 'program-structure' }],
+      })
+    }
+    try {
+      const nextTree = deriveTree(workspace)
+      setTree(nextTree)
+      if (nextTree.length < FOUR_SEAS_WORKSPACE_LIMITS.maxWorkspaceBlocks) setCapacityMessage(null)
+    } catch {
+      setTree([])
+    }
+  }
+
   const enterFailClosedRecovery = (workspace: Blockly.Workspace) => {
     invalidatePendingSave()
     lastDraftRef.current = null
-    try {
-      refresh(false)
-    } catch {
-      setTree(deriveTree(workspace))
-    }
+    syncReadOnlyWorkspace(workspace)
     setRecoveryFailed(true)
     setWorkspaceBlocksLocked(workspace, true)
     setWorkspaceError('工作区可能已改变，现在不可执行。请重新载入一份合法草稿。')
@@ -543,7 +558,11 @@ export function FourSeasRegaliaBlocklyWorkspace({
 
   const scheduleLockedRestore = (workspace: Blockly.Workspace) => {
     setWorkspaceBlocksLocked(workspace, true)
-    if (recoveryFailedRef.current) return
+    if (recoveryFailedRef.current) {
+      syncReadOnlyWorkspace(workspace)
+      setWorkspaceBlocksLocked(workspace, true)
+      return
+    }
     if (lockedRestoreTimerRef.current !== null) return
     lockedRestoreTimerRef.current = window.setTimeout(() => {
       lockedRestoreTimerRef.current = null

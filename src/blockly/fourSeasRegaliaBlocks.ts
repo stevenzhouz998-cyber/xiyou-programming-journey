@@ -34,16 +34,16 @@ export const FOUR_SEAS_CHILD_BLOCK_TYPES = [
 ] as const satisfies readonly FourSeasBlockType[]
 
 export const FOUR_SEAS_BLOCK_LABELS: Readonly<Record<FourSeasBlockType, string>> = {
-  xiyou_request_regalia: '请求四海龙王赐下披挂',
-  xiyou_collect_gifts: '收取三件礼物',
-  xiyou_receive_cloud_boots: '收下藕丝步云履',
-  xiyou_receive_golden_armor: '收下锁子黄金甲',
-  xiyou_receive_purple_crown: '收下凤翅紫金冠',
-  xiyou_equip_regalia: '穿戴齐天披挂',
+  xiyou_request_regalia: '向东海龙王请求披挂',
+  xiyou_collect_gifts: '收齐三海宝物',
+  xiyou_receive_cloud_boots: '收下北海的藕丝步云履',
+  xiyou_receive_golden_armor: '收下西海的锁子黄金甲',
+  xiyou_receive_purple_crown: '收下南海的凤翅紫金冠',
+  xiyou_equip_regalia: '穿戴整副披挂',
   xiyou_wear_crown: '戴上凤翅紫金冠',
   xiyou_wear_armor: '穿上锁子黄金甲',
-  xiyou_wear_boots: '穿上藕丝步云履',
-  xiyou_verify_regalia: '验证齐天披挂',
+  xiyou_wear_boots: '踏上藕丝步云履',
+  xiyou_verify_regalia: '检查披挂是否齐全',
 }
 
 const topTypes = new Set<string>(FOUR_SEAS_TOP_BLOCK_TYPES)

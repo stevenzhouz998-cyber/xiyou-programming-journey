@@ -80,16 +80,16 @@ function setup(
 
 function addFullProgram() {
   for (const name of [
-    '加入主任务：请求四海龙王赐下披挂',
-    '加入主任务：收取三件礼物',
-    '加入主任务：穿戴齐天披挂',
-    '加入主任务：验证齐天披挂',
-    '加入收集子任务：收下藕丝步云履',
-    '加入收集子任务：收下锁子黄金甲',
-    '加入收集子任务：收下凤翅紫金冠',
+    '加入主任务：向东海龙王请求披挂',
+    '加入主任务：收齐三海宝物',
+    '加入主任务：穿戴整副披挂',
+    '加入主任务：检查披挂是否齐全',
+    '加入收集子任务：收下北海的藕丝步云履',
+    '加入收集子任务：收下西海的锁子黄金甲',
+    '加入收集子任务：收下南海的凤翅紫金冠',
     '加入穿戴子任务：戴上凤翅紫金冠',
     '加入穿戴子任务：穿上锁子黄金甲',
-    '加入穿戴子任务：穿上藕丝步云履',
+    '加入穿戴子任务：踏上藕丝步云履',
   ]) fireEvent.click(screen.getByRole('button', { name }))
 }
 
@@ -124,28 +124,43 @@ describe('FourSeasRegaliaBlocklyWorkspace', () => {
   })
 
   it('uses the registered Blockly catalogue as the only player-facing block label source', () => {
+    expect(FOUR_SEAS_BLOCK_LABELS).toEqual({
+      xiyou_request_regalia: '向东海龙王请求披挂',
+      xiyou_collect_gifts: '收齐三海宝物',
+      xiyou_receive_cloud_boots: '收下北海的藕丝步云履',
+      xiyou_receive_golden_armor: '收下西海的锁子黄金甲',
+      xiyou_receive_purple_crown: '收下南海的凤翅紫金冠',
+      xiyou_equip_regalia: '穿戴整副披挂',
+      xiyou_wear_crown: '戴上凤翅紫金冠',
+      xiyou_wear_armor: '穿上锁子黄金甲',
+      xiyou_wear_boots: '踏上藕丝步云履',
+      xiyou_verify_regalia: '检查披挂是否齐全',
+    })
     const { workspace } = setup(FULL)
     const tree = screen.getByRole('list', { name: '四海披挂程序树' })
     for (const block of workspace.getAllBlocks(false)) {
       const type = block.type as FourSeasBlockType
+      expect(block.toString()).toContain(FOUR_SEAS_BLOCK_LABELS[type])
       expect(block.getTooltip()).toBe(FOUR_SEAS_BLOCK_LABELS[type])
       expect(tree).toHaveTextContent(FOUR_SEAS_BLOCK_LABELS[type])
     }
-    expect(screen.getByRole('button', { name: `加入穿戴子任务：${FOUR_SEAS_BLOCK_LABELS.xiyou_wear_boots}` })).toBeVisible()
-    expect(tree).toHaveTextContent('穿上藕丝步云履')
-    expect(tree).not.toHaveTextContent('踏上藕丝步云履')
+    for (const label of Object.values(FOUR_SEAS_BLOCK_LABELS)) {
+      expect(screen.getByRole('button', { name: new RegExp(`^\u52a0\u5165.*：${label}$`) })).toBeVisible()
+    }
+    expect(tree).toHaveTextContent('踏上藕丝步云履')
+    expect(tree).not.toHaveTextContent('穿上藕丝步云履')
   })
 
   it('preserves a wrong visible gift order instead of silently correcting it', () => {
     const { onRun } = setup()
     for (const name of [
-      '加入主任务：请求四海龙王赐下披挂',
-      '加入主任务：收取三件礼物',
-      '加入主任务：穿戴齐天披挂',
-      '加入主任务：验证齐天披挂',
-      '加入收集子任务：收下凤翅紫金冠',
-      '加入收集子任务：收下锁子黄金甲',
-      '加入收集子任务：收下藕丝步云履',
+      '加入主任务：向东海龙王请求披挂',
+      '加入主任务：收齐三海宝物',
+      '加入主任务：穿戴整副披挂',
+      '加入主任务：检查披挂是否齐全',
+      '加入收集子任务：收下南海的凤翅紫金冠',
+      '加入收集子任务：收下西海的锁子黄金甲',
+      '加入收集子任务：收下北海的藕丝步云履',
       '加入穿戴子任务：戴上凤翅紫金冠',
     ]) fireEvent.click(screen.getByRole('button', { name }))
     fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }))
@@ -156,7 +171,7 @@ describe('FourSeasRegaliaBlocklyWorkspace', () => {
 
   it('moves within one real child scope and recompiles the changed connections', () => {
     const { workspace, onRun } = setup(FULL)
-    fireEvent.click(screen.getByRole('button', { name: '上移收集子任务：收下锁子黄金甲' }))
+    fireEvent.click(screen.getByRole('button', { name: '上移收集子任务：收下西海的锁子黄金甲' }))
     expect(workspace.getBlockById('collect')?.getInputTargetBlock('GIFTS')?.id).toBe('armor-gift')
     fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }))
     expect(traceFromLastRun(onRun).filter(({ parentBlockId }) => parentBlockId === 'collect').map(({ sourceBlockId }) => sourceBlockId)).toEqual([
@@ -166,7 +181,7 @@ describe('FourSeasRegaliaBlocklyWorkspace', () => {
 
   it('moves a child across containers and exposes the new real parentBlockId', () => {
     const { workspace, onRun } = setup(FULL)
-    fireEvent.click(screen.getByRole('button', { name: '移到穿戴任务组：收下凤翅紫金冠' }))
+    fireEvent.click(screen.getByRole('button', { name: '移到穿戴任务组：收下南海的凤翅紫金冠' }))
     expect(workspace.getBlockById('crown-gift')?.getSurroundParent()?.id).toBe('equip')
     fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }))
     expect(traceFromLastRun(onRun).find(({ sourceBlockId }) => sourceBlockId === 'crown-gift')?.parentBlockId).toBe('equip')
@@ -176,7 +191,7 @@ describe('FourSeasRegaliaBlocklyWorkspace', () => {
     const { workspace } = setup(FULL)
     expect(screen.getByRole('list', { name: '四海披挂程序树' })).toHaveTextContent('收集子任务')
     act(() => workspace.getBlockById('crown-gift')!.dispose(false))
-    await waitFor(() => expect(screen.queryByText('收下凤翅紫金冠')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByText('收下南海的凤翅紫金冠')).not.toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: '删除：穿上锁子黄金甲' }))
     expect(workspace.getBlockById('armor-wear')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '清空并重新开始' }))
@@ -189,7 +204,7 @@ describe('FourSeasRegaliaBlocklyWorkspace', () => {
       .mockResolvedValueOnce({ status: 'unsaved' as const })
       .mockResolvedValueOnce({ status: 'saved' as const })
     const { workspace } = setup(EMPTY, onDraftChange)
-    fireEvent.click(screen.getByRole('button', { name: '加入主任务：请求四海龙王赐下披挂' }))
+    fireEvent.click(screen.getByRole('button', { name: '加入主任务：向东海龙王请求披挂' }))
     expect(await screen.findByText('这次积木更改还没有保存。')).toBeVisible()
     expect(workspace.getAllBlocks(false)).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: '重试保存积木' }))
@@ -204,8 +219,8 @@ describe('FourSeasRegaliaBlocklyWorkspace', () => {
     const second = new Promise<SaveResult>((resolve) => { resolveSecond = resolve })
     const onDraftChange = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
     setup(EMPTY, onDraftChange)
-    fireEvent.click(screen.getByRole('button', { name: '加入主任务：请求四海龙王赐下披挂' }))
-    fireEvent.click(screen.getByRole('button', { name: '加入主任务：验证齐天披挂' }))
+    fireEvent.click(screen.getByRole('button', { name: '加入主任务：向东海龙王请求披挂' }))
+    fireEvent.click(screen.getByRole('button', { name: '加入主任务：检查披挂是否齐全' }))
     await act(async () => resolveSecond({ status: 'conflict' }))
     await act(async () => resolveFirst({ status: 'saved' }))
     expect(screen.getByText('其他标签页已经更新，这次积木更改暂停保存。')).toBeVisible()
@@ -219,7 +234,7 @@ describe('FourSeasRegaliaBlocklyWorkspace', () => {
       const onDraftChange = vi.fn(() => oldSave)
       const { workspace, renderWorkspace, view } = setup(EMPTY, onDraftChange)
 
-      fireEvent.click(screen.getByRole('button', { name: '加入主任务：请求四海龙王赐下披挂' }))
+      fireEvent.click(screen.getByRole('button', { name: '加入主任务：向东海龙王请求披挂' }))
       expect(onDraftChange).toHaveBeenCalledOnce()
       view.rerender(renderWorkspace(oneBlockDraft('external-current')))
       expect(workspace.getAllBlocks(false).map(({ id }) => id)).toEqual(['external-current'])
@@ -237,7 +252,7 @@ describe('FourSeasRegaliaBlocklyWorkspace', () => {
     const pending = new Promise<SaveResult>((resolve) => { settle = resolve })
     const onDraftChange = vi.fn<Saver>(() => pending)
     const { renderWorkspace, view } = setup(EMPTY, onDraftChange)
-    fireEvent.click(screen.getByRole('button', { name: '加入主任务：请求四海龙王赐下披挂' }))
+    fireEvent.click(screen.getByRole('button', { name: '加入主任务：向东海龙王请求披挂' }))
     const localEcho = structuredClone(onDraftChange.mock.calls[0][0])
     view.rerender(renderWorkspace(localEcho))
 
@@ -281,7 +296,7 @@ describe('FourSeasRegaliaBlocklyWorkspace', () => {
   })
 
   it('fails closed when aggregate rollback and accepted recovery fail, then unlocks for a legal external draft', async () => {
-    const { workspace, renderWorkspace, view, onRun } = setup(FULL)
+    const { workspace, renderWorkspace, view, onRun, onDraftChange } = setup(FULL)
     const realNewBlock = workspace.newBlock.bind(workspace)
     workspace.newBlock = ((type: string, id?: string) => {
       if (id === 'incoming-broken' || id === 'armor-gift') throw new Error(`cannot create ${String(id)}`)
@@ -296,13 +311,40 @@ describe('FourSeasRegaliaBlocklyWorkspace', () => {
     expect(screen.getByLabelText('Blockly 积木编辑区')).toHaveAttribute('inert')
     fireEvent.keyDown(screen.getByLabelText('Blockly 积木编辑区'), { key: 'Enter' })
     expect(onRun).not.toHaveBeenCalled()
+    expect(onDraftChange).not.toHaveBeenCalled()
+    expect(screen.queryByRole('list', { name: '四海披挂程序树' })).not.toBeInTheDocument()
+
+    let native!: Blockly.Block
+    act(() => { native = workspace.newBlock('xiyou_request_regalia', 'native-after-failure') })
+    await waitFor(() => expect(screen.getByRole('list', { name: '四海披挂程序树' })).toHaveTextContent('向东海龙王请求披挂'))
+    expect(native.isMovable()).toBe(false)
+    expect(native.isDeletable()).toBe(false)
+    expect(native.isEditable()).toBe(false)
+
+    act(() => native.moveBy(16, 12))
+    await waitFor(() => expect(workspace.getBlockById('native-after-failure')?.getRelativeToSurfaceXY()).toMatchObject({ x: 16, y: 12 }))
+    expect(screen.getByRole('list', { name: '四海披挂程序树' })).toHaveTextContent('向东海龙王请求披挂')
+
+    act(() => workspace.getBlockById('native-after-failure')!.dispose(false))
+    await waitFor(() => expect(screen.queryByRole('list', { name: '四海披挂程序树' })).not.toBeInTheDocument())
+    expect(onDraftChange).not.toHaveBeenCalled()
+    expect(onRun).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeDisabled()
+    expect(screen.getAllByRole('button', { name: /^加入/ }).every((button) => button.hasAttribute('disabled'))).toBe(true)
+    expect(screen.getByLabelText('Blockly 积木编辑区')).toHaveAttribute('inert')
 
     workspace.newBlock = realNewBlock
-    view.rerender(renderWorkspace(oneBlockDraft('external-recovered')))
+    view.rerender(renderWorkspace(oneBlockDraft('external-recovered'), true))
     await waitFor(() => expect(workspace.getAllBlocks(false).map(({ id }) => id)).toEqual(['external-recovered']))
     expect(screen.queryByText('工作区可能已改变，现在不可执行。请重新载入一份合法草稿。')).not.toBeInTheDocument()
+    expect(screen.getByRole('list', { name: '四海披挂程序树' })).toHaveTextContent('向东海龙王请求披挂')
+    expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeDisabled()
+    expect(screen.getByLabelText('Blockly 积木编辑区')).toHaveAttribute('inert')
+
+    view.rerender(renderWorkspace(oneBlockDraft('external-recovered'), false))
     expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeEnabled()
     expect(screen.getByLabelText('Blockly 积木编辑区')).not.toHaveAttribute('inert')
+    expect(onDraftChange).not.toHaveBeenCalled()
   })
 
   it('locks helpers and atomically restores the accepted graph after a native mutation', async () => {
@@ -324,9 +366,9 @@ describe('FourSeasRegaliaBlocklyWorkspace', () => {
     const handled = vi.fn()
     const { workspace, renderWorkspace, view, onRun } = setup(FULL)
     view.rerender(renderWorkspace(FULL, false, 'armor-gift', handled))
-    expect(document.activeElement).toHaveTextContent('收下锁子黄金甲')
+    expect(document.activeElement).toHaveTextContent('收下西海的锁子黄金甲')
     expect(handled).toHaveBeenCalledOnce()
-    fireEvent.keyDown(screen.getByRole('button', { name: '上移收集子任务：收下锁子黄金甲' }), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByRole('button', { name: '上移收集子任务：收下西海的锁子黄金甲' }), { key: 'Enter' })
     expect(workspace.getBlockById('collect')?.getInputTargetBlock('GIFTS')?.id).toBe('armor-gift')
     fireEvent.keyDown(screen.getByLabelText('Blockly 积木编辑区'), { key: 'Enter' })
     expect(onRun).toHaveBeenCalledWith(expect.objectContaining({ ok: true }))
