@@ -48,6 +48,17 @@ const REQUIRED_METADATA = [
 
 const QA_STATUSES = new Set(['planned', 'generated', 'provenance-verified', 'visual-qa-passed', 'rejected']);
 
+const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
+  ['assets/dragon-palace/background.webp', ['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx', 'src/components/FourSeasRegaliaScene.tsx']],
+  ['assets/dragon-palace/wukong.webp', ['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx', 'src/components/FourSeasRegaliaScene.tsx']],
+  ['assets/dragon-palace/dragon-king.webp', ['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx', 'src/components/FourSeasRegaliaScene.tsx']],
+  ['assets/dragon-palace/weapons.webp', ['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx']],
+  ['assets/dragon-palace/sabre.webp', ['src/components/RuyiStaffScene.tsx']],
+  ['assets/dragon-palace/effects.webp', ['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx', 'src/components/FourSeasRegaliaScene.tsx']],
+  ['assets/dragon-palace/regalia.webp', ['src/components/FourSeasRegaliaScene.tsx']],
+  ['assets/dragon-palace/wukong-regalia.webp', ['src/components/FourSeasRegaliaScene.tsx']],
+]);
+
 function splitMarkdownRow(line) {
   return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
 }
@@ -214,6 +225,38 @@ export function verifyAssetManifest({ manifestRows, publicFiles, promptRecords, 
   return { assetCount: manifestRows.length, totalBytes, mode };
 }
 
+export function verifyRequiredDragonPalaceInventory({
+  manifestRows,
+  publicFiles,
+  promptRecords,
+  sourceFiles,
+  mode = 'verify',
+}) {
+  const expectedPaths = [...REQUIRED_DRAGON_PALACE_SLOTS.keys()];
+  const actualPaths = manifestRows.map((row) => row.assetId);
+  if (actualPaths.length !== expectedPaths.length) {
+    throw new Error(`Asset manifest: exactly eight required Dragon Palace assets are required; found ${actualPaths.length}.`);
+  }
+  for (const assetId of expectedPaths) {
+    if (!actualPaths.includes(assetId)) throw new Error(`Asset manifest: required Dragon Palace asset ${assetId} is missing.`);
+  }
+  for (const assetId of actualPaths) {
+    if (!REQUIRED_DRAGON_PALACE_SLOTS.has(assetId)) throw new Error(`Asset manifest: unexpected Dragon Palace asset ${assetId}.`);
+  }
+  if (!(sourceFiles instanceof Map)) throw new Error('Asset manifest: formal scene source files are required for slot verification.');
+  for (const [assetId, slots] of REQUIRED_DRAGON_PALACE_SLOTS) {
+    const publicPath = `/${assetId}`;
+    const exactReference = `assetUrl('${publicPath}')`;
+    for (const slot of slots) {
+      const source = sourceFiles.get(slot);
+      if (typeof source !== 'string' || !source.includes(exactReference)) {
+        throw new Error(`Asset manifest: ${assetId} is missing its exact real scene slot ${slot}.`);
+      }
+    }
+  }
+  return verifyAssetManifest({ manifestRows, publicFiles, promptRecords, mode });
+}
+
 export function readWebpDimensions(buffer) {
   if (buffer.length < 12 || buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WEBP') {
     throw new Error('Asset manifest: invalid WebP container.');
@@ -346,8 +389,13 @@ async function main() {
   const assetRoot = join(root, 'public', 'assets', 'dragon-palace');
   const { manifestRows, promptRecords } = parseAssetManifest(await readFile(manifestPath, 'utf8'));
   const publicFiles = await collectAssetFiles(assetRoot);
+  const sourceFiles = new Map(await Promise.all([
+    'src/components/GameScene.tsx',
+    'src/components/RuyiStaffScene.tsx',
+    'src/components/FourSeasRegaliaScene.tsx',
+  ].map(async (sourcePath) => [sourcePath, await readFile(join(root, sourcePath), 'utf8')])));
   const mode = process.argv.includes('--require-visual-qa') ? 'verify' : 'check';
-  const result = verifyAssetManifest({ manifestRows, publicFiles, promptRecords, mode });
+  const result = verifyRequiredDragonPalaceInventory({ manifestRows, publicFiles, promptRecords, sourceFiles, mode });
   console.log(`Dragon Palace assets: ${result.assetCount} files, ${result.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
 }
 

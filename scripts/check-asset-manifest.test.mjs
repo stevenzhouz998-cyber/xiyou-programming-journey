@@ -9,6 +9,7 @@ import {
   decodeWebpDimensions,
   parseAssetManifest,
   readWebpDimensions,
+  verifyRequiredDragonPalaceInventory,
   verifyAssetManifest,
 } from './check-asset-manifest.mjs';
 
@@ -178,15 +179,17 @@ test('rejects a structurally valid VP8 header that cannot be fully decoded', asy
   }
 });
 
-test('fully decodes all six shipping WebP files including the standalone broad sabre', async () => {
+test('fully decodes all eight shipping WebP files including the Four Seas regalia pair', async () => {
   const assetRoot = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'assets', 'dragon-palace');
   const expectedDimensions = new Map([
     ['background.webp', { width: 1600, height: 900 }],
     ['dragon-king.webp', { width: 640, height: 640 }],
     ['effects.webp', { width: 1024, height: 512 }],
+    ['regalia.webp', { width: 1024, height: 512 }],
     ['sabre.webp', { width: 256, height: 384 }],
     ['weapons.webp', { width: 1024, height: 512 }],
     ['wukong.webp', { width: 640, height: 640 }],
+    ['wukong-regalia.webp', { width: 640, height: 640 }],
   ]);
   for (const [name, expected] of expectedDimensions) {
     const bytes = await readFile(join(assetRoot, name));
@@ -197,15 +200,69 @@ test('fully decodes all six shipping WebP files including the standalone broad s
 test('traces every approved Dragon Palace raster to a real formal scene slot', async () => {
   const manifestPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'assets', 'asset-manifest.md');
   const parsed = parseAssetManifest(await readFile(manifestPath, 'utf8'));
-  assert.equal(parsed.manifestRows.length, 6);
+  assert.equal(parsed.manifestRows.length, 8);
   for (const manifestRow of parsed.manifestRows) {
-    assert.match(manifestRow.screenSlots, /\bw1-m[12]\b/, manifestRow.assetId);
+    assert.match(manifestRow.screenSlots, /\bw1-m[123]\b/, manifestRow.assetId);
     assert.equal(manifestRow.qaStatus, 'visual-qa-passed');
   }
   const sabre = parsed.manifestRows.find((row) => row.assetId === 'assets/dragon-palace/sabre.webp');
   assert.ok(sabre, 'standalone broad sabre manifest row');
   assert.match(sabre.purpose, /broad.*sabre|\u5927\u634d\u5200/i);
   assert.match(sabre.screenSlots, /w1-m2.*wrong-weapon/i);
+
+  const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const publicFiles = await collectAssetFiles(join(sourceRoot, 'public', 'assets', 'dragon-palace'));
+  const sourceFiles = new Map([
+    ['src/components/GameScene.tsx', await readFile(join(sourceRoot, 'src', 'components', 'GameScene.tsx'), 'utf8')],
+    ['src/components/RuyiStaffScene.tsx', await readFile(join(sourceRoot, 'src', 'components', 'RuyiStaffScene.tsx'), 'utf8')],
+    ['src/components/FourSeasRegaliaScene.tsx', await readFile(join(sourceRoot, 'src', 'components', 'FourSeasRegaliaScene.tsx'), 'utf8')],
+  ]);
+  assert.doesNotThrow(() => verifyRequiredDragonPalaceInventory({
+    manifestRows: parsed.manifestRows,
+    publicFiles,
+    promptRecords: parsed.promptRecords,
+    sourceFiles,
+  }));
+
+  for (const [assetId, prompt, dimensions, purpose, slots] of [
+    ['assets/dragon-palace/regalia.webp', '[Prompt DP-007](#prompt-dp-007-regalia)', '1024x512', /crown.*armor.*boots/i, /w1-m3.*collected/i],
+    ['assets/dragon-palace/wukong-regalia.webp', '[Prompt DP-008](#prompt-dp-008-wukong-regalia)', '640x640', /Wukong.*three.*regalia/i, /w1-m3.*equipped/i],
+  ]) {
+    const manifestRow = parsed.manifestRows.find((row) => row.assetId === assetId);
+    const publicFile = publicFiles.find((file) => file.path === assetId);
+    assert.ok(manifestRow, `${assetId} exact manifest row`);
+    assert.ok(publicFile, `${assetId} public file`);
+    assert.equal(manifestRow.toolOrSource, 'OpenAI built-in image_gen');
+    assert.equal(manifestRow.licenseProvenance, 'generated in-project with built-in image_gen; provenance verified');
+    assert.equal(manifestRow.promptOrSourceReference, prompt);
+    assert.equal(manifestRow.dimensions, dimensions);
+    assert.match(manifestRow.purpose, purpose);
+    assert.match(manifestRow.screenSlots, slots);
+    assert.equal(manifestRow.sha256, publicFile.sha256);
+    assert.match(manifestRow.sha256, /^[a-f0-9]{64}$/);
+  }
+});
+
+test('rejects a Dragon Palace inventory that drops an existing row or lacks the exact Four Seas scene slot', () => {
+  const sourceFiles = new Map([
+    ['src/components/GameScene.tsx', "assetUrl('/assets/dragon-palace/background.webp') assetUrl('/assets/dragon-palace/wukong.webp') assetUrl('/assets/dragon-palace/dragon-king.webp') assetUrl('/assets/dragon-palace/weapons.webp') assetUrl('/assets/dragon-palace/effects.webp')"],
+    ['src/components/RuyiStaffScene.tsx', "assetUrl('/assets/dragon-palace/sabre.webp')"],
+    ['src/components/FourSeasRegaliaScene.tsx', "assetUrl('/assets/dragon-palace/regalia.webp')"],
+  ]);
+  const data = numberedScenario(8);
+  data.manifestRows = [
+    row({ assetId: 'assets/dragon-palace/background.webp' }),
+    ...['wukong', 'dragon-king', 'weapons', 'sabre', 'effects', 'regalia'].map((name, index) => row({
+      assetId: `assets/dragon-palace/${name}.webp`,
+      promptOrSourceReference: `[Prompt DP-${String(index + 2).padStart(3, '0')}](#prompt-dp-${String(index + 2).padStart(3, '0')}-${name})`,
+    })),
+  ];
+  assert.throws(() => verifyRequiredDragonPalaceInventory({
+    manifestRows: data.manifestRows,
+    publicFiles: [],
+    promptRecords: [],
+    sourceFiles,
+  }), /wukong-regalia|eight|required/i);
 });
 
 test('rejects truncated WebP chunks, RIFF size mismatches, and trailing junk', () => {
