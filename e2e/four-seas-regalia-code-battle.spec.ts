@@ -66,14 +66,21 @@ async function buildMainAndEquip(page: Page) {
   await add(page, '加入穿戴子任务：踏上藕丝步云履')
 }
 
-async function visibleTraceIds(page: Page) {
-  const blocks = page.getByRole('region', { name: '本次执行来源' }).locator('code')
-  const ids: string[] = []
-  for (let index = 0; index < await blocks.count(); index += 1) {
-    const id = await blocks.nth(index).textContent()
-    if (id !== null) ids.push(id)
+async function visibleTracePairs(page: Page) {
+  const items = page.getByRole('region', { name: '本次执行来源' }).locator('li')
+  const pairs: Array<{ sourceBlockId: string; parentBlockId: string | null }> = []
+  for (let index = 0; index < await items.count(); index += 1) {
+    const item = items.nth(index)
+    const sourceBlockId = await item.locator('code').textContent()
+    const parentText = await item.locator('span').textContent()
+    if (sourceBlockId !== null && parentText !== null) {
+      pairs.push({
+        sourceBlockId,
+        parentBlockId: parentText === 'parent=top' ? null : parentText.replace(/^parent=/, ''),
+      })
+    }
   }
-  return ids.sort()
+  return pairs
 }
 
 test('@regalia-full visible wrong nested order is corrected, persisted, and unlocks w1-m4', async ({ page }) => {
@@ -102,16 +109,41 @@ test('@regalia-full visible wrong nested order is corrected, persisted, and unlo
   await add(page, '上移收集子任务：收下北海的藕丝步云履')
   await add(page, '执行披挂指令')
   await expect(page.getByRole('region', { name: '本次执行来源' })).toContainText('parent=')
-  const idsBefore = await visibleTraceIds(page)
-  expect(idsBefore).toHaveLength(10)
+  const traceBefore = await visibleTracePairs(page)
+  expect(traceBefore).toHaveLength(10)
+  expect(new Set(traceBefore.map(({ sourceBlockId }) => sourceBlockId)).size).toBe(10)
+  expect(traceBefore.map(({ parentBlockId }) => parentBlockId)).toEqual([
+    null,
+    null,
+    traceBefore[1].sourceBlockId,
+    traceBefore[1].sourceBlockId,
+    traceBefore[1].sourceBlockId,
+    null,
+    traceBefore[5].sourceBlockId,
+    traceBefore[5].sourceBlockId,
+    traceBefore[5].sourceBlockId,
+    null,
+  ])
   await expect(page.locator('.four-seas-regalia-scene-frame .game-scene')).toHaveAttribute('data-scene-state', 'regalia-verified', { timeout: 15_000 })
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 15_000 })
 
   await page.reload()
   await expect(page.getByRole('heading', { name: '四海披挂', level: 1 })).toBeVisible()
   await expect(page.getByRole('button', { name: '重播最近一次' })).toBeEnabled()
-  expect(await visibleTraceIds(page)).toEqual(idsBefore)
+  expect(await visibleTracePairs(page)).toEqual(traceBefore)
   await expect(page.getByRole('region', { name: '本次执行来源' })).toContainText('parent=')
+  await expect(page.getByRole('dialog', { name: '闯关成功' })).toHaveCount(0)
+
+  const scene = page.locator('.four-seas-regalia-scene-frame .game-scene')
+  const observeHint = page.getByRole('button', { name: '观察提示' })
+  await expect(scene).toHaveAttribute('data-scene-state', 'regalia-verified', { timeout: 15_000 })
+  await expect(observeHint).toBeEnabled({ timeout: 15_000 })
+  await page.getByRole('button', { name: '重播最近一次' }).click()
+  await expect(observeHint).toBeDisabled()
+  await expect(scene).toHaveAttribute('data-scene-state', 'regalia-verified', { timeout: 15_000 })
+  await expect(observeHint).toBeEnabled({ timeout: 15_000 })
+  await expect(page.getByRole('dialog', { name: '闯关成功' })).toHaveCount(0)
+  expect(await visibleTracePairs(page)).toEqual(traceBefore)
 
   await page.getByRole('button', { name: '成长地图' }).first().click()
   await expect(page.getByRole('button', { name: '幽冥勾名' })).toBeEnabled()

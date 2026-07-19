@@ -7,6 +7,7 @@ import { useProgress } from '../context/ProgressContext'
 import type { FourSeasRegaliaMissionSession } from '../progress/types'
 import { createMissionSession, recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/session'
 import type { CoordinatedSaveResult } from '../progress/storageCoordinator'
+import { downloadTextFile } from '../utils/download'
 import { FourSeasRegaliaFeedback } from './FourSeasRegaliaFeedback'
 import { ToolErrorBoundary } from './ToolErrorBoundary'
 
@@ -52,6 +53,14 @@ interface Playback {
 }
 
 interface DurableRunIdentity { requestId: number; identity: string }
+
+interface SessionOperation {
+  kind: 'compile' | 'run'
+  requestId: number
+  status: 'pending' | 'unsaved' | 'conflict'
+  expectedCompileFailures?: number
+  expectedSavedAt?: string
+}
 
 function completionEvidence(tiers: readonly string[]): Evidence {
   const count = new Set(tiers).size
@@ -113,7 +122,7 @@ export function FourSeasRegaliaExperience({
 }: FourSeasRegaliaExperienceProps) {
   const FourSeasRegaliaScene = useMemo(() => lazy(loaders.scene), [loaders.scene])
   const FourSeasRegaliaBlocklyWorkspace = useMemo(() => lazy(loaders.workspace), [loaders.workspace])
-  const { progress, saveStatus, retrySave, updateMissionSession } = useProgress()
+  const { progress, retrySave, updateMissionSession, createBackup, reloadExternalProgress } = useProgress()
   const emptyRef = useRef(createMissionSession(MISSION_ID, '1970-01-01T00:00:00.000Z'))
   const session = progress.sessions[MISSION_ID] ?? emptyRef.current
   const [playback, setPlayback] = useState(() => restored(session))
@@ -122,7 +131,8 @@ export function FourSeasRegaliaExperience({
   const mountedRef = useRef(true)
   const completionRequestedRef = useRef<number | null>(null)
   const playbackFinishedRef = useRef<number | null>(null)
-  const sessionStatusRef = useRef<{ requestId: number; status: 'pending' | 'saved' | 'recovery' } | null>(null)
+  const sessionOperationRef = useRef<SessionOperation | null>(null)
+  const [sessionOperation, setSessionOperationState] = useState<SessionOperation | null>(null)
   const durableRunRef = useRef<DurableRunIdentity | null>(null)
   const checkingSaveRef = useRef(new Set<number>())
   const completionHandedOffRef = useRef<number | null>(null)
@@ -155,6 +165,11 @@ export function FourSeasRegaliaExperience({
     interactionCallbackRef.current(active, reason)
   }
 
+  const setSessionOperation = (operation: SessionOperation | null) => {
+    sessionOperationRef.current = operation
+    setSessionOperationState(operation)
+  }
+
   const replace = (next: Playback, reason: FourSeasHintLockReason = next.events.length > 0 ? 'playback' : 'idle') => {
     if (playbackRef.current.requestId !== next.requestId) {
       durableRunRef.current = null
@@ -174,6 +189,7 @@ export function FourSeasRegaliaExperience({
       durableRunRef.current = null
       playbackFinishedRef.current = null
       completionRequestedRef.current = null
+      sessionOperationRef.current = null
       sessionPersistenceRef.current(false)
       interactionCallbackRef.current(false, 'idle')
     }
@@ -181,7 +197,7 @@ export function FourSeasRegaliaExperience({
 
   const wasCompletionLockedRef = useRef(locked)
   useEffect(() => {
-    if (wasCompletionLockedRef.current && !locked && sessionStatusRef.current?.status === 'saved') setInteractionLocked(false)
+    if (wasCompletionLockedRef.current && !locked && sessionOperationRef.current === null) setInteractionLocked(false)
     wasCompletionLockedRef.current = locked
   }, [locked])
 
@@ -224,22 +240,51 @@ export function FourSeasRegaliaExperience({
     setCompletionHandedOffRequest(requestId)
     playbackRef.current = { ...current, eligible: false }
     durableRunRef.current = null
+    setSessionOperation(null)
     sessionPersistenceRef.current(false)
     void completeRef.current(current.evidence)
+  }
+
+  const recoverSessionOperation = (operation: SessionOperation, status: 'unsaved' | 'conflict') => {
+    if (!mountedRef.current || sessionOperationRef.current?.requestId !== operation.requestId
+      || sessionOperationRef.current.kind !== operation.kind) return
+    setSessionOperation({ ...operation, status })
+    setInteractionLocked(true, 'session-recovery')
+    if (status === 'conflict') sessionPersistenceRef.current(false)
+  }
+
+  const recordCompileSessionSave = (requestId: number, saved: CoordinatedSaveResult) => {
+    const operation = sessionOperationRef.current
+    if (!mountedRef.current || operation?.kind !== 'compile' || operation.requestId !== requestId) return
+    if (saved.status !== 'saved') {
+      recoverSessionOperation(operation, saved.status)
+      return
+    }
+    const savedSession = saved.progress.sessions[MISSION_ID]
+    if (savedSession === undefined || savedSession.compileFailures !== operation.expectedCompileFailures || savedSession.savedAt !== operation.expectedSavedAt) {
+      recoverSessionOperation(operation, 'unsaved')
+      return
+    }
+    setSessionOperation(null)
+    sessionPersistenceRef.current(false)
+    if (!locked) setInteractionLocked(false)
   }
 
   const recordSessionSave = (requestId: number, saved: CoordinatedSaveResult) => {
     const current = playbackRef.current
     if (!mountedRef.current || current.requestId !== requestId || current.origin !== 'run' || completionRequestedRef.current === requestId) return
     if (saved.status !== 'saved') {
-      sessionStatusRef.current = { requestId, status: 'recovery' }
-      setInteractionLocked(true, 'session-recovery')
-      if (saved.status === 'conflict') sessionPersistenceRef.current(false)
+      const operation = sessionOperationRef.current
+      if (operation?.kind === 'run' && operation.requestId === requestId) recoverSessionOperation(operation, saved.status)
       return
     }
     const savedSession = saved.progress.sessions[MISSION_ID]
-    if (savedSession === undefined || current.sessionIdentity === null || sessionIdentity(savedSession) !== current.sessionIdentity) return
-    sessionStatusRef.current = { requestId, status: 'saved' }
+    if (savedSession === undefined || current.sessionIdentity === null || sessionIdentity(savedSession) !== current.sessionIdentity) {
+      const operation = sessionOperationRef.current
+      if (operation?.kind === 'run' && operation.requestId === requestId) recoverSessionOperation(operation, 'unsaved')
+      return
+    }
+    setSessionOperation(null)
     syncedSessionIdentityRef.current = current.sessionIdentity
     if (current.result?.completed !== true || !current.eligible) {
       durableRunRef.current = null
@@ -266,7 +311,19 @@ export function FourSeasRegaliaExperience({
     invalidateCompletion()
     if (!compiled.ok) {
       setDiagnostic(compiled.diagnostics[0])
-      void updateMissionSession(MISSION_ID, (current) => recordCompileFailure(current, 'program-structure', new Date().toISOString()))
+      const now = new Date().toISOString()
+      const operation: SessionOperation = {
+        kind: 'compile',
+        requestId: ++sequenceRef.current,
+        status: 'pending',
+        expectedCompileFailures: session.compileFailures + 1,
+        expectedSavedAt: now,
+      }
+      sessionPersistenceRef.current(true)
+      setSessionOperation(operation)
+      setInteractionLocked(true, 'session-pending')
+      void updateMissionSession(MISSION_ID, (current) => recordCompileFailure(current, 'program-structure', now))
+        .then((saved) => recordCompileSessionSave(operation.requestId, saved))
       return
     }
     const result = runFourSeasRegalia(compiled.trace)
@@ -288,7 +345,7 @@ export function FourSeasRegaliaExperience({
       sessionSave,
       sessionIdentity: identity,
     }
-    sessionStatusRef.current = { requestId: next.requestId, status: 'pending' }
+    setSessionOperation({ kind: 'run', requestId: next.requestId, status: 'pending' })
     replace(next, 'session-pending')
     setDiagnostic(resultSnapshot.diagnostic)
     checkSessionSave(next.requestId, sessionSave)
@@ -299,11 +356,13 @@ export function FourSeasRegaliaExperience({
     if (!mountedRef.current || current.requestId !== requestId) return
     playbackFinishedRef.current = requestId
     if (current.origin !== 'run') { setInteractionLocked(false); return }
-    const status = sessionStatusRef.current?.requestId === requestId ? sessionStatusRef.current.status : undefined
-    if (status === 'pending') setInteractionLocked(true, 'session-pending')
-    if (status === 'recovery') setInteractionLocked(true, 'session-recovery')
+    const operation = sessionOperationRef.current?.kind === 'run' && sessionOperationRef.current.requestId === requestId
+      ? sessionOperationRef.current
+      : null
+    if (operation?.status === 'pending') setInteractionLocked(true, 'session-pending')
+    if (operation?.status === 'unsaved' || operation?.status === 'conflict') setInteractionLocked(true, 'session-recovery')
     if (current.result?.completed !== true || !current.eligible || current.evidence === null || missionCompletedRef.current) {
-      if (status === 'saved' || status === undefined) setInteractionLocked(false)
+      if (operation === null) setInteractionLocked(false)
       return
     }
     maybeReleaseCompletion(requestId)
@@ -329,16 +388,37 @@ export function FourSeasRegaliaExperience({
   }
 
   const retrySessionSave = async () => {
-    const current = playbackRef.current
-    if (current.origin !== 'run' || current.sessionSave === null || completionHandedOffRef.current === current.requestId) return
-    const requestId = current.requestId
-    sessionStatusRef.current = { requestId, status: 'pending' }
+    const operation = sessionOperationRef.current
+    if (operation === null || operation.status !== 'unsaved') return
+    if (operation.kind === 'run') {
+      const current = playbackRef.current
+      if (current.origin !== 'run' || current.requestId !== operation.requestId || current.sessionSave === null
+        || completionHandedOffRef.current === current.requestId) return
+    }
+    setSessionOperation({ ...operation, status: 'pending' })
     setInteractionLocked(true, 'session-pending')
-    recordSessionSave(requestId, await retrySave())
+    const saved = await retrySave()
+    if (operation.kind === 'compile') recordCompileSessionSave(operation.requestId, saved)
+    else recordSessionSave(operation.requestId, saved)
+  }
+
+  const downloadSessionConflictBackup = () => {
+    if (sessionOperationRef.current?.status !== 'conflict') return
+    const backup = createBackup()
+    downloadTextFile(backup.filename, backup.contents, backup.mimeType)
+  }
+
+  const loadExternalSessionProgress = () => {
+    if (sessionOperationRef.current?.status !== 'conflict') return
+    const loaded = reloadExternalProgress()
+    if (loaded === null) return
+    setSessionOperation(null)
+    sessionPersistenceRef.current(false)
+    if (!locked) setInteractionLocked(false)
   }
 
   const focusWorkspace = () => regionRef.current?.querySelector<HTMLElement>('[aria-label="Blockly 积木编辑区"]')?.focus()
-  const sessionRetryActive = playback.origin === 'run' && playback.sessionSave !== null && completionHandedOffRequest !== playback.requestId
+  const sessionRecoveryActive = sessionOperation !== null && completionHandedOffRequest !== sessionOperation.requestId
 
   return <div className="four-seas-regalia-experience" onKeyDown={activateButtonOnEnter}>
     <div className="four-seas-regalia-scene-region">
@@ -352,14 +432,15 @@ export function FourSeasRegaliaExperience({
     <div className="four-seas-regalia-program-region" ref={regionRef}>
       <ToolErrorBoundary label="四海披挂编程工作台" reloadPage={reloadPage}>
         <Suspense fallback={<p role="status">四海披挂编程工作台加载中，请稍候……</p>}>
-          <FourSeasRegaliaBlocklyWorkspace draft={session.workspace} onDraftChange={saveDraft} onRun={run} focusBlockId={focusBlockId} onFocusHandled={() => setFocusBlockId(null)} saveRecoverySuperseded={sessionRetryActive} locked={locked || interactionLocked} />
+          <FourSeasRegaliaBlocklyWorkspace draft={session.workspace} onDraftChange={saveDraft} onRun={run} focusBlockId={focusBlockId} onFocusHandled={() => setFocusBlockId(null)} saveRecoverySuperseded={sessionRecoveryActive} locked={locked || interactionLocked} />
         </Suspense>
       </ToolErrorBoundary>
     </div>
     <div className="four-seas-regalia-feedback-region">
       <FourSeasRegaliaFeedback diagnostic={diagnostic} occurrenceId={occurrenceId} onFocusBlock={setFocusBlockId} onFocusWorkspace={focusWorkspace} />
       {playback.trace.length > 0 ? <section className="execution-provenance" aria-label="本次执行来源"><details open><summary>本次指令的真实积木来源</summary><ol>{playback.trace.map((instruction) => <li key={instruction.instructionId}><code>{instruction.sourceBlockId}</code> <span>parent={instruction.parentBlockId ?? 'top'}</span></li>)}</ol></details></section> : null}
-      {sessionRetryActive && saveStatus === 'unsaved' ? <div className="unsaved-session" role="status"><p>本关尚未保存，请重试。</p><button type="button" onClick={retrySessionSave}>重试保存本关</button></div> : null}
+      {sessionOperation?.status === 'unsaved' ? <div className="unsaved-session" role="status"><p>{sessionOperation.kind === 'compile' ? '编译失败记录尚未保存，请重试。' : '本关尚未保存，请重试。'}</p><button type="button" onClick={retrySessionSave}>{sessionOperation.kind === 'compile' ? '重试保存编译记录' : '重试保存本关'}</button></div> : null}
+      {sessionOperation?.status === 'conflict' ? <div className="unsaved-session" role="alert"><p>{sessionOperation.kind === 'compile' ? '编译失败记录与其他标签页冲突。' : '本关运行记录与其他标签页冲突。'}</p><button type="button" onClick={downloadSessionConflictBackup}>下载本页备份</button><button type="button" onClick={loadExternalSessionProgress}>载入其他标签页版本</button></div> : null}
     </div>
   </div>
 }

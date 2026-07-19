@@ -59,6 +59,28 @@ async function acknowledgePrivacySuccessfully() {
   await waitFor(() => expect(screen.queryByRole('dialog', { name: '你的学习数据保存在这台设备' })).not.toBeInTheDocument());
 }
 
+function unlockedW1M3Progress() {
+  let progress = withParentAccess(createInitialProgress());
+  progress.privacy.localDataNoticeSeen = true;
+  progress = completeMission(progress, 'w1-m1', { stars: 3, hintsUsed: 0 });
+  return completeMission(progress, 'w1-m2', { stars: 3, hintsUsed: 0 });
+}
+
+async function buildCorrectFourSeasProgram() {
+  for (const label of [
+    '加入主任务：向东海龙王请求披挂',
+    '加入主任务：收齐三海宝物',
+    '加入主任务：穿戴整副披挂',
+    '加入主任务：检查披挂是否齐全',
+    '加入穿戴子任务：戴上凤翅紫金冠',
+    '加入穿戴子任务：穿上锁子黄金甲',
+    '加入穿戴子任务：踏上藕丝步云履',
+    '加入收集子任务：收下北海的藕丝步云履',
+    '加入收集子任务：收下西海的锁子黄金甲',
+    '加入收集子任务：收下南海的凤翅紫金冠',
+  ]) fireEvent.click(await screen.findByRole('button', { name: label }, { timeout: 5000 }));
+}
+
 describe('西游编程记', () => {
   beforeEach(() => {
     Object.defineProperty(globalThis, 'localStorage', { value: originalStorage, configurable: true });
@@ -224,6 +246,76 @@ describe('西游编程记', () => {
     const secondView = render(<App />);
     expect(await screen.findByRole('heading', { name: '幽冥勾名', level: 1 })).toBeVisible();
     await waitFor(() => expect(secondView.container.querySelector('.legacy-mission-tools')).toHaveAttribute('data-mission-id', 'w1-m4'));
+  });
+
+  it('keeps w1-m3 final completion unsaved under the completion owner and reveals success only after its retry', async () => {
+    const progress = unlockedW1M3Progress();
+    const storage = installDynamicStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(progress) }, false);
+    window.location.hash = '#/mission/w1-m3';
+    render(<App />);
+
+    await buildCorrectFourSeasProgram();
+    fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
+      sessions: { 'w1-m3': { lastRun: { completed: true } } },
+    }));
+    storage.failWrites = true;
+    fireEvent.click(screen.getByRole('button', { name: '完成四海披挂场景播放' }));
+
+    expect(await screen.findByRole('button', { name: '重试保存通关' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: '重试保存本关' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重试保存编译记录' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '观察提示' })).toBeDisabled();
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).not.toHaveProperty('missions.w1-m3');
+
+    storage.failWrites = false;
+    fireEvent.click(screen.getByRole('button', { name: '重试保存通关' }));
+    expect(await screen.findByRole('heading', { name: '闯关成功' })).toBeVisible();
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
+      missions: { 'w1-m3': { status: 'completed' } },
+    }));
+  });
+
+  it('keeps a w1-m3 final CAS conflict under one completion recovery group and safely loads incomplete CURRENT', async () => {
+    const progress = unlockedW1M3Progress();
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    localStorage.setItem(REVISION_PROGRESS_KEY, '0');
+    window.location.hash = '#/mission/w1-m3';
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:w1-m3-completion-conflict');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const downloadClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    render(<App />);
+
+    await buildCorrectFourSeasProgram();
+    fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
+      sessions: { 'w1-m3': { lastRun: { completed: true } } },
+    }));
+    localStorage.setItem(REVISION_PROGRESS_KEY, String(Number(localStorage.getItem(REVISION_PROGRESS_KEY)) + 1));
+    window.dispatchEvent(new StorageEvent('storage', { key: REVISION_PROGRESS_KEY }));
+    fireEvent.click(screen.getByRole('button', { name: '完成四海披挂场景播放' }));
+
+    expect(await screen.findByText(/通关待保存/)).toBeVisible();
+    expect(screen.getAllByRole('button', { name: '下载本页备份' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: '载入其他标签页版本' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: '重试保存本关' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重试保存编译记录' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重试保存通关' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '观察提示' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: '下载本页备份' }));
+    expect(createObjectURL).toHaveBeenCalledOnce();
+    expect(downloadClick).toHaveBeenCalledOnce();
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).not.toHaveProperty('missions.w1-m3');
+    fireEvent.click(screen.getByRole('button', { name: '载入其他标签页版本' }));
+    await waitFor(() => expect(screen.queryByText(/通关待保存/)).not.toBeInTheDocument());
+    expect(screen.queryByRole('heading', { name: '闯关成功' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '观察提示' })).toBeEnabled();
   });
 
   it('isolates the outer Four Seas experience chunk and keeps story and objective with explicit retry', async () => {

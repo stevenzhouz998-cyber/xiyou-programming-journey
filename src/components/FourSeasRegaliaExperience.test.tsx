@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FourSeasBattleEvent } from '../battle/types'
+import type { FourSeasBattleEvent, FourSeasInstruction } from '../battle/types'
+import type { FourSeasCompileResult } from '../blockly/fourSeasRegaliaCompiler'
 import { ProgressProvider, useProgress } from '../context/ProgressContext'
 import { completeMission, createInitialProgress, serializeProgress } from '../progress/progress'
 import { CURRENT_PROGRESS_KEY } from '../progress/storage'
@@ -91,6 +92,29 @@ function HintButtons() {
   return <><button type="button" onClick={() => recordMissionHint('w1-m3', 'observe')}>观察提示</button><button type="button" onClick={() => recordMissionHint('w1-m3', 'think')}>思路提示</button></>
 }
 
+function LearnerName() {
+  const { progress } = useProgress()
+  return <output data-testid="learner-name">{progress.learnerName}</output>
+}
+
+const motionTrace: FourSeasInstruction[] = [
+  { instructionId: 'instruction:request', sourceBlockId: 'request', parentBlockId: null, opcode: 'request_regalia' },
+  { instructionId: 'instruction:collect', sourceBlockId: 'collect', parentBlockId: null, opcode: 'collect_gifts' },
+  { instructionId: 'instruction:boots-gift', sourceBlockId: 'boots-gift', parentBlockId: 'collect', opcode: 'receive_cloud_boots' },
+  { instructionId: 'instruction:armor-gift', sourceBlockId: 'armor-gift', parentBlockId: 'collect', opcode: 'receive_golden_armor' },
+  { instructionId: 'instruction:crown-gift', sourceBlockId: 'crown-gift', parentBlockId: 'collect', opcode: 'receive_purple_crown' },
+  { instructionId: 'instruction:equip', sourceBlockId: 'equip', parentBlockId: null, opcode: 'equip_regalia' },
+  { instructionId: 'instruction:crown-wear', sourceBlockId: 'crown-wear', parentBlockId: 'equip', opcode: 'wear_crown' },
+  { instructionId: 'instruction:armor-wear', sourceBlockId: 'armor-wear', parentBlockId: 'equip', opcode: 'wear_armor' },
+  { instructionId: 'instruction:boots-wear', sourceBlockId: 'boots-wear', parentBlockId: 'equip', opcode: 'wear_boots' },
+  { instructionId: 'instruction:verify', sourceBlockId: 'verify', parentBlockId: null, opcode: 'verify_regalia' },
+]
+const motionCompile: FourSeasCompileResult = { ok: true, trace: motionTrace }
+
+function MotionWorkspace({ onRun, locked }: { onRun: (compiled: FourSeasCompileResult) => void; locked: boolean }) {
+  return <button type="button" disabled={locked} onClick={() => onRun(motionCompile)}>执行受控披挂指令</button>
+}
+
 describe('FourSeasRegaliaExperience', () => {
   beforeEach(() => {
     callbacks.clear()
@@ -107,6 +131,73 @@ describe('FourSeasRegaliaExperience', () => {
     await waitFor(() => expect(stored().sessions['w1-m3']).toMatchObject({ compileFailures: 1, totalRuns: 0 }))
     expect(screen.getByTestId('regalia-events')).toHaveTextContent('[]')
     expect(onComplete).not.toHaveBeenCalled()
+  })
+
+  it('locks compile-failure persistence until the exact session write is durable, without playback', async () => {
+    const pending = deferred<CoordinatedSaveResult>()
+    const save = vi.fn<SaveCoordinator>(() => pending.promise)
+    const persistence = vi.fn()
+    const interaction = vi.fn()
+    render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('../progress/storageCoordinator'))}>
+      <FourSeasRegaliaExperience reducedMotion muted onComplete={() => undefined} onSessionPersistenceActiveChange={persistence} onInteractionLockChange={interaction} />
+    </ProgressProvider>)
+    fireEvent.click(await screen.findByRole('button', { name: '执行披挂指令' }, { timeout: 5000 }))
+    await waitFor(() => expect(save).toHaveBeenCalledOnce())
+    expect(persistence).toHaveBeenCalledWith(true)
+    expect(interaction).toHaveBeenCalledWith(true, 'session-pending')
+    expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeDisabled()
+    expect(screen.getByTestId('regalia-events')).toHaveTextContent('[]')
+    const exact = save.mock.calls[0][0]
+    await act(async () => pending.resolve({ status: 'saved', revision: 1, progress: exact }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeEnabled())
+    expect(persistence).toHaveBeenLastCalledWith(false)
+    expect(interaction).toHaveBeenLastCalledWith(false, 'idle')
+  })
+
+  it('keeps a failed compile-failure write locked and lets only its session owner retry to saved', async () => {
+    const save = vi.fn<SaveCoordinator>()
+      .mockImplementationOnce(async (progress) => ({ status: 'unsaved', progress, error: 'compile evidence disk failure' }))
+      .mockImplementationOnce(async (progress) => ({ status: 'saved', revision: 2, progress }))
+    const interaction = vi.fn()
+    render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('../progress/storageCoordinator'))}>
+      <FourSeasRegaliaExperience reducedMotion muted onComplete={() => undefined} onInteractionLockChange={interaction} />
+    </ProgressProvider>)
+    fireEvent.click(await screen.findByRole('button', { name: '执行披挂指令' }, { timeout: 5000 }))
+    expect(await screen.findByText('编译失败记录尚未保存，请重试。')).toBeVisible()
+    expect(interaction).toHaveBeenCalledWith(true, 'session-recovery')
+    expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: '重试保存通关' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '重试保存编译记录' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: '重试保存编译记录' })).not.toBeInTheDocument())
+    expect(save).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeEnabled()
+  })
+
+  it('offers compile-session conflict backup/external recovery without overwriting CURRENT', async () => {
+    const external = unlockedProgress()
+    external.learnerName = '外部标签页版本'
+    const save = vi.fn<SaveCoordinator>(async (progress, expectedRevision) => {
+      localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(external))
+      return { status: 'conflict', progress, expectedRevision, actualRevision: expectedRevision + 1, error: 'compile conflict' }
+    })
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:compile-conflict')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const downloadClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('../progress/storageCoordinator'))}>
+      <FourSeasRegaliaExperience reducedMotion muted onComplete={() => undefined} /><LearnerName />
+    </ProgressProvider>)
+    fireEvent.click(await screen.findByRole('button', { name: '执行披挂指令' }, { timeout: 5000 }))
+    expect(await screen.findByText('编译失败记录与其他标签页冲突。')).toBeVisible()
+    expect(screen.getAllByRole('button', { name: '下载本页备份' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: '载入其他标签页版本' })).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: '下载本页备份' }))
+    expect(createObjectURL).toHaveBeenCalledOnce()
+    expect(downloadClick).toHaveBeenCalledOnce()
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).learnerName).toBe('外部标签页版本')
+    fireEvent.click(screen.getByRole('button', { name: '载入其他标签页版本' }))
+    await waitFor(() => expect(screen.getByTestId('learner-name')).toHaveTextContent('外部标签页版本'))
+    expect(screen.queryByText('编译失败记录与其他标签页冲突。')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeEnabled()
   })
 
   it('persists and visibly plays the exact wrong nested trace without completing', async () => {
@@ -176,6 +267,8 @@ describe('FourSeasRegaliaExperience', () => {
     expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeDisabled()
     expect(screen.getByRole('list', { name: '四海披挂程序树' }).querySelectorAll(':scope > li')).toHaveLength(10)
     expect(onComplete).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: '重试保存通关' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重试保存编译记录' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '重试保存本关' }))
     await waitFor(() => expect(onComplete).toHaveBeenCalledOnce())
   })
@@ -187,14 +280,33 @@ describe('FourSeasRegaliaExperience', () => {
       localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(external))
       return { status: 'conflict', progress, expectedRevision, actualRevision: expectedRevision + 1, error: 'stale tab' }
     })
-    const { onComplete } = renderExperience({ save })
+    const onComplete = vi.fn<Complete>()
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:run-conflict')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const downloadClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('../progress/storageCoordinator'))}>
+      <FourSeasRegaliaExperience reducedMotion muted onComplete={onComplete} /><LearnerName />
+    </ProgressProvider>)
     await buildCorrect()
     fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }))
     act(() => callbacks.get(token())?.())
     await waitFor(() => expect(save).toHaveBeenCalledOnce())
     expect(onComplete).not.toHaveBeenCalled()
     expect(stored().learnerName).toBe('其他标签页版本')
+    expect(screen.getByText('本关运行记录与其他标签页冲突。')).toBeVisible()
     expect(screen.queryByRole('button', { name: '重试保存本关' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重试保存通关' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: '下载本页备份' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: '载入其他标签页版本' })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: '下载本页备份' }))
+    expect(createObjectURL).toHaveBeenCalledOnce()
+    expect(downloadClick).toHaveBeenCalledOnce()
+    expect(stored().learnerName).toBe('其他标签页版本')
+    fireEvent.click(screen.getByRole('button', { name: '载入其他标签页版本' }))
+    await waitFor(() => expect(screen.getByTestId('learner-name')).toHaveTextContent('其他标签页版本'))
+    expect(screen.queryByText('本关运行记录与其他标签页冲突。')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeEnabled()
   })
 
   it('does not let delayed save or playback callbacks complete after unmount', async () => {
@@ -233,6 +345,29 @@ describe('FourSeasRegaliaExperience', () => {
     fireEvent.click(screen.getByRole('button', { name: '重播最近一次' }))
     act(() => callbacks.get(token())?.())
     expect(restoredComplete).not.toHaveBeenCalled()
+  })
+
+  it('passes an identical exact event sequence to standard and reduced scenes and completes both once', async () => {
+    const captured: Record<'standard' | 'reduced', FourSeasBattleEvent[]> = { standard: [], reduced: [] }
+    const completes = { standard: vi.fn<Complete>(), reduced: vi.fn<Complete>() }
+    for (const [mode, reducedMotion] of [['standard', false], ['reduced', true]] as const) {
+      localStorage.clear()
+      localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(unlockedProgress()))
+      function MotionScene({ events, onPlaybackComplete }: { events: FourSeasBattleEvent[]; onPlaybackComplete: () => void }) {
+        captured[mode] = structuredClone(events)
+        return <button type="button" onClick={onPlaybackComplete}>{mode}播放完成</button>
+      }
+      const view = render(<ProgressProvider><FourSeasRegaliaExperience reducedMotion={reducedMotion} muted onComplete={completes[mode]} loaders={{
+        scene: () => Promise.resolve({ default: MotionScene }),
+        workspace: () => Promise.resolve({ default: MotionWorkspace }),
+      }} /></ProgressProvider>)
+      fireEvent.click(await screen.findByRole('button', { name: '执行受控披挂指令' }))
+      fireEvent.click(screen.getByRole('button', { name: `${mode}播放完成` }))
+      await waitFor(() => expect(completes[mode]).toHaveBeenCalledOnce())
+      view.unmount()
+    }
+    expect(captured.standard).toEqual(captured.reduced)
+    expect(captured.standard.map((event) => event.messageCode)).toEqual(captured.reduced.map((event) => event.messageCode))
   })
 
   it('isolates a rejected scene chunk while story and the workspace remain usable with explicit retry', async () => {
