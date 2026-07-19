@@ -1,5 +1,6 @@
 import * as Blockly from 'blockly'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { runFourSeasRegalia } from '../battle/fourSeasRegalia'
 import { registerDragonPalaceBlocks } from './dragonPalaceBlocks'
 import { registerFourSeasRegaliaBlocks } from './fourSeasRegaliaBlocks'
 import { compileFourSeasRegaliaWorkspace } from './fourSeasRegaliaCompiler'
@@ -45,6 +46,63 @@ function oneBlockDraft(
   }
 }
 
+function connect(previous: Blockly.Block, next: Blockly.Block): void {
+  if (!previous.nextConnection || !next.previousConnection) throw new Error('missing connection')
+  previous.nextConnection.connect(next.previousConnection)
+}
+
+function connectInput(
+  container: Blockly.Block,
+  inputName: 'GIFTS' | 'GEAR',
+  child: Blockly.Block,
+): void {
+  const input = container.getInput(inputName)?.connection
+  if (!input || !child.previousConnection) throw new Error(`missing ${inputName} connection`)
+  input.connect(child.previousConnection)
+}
+
+function buildWorkspaceWithMisplacedChild(
+  workspace: Blockly.Workspace,
+  placement: 'receive-under-equip' | 'wear-under-collect',
+): string {
+  const request = workspace.newBlock('xiyou_request_regalia', 'request')
+  const collect = workspace.newBlock('xiyou_collect_gifts', 'collect')
+  const boots = workspace.newBlock('xiyou_receive_cloud_boots', 'boots')
+  const armor = workspace.newBlock('xiyou_receive_golden_armor', 'armor')
+  const crown = workspace.newBlock('xiyou_receive_purple_crown', 'crown')
+  const equip = workspace.newBlock('xiyou_equip_regalia', 'equip')
+  const verify = workspace.newBlock('xiyou_verify_regalia', 'verify')
+  connect(request, collect)
+  connect(collect, equip)
+  connect(equip, verify)
+  connectInput(collect, 'GIFTS', boots)
+  connect(boots, armor)
+  connect(armor, crown)
+
+  if (placement === 'receive-under-equip') {
+    const misplaced = workspace.newBlock('xiyou_receive_cloud_boots', 'receive-in-equip')
+    connectInput(equip, 'GEAR', misplaced)
+    return misplaced.id
+  }
+
+  const misplaced = workspace.newBlock('xiyou_wear_crown', 'wear-in-collect')
+  const equipChild = workspace.newBlock('xiyou_wear_crown', 'equip-child')
+  connect(crown, misplaced)
+  connectInput(equip, 'GEAR', equipChild)
+  return misplaced.id
+}
+
+function buildTopChain(
+  workspace: Blockly.Workspace,
+  count: number,
+  idForIndex: (index: number) => string = (index) => `block-${index.toString().padStart(3, '0')}`,
+): Blockly.Block[] {
+  const blocks = Array.from({ length: count }, (_, index) =>
+    workspace.newBlock('xiyou_request_regalia', idForIndex(index)))
+  for (let index = 1; index < blocks.length; index += 1) connect(blocks[index - 1], blocks[index])
+  return blocks
+}
+
 describe('FourSeasWorkspaceDraftV1', () => {
   let workspace: Blockly.Workspace
 
@@ -82,6 +140,68 @@ describe('FourSeasWorkspaceDraftV1', () => {
   })
 
   it.each([
+    { placement: 'receive-under-equip', misplacedId: 'receive-in-equip', parentBlockId: 'equip' },
+    { placement: 'wear-under-collect', misplacedId: 'wear-in-collect', parentBlockId: 'collect' },
+  ] as const)(
+    'round trips $placement and leaves the semantic rejection to the runner',
+    ({ placement, misplacedId, parentBlockId }) => {
+      buildWorkspaceWithMisplacedChild(workspace, placement)
+      const saved = saveFourSeasWorkspaceDraft(workspace)
+      const restored = new Blockly.Workspace()
+      try {
+        loadFourSeasWorkspaceDraft(restored, saved)
+        const compiled = compileFourSeasRegaliaWorkspace(restored)
+        expect(compiled.ok).toBe(true)
+        if (!compiled.ok) throw new Error('expected the structurally valid workspace to compile')
+        expect(compiled.trace.find((item) => item.sourceBlockId === misplacedId)).toMatchObject({
+          sourceBlockId: misplacedId,
+          parentBlockId,
+        })
+
+        const result = runFourSeasRegalia(compiled.trace)
+        expect(result.diagnostic).toMatchObject({
+          type: 'instruction-rejected',
+          concept: 'container-scope',
+          sourceBlockId: misplacedId,
+          parentBlockId,
+        })
+      } finally {
+        restored.dispose()
+      }
+    },
+  )
+
+  it('accepts the formal 500-block workspace boundary', () => {
+    buildTopChain(workspace, 500)
+    expect(saveFourSeasWorkspaceDraft(workspace).blocks).toHaveLength(500)
+  })
+
+  it('accepts 256-character ids and rejects longer ids', () => {
+    workspace.newBlock('xiyou_request_regalia', 'a'.repeat(256))
+    expect(saveFourSeasWorkspaceDraft(workspace).blocks[0].id).toHaveLength(256)
+
+    workspace.clear()
+    workspace.newBlock('xiyou_request_regalia', 'b'.repeat(257))
+    expect(() => saveFourSeasWorkspaceDraft(workspace)).toThrow()
+  })
+
+  it.each([
+    { name: 'the positive safe coordinate boundary', coordinate: Number.MAX_SAFE_INTEGER, accepted: true },
+    { name: 'the negative safe coordinate boundary', coordinate: -Number.MAX_SAFE_INTEGER, accepted: true },
+    { name: 'a coordinate above the safe boundary', coordinate: Number.MAX_SAFE_INTEGER + 1, accepted: false },
+    { name: 'positive infinity', coordinate: Infinity, accepted: false },
+    { name: 'NaN', coordinate: Number.NaN, accepted: false },
+  ])('$name is consistently handled by draft save', ({ coordinate, accepted }) => {
+    const block = workspace.newBlock('xiyou_request_regalia', 'coordinate-block')
+    block.moveBy(coordinate, 0)
+    if (accepted) {
+      expect(saveFourSeasWorkspaceDraft(workspace).blocks[0].x).toBe(coordinate)
+    } else {
+      expect(() => saveFourSeasWorkspaceDraft(workspace)).toThrow()
+    }
+  })
+
+  it.each([
     {
       name: 'duplicate ids',
       draft: {
@@ -105,8 +225,8 @@ describe('FourSeasWorkspaceDraftV1', () => {
       draft: {
         version: 1,
         blocks: [
-          { id: 'equip', type: 'xiyou_equip_regalia', nextId: null, parentBlockId: null, x: 0, y: 0 },
-          { id: 'gift', type: 'xiyou_receive_cloud_boots', nextId: null, parentBlockId: 'equip', x: 0, y: 20 },
+          { id: 'request', type: 'xiyou_request_regalia', nextId: null, parentBlockId: null, x: 0, y: 0 },
+          { id: 'gift', type: 'xiyou_receive_cloud_boots', nextId: null, parentBlockId: 'request', x: 0, y: 20 },
         ],
       },
     },
@@ -153,13 +273,13 @@ describe('FourSeasWorkspaceDraftV1', () => {
       draft: oneBlockDraft({ type: 'xiyou_inspect_weights' as 'xiyou_request_regalia' }),
     },
     {
-      name: 'more than 100 nodes',
+      name: 'more than 500 nodes',
       draft: {
         version: 1,
-        blocks: Array.from({ length: 101 }, (_, index) => ({
+        blocks: Array.from({ length: 501 }, (_, index) => ({
           id: `block-${index}`,
           type: 'xiyou_request_regalia' as const,
-          nextId: index === 100 ? null : `block-${index + 1}`,
+          nextId: index === 500 ? null : `block-${index + 1}`,
           parentBlockId: null,
           x: index,
           y: index,

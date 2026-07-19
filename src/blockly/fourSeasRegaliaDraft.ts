@@ -7,7 +7,55 @@ import {
   type FourSeasBlockType,
 } from './fourSeasRegaliaBlocks'
 
-const MAX_DRAFT_BLOCKS = 100
+export const FOUR_SEAS_WORKSPACE_LIMITS = {
+  maxWorkspaceBlocks: 500,
+  maxBlockOrSourceIdLength: 256,
+  maxCoordinateMagnitude: Number.MAX_SAFE_INTEGER,
+} as const
+
+export interface FourSeasWorkspaceBoundaryItem {
+  id: unknown
+  x: unknown
+  y: unknown
+}
+
+export interface FourSeasWorkspaceBoundaryViolation {
+  reason: 'block-count' | 'block-id' | 'coordinate'
+  sourceBlockId: string | null
+}
+
+export function findFourSeasWorkspaceBoundaryViolation(
+  blocks: readonly FourSeasWorkspaceBoundaryItem[],
+): FourSeasWorkspaceBoundaryViolation | null {
+  if (blocks.length > FOUR_SEAS_WORKSPACE_LIMITS.maxWorkspaceBlocks) {
+    const firstOverBoundary = blocks[FOUR_SEAS_WORKSPACE_LIMITS.maxWorkspaceBlocks]
+    return {
+      reason: 'block-count',
+      sourceBlockId:
+        typeof firstOverBoundary?.id === 'string' ? firstOverBoundary.id : null,
+    }
+  }
+  for (const block of blocks) {
+    const sourceBlockId = typeof block.id === 'string' ? block.id : null
+    if (
+      typeof block.id === 'string'
+      && block.id.length > FOUR_SEAS_WORKSPACE_LIMITS.maxBlockOrSourceIdLength
+    ) {
+      return { reason: 'block-id', sourceBlockId }
+    }
+    if (
+      typeof block.x !== 'number'
+      || typeof block.y !== 'number'
+      || !Number.isFinite(block.x)
+      || !Number.isFinite(block.y)
+      || Math.abs(block.x) > FOUR_SEAS_WORKSPACE_LIMITS.maxCoordinateMagnitude
+      || Math.abs(block.y) > FOUR_SEAS_WORKSPACE_LIMITS.maxCoordinateMagnitude
+    ) {
+      return { reason: 'coordinate', sourceBlockId }
+    }
+  }
+  return null
+}
 
 export interface FourSeasWorkspaceDraftV1 {
   version: 1
@@ -25,22 +73,15 @@ function byId(left: Block, right: Block): number {
   return left.id < right.id ? -1 : left.id > right.id ? 1 : 0
 }
 
-function isSafeCoordinate(value: number): boolean {
-  return Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER
-}
-
-function expectedParentType(type: FourSeasBlockType): FourSeasBlockType | null {
-  if (type.startsWith('xiyou_receive_')) return 'xiyou_collect_gifts'
-  if (type.startsWith('xiyou_wear_')) return 'xiyou_equip_regalia'
-  return null
-}
-
 function validateDraft(draft: FourSeasWorkspaceDraftV1): void {
   if (draft.version !== 1 || !Array.isArray(draft.blocks)) {
     throw new Error('Unsupported four seas workspace draft')
   }
-  if (draft.blocks.length > MAX_DRAFT_BLOCKS) {
-    throw new Error(`Four seas workspace draft exceeds ${MAX_DRAFT_BLOCKS} blocks`)
+  const boundaryViolation = findFourSeasWorkspaceBoundaryViolation(draft.blocks)
+  if (boundaryViolation !== null) {
+    throw new Error(
+      `Four seas workspace boundary violation (${boundaryViolation.reason}): ${String(boundaryViolation.sourceBlockId)}`,
+    )
   }
 
   const byBlockId = new Map<string, FourSeasWorkspaceDraftV1['blocks'][number]>()
@@ -50,22 +91,20 @@ function validateDraft(draft: FourSeasWorkspaceDraftV1): void {
     }
     if (byBlockId.has(block.id)) throw new Error(`Duplicate block id: ${block.id}`)
     if (!isFourSeasBlockType(block.type)) throw new Error(`Unknown block type: ${String(block.type)}`)
-    if (!isSafeCoordinate(block.x) || !isSafeCoordinate(block.y)) {
-      throw new Error(`Unsafe block position: ${block.id}`)
-    }
     byBlockId.set(block.id, block)
   }
 
   const predecessorIds = new Set<string>()
   for (const block of draft.blocks) {
-    const requiredParentType = expectedParentType(block.type)
-    if (requiredParentType === null) {
+    if (!isFourSeasChildBlockType(block.type)) {
       if (block.parentBlockId !== null) throw new Error(`Top block cannot have a parent: ${block.id}`)
     } else {
       if (typeof block.parentBlockId !== 'string') throw new Error(`Child block requires a parent: ${block.id}`)
       const parent = byBlockId.get(block.parentBlockId)
       if (!parent) throw new Error(`Unknown parent block id: ${block.parentBlockId}`)
-      if (parent.type !== requiredParentType) throw new Error(`Wrong parent block type: ${block.id}`)
+      if (parent.type !== 'xiyou_collect_gifts' && parent.type !== 'xiyou_equip_regalia') {
+        throw new Error(`Wrong parent block type: ${block.id}`)
+      }
     }
 
     if (block.nextId === null) continue
@@ -129,7 +168,6 @@ function assertSnapshotCompatible(block: Block): void {
 
 export function saveFourSeasWorkspaceDraft(workspace: Workspace): FourSeasWorkspaceDraftV1 {
   const blocks = workspace.getAllBlocks(false).sort(byId)
-  if (blocks.length > MAX_DRAFT_BLOCKS) throw new Error(`Workspace exceeds ${MAX_DRAFT_BLOCKS} blocks`)
   const draft: FourSeasWorkspaceDraftV1 = {
     version: 1,
     blocks: blocks.map((block) => {

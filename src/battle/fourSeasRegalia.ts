@@ -24,6 +24,19 @@ const transitions: Readonly<
   'regalia-equipped': { verify_regalia: 'regalia-verified' },
 }
 
+const opcodeParentScope = {
+  request_regalia: 'top',
+  collect_gifts: 'top',
+  receive_cloud_boots: 'collect',
+  receive_golden_armor: 'collect',
+  receive_purple_crown: 'collect',
+  equip_regalia: 'top',
+  wear_crown: 'equip',
+  wear_armor: 'equip',
+  wear_boots: 'equip',
+  verify_regalia: 'top',
+} as const satisfies Record<FourSeasOpcode, 'top' | 'collect' | 'equip'>
+
 function instructionEvent(
   type: 'instruction-accepted' | 'instruction-rejected' | 'state-changed',
   state: FourSeasState,
@@ -46,10 +59,11 @@ function hasCorrectParent(
   collectBlockId: string | null,
   equipBlockId: string | null,
 ): boolean {
-  if (instruction.opcode.startsWith('receive_')) {
+  const scope = opcodeParentScope[instruction.opcode]
+  if (scope === 'collect') {
     return collectBlockId !== null && instruction.parentBlockId === collectBlockId
   }
-  if (instruction.opcode.startsWith('wear_')) {
+  if (scope === 'equip') {
     return equipBlockId !== null && instruction.parentBlockId === equipBlockId
   }
   return instruction.parentBlockId === null

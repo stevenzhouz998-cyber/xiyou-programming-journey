@@ -6,6 +6,7 @@ import {
   isFourSeasChildBlockType,
   isFourSeasTopBlockType,
 } from './fourSeasRegaliaBlocks'
+import { findFourSeasWorkspaceBoundaryViolation } from './fourSeasRegaliaDraft'
 
 export type FourSeasCompileDiagnosticCode =
   | 'unknown-block'
@@ -15,6 +16,7 @@ export type FourSeasCompileDiagnosticCode =
   | 'missing-child-chain'
   | 'orphan-child'
   | 'invalid-nesting'
+  | 'workspace-boundary'
 
 export type FourSeasCompileResult =
   | { ok: true; trace: FourSeasInstruction[] }
@@ -98,6 +100,16 @@ function containerInputIsCanonical(block: Block): boolean {
 export function compileFourSeasRegaliaWorkspace(workspace: Workspace): FourSeasCompileResult {
   const blocks = workspace.getAllBlocks(false).sort(byId)
   if (blocks.length === 0) return failure('empty-workspace', null)
+
+  const boundaryViolation = findFourSeasWorkspaceBoundaryViolation(
+    blocks.map((block) => {
+      const position = block.getRelativeToSurfaceXY()
+      return { id: block.id, x: position.x, y: position.y }
+    }),
+  )
+  if (boundaryViolation !== null) {
+    return failure('workspace-boundary', boundaryViolation.sourceBlockId)
+  }
 
   const unknown = blocks.find((block) => !isFourSeasBlockType(block.type))
   if (unknown) return failure('unknown-block', unknown.id)

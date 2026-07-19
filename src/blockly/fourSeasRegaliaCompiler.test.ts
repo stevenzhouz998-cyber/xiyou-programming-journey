@@ -64,6 +64,17 @@ function expectedInstruction(
   return { instructionId: `instruction:${sourceBlockId}`, sourceBlockId, parentBlockId, opcode }
 }
 
+function buildTopChain(
+  workspace: Blockly.Workspace,
+  count: number,
+  idForIndex: (index: number) => string = (index) => `block-${index.toString().padStart(3, '0')}`,
+): Blockly.Block[] {
+  const blocks = Array.from({ length: count }, (_, index) =>
+    workspace.newBlock('xiyou_request_regalia', idForIndex(index)))
+  for (let index = 1; index < blocks.length; index += 1) connect(blocks[index - 1], blocks[index])
+  return blocks
+}
+
 describe('compileFourSeasRegaliaWorkspace', () => {
   let workspace: Blockly.Workspace
 
@@ -113,6 +124,69 @@ describe('compileFourSeasRegaliaWorkspace', () => {
         expectedInstruction('verify', 'verify_regalia', null),
       ],
     })
+  })
+
+  it('accepts exactly 500 blocks and rejects the first block beyond the formal boundary', () => {
+    buildTopChain(workspace, 500)
+    const accepted = compileFourSeasRegaliaWorkspace(workspace)
+    expect(accepted.ok && accepted.trace).toHaveLength(500)
+
+    workspace.clear()
+    buildTopChain(workspace, 501)
+    const rejected = compileFourSeasRegaliaWorkspace(workspace)
+    expect(rejected.ok).toBe(false)
+    if (!rejected.ok) {
+      expect(rejected).toEqual({
+        ok: false,
+        trace: [],
+        diagnostics: [
+          { code: 'workspace-boundary', sourceBlockId: 'block-500', concept: 'program-structure' },
+        ],
+      })
+    }
+  })
+
+  it('accepts a 256-character block id and rejects a longer source identity', () => {
+    workspace.newBlock('xiyou_request_regalia', 'a'.repeat(256))
+    expect(compileFourSeasRegaliaWorkspace(workspace).ok).toBe(true)
+
+    workspace.clear()
+    const overlongId = 'b'.repeat(257)
+    workspace.newBlock('xiyou_request_regalia', overlongId)
+    const rejected = compileFourSeasRegaliaWorkspace(workspace)
+    expect(rejected.ok).toBe(false)
+    if (!rejected.ok) {
+      expect(rejected).toEqual({
+        ok: false,
+        trace: [],
+        diagnostics: [
+          { code: 'workspace-boundary', sourceBlockId: overlongId, concept: 'program-structure' },
+        ],
+      })
+    }
+  })
+
+  it.each([
+    { name: 'the positive safe coordinate boundary', coordinate: Number.MAX_SAFE_INTEGER, accepted: true },
+    { name: 'the negative safe coordinate boundary', coordinate: -Number.MAX_SAFE_INTEGER, accepted: true },
+    { name: 'a coordinate above the safe boundary', coordinate: Number.MAX_SAFE_INTEGER + 1, accepted: false },
+    { name: 'positive infinity', coordinate: Infinity, accepted: false },
+    { name: 'NaN', coordinate: Number.NaN, accepted: false },
+  ])('$name is validated before trace generation', ({ coordinate, accepted }) => {
+    const block = workspace.newBlock('xiyou_request_regalia', 'coordinate-block')
+    block.moveBy(coordinate, 0)
+    const result = compileFourSeasRegaliaWorkspace(workspace)
+    if (accepted) {
+      expect(result.ok).toBe(true)
+    } else {
+      expect(result).toEqual({
+        ok: false,
+        trace: [],
+        diagnostics: [
+          { code: 'workspace-boundary', sourceBlockId: 'coordinate-block', concept: 'program-structure' },
+        ],
+      })
+    }
   })
 
   it('reflects real child reordering and wrong-container placement instead of correcting it', () => {
