@@ -248,18 +248,16 @@ export function FourSeasRegaliaScene({
   useEffect(() => {
     if (navigator.userAgent.includes('jsdom')) return undefined
     const owner = Symbol('four-seas-regalia-scene')
-    let cancelled = false
-    let failed = false
     let game: Phaser.Game | null = null
     ownerRef.current = owner
-    const owns = () => !cancelled && !failed && ownerRef.current === owner
+    const owns = () => ownerRef.current === owner
 
     class Scene extends Phaser.Scene {
       preload() {
         if (!owns()) return
         this.load.once('loaderror', () => {
           if (!owns()) return
-          failed = true
+          ownerRef.current = null
           generationRef.current += 1
           activeRef.current = false
           if (sceneRef.current?.owner === owner) sceneRef.current = null
@@ -305,7 +303,6 @@ export function FourSeasRegaliaScene({
     })
     if (owns()) gameRef.current = { owner, game }
     return () => {
-      cancelled = true
       if (ownerRef.current === owner) {
         ownerRef.current = null
         generationRef.current += 1

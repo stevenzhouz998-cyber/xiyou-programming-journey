@@ -21,13 +21,22 @@ function node() {
 
 const nodes = {
   background: node(),
+  boots: node(),
+  crown: node(),
   dragonKing: node(),
   effects: node(),
-  regalia: node(),
+  armor: node(),
   wukong: node(),
   wukongRegalia: node(),
 }
 const loadImage = vi.fn()
+const addImage = vi.fn((_x: number, _y: number, key: string) => {
+  if (key === 'regalia') {
+    const regaliaNodes = [nodes.crown, nodes.armor, nodes.boots]
+    return regaliaNodes[regaliaNodeIndex++ % regaliaNodes.length]
+  }
+  return nodes[key as keyof typeof nodes]
+})
 const queue: Tween[] = []
 const tweens = {
   add: vi.fn((config: Tween) => {
@@ -38,28 +47,33 @@ const tweens = {
 }
 const sound = { mute: false }
 const destroys: Array<ReturnType<typeof vi.fn>> = []
-let failHandler: (() => void) | null = null
+let regaliaNodeIndex = 0
+let deferSceneCreate = false
+const sceneInstances: Array<{ create(): void; emitLoadError(): void }> = []
 
 vi.mock('phaser', () => {
   class Scene {
     scale = { width: 760, height: 320 }
+    loadErrorHandler: (() => void) | null = null
     load = {
       image: loadImage,
-      once: vi.fn((_event: string, handler: () => void) => {
-        failHandler = handler
+      once: vi.fn((event: string, handler: () => void) => {
+        if (event === 'loaderror') this.loadErrorHandler = handler
       }),
     }
-    add = { image: vi.fn((_x: number, _y: number, key: keyof typeof nodes) => nodes[key]) }
+    add = { image: addImage }
     tweens = tweens
     sound = sound
+    emitLoadError = () => this.loadErrorHandler?.()
   }
   class Game {
     destroy = vi.fn()
     constructor(config: { scene: new () => Scene & { preload(): void; create(): void } }) {
       destroys.push(this.destroy)
       const scene = new config.scene()
+      sceneInstances.push(scene)
       scene.preload()
-      scene.create()
+      if (!deferSceneCreate) scene.create()
     }
   }
   return { AUTO: 0, Scene, Game, default: { AUTO: 0, Scene, Game } }
@@ -103,7 +117,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   queue.length = 0
   destroys.length = 0
-  failHandler = null
+  sceneInstances.length = 0
+  regaliaNodeIndex = 0
+  deferSceneCreate = false
   sound.mute = false
   vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('test-browser')
 })
@@ -143,7 +159,12 @@ it('shows all three collected gifts before dressing while keeping base Wukong vi
 
   expect(screen.getByRole('img')).toHaveAttribute('data-scene-state', 'all-gifts-received')
   expect(screen.getByRole('img')).toHaveAttribute('data-visible-regalia', 'all-collected')
-  expect(nodes.regalia.setVisible).toHaveBeenLastCalledWith(true)
+  expect(nodes.crown.setVisible).toHaveBeenLastCalledWith(true)
+  expect(nodes.armor.setVisible).toHaveBeenLastCalledWith(true)
+  expect(nodes.boots.setVisible).toHaveBeenLastCalledWith(true)
+  expect(nodes.crown.setCrop).toHaveBeenLastCalledWith(0, 0, 341, 512)
+  expect(nodes.armor.setCrop).toHaveBeenLastCalledWith(341, 0, 341, 512)
+  expect(nodes.boots.setCrop).toHaveBeenLastCalledWith(682, 0, 342, 512)
   expect(nodes.wukong.setVisible).toHaveBeenLastCalledWith(true)
   expect(nodes.wukongRegalia.setVisible).toHaveBeenLastCalledWith(false)
 })
@@ -222,9 +243,80 @@ it('ignores stale tween callbacks when a newer replay owns playback', async () =
 
 it('reports an asset failure and retries only the local scene with the approved set', async () => {
   render(<FourSeasRegaliaScene events={correct} replayToken={1} reducedMotion muted />)
-  await act(async () => failHandler?.())
+  await act(async () => sceneInstances[0]?.emitLoadError())
 
   expect(screen.getByRole('alert')).toHaveTextContent('四海披挂场景资源加载失败')
   fireEvent.click(screen.getByRole('button', { name: '重新加载四海披挂场景' }))
   expect(loadImage).toHaveBeenCalledTimes(12)
+})
+
+it('lets only the retry replacement owner create, fail, and complete playback', async () => {
+  deferSceneCreate = true
+  const onPlaybackComplete = vi.fn()
+  render(
+    <FourSeasRegaliaScene
+      events={correct}
+      replayToken={1}
+      reducedMotion
+      muted
+      onPlaybackComplete={onPlaybackComplete}
+    />,
+  )
+
+  const staleScene = sceneInstances[0]
+  await act(async () => staleScene?.emitLoadError())
+  expect(screen.getByRole('alert')).toHaveTextContent('四海披挂场景资源加载失败')
+  expect(onPlaybackComplete).not.toHaveBeenCalled()
+
+  fireEvent.click(screen.getByRole('button', { name: '重新加载四海披挂场景' }))
+  expect(destroys[0]).toHaveBeenCalledOnce()
+  expect(sceneInstances).toHaveLength(2)
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+  await act(async () => {
+    staleScene?.create()
+    staleScene?.emitLoadError()
+  })
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(screen.getByRole('status')).toBeEmptyDOMElement()
+  expect(onPlaybackComplete).not.toHaveBeenCalled()
+
+  await act(async () => sceneInstances[1]?.create())
+  expect(screen.getByRole('img')).toHaveAttribute('data-scene-state', 'regalia-verified')
+  expect(screen.getByRole('img')).toHaveAttribute('data-visible-regalia', 'equipped')
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(onPlaybackComplete).toHaveBeenCalledOnce()
+
+  await act(async () => {
+    staleScene?.create()
+    staleScene?.emitLoadError()
+  })
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(screen.getByRole('img')).toHaveAttribute('data-scene-state', 'regalia-verified')
+  expect(onPlaybackComplete).toHaveBeenCalledOnce()
+})
+
+it('invalidates delayed tween and load-error callbacks when the owner unmounts', async () => {
+  const onPlaybackComplete = vi.fn()
+  const view = render(
+    <FourSeasRegaliaScene
+      events={correct}
+      replayToken={1}
+      reducedMotion={false}
+      muted
+      onPlaybackComplete={onPlaybackComplete}
+    />,
+  )
+  const staleTween = queue[0]
+  const staleScene = sceneInstances[0]
+
+  view.unmount()
+  expect(destroys[0]).toHaveBeenCalledOnce()
+  await act(async () => {
+    staleTween?.onComplete?.()
+    staleScene?.emitLoadError()
+    staleScene?.create()
+  })
+  expect(onPlaybackComplete).not.toHaveBeenCalled()
+  expect(destroys[0]).toHaveBeenCalledOnce()
 })
