@@ -1,12 +1,11 @@
 # Four Seas regalia code battle browser verification
 
 - Date: 2026-07-20 (Asia/Shanghai)
-- Tested post-review implementation SHA: `90c1bdaa6258409102c4ffdaea6963d5ae104ae0`
-- Complete pre-review five-project matrix implementation SHA: `a6ea03efb9253ea8775f5e4b540cbffa9b06118a`
+- Tested implementation SHA: `362f1780022256284d6c4e2ae7433d4d17867f56`
 - Evidence screenshot commit SHA: `059e333bc5de7ee872f83d81e36137fb9206228d`
 - The commit containing this document is evidence-only; it does not change product or test behavior.
 - Runner: Playwright against the isolated local production E2E preview, using one worker and the five configured browser/device projects.
-- Complete pre-review browser matrix: **141/141 passed**, with zero skipped tests and zero skipped projects. The post-review affected path then passed the stricter five-project `@visual` vertical-geometry matrix **5/5** in both update and non-update modes.
+- Final browser result at the tested SHA: **141/141 passed**, with zero skipped tests and zero skipped projects.
 
 ## What the real-browser path proves
 
@@ -51,7 +50,7 @@ The five-project suite covers Progress V3 schema, migrations and persistence; se
 
 E2E fault builds write to `dist-e2e`, never production `dist`. After the final E2E run, production `verify:bundle` rebuilt `dist`, its byte scan found none of the five storage-fault sentinels, and `dist-e2e` was removed. The local base path and local preview 404 behavior passed; **public deployment, public production 404 behavior, deployed-version matching, and public-network performance were not verified**.
 
-The formal course catalogue and runtime keep `w1-m1`, `w1-m2`, and `w1-m3` as separate demand-loaded Experiences; `w1-m4+` remains the legacy lazy path. Ruyi Staff demand-load, visible scene/workspace recovery, and workspace locking during scene playback passed as maintained regression evidence. Those Ruyi results are not represented as Four Seas implementation behavior.
+The formal course catalogue and runtime keep `w1-m1`, `w1-m2`, and `w1-m3` as separate demand-loaded Experiences; `w1-m4+` remains the legacy lazy path. The final focused Ruyi audit passed **11/11**: five `@staff-full` cases, the exact repeated inspection-asset recovery case, and five `@staff-cold` cases. In the recovery case, the first two asset failures keep the workspace locked and publish no `w1-m2` completion or success and no `w1-m3` unlock; the third successful load resumes playback and completes exactly once. Formal missions no longer carry the legacy `expectedSequence` execution field, removing that second truth source. These are maintained `w1-m2` regression results, not Four Seas implementation behavior.
 
 ## Fixed performance budgets
 
@@ -59,11 +58,11 @@ The fixed cold ceilings were not raised: `w1-m1` and `w1-m2` remain 2.5 MiB (`2,
 
 | Route | Maximum measured response bodies | Fixed limit | Headroom |
 | --- | ---: | ---: | ---: |
-| `w1-m1` | 2,611,081 B | 2,621,440 B | 10,359 B |
-| `w1-m2` | 2,612,674 B | 2,621,440 B | 8,766 B |
-| `w1-m3` | 2,769,840 B | 2,883,584 B | 113,744 B |
+| `w1-m1` | 2,611,302 B | 2,621,440 B | 10,138 B |
+| `w1-m2` | 2,613,676 B | 2,621,440 B | 7,764 B |
+| `w1-m3` | 2,770,260 B | 2,883,584 B | 113,324 B |
 
-Cold collection blocks service workers, sends no-store headers, counts every HTTP(S) response instance including the external Blockly sprite, awaits each successful body, and fails on response/request health problems. Browser delivery differs slightly, so the maxima above are the conservative evidence values. The production static gate measured entry JS at **102.6 KiB gzip / 180 KiB** and the conservative homepage at **417.1 KiB / 650 KiB**. The `w1-m1` and `w1-m2` cold headroom is narrow and remains a material regression risk.
+Cold collection blocks service workers, sends no-store headers, counts every HTTP(S) response instance including the external Blockly sprite, awaits each successful body, and fails on response/request health problems. Browser delivery differs slightly, so the maxima above are the conservative evidence values. The production static gate measured entry JS at **102.7 KiB gzip / 180 KiB** and the conservative homepage at **417.2 KiB / 650 KiB**. The `w1-m1` and `w1-m2` cold headroom is narrow and remains a material regression risk.
 
 ## Asset provenance and original-resolution QA
 
@@ -106,7 +105,7 @@ The final green result was reached through executable failures. The categories b
 8. **Obsolete regression assumptions:** older foundation tests expected the previous shell and conflated the course catalogue with formal routes. They were updated to the current formal/legacy split and visible focus behavior; the historical shell is not counted as Four Seas evidence.
 9. **Build side-effect boundary:** E2E fault sentinels could have contaminated the production directory without isolation. Fault builds now use `dist-e2e`; a production rebuild and byte scan prove the final `dist` has no test sentinel, and the E2E directory is cleaned.
 10. **Evidence collection defect:** cold response accounting once raced outstanding bodies and could miss a late failure. The collector now waits for every body and fails closed before comparing the fixed budget.
-11. **Maintained Ruyi product regression:** the verified broad sabre recovery path and workspace lock during scene playback were repaired and rerun. They protect the prior `w1-m2` claim but are not credited as `w1-m3` features.
+11. **Maintained Ruyi product regression:** final audit found a repeated inspection-asset lock gap and a residual formal `expectedSequence` second truth. Both were removed; recovery now stays locked through two failures and completes exactly once after the third successful load. This protects the prior `w1-m2` claim but is not credited as a `w1-m3` feature.
 
 ## Commands and exact final results
 
@@ -128,15 +127,15 @@ git diff --check
 - Post-review evidence update: **5/5 passed** in 2.6 minutes and changed exactly the five listed PNG files.
 - Post-review ordinary non-update rerun: **5/5 passed** in 2.6 minutes; all five before/after SHA-256 values were identical (`SCREENSHOT_HASHES_UNCHANGED`).
 - Playwright list: exactly **141 tests / 5 files**, partitioned 53 / 24 / 22 / 24 / 18; Four Seas is exactly **29 tests**.
-- Complete pre-review Playwright run: **141/141 passed**, zero skips; request/response, console and page health checks remained fail closed. The post-review CSS/geometry change reran the affected five-project path 5/5 with the stricter vertical assertions.
-- Complete pre-review `npm test`: **44 unit files / 757 unit tests**, **135 bundle/source-contract tests**, and **32 asset tests** passed. These are separate suites and are not added into one misleading total. Post-review affected static gates are recorded separately below.
-- Post-review `npm run typecheck`: exit 0.
-- Post-review `npm run test:assets`: **32/32 passed**; `npm run verify:assets`: 8 files, 434,944 B / 1,310,720 B, all required rows `visual-qa-passed`.
-- Post-review production `npm run verify:bundle`: 135/135 contract tests; build completed; entry 102.6 KiB gzip / 180 KiB; homepage 417.1 KiB / 650 KiB; production sentinel scan passed.
+- Final full Playwright at the tested SHA: **141/141 passed**, zero skips; request/response, console and page health checks remained fail closed.
+- Final `npm test`: **761 unit tests**, **135 bundle/source-contract tests**, and **32 asset tests** passed. These are separate suites and are not added into one misleading total.
+- Final `npm run typecheck`: exit 0.
+- Final `npm run test:assets`: **32/32 passed**; `npm run verify:assets`: 8 files, 434,944 B / 1,310,720 B, all required rows `visual-qa-passed`.
+- Post-E2E production `npm run verify:bundle`: **135/135** contract tests; build completed; entry **102.7 KiB gzip / 180 KiB**; homepage **417.2 KiB / 650 KiB**; production sentinel scan passed.
 - `npm audit --registry=https://registry.npmjs.org --audit-level=high`: `found 0 vulnerabilities`.
 - `git diff --check`: no errors.
-- Post-review focused checks: mobile Chromium 390px **1/1** and `src/responsive.test.tsx` **8/8** after selecting the final 540px readable host height.
-- Post-E2E: production `dist` rebuilt green and `dist-e2e` removed.
+- Final focused Ruyi audit: **11/11 passed** (`@staff-full` 5, repeated inspection-asset recovery 1, `@staff-cold` 5).
+- Post-E2E: production `dist` rebuilt green, the sentinel was absent, and `dist-e2e` was removed.
 
 ## Completion boundary and residual risks
 
