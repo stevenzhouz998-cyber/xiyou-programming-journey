@@ -15,6 +15,16 @@ interface Props {
   onFocusHandled: () => void
   saveRecoverySuperseded?: boolean
   locked?: boolean
+  lockReason?: RuyiWorkspaceLockReason
+}
+
+export type RuyiWorkspaceLockReason = 'completion-save' | 'playback' | 'session-pending' | 'session-recovery'
+
+const LOCK_MESSAGE: Record<RuyiWorkspaceLockReason, string> = {
+  'playback': '战斗画面正在播放，先不要改动指令卷轴。播放完成或画面加载失败后就能继续操作。',
+  'session-pending': '本关运行记录正在保存，先不要改动指令卷轴。保存完成后就能继续操作。',
+  'session-recovery': '本关运行记录尚未保存，先不要改动指令卷轴。请先按提示完成保存恢复。',
+  'completion-save': '通关结果正在保存或恢复，先不要改动指令卷轴。请按通关保存提示完成处理后再继续。',
 }
 
 export interface RuyiStaffBlocklyWorkspaceAdapter { create(host: HTMLDivElement): Blockly.Workspace }
@@ -139,7 +149,7 @@ function isUsableWorkspaceFocusTarget(target: HTMLElement | null, workspaceRegio
     && target.tabIndex >= 0
 }
 
-export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBlockId, onFocusHandled, saveRecoverySuperseded = false, locked = false }: Props) {
+export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBlockId, onFocusHandled, saveRecoverySuperseded = false, locked = false, lockReason = 'completion-save' }: Props) {
   const adapter = useContext(AdapterContext)
   const regionRef = useRef<HTMLElement>(null); const hostRef = useRef<HTMLDivElement>(null); const lockMessageRef = useRef<HTMLParagraphElement>(null); const workspaceRef = useRef<Blockly.Workspace | null>(null)
   const itemRefs = useRef(new Map<string, HTMLLIElement>()); const onDraftRef = useRef(onDraftChange); const handledRef = useRef(onFocusHandled)
@@ -327,7 +337,7 @@ export function RuyiStaffBlocklyWorkspace({ draft, onDraftChange, onRun, focusBl
   const atCapacity = blocks.length >= MAX_WORKSPACE_BLOCKS
 
   return <section ref={regionRef} className="code-workspace ruyi-staff-workspace" aria-label="定海神针图形化编程工作台" onKeyDown={activateButtonOnEnter}>
-    {locked ? <p ref={lockMessageRef} className="workspace-lock-message" role="status" tabIndex={-1}>通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。</p> : null}
+    {locked ? <p ref={lockMessageRef} className="workspace-lock-message" role="status" tabIndex={-1}>{LOCK_MESSAGE[lockReason]}</p> : null}
     <div className="command-palette"><p className="eyebrow">指令匣 · 点击加入卷轴</p><div className="command-buttons">{ACTIONS.map(({ type, label }) => <button type="button" className="command-button" key={type} disabled={locked || atCapacity} onClick={() => mutate((workspace) => {
       if (workspace.getTopBlocks(false).length > 1) throw new Error('multiple chains')
       const chain = orderedBlocks(workspace); const block = workspace.newBlock(type); initializeWorkspaceBlock(block)

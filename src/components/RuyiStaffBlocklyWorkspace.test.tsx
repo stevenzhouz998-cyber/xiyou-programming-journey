@@ -32,7 +32,7 @@ function stubBlocklySvgMetrics() {
   })
 }
 
-function setup(draft = EMPTY, onDraftChange: DraftSaver = vi.fn(() => ({ status: 'saved' as const })), locked = false) {
+function setup(draft = EMPTY, onDraftChange: DraftSaver = vi.fn(() => ({ status: 'saved' as const })), locked = false, lockReason: 'completion-save' | 'playback' | 'session-pending' | 'session-recovery' = 'completion-save') {
   const workspace = new Blockly.Workspace()
   const onRun = vi.fn<(result: RuyiCompileResult) => void>()
   const view = render(
@@ -44,6 +44,7 @@ function setup(draft = EMPTY, onDraftChange: DraftSaver = vi.fn(() => ({ status:
         focusBlockId={null}
         onFocusHandled={() => undefined}
         locked={locked}
+        lockReason={lockReason}
       />
     </RuyiStaffBlocklyWorkspaceAdapterProvider>,
   )
@@ -57,19 +58,38 @@ describe('RuyiStaffBlocklyWorkspace', () => {
     const onDraftChange = vi.fn<DraftSaver>(() => ({ status: 'saved' as const }))
     const { workspace, onRun } = setup(chainDraft(3), onDraftChange, true)
 
-    expect(screen.getByText('通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。')).toBeVisible()
+    expect(screen.getByText('通关结果正在保存或恢复，先不要改动指令卷轴。请按通关保存提示完成处理后再继续。')).toBeVisible()
     expect(screen.getAllByRole('button', { name: /^加入：/ }).every((button) => button.hasAttribute('disabled'))).toBe(true)
     expect(screen.getAllByRole('button', { name: /^(上移|下移|删除)：/ }).every((button) => button.hasAttribute('disabled'))).toBe(true)
     expect(screen.getByRole('button', { name: '清空并重新开始' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '执行战斗指令' })).toBeDisabled()
     expect(screen.getByLabelText('Blockly 积木编辑区')).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByLabelText('Blockly 积木编辑区')).toHaveAttribute('inert')
 
-    fireEvent.click(screen.getByRole('button', { name: '加入：查看三件兵器重量' }))
-    fireEvent.click(screen.getAllByRole('button', { name: '删除：查看三件兵器重量' })[0])
+    for (const control of [
+      screen.getByRole('button', { name: '加入：查看三件兵器重量' }),
+      screen.getAllByRole('button', { name: '上移：查看三件兵器重量' })[1],
+      screen.getAllByRole('button', { name: '删除：查看三件兵器重量' })[0],
+      screen.getByRole('button', { name: '清空并重新开始' }),
+      screen.getByRole('button', { name: '执行战斗指令' }),
+    ]) {
+      control.removeAttribute('disabled')
+      fireEvent.click(control)
+    }
     fireEvent.keyDown(screen.getByLabelText('Blockly 积木编辑区'), { key: 'Enter' })
     expect(workspace.getAllBlocks(false)).toHaveLength(3)
     expect(onDraftChange).not.toHaveBeenCalled()
     expect(onRun).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['playback', '战斗画面正在播放，先不要改动指令卷轴。播放完成或画面加载失败后就能继续操作。'],
+    ['session-pending', '本关运行记录正在保存，先不要改动指令卷轴。保存完成后就能继续操作。'],
+    ['session-recovery', '本关运行记录尚未保存，先不要改动指令卷轴。请先按提示完成保存恢复。'],
+    ['completion-save', '通关结果正在保存或恢复，先不要改动指令卷轴。请按通关保存提示完成处理后再继续。'],
+  ] as const)('names the real %s lock owner without claiming a completion save', (lockReason, message) => {
+    setup(chainDraft(3), vi.fn(() => ({ status: 'saved' as const })), true, lockReason)
+    expect(screen.getByText(message)).toBeVisible()
   })
 
   it('atomically restores the accepted draft after locked native delete, paste and keyboard attempts, then unlocks', async () => {
@@ -91,7 +111,7 @@ describe('RuyiStaffBlocklyWorkspace', () => {
 
     view.rerender(renderWorkspace(true))
 
-    const lockMessage = screen.getByText('通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。')
+    const lockMessage = screen.getByText('通关结果正在保存或恢复，先不要改动指令卷轴。请按通关保存提示完成处理后再继续。')
     await waitFor(() => expect(lockMessage).toHaveFocus())
     expect(host).toHaveAttribute('inert')
     expect(host).toHaveAttribute('tabindex', '-1')
@@ -302,7 +322,7 @@ describe('RuyiStaffBlocklyWorkspace', () => {
     expect(originalControl).toHaveFocus()
 
     view.rerender(renderWorkspace(true))
-    const lockMessage = screen.getByText('通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。')
+    const lockMessage = screen.getByText('通关结果正在保存或恢复，先不要改动指令卷轴。请按通关保存提示完成处理后再继续。')
     await waitFor(() => expect(lockMessage).toHaveFocus())
 
     view.rerender(renderWorkspace(false))
@@ -325,7 +345,7 @@ describe('RuyiStaffBlocklyWorkspace', () => {
     removedControl.focus()
 
     view.rerender(renderWorkspace(true))
-    await waitFor(() => expect(screen.getByText('通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。')).toHaveFocus())
+    await waitFor(() => expect(screen.getByText('通关结果正在保存或恢复，先不要改动指令卷轴。请按通关保存提示完成处理后再继续。')).toHaveFocus())
 
     view.rerender(renderWorkspace(false, externalDraft))
     const safeControl = screen.getByRole('button', { name: '加入：查看三件兵器重量' })

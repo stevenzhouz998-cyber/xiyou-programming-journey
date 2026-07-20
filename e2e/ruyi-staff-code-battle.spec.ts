@@ -93,6 +93,8 @@ async function readEvidence(page: Page) {
     const session = progress.sessions['w1-m2']
     return {
       mission: progress.missions['w1-m2'] ?? null,
+      attempts: progress.missions['w1-m2']?.attempts ?? 0,
+      draft: session.workspace,
       blockIds: session.workspace.blocks.map((block: { id: string }) => block.id).sort(),
       trace: session.lastTrace,
       events: session.lastRun?.events ?? [],
@@ -309,11 +311,34 @@ test('@staff-storage standalone broad sabre drives the visible 3600-jin wrong ac
   const scene = page.locator('.ruyi-staff-scene-frame .game-scene')
   await expect(page.getByRole('status', { name: '大捍刀画面状态' })).toContainText('正在取来大捍刀画面')
   await expect(page.getByRole('button', { name: '重播最近一次' })).toBeDisabled()
+  const lockedHost = page.locator('.ruyi-staff-workspace .blockly-host')
+  await expect(lockedHost).toHaveAttribute('aria-disabled', 'true')
+  await expect(lockedHost).toHaveAttribute('inert', '')
+  await expect(lockedHost).toHaveAttribute('tabindex', '-1')
+  await expect(page.getByText('战斗画面正在播放，先不要改动指令卷轴。播放完成或画面加载失败后就能继续操作。')).toBeVisible()
+  const blockedControls = [
+    page.getByRole('button', { name: '执行战斗指令' }),
+    page.getByRole('button', { name: '加入：查看三件兵器重量' }),
+    page.getByRole('button', { name: '删除：缩小定海神针' }),
+    page.getByRole('button', { name: '上移：缩小定海神针' }),
+    page.getByRole('button', { name: '清空并重新开始' }),
+  ]
+  for (const control of blockedControls) await expect(control).toBeDisabled()
   await expect(scene).toHaveAttribute('data-sabre-asset-state', 'loading')
   await expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'false')
   await expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
   const beforeVisualRetry = await readEvidence(page)
   expect(beforeVisualRetry.totalRuns).toBe(1)
+  for (const control of blockedControls) {
+    await control.evaluate((button) => {
+      button.removeAttribute('disabled')
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+  }
+  await lockedHost.dispatchEvent('keydown', { key: 'Enter', code: 'Enter' })
+  await lockedHost.dispatchEvent('keydown', { key: 'Delete', code: 'Delete' })
+  await lockedHost.dispatchEvent('keydown', { key: 'v', code: 'KeyV', ctrlKey: true })
+  expect(await readEvidence(page)).toEqual(beforeVisualRetry)
 
   releaseFirstFailure?.()
   await expect(scene).toHaveAttribute('data-sabre-asset-state', 'error')
@@ -324,11 +349,15 @@ test('@staff-storage standalone broad sabre drives the visible 3600-jin wrong ac
   await expect(alert).toBeFocused()
   await expect(page.getByRole('button', { name: '重试大捍刀画面' })).toBeVisible()
   await expect(page.getByRole('button', { name: '重播最近一次' })).toBeEnabled()
+  await expect(lockedHost).not.toHaveAttribute('aria-disabled')
+  await expect(lockedHost).not.toHaveAttribute('inert')
+  await expect(page.getByRole('button', { name: '执行战斗指令' })).toBeEnabled()
   expect(await readEvidence(page)).toEqual(beforeVisualRetry)
 
   await activate(page, '重试大捍刀画面')
   await expect(scene).toHaveAttribute('data-sabre-asset-state', 'loading')
   await expect(page.getByRole('status', { name: '大捍刀画面状态' })).toBeVisible()
+  await expect(lockedHost).not.toHaveAttribute('inert')
   await expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'false')
   await expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
   releaseSabre?.()
@@ -390,7 +419,7 @@ test('@staff-storage final completion stays unpublished until its exact CURRENT 
   await expect(page.getByText('通关待保存：进度尚未安全写入这台电脑。')).toBeVisible({ timeout: 15_000 })
   await expect(hint).toBeDisabled()
   await expect(page.getByText('通关结果尚未保存，请先完成保存恢复。')).toBeVisible()
-  const lockMessage = page.getByText('通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。')
+  const lockMessage = page.getByText('通关结果正在保存或恢复，先不要改动指令卷轴。请按通关保存提示完成处理后再继续。')
   await expect(lockMessage).toBeVisible()
   await expect(lockMessage).toBeFocused()
   await hint.click({ force: true })

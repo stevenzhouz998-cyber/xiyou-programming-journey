@@ -40,6 +40,11 @@ const successfulTrace: RuyiStaffInstruction[] = [
   { instructionId: 'instruction:shrink', sourceBlockId: 'shrink', opcode: 'shrink_ruyi_staff' },
 ]
 const successfulCompile: RuyiCompileResult = { ok: true, trace: successfulTrace }
+const sabreCompile: RuyiCompileResult = { ok: true, trace: [
+  { instructionId: 'instruction:inspect-sabre', sourceBlockId: 'inspect-sabre', opcode: 'inspect_weights' },
+  { instructionId: 'instruction:sabre', sourceBlockId: 'sabre', opcode: 'choose_sabre' },
+  { instructionId: 'instruction:shrink-sabre', sourceBlockId: 'shrink-sabre', opcode: 'shrink_ruyi_staff' },
+] }
 function ControlledScene({ events, replayToken, onPlaybackComplete }: { events: RuyiStaffBattleEvent[]; replayToken: number; onPlaybackComplete?: () => void }) {
   return <section aria-label="受控定海神针场景" data-replay-token={replayToken}><output data-testid="controlled-events">{JSON.stringify(events)}</output><button type="button" onClick={onPlaybackComplete}>完成受控播放</button></section>
 }
@@ -49,6 +54,25 @@ function ControlledWorkspace({ onRun }: { onRun: (result: RuyiCompileResult) => 
 const controlledLoaders: TestLoaders = {
   scene: () => Promise.resolve({ default: ControlledScene }),
   workspace: () => Promise.resolve({ default: ControlledWorkspace }),
+}
+interface LockProbeProps {
+  locked: boolean
+  lockReason?: string
+  onRun: (result: RuyiCompileResult) => void
+  onDraftChange: (draft: { version: 1; blocks: Array<{ id: string; type: 'xiyou_inspect_weights'; nextId: null; x: number; y: number }> }) => unknown
+}
+let latestLockProbeProps: LockProbeProps | null = null
+function LockProbeWorkspace(props: LockProbeProps) {
+  latestLockProbeProps = props
+  return <section aria-label="锁定探针工作台" data-locked={String(props.locked)} data-lock-reason={props.lockReason}>
+    <button type="button" onClick={() => props.onRun(sabreCompile)}>启动大捍刀运行</button>
+    <button type="button" onClick={() => props.onRun(successfulCompile)}>强制再次执行</button>
+    <button type="button" onClick={() => props.onDraftChange({ version: 1, blocks: [{ id: 'forced-draft', type: 'xiyou_inspect_weights', nextId: null, x: 0, y: 0 }] })}>强制改写草稿</button>
+  </section>
+}
+const lockProbeLoaders: TestLoaders = {
+  scene: () => Promise.resolve({ default: ControlledScene }),
+  workspace: () => Promise.resolve({ default: LockProbeWorkspace }),
 }
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -77,7 +101,7 @@ const LoadableExperience = RuyiStaffExperience as ComponentType<{
 
 describe('RuyiStaffExperience', () => {
   beforeEach(() => {
-    localStorage.clear(); callbacks.clear()
+    localStorage.clear(); callbacks.clear(); latestLockProbeProps = null
     const progress = createInitialProgress(); progress.privacy.localDataNoticeSeen = true
     localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress))
   })
@@ -149,6 +173,46 @@ describe('RuyiStaffExperience', () => {
     await waitFor(() => expect(onComplete).toHaveBeenCalledOnce())
   })
 
+  it('propagates playback ownership to the whole workspace and rejects forced handlers until scene ready or error', async () => {
+    const save = vi.fn<SaveCoordinator>(async (progress) => ({ status: 'saved', revision: 1, progress }))
+    render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('../progress/storageCoordinator'))}>
+      <RuyiStaffExperience reducedMotion muted onComplete={() => undefined} loaders={lockProbeLoaders} />
+    </ProgressProvider>)
+    const probe = await screen.findByLabelText('锁定探针工作台')
+    fireEvent.click(screen.getByRole('button', { name: '启动大捍刀运行' }))
+    await waitFor(() => expect(probe).toHaveAttribute('data-locked', 'true'))
+    await waitFor(() => expect(probe).toHaveAttribute('data-lock-reason', 'playback'))
+    const beforeForcedHandlers = stored().sessions['w1-m2']
+
+    fireEvent.click(screen.getByRole('button', { name: '强制再次执行' }))
+    fireEvent.click(screen.getByRole('button', { name: '强制改写草稿' }))
+    expect(stored().sessions['w1-m2']).toEqual(beforeForcedHandlers)
+    expect(save).toHaveBeenCalledOnce()
+    expect(screen.getByRole('button', { name: '重播最近一次' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: '完成受控播放' }))
+    await waitFor(() => expect(probe).toHaveAttribute('data-locked', 'false'))
+    expect(probe).not.toHaveAttribute('data-lock-reason', 'playback')
+  })
+
+  it('keeps the session owner after scene completion and changes the visible owner on recovery', async () => {
+    const pending = deferred<CoordinatedSaveResult>()
+    const save = vi.fn<SaveCoordinator>(() => pending.promise)
+    render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated: save } as unknown as typeof import('../progress/storageCoordinator'))}>
+      <RuyiStaffExperience reducedMotion muted onComplete={() => undefined} loaders={lockProbeLoaders} />
+    </ProgressProvider>)
+    const probe = await screen.findByLabelText('锁定探针工作台')
+    fireEvent.click(screen.getByRole('button', { name: '启动大捍刀运行' }))
+    await waitFor(() => expect(probe).toHaveAttribute('data-lock-reason', 'session-pending'))
+    fireEvent.click(screen.getByRole('button', { name: '完成受控播放' }))
+    expect(probe).toHaveAttribute('data-locked', 'true')
+    expect(probe).toHaveAttribute('data-lock-reason', 'session-pending')
+    const progress = save.mock.calls[0][0]
+    await act(async () => pending.resolve({ status: 'unsaved', progress, error: 'intentional recovery' }))
+    await waitFor(() => expect(probe).toHaveAttribute('data-lock-reason', 'session-recovery'))
+    expect(probe).toHaveAttribute('data-locked', 'true')
+  })
+
   it('releases a durably saved current run under the production StrictMode effect cycle', async () => {
     const save = vi.fn<SaveCoordinator>(async (progress) => ({ status: 'saved', revision: 1, progress }))
     const onComplete = vi.fn()
@@ -205,31 +269,20 @@ describe('RuyiStaffExperience', () => {
     await waitFor(() => expect(onComplete).toHaveBeenCalledOnce())
   })
 
-  it('never lets an older saved run release completion for the current request', async () => {
+  it('rejects forced newer runs while the current run owns playback and session persistence', async () => {
     const first = deferred<CoordinatedSaveResult>()
-    const second = deferred<CoordinatedSaveResult>()
-    const third = deferred<CoordinatedSaveResult>()
     const save = vi.fn<SaveCoordinator>()
       .mockImplementationOnce(() => first.promise)
-      .mockImplementationOnce(() => second.promise)
-      .mockImplementationOnce(() => third.promise)
     const onComplete = renderControlledExperience(save)
     const runButton = await screen.findByRole('button', { name: '运行受控成功程序' })
     fireEvent.click(runButton)
     fireEvent.click(screen.getByRole('button', { name: '完成受控播放' }))
     fireEvent.click(runButton)
-    fireEvent.click(screen.getByRole('button', { name: '完成受控播放' }))
     fireEvent.click(runButton)
-    fireEvent.click(screen.getByRole('button', { name: '完成受控播放' }))
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
     await act(async () => first.resolve({ status: 'saved', revision: 1, progress: save.mock.calls[0][0] }))
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(2))
-    expect(onComplete).not.toHaveBeenCalled()
-    await act(async () => second.resolve({ status: 'saved', revision: 2, progress: save.mock.calls[1][0] }))
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(3))
-    expect(onComplete).not.toHaveBeenCalled()
-    await act(async () => third.resolve({ status: 'saved', revision: 3, progress: save.mock.calls[2][0] }))
     await waitFor(() => expect(onComplete).toHaveBeenCalledOnce())
+    expect(save).toHaveBeenCalledOnce()
   })
 
   it('restores and replays a saved success without completion or a new attempt', async () => {

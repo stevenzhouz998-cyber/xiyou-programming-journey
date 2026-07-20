@@ -77,6 +77,7 @@ export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onCo
   const sessionLockStatusRef = useRef<{ requestId: number; status: 'pending' | 'saved' | 'recovery' } | null>(null); const playbackFinishedRequestRef = useRef<number | null>(null)
   const regionRef = useRef<HTMLDivElement>(null); const [diagnostic, setDiagnostic] = useState<Diagnostic | null>(() => session.lastRun?.diagnostic ?? null)
   const [interactionLocked, setInteractionLockedState] = useState(false)
+  const [interactionLockReason, setInteractionLockReasonState] = useState<RuyiHintLockReason>('idle')
   const [occurrenceId, setOccurrenceId] = useState(0); const [focusBlockId, setFocusBlockId] = useState<string | null>(null); const [sessionSyncTick, setSessionSyncTick] = useState(0)
   const currentSessionIdentity = sessionIdentity(session); const syncedSessionIdentityRef = useRef(currentSessionIdentity)
   completeRef.current = onComplete; sessionPersistenceRef.current = onSessionPersistenceActiveChange; interactionLockCallbackRef.current = onInteractionLockChange; missionCompletedRef.current = Boolean(progress.missions[MISSION_ID])
@@ -84,7 +85,7 @@ export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onCo
     if (interactionLockedRef.current === active && interactionLockReasonRef.current === reason) return
     interactionLockedRef.current = active
     interactionLockReasonRef.current = reason
-    if (mountedRef.current) setInteractionLockedState(active)
+    if (mountedRef.current) { setInteractionLockedState(active); setInteractionLockReasonState(reason) }
     interactionLockCallbackRef.current(active, reason)
   }
   useEffect(() => {
@@ -94,7 +95,9 @@ export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onCo
   }, [])
   const wasCompletionLockedRef = useRef(locked)
   useEffect(() => {
-    if (wasCompletionLockedRef.current && !locked) setInteractionLocked(false)
+    const requestId = playbackRef.current.requestId
+    const sessionStatus = sessionLockStatusRef.current?.requestId === requestId ? sessionLockStatusRef.current.status : undefined
+    if (wasCompletionLockedRef.current && !locked && sessionStatus !== 'pending' && sessionStatus !== 'recovery' && playbackFinishedRequestRef.current === requestId) setInteractionLocked(false)
     wasCompletionLockedRef.current = locked
   }, [locked])
   const replace = (next: Playback, lockReason: RuyiHintLockReason = next.events.length > 0 ? 'playback' : 'idle') => {
@@ -119,8 +122,12 @@ export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onCo
     replace(next); setDiagnostic(session.lastRun?.diagnostic ?? null); setOccurrenceId((value) => value + 1); setFocusBlockId(null)
   }, [currentSessionIdentity, sessionSyncTick])
   const invalidate = () => { if (playbackRef.current.eligible) playbackRef.current = { ...playbackRef.current, eligible: false } }
-  const saveDraft = (draft: RuyiWorkspaceDraftV1) => updateMissionSession(MISSION_ID, (current) => updateWorkspaceDraft(current, draft, new Date().toISOString()))
+  const saveDraft = (draft: RuyiWorkspaceDraftV1) => {
+    if (locked || interactionLockedRef.current) return { status: 'unsaved' as const }
+    return updateMissionSession(MISSION_ID, (current) => updateWorkspaceDraft(current, draft, new Date().toISOString()))
+  }
   const run = (compiled: RuyiCompileResult) => {
+    if (locked || interactionLockedRef.current) return
     setOccurrenceId((value) => value + 1); invalidate()
     if (!compiled.ok) {
       const primary = compiled.diagnostics[0]; setDiagnostic(primary)
@@ -190,6 +197,7 @@ export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onCo
     if (current.sessionSave && durableRunRef.current?.requestId !== requestId) checkSessionSave(requestId, current.sessionSave)
   }
   const replay = () => {
+    if (locked || interactionLockedRef.current) return
     const result = session.lastRun ?? playbackRef.current.result; if (!result) return; const snapshot = structuredClone(result)
     replace({ requestId: ++sequenceRef.current, origin: 'replay', events: snapshot.events, result: snapshot, eligible: false, evidence: null, runAt: session.lastRunAt, sessionSave: null, sessionIdentity: sessionIdentity(session) })
   }
@@ -203,9 +211,15 @@ export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onCo
   }
   const focusWorkspace = () => regionRef.current?.querySelector<HTMLElement>('[aria-label="Blockly 积木编辑区"]')?.focus()
   const sessionRetryActive = playback.origin === 'run' && playback.sessionSave !== null && completionHandedOffRequestId !== playback.requestId
+  const completionLockReleased = !locked && completionHandedOffRequestId === playback.requestId
+  const workspaceLocked = locked || (interactionLocked && !completionLockReleased)
+  const workspaceLockReason = !workspaceLocked
+    ? undefined
+    : locked ? 'completion-save'
+      : interactionLockReason === 'idle' ? 'playback' : interactionLockReason
   return <div className="ruyi-staff-experience" onKeyDown={activateButtonOnEnter}>
     <div className="ruyi-staff-scene-region"><ToolErrorBoundary label="定海神针场景" reloadPage={reloadPage}><Suspense fallback={<p role="status">龙宫场景加载中，请稍候……</p>}><RuyiStaffScene events={playback.events} replayToken={playback.requestId} reducedMotion={reducedMotion} muted={muted} onPlaybackComplete={() => playbackComplete(playback.requestId)} /></Suspense></ToolErrorBoundary><div className="dragon-palace-scene-controls"><button type="button" className="button button-ghost" disabled={interactionLocked || (!session.lastRun && !playback.result)} onClick={replay}>重播最近一次</button></div></div>
-    <div className="ruyi-staff-program-region" ref={regionRef}><ToolErrorBoundary label="定海神针编程工作台" reloadPage={reloadPage}><Suspense fallback={<p role="status">编程工作台加载中，请稍候……</p>}><RuyiStaffBlocklyWorkspace draft={session.workspace} onDraftChange={saveDraft} onRun={run} focusBlockId={focusBlockId} onFocusHandled={() => setFocusBlockId(null)} saveRecoverySuperseded={sessionRetryActive} locked={locked} /></Suspense></ToolErrorBoundary></div>
+    <div className="ruyi-staff-program-region" ref={regionRef}><ToolErrorBoundary label="定海神针编程工作台" reloadPage={reloadPage}><Suspense fallback={<p role="status">编程工作台加载中，请稍候……</p>}><RuyiStaffBlocklyWorkspace draft={session.workspace} onDraftChange={saveDraft} onRun={run} focusBlockId={focusBlockId} onFocusHandled={() => setFocusBlockId(null)} saveRecoverySuperseded={sessionRetryActive} locked={workspaceLocked} lockReason={workspaceLockReason} /></Suspense></ToolErrorBoundary></div>
     <div className="ruyi-staff-feedback-region"><RuyiStaffFeedback diagnostic={diagnostic} occurrenceId={occurrenceId} onFocusBlock={setFocusBlockId} onFocusWorkspace={focusWorkspace} />
       {sessionRetryActive && saveStatus === 'unsaved' ? <div className="unsaved-session" role="status"><p>本关尚未保存，请重试。</p><button type="button" onClick={retrySessionSave}>重试保存本关</button></div> : null}
     </div>

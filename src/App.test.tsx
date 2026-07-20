@@ -462,7 +462,7 @@ describe('西游编程记', () => {
     expect(screen.getAllByRole('button', { name: /重试保存/ })).toHaveLength(1);
     expect(screen.getByRole('button', { name: '重试保存通关' })).toBeVisible();
     expect(document.querySelectorAll('.completion-save-status')).toHaveLength(1);
-    expect(screen.getByText('通关结果正在处理，先不要改动指令卷轴。保存完成后就能继续操作。')).toBeVisible();
+    expect(screen.getByText('通关结果正在保存或恢复，先不要改动指令卷轴。请按通关保存提示完成处理后再继续。')).toBeVisible();
     expect(screen.getAllByRole('button', { name: /^加入：/ }).every((button) => button.hasAttribute('disabled'))).toBe(true);
     expect(screen.getAllByRole('button', { name: /^(上移|下移|删除)：/ }).every((button) => button.hasAttribute('disabled'))).toBe(true);
     expect(screen.getByRole('button', { name: '清空并重新开始' })).toBeDisabled();
