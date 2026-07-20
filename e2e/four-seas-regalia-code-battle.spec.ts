@@ -23,7 +23,7 @@ function expectedNavigationAbort(event: HealthEvent) {
   )
 }
 
-function unlockedFixture() {
+function fourSeasPrerequisiteFixture() {
   return {
     version: 3,
     schemaRevision: 1,
@@ -40,12 +40,16 @@ function unlockedFixture() {
   }
 }
 
+async function installFourSeasPrerequisites(page: Page) {
+  await page.addInitScript(({ key, value }) => {
+    if (localStorage.getItem(key) === null) localStorage.setItem(key, JSON.stringify(value))
+  }, { key: CURRENT_KEY, value: fourSeasPrerequisiteFixture() })
+}
+
 test.beforeEach(async ({ page }) => {
   healthEvents = []
   attachHealth(page)
-  await page.addInitScript(({ key, value }) => {
-    if (localStorage.getItem(key) === null) localStorage.setItem(key, JSON.stringify(value))
-  }, { key: CURRENT_KEY, value: unlockedFixture() })
+  await installFourSeasPrerequisites(page)
 })
 
 test.afterEach(() => {

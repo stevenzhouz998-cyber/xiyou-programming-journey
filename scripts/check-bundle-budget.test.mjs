@@ -217,9 +217,13 @@ test('forbids Blockly as well as Phaser in the entry static closure', () => {
 
 test('rejects hidden w1-m3 writes and missing health listeners on every independent E2E page', () => {
   const good = `
-    const externalPage = await page.context().newPage()
-    attachHealth(externalPage)
-    await externalPage.evaluate(() => localStorage.setItem('xiyou-test-storage-mode', 'fail'))
+    function attachHealth(page) {}
+    async function newHealthyPage(context) {
+      const page = await context.newPage()
+      attachHealth(page)
+      return page
+    }
+    const externalPage = await newHealthyPage(page.context())
     const mission = await externalPage.evaluate(() => JSON.parse(localStorage.getItem('xiyou-programming-progress-v3')).missions['w1-m3'])
   `;
   assert.doesNotThrow(() => assertFourSeasE2ESourceContract(good));
@@ -239,6 +243,34 @@ test('rejects hidden w1-m3 writes and missing health listeners on every independ
 
   const actualSource = readFileSync(new URL('../e2e/four-seas-regalia-code-battle.spec.ts', import.meta.url), 'utf8');
   assert.doesNotThrow(() => assertFourSeasE2ESourceContract(actualSource));
+});
+
+test('allows the exact prerequisite init helper without w1-m3 state', () => {
+  assert.doesNotThrow(() => assertFourSeasE2ESourceContract(`
+    function attachHealth(page) {}
+    function fourSeasPrerequisiteFixture() {
+      return { missions: { 'w1-m1': {}, 'w1-m2': {} }, sessions: {} }
+    }
+    async function installFourSeasPrerequisites(page) {
+      await page.addInitScript(({ key, value }) => {
+        if (localStorage.getItem(key) === null) localStorage.setItem(key, JSON.stringify(value))
+      }, { key: CURRENT_KEY, value: fourSeasPrerequisiteFixture() })
+    }
+    test.beforeEach(async ({ page }) => {
+      attachHealth(page)
+      await installFourSeasPrerequisites(page)
+    })
+  `));
+});
+
+test('allows the exact standalone storage failure helper', () => {
+  assert.doesNotThrow(() => assertFourSeasE2ESourceContract(`
+    async function setFourSeasStorageFailureMode(page, mode) {
+      await page.evaluate((value) => {
+        localStorage.setItem('xiyou-test-storage-mode', value)
+      }, mode)
+    }
+  `));
 });
 
 test('rejects CURRENT_KEY-indirect persistence writes inside evaluate', () => {
@@ -264,6 +296,87 @@ test('does not accept a commented health attachment for an independent page', ()
     // attachHealth(externalPage)
     await externalPage.goto('./')
   `), /health/i);
+});
+
+test('rejects a localStorage object alias inside evaluate', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    await page.evaluate(() => {
+      const storage = localStorage
+      storage.setItem('xiyou-programming-progress-v3', '{}')
+    })
+  `), /evaluate|write|call/i);
+});
+
+test('rejects globalThis computed localStorage writes inside evaluate', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    await page.evaluate(() => {
+      globalThis['localStorage'].setItem('xiyou-programming-progress-v3', '{}')
+    })
+  `), /evaluate|write|call/i);
+});
+
+test('rejects a progress missions alias assignment inside evaluate', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    await page.evaluate(() => {
+      const missions = progress.missions
+      missions['w1-m3'] = { status: 'completed' }
+    })
+  `), /evaluate|write|assignment/i);
+});
+
+test('rejects addInitScript completion injection', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    await page.addInitScript(() => {
+      localStorage.setItem('xiyou-programming-progress-v3', JSON.stringify({
+        missions: { 'w1-m3': { status: 'completed' } },
+      }))
+    })
+  `), /addInitScript|allowlist|fixture/i);
+});
+
+test('rejects conditional health attachment in the page factory', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    function attachHealth(page) {}
+    async function newHealthyPage(context) {
+      const page = await context.newPage()
+      if (false) attachHealth(page)
+      return page
+    }
+  `), /factory|health/i);
+});
+
+test('rejects health attachment after page navigation', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    function attachHealth(page) {}
+    async function newHealthyPage(context) {
+      const page = await context.newPage()
+      await page.goto('./')
+      attachHealth(page)
+      return page
+    }
+  `), /factory|health|navigation/i);
+});
+
+test('rejects a shadowed attachHealth parameter in another scope', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    function attachHealth(page) {}
+    async function newHealthyPage(context) {
+      const page = await context.newPage()
+      ;((attachHealth) => attachHealth(page))(() => {})
+      return page
+    }
+  `), /factory|health|shadow/i);
+});
+
+test('rejects an aliased evaluate method that writes progress', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    const run = page.evaluate
+    await run(() => {
+      localStorage.setItem('xiyou-programming-progress-v3', JSON.stringify({
+        missions: { 'w1-m3': { status: 'completed' } },
+      }))
+    })
+  `), /alias|evaluate|browser-context/i);
 });
 
 test('keeps both formal Phaser scene roots bounded and browser cold gates shared', () => {
