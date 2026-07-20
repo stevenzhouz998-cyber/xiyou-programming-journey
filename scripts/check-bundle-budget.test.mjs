@@ -693,6 +693,45 @@ for (const [name, dynamicCode] of dynamicExecutionCases) {
   });
 }
 
+const monkeypatchCases = [
+  ...['Array', 'Object', 'Function'].flatMap((builtIn) => [
+    [`Object.defineProperty ${builtIn}.prototype`, `Object.defineProperty(${builtIn}.prototype, 'filter', { value: () => [] })`],
+    [`Object.defineProperties ${builtIn}.prototype`, `Object.defineProperties(${builtIn}.prototype, { filter: { value: () => [] } })`],
+    [`Object.setPrototypeOf ${builtIn}.prototype`, `Object.setPrototypeOf(${builtIn}.prototype, forgedPrototype)`],
+  ]),
+  ['Reflect.defineProperty', "Reflect.defineProperty(Array.prototype, 'filter', { value: () => [] })"],
+  ['Reflect.setPrototypeOf', 'Reflect.setPrototypeOf(Object.prototype, forgedPrototype)'],
+  ['Reflect.deleteProperty', "Reflect.deleteProperty(Function.prototype, 'call')"],
+  ['direct prototype assignment', 'Array.prototype.filter = () => []'],
+  ['computed prototype assignment', "Object.prototype['toString'] = () => ''"],
+  ['nested computed prototype assignment', "Function['prototype']['call'] = forgedCall"],
+  ['prototype delete', 'delete Array.prototype.filter'],
+  ['prototype update', 'Object.prototype.length++'],
+  ['prototype assign', 'Object.assign(Array.prototype, { filter: () => [] })'],
+  ['prototype mutation call', 'Array.prototype.push(forgedEvent)'],
+  ['Object.assign alias', 'const assign = Object.assign; assign(Array.prototype, { filter: () => [] })'],
+  ['Object.assign destructure', 'const { assign } = Object; assign(Array.prototype, { filter: () => [] })'],
+  ['Object mutator alias', "const define = Object.defineProperty; define(Array.prototype, 'filter', { value: () => [] })"],
+  ['Reflect mutator destructure', "const { defineProperty: define } = Reflect; define(Array.prototype, 'filter', { value: () => [] })"],
+  ['computed Object mutator alias', "const define = Object['defineProperty']; define(Array.prototype, 'filter', { value: () => [] })"],
+  ['computed Object mutator destructure', "const { ['defineProperty']: define } = Object; define(Array.prototype, 'filter', { value: () => [] })"],
+  ['built-in alias prototype mutation', 'const builtIn = Array; builtIn.prototype.filter = () => []'],
+  ...['expect', 'test', 'JSON', 'Object', 'Array', 'Reflect', 'localStorage'].map((globalName) => (
+    [`${globalName} reassignment`, `${globalName} = forgedGlobal`]
+  )),
+];
+
+for (const [name, monkeypatchCode] of monkeypatchCases) {
+  test(`rejects E2E built-in monkeypatch through ${name}`, () => {
+    assert.throws(() => assertFourSeasE2ESourceContract(`
+      ${validHealthHarness}
+      test('monkeypatch bypass', () => {
+        ${monkeypatchCode}
+      })
+    `), /prototype|monkeypatch|built-in|mutation|define|Function/i);
+  });
+}
+
 test('allows locator geometry evaluate and Node-side map', () => {
   assert.doesNotThrow(() => assertFourSeasE2ESourceContract(`
     const rect = await page.locator('.cell').evaluate((element) => element.getBoundingClientRect())

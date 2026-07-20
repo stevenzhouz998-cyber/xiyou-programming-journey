@@ -133,6 +133,22 @@ const safeReadCalls = new Set([
 
 const dynamicExecutorNames = new Set(['eval', 'Function']);
 const dynamicTimerNames = new Set(['setTimeout', 'setInterval']);
+const protectedGlobalNames = new Set([
+  'expect',
+  'test',
+  'JSON',
+  'Object',
+  'Array',
+  'Reflect',
+  'localStorage',
+]);
+const builtInPrototypeNames = new Set(['Array', 'Object', 'Function']);
+const forbiddenObjectMutators = new Set([
+  'defineProperty',
+  'defineProperties',
+  'setPrototypeOf',
+  'deleteProperty',
+]);
 
 const isGlobalObjectExpression = (node) => {
   const expression = unwrapExpression(node);
@@ -143,6 +159,103 @@ const isInlineTimerCallback = (node) => {
   const callback = node && unwrapExpression(node);
   return callback && (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback));
 };
+
+const directIdentifierName = (node) => {
+  const expression = unwrapExpression(node);
+  return ts.isIdentifier(expression) ? expression.text : null;
+};
+
+const isProtectedGlobalTarget = (node) => {
+  const expression = unwrapExpression(node);
+  if (ts.isIdentifier(expression)) return protectedGlobalNames.has(expression.text);
+  if (!ts.isPropertyAccessExpression(expression) && !ts.isElementAccessExpression(expression)) return false;
+  return isGlobalObjectExpression(expression.expression)
+    && (staticPropertyName(expression) === null || protectedGlobalNames.has(staticPropertyName(expression)));
+};
+
+const isBuiltInPrototypeChain = (node) => {
+  const expression = unwrapExpression(node);
+  if (!ts.isPropertyAccessExpression(expression) && !ts.isElementAccessExpression(expression)) return false;
+  const receiver = unwrapExpression(expression.expression);
+  if (staticPropertyName(expression) === 'prototype') return true;
+  if (ts.isIdentifier(receiver) && builtInPrototypeNames.has(receiver.text)
+    && staticPropertyName(expression) === '__proto__') return true;
+  return isBuiltInPrototypeChain(receiver);
+};
+
+function assertNoBuiltInMonkeypatch(file) {
+  const prototypeAssignAliases = new Set();
+  const fail = (detail) => {
+    throw new Error(`Four Seas E2E source contract: built-in/prototype mutation write or monkeypatch is forbidden (${detail}).`);
+  };
+  const visit = (node) => {
+    if (ts.isVariableDeclaration(node) && node.initializer) {
+      const initializerName = directIdentifierName(node.initializer);
+      const initializer = unwrapExpression(node.initializer);
+      if (ts.isIdentifier(node.name) && initializerName !== null
+        && protectedGlobalNames.has(initializerName)) {
+        fail(`protected global alias ${initializerName}`);
+      }
+      if (ts.isIdentifier(node.name)
+        && ((initializerName !== null && prototypeAssignAliases.has(initializerName))
+          || ((ts.isPropertyAccessExpression(initializer) || ts.isElementAccessExpression(initializer))
+            && directIdentifierName(initializer.expression) === 'Object'
+            && staticPropertyName(initializer) === 'assign'))) {
+        prototypeAssignAliases.add(node.name.text);
+      }
+      if (ts.isObjectBindingPattern(node.name)
+        && (initializerName === 'Object' || initializerName === 'Reflect')) {
+        for (const element of node.name.elements) {
+          const name = bindingPropertyName(element);
+          if (name === null || forbiddenObjectMutators.has(name)) {
+            fail(`${initializerName} mutator destructuring`);
+          }
+          if (initializerName === 'Object' && name === 'assign' && ts.isIdentifier(element.name)) {
+            prototypeAssignAliases.add(element.name.text);
+          }
+        }
+      }
+    }
+    if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))) {
+      const receiverName = directIdentifierName(node.expression);
+      const name = staticPropertyName(node);
+      if ((receiverName === 'Object' || receiverName === 'Reflect')
+        && (name === null || forbiddenObjectMutators.has(name))) {
+        fail(`${receiverName}.${String(name)}`);
+      }
+    }
+    if (ts.isBinaryExpression(node) && assignmentOperators.has(node.operatorToken.kind)) {
+      if (isProtectedGlobalTarget(node.left)) fail('protected global reassignment');
+      if (isBuiltInPrototypeChain(node.left)) fail('prototype assignment');
+    }
+    if ((ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node))
+      && (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken)) {
+      if (isProtectedGlobalTarget(node.operand)) fail('protected global update');
+      if (isBuiltInPrototypeChain(node.operand)) fail('prototype update');
+    }
+    if (ts.isDeleteExpression(node)) {
+      if (isProtectedGlobalTarget(node.expression)) fail('protected global delete');
+      if (isBuiltInPrototypeChain(node.expression)) fail('prototype delete');
+    }
+    if (ts.isCallExpression(node)) {
+      const callee = unwrapExpression(node.expression);
+      if ((ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee))
+        && isBuiltInPrototypeChain(callee.expression)) {
+        fail('prototype mutation call');
+      }
+      if (qualifiedCallName(node) === 'Object.assign'
+        && node.arguments[0] && isBuiltInPrototypeChain(node.arguments[0])) {
+        fail('Object.assign prototype mutation');
+      }
+      if (ts.isIdentifier(callee) && prototypeAssignAliases.has(callee.text)
+        && node.arguments[0] && isBuiltInPrototypeChain(node.arguments[0])) {
+        fail('Object.assign alias prototype mutation');
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+}
 
 function assertNoDynamicExecution(file) {
   const fail = (detail) => {
@@ -686,6 +799,7 @@ export function assertFourSeasE2ESourceContract(source) {
   if (file.parseDiagnostics.length > 0) {
     throw new Error('Four Seas E2E source contract: source must parse before safety inspection.');
   }
+  assertNoBuiltInMonkeypatch(file);
   assertNoDynamicExecution(file);
 
   const topLevelFunctions = new Map(file.statements
