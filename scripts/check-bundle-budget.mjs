@@ -38,8 +38,6 @@ export function assertNoSourceVisualAssets(files) {
   if (sourceAsset) throw new Error(`Bundle budget: non-shipping visual source remains in public: ${sourceAsset}.`);
 }
 
-export { assertFourSeasE2ESourceContract } from './check-four-seas-e2e-contract.mjs';
-
 async function listFiles(root, relativeRoot = '') {
   const entries = await readdir(join(root, relativeRoot), { withFileTypes: true });
   const files = [];

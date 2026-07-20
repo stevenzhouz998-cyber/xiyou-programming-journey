@@ -5,8 +5,9 @@ import { dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import * as bundleBudget from './check-bundle-budget.mjs';
+import { assertFourSeasE2ESourceContract } from './check-four-seas-e2e-contract.mjs';
 
-const { analyzeManifest, assertFourSeasE2ESourceContract, assertNoSourceVisualAssets } = bundleBudget;
+const { analyzeManifest, assertNoSourceVisualAssets } = bundleBudget;
 
 const base = {
   'src/main.tsx': { file: 'assets/main.js', isEntry: true, imports: ['vendor.js'] },
@@ -15,15 +16,28 @@ const base = {
 
 const sourceRoot = fileURLToPath(new URL('../src/', import.meta.url));
 
-const validHealthHarness = `
+const validHealthCore = `
   let healthEvents = []
   function attachHealth(page) {
-    page.on('console', (event) => healthEvents.push(event))
-    page.on('pageerror', (event) => healthEvents.push(event))
-    page.on('requestfailed', (event) => healthEvents.push(event))
+    page.on('console', (message) => {
+      if (message.type() === 'error') healthEvents.push({ kind: 'console', url: message.location().url || page.url(), detail: message.text() })
+    })
+    page.on('pageerror', (error) => healthEvents.push({ kind: 'pageerror', url: page.url(), detail: error.message }))
+    page.on('requestfailed', (request) => healthEvents.push({ kind: 'requestfailed', url: request.url(), detail: request.failure()?.errorText ?? 'unknown' }))
   }
+  function expectedNavigationAbort(event) {
+    return event.kind === 'requestfailed' && (
+      (event.url.startsWith('https://fonts.gstatic.com/') && /ABORTED|cancelled/i.test(event.detail))
+      || (event.url.includes('/assets/audio/') && /ABORTED|cancelled/i.test(event.detail))
+      || (event.url === 'https://static.blockly.com/media/sprites.svg' && /ABORTED|cancelled/i.test(event.detail))
+    )
+  }
+`;
+
+const validHealthHarness = `
+  ${validHealthCore}
   test.afterEach(() => {
-    expect(healthEvents.filter((event) => event.unexpected)).toEqual([])
+    expect(healthEvents.filter((event) => !expectedNavigationAbort(event)), 'unexpected Four Seas browser health events').toEqual([])
   })
 `;
 
@@ -94,6 +108,18 @@ async function loadTypeScriptModule(path) {
   return import(`data:text/javascript;base64,${Buffer.from(output).toString('base64')}`);
 }
 
+function loadNamedFunctionFromTypeScriptSource(source, name) {
+  const file = ts.createSourceFile('source.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const declaration = file.statements.find((statement) => (
+    ts.isFunctionDeclaration(statement) && statement.name?.text === name
+  ));
+  assert.ok(declaration, `missing ${name} declaration`);
+  const output = ts.transpileModule(declaration.getText(file), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  return Function(`${output}\nreturn ${name}`)();
+}
+
 test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
   assert.equal(bundleBudget.DRAGON_PALACE_COLD_LOAD_MAX_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.RUYI_STAFF_COLD_LOAD_MAX_BYTES, 2.5 * 1024 * 1024);
@@ -106,8 +132,7 @@ test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
 
 test('keeps the Four Seas E2E AST contract isolated from bundle analysis', () => {
   const source = readFileSync(new URL('./check-bundle-budget.mjs', import.meta.url), 'utf8');
-  assert.match(source, /from ['"]\.\/check-four-seas-e2e-contract\.mjs['"]/);
-  assert.doesNotMatch(source, /ts\.createSourceFile/);
+  assert.doesNotMatch(source, /check-four-seas-e2e-contract|typescript|ts\.createSourceFile/);
 });
 
 test('derives compatible cold-load aliases from canonical budget constants', () => {
@@ -261,6 +286,22 @@ test('rejects hidden w1-m3 writes and missing health listeners on every independ
 
   const actualSource = readFileSync(new URL('../e2e/four-seas-regalia-code-battle.spec.ts', import.meta.url), 'utf8');
   assert.doesNotThrow(() => assertFourSeasE2ESourceContract(actualSource));
+});
+
+test('keeps the actual navigation-abort filter pure and narrow for synthetic health events', () => {
+  const source = readFileSync(new URL('../e2e/four-seas-regalia-code-battle.spec.ts', import.meta.url), 'utf8');
+  const expectedNavigationAbort = loadNamedFunctionFromTypeScriptSource(source, 'expectedNavigationAbort');
+  const events = [
+    Object.freeze({ kind: 'console', url: 'https://fonts.gstatic.com/font.woff2', detail: 'net::ERR_ABORTED' }),
+    Object.freeze({ kind: 'pageerror', url: 'https://static.blockly.com/media/sprites.svg', detail: 'cancelled' }),
+    Object.freeze({ kind: 'requestfailed', url: 'https://example.test/api', detail: 'net::ERR_ABORTED' }),
+    Object.freeze({ kind: 'requestfailed', url: 'https://fonts.gstatic.com/font.woff2', detail: 'net::ERR_ABORTED' }),
+    Object.freeze({ kind: 'requestfailed', url: 'https://example.test/assets/audio/click.mp3', detail: 'cancelled' }),
+    Object.freeze({ kind: 'requestfailed', url: 'https://static.blockly.com/media/sprites.svg', detail: 'net::ERR_ABORTED' }),
+  ];
+  const snapshots = events.map((event) => ({ ...event }));
+  assert.deepEqual(events.map(expectedNavigationAbort), [false, false, false, true, true, true]);
+  assert.deepEqual(events, snapshots, 'the filter must not mutate synthetic health events');
 });
 
 test('allows the exact prerequisite init helper without w1-m3 state', () => {
@@ -477,12 +518,7 @@ test('rejects an empty attachHealth helper even when it is called', () => {
 
 test('rejects an afterEach that negates the shared healthEvents empty assertion', () => {
   assert.throws(() => assertFourSeasE2ESourceContract(`
-    let healthEvents = []
-    function attachHealth(page) {
-      page.on('console', (event) => healthEvents.push(event))
-      page.on('pageerror', (event) => healthEvents.push(event))
-      page.on('requestfailed', (event) => healthEvents.push(event))
-    }
+    ${validHealthCore}
     test.beforeEach(async ({ page }) => {
       attachHealth(page)
     })
@@ -490,6 +526,73 @@ test('rejects an afterEach that negates the shared healthEvents empty assertion'
       expect(healthEvents).not.toEqual([])
     })
   `), /afterEach|healthEvents|empty|unexpected/i);
+});
+
+test('rejects a health assertion hidden behind an empty-length condition', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    ${validHealthCore}
+    test.afterEach(() => {
+      if (healthEvents.length === 0) {
+        expect(healthEvents.filter((event) => !expectedNavigationAbort(event))).toEqual([])
+      }
+    })
+  `), /afterEach|healthEvents|unconditional|structure/i);
+});
+
+test('rejects a health filter that discards every event', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    ${validHealthCore}
+    test.afterEach(() => {
+      expect(healthEvents.filter(() => false)).toEqual([])
+    })
+  `), /afterEach|filter|healthEvents|unexpected/i);
+});
+
+test('rejects resetting healthEvents before the empty assertion', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    ${validHealthCore}
+    test.afterEach(() => {
+      healthEvents = []
+      expect(healthEvents.filter((event) => !expectedNavigationAbort(event))).toEqual([])
+    })
+  `), /afterEach|reset|healthEvents|structure/i);
+});
+
+test('rejects listener callbacks whose healthEvents pushes are unreachable', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    let healthEvents = []
+    function attachHealth(page) {
+      page.on('console', (message) => {
+        if (false) healthEvents.push({ kind: 'console', url: page.url(), detail: message.text() })
+      })
+      page.on('pageerror', (error) => {
+        if (false) healthEvents.push({ kind: 'pageerror', url: page.url(), detail: error.message })
+      })
+      page.on('requestfailed', (request) => {
+        if (false) healthEvents.push({ kind: 'requestfailed', url: request.url(), detail: request.failure()?.errorText ?? 'unknown' })
+      })
+    }
+    function expectedNavigationAbort(event) {
+      return event.kind === 'requestfailed' && (
+        (event.url.startsWith('https://fonts.gstatic.com/') && /ABORTED|cancelled/i.test(event.detail))
+        || (event.url.includes('/assets/audio/') && /ABORTED|cancelled/i.test(event.detail))
+        || (event.url === 'https://static.blockly.com/media/sprites.svg' && /ABORTED|cancelled/i.test(event.detail))
+      )
+    }
+    test.afterEach(() => {
+      expect(healthEvents.filter((event) => !expectedNavigationAbort(event))).toEqual([])
+    })
+  `), /attachHealth|listener|console|pageerror|requestfailed|push/i);
+});
+
+test('allows one top-level unexpected healthEvents filter before the empty assertion', () => {
+  assert.doesNotThrow(() => assertFourSeasE2ESourceContract(`
+    ${validHealthCore}
+    test.afterEach(() => {
+      const unexpected = healthEvents.filter((event) => !expectedNavigationAbort(event))
+      expect(unexpected, 'unexpected Four Seas browser health events').toEqual([])
+    })
+  `));
 });
 
 test('allows locator geometry evaluate and Node-side map', () => {
