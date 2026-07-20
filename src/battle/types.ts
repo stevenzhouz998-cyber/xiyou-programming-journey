@@ -1,3 +1,7 @@
+import type { FourSeasOpcode } from '../blockly/fourSeasRegaliaContract'
+
+export type { FourSeasOpcode } from '../blockly/fourSeasRegaliaContract'
+
 export type DragonPalaceOpcode = 'enter_palace' | 'request_weapon' | 'test_weapon'
 
 export type RuyiStaffOpcode =
@@ -6,18 +10,6 @@ export type RuyiStaffOpcode =
   | 'choose_halberd'
   | 'choose_ruyi_staff'
   | 'shrink_ruyi_staff'
-
-export type FourSeasOpcode =
-  | 'request_regalia'
-  | 'collect_gifts'
-  | 'receive_cloud_boots'
-  | 'receive_golden_armor'
-  | 'receive_purple_crown'
-  | 'equip_regalia'
-  | 'wear_crown'
-  | 'wear_armor'
-  | 'wear_boots'
-  | 'verify_regalia'
 
 export type BattleOpcode = DragonPalaceOpcode | RuyiStaffOpcode
 

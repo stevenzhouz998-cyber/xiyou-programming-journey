@@ -2,6 +2,7 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 import { dirname, isAbsolute, join, normalize, relative, resolve, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import {
   ENTRY_GZIP_LIMIT,
   GAME_SCENE_RAW_LIMIT,
@@ -38,46 +39,168 @@ export function assertNoSourceVisualAssets(files) {
   if (sourceAsset) throw new Error(`Bundle budget: non-shipping visual source remains in public: ${sourceAsset}.`);
 }
 
-export function assertFourSeasE2ESourceContract(source) {
-  const pageDeclarations = [...source.matchAll(/const\s+([A-Za-z_$][\w$]*)\s*=\s*await\s+(?:page\.context\(\)|context|browser\.newContext\(\))\.newPage\(\)/g)];
-  for (const declaration of pageDeclarations) {
-    const pageName = declaration[1];
-    if (!new RegExp(`attachHealth\\(\\s*${pageName}\\s*\\)`).test(source)) {
-      throw new Error(`Four Seas E2E source contract: independent page ${pageName} is missing health listeners.`);
-    }
-  }
+const unwrapExpression = (node) => {
+  let current = node;
+  while (
+    ts.isAwaitExpression(current)
+    || ts.isParenthesizedExpression(current)
+    || ts.isAsExpression(current)
+    || ts.isTypeAssertionExpression(current)
+    || ts.isNonNullExpression(current)
+  ) current = current.expression;
+  return current;
+};
 
-  const evaluateBodies = [];
-  let cursor = 0;
-  while ((cursor = source.indexOf('.evaluate', cursor)) !== -1) {
-    const open = source.indexOf('(', cursor + '.evaluate'.length);
-    if (open === -1) break;
-    let depth = 0;
-    let quote = null;
-    let escaped = false;
-    let end = open;
-    for (; end < source.length; end += 1) {
-      const character = source[end];
-      if (quote !== null) {
-        if (escaped) escaped = false;
-        else if (character === '\\') escaped = true;
-        else if (character === quote) quote = null;
-        continue;
-      }
-      if (character === "'" || character === '"' || character === '`') { quote = character; continue; }
-      if (character === '(') depth += 1;
-      else if (character === ')' && --depth === 0) { end += 1; break; }
-    }
-    evaluateBodies.push(source.slice(cursor, end));
-    cursor = Math.max(end, cursor + 1);
+const calledPropertyName = (call) => {
+  const callee = unwrapExpression(call.expression);
+  if (ts.isPropertyAccessExpression(callee)) return callee.name.text;
+  if (ts.isElementAccessExpression(callee)) {
+    const argument = unwrapExpression(callee.argumentExpression);
+    if (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument)) return argument.text;
   }
-  for (const body of evaluateBodies) {
-    if (!/w1-m3/.test(body)) continue;
-    const directAssignment = /(?:missions|sessions)\s*\[\s*['"]w1-m3['"]\s*\]\s*=/.test(body);
-    const writesCurrent = /localStorage\.setItem\s*\(\s*['"]xiyou-programming-progress-v3['"]/.test(body);
-    const containsInjectedEvidence = /workspaceDraft|lastTrace|lastRun|completedAt|status\s*:\s*['"]completed['"]/.test(body);
-    if (directAssignment || (writesCurrent && containsInjectedEvidence)) {
-      throw new Error('Four Seas E2E source contract: evaluate-injected w1-m3 completion/session/draft/run is forbidden.');
+  return null;
+};
+
+const callReceiver = (call) => {
+  const callee = unwrapExpression(call.expression);
+  return ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee)
+    ? callee.expression
+    : null;
+};
+
+const containsIdentifier = (node, name) => {
+  let found = false;
+  const visit = (current) => {
+    if (found) return;
+    if (ts.isIdentifier(current) && current.text === name) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(current, visit);
+  };
+  visit(node);
+  return found;
+};
+
+const containsStorageReference = (node) => (
+  containsIdentifier(node, 'localStorage') || containsIdentifier(node, 'sessionStorage')
+);
+
+const assignmentOperators = new Set([
+  ts.SyntaxKind.EqualsToken,
+  ts.SyntaxKind.PlusEqualsToken,
+  ts.SyntaxKind.MinusEqualsToken,
+  ts.SyntaxKind.AsteriskEqualsToken,
+  ts.SyntaxKind.AsteriskAsteriskEqualsToken,
+  ts.SyntaxKind.SlashEqualsToken,
+  ts.SyntaxKind.PercentEqualsToken,
+  ts.SyntaxKind.LessThanLessThanEqualsToken,
+  ts.SyntaxKind.GreaterThanGreaterThanEqualsToken,
+  ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
+  ts.SyntaxKind.AmpersandEqualsToken,
+  ts.SyntaxKind.BarEqualsToken,
+  ts.SyntaxKind.CaretEqualsToken,
+  ts.SyntaxKind.BarBarEqualsToken,
+  ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+  ts.SyntaxKind.QuestionQuestionEqualsToken,
+]);
+
+const allowedStorageWriteKeys = new Set(['xiyou-test-storage-mode']);
+
+function assertReadOnlyEvaluate(callback) {
+  const fail = (detail) => {
+    throw new Error(`Four Seas E2E source contract: evaluate write/injection is forbidden (${detail}).`);
+  };
+  const visit = (node) => {
+    if (ts.isBinaryExpression(node) && assignmentOperators.has(node.operatorToken.kind)) {
+      if (containsIdentifier(node.left, 'progress')) fail('progress assignment');
+      if (containsStorageReference(node.left)) fail('storage assignment');
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node))
+      && (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken)
+      && containsIdentifier(node.operand, 'progress')
+    ) fail('progress mutation');
+    if (ts.isDeleteExpression(node) && containsIdentifier(node.expression, 'progress')) {
+      fail('progress delete');
+    }
+    if (ts.isCallExpression(node)) {
+      const method = calledPropertyName(node);
+      const receiver = callReceiver(node);
+      if (receiver !== null && containsStorageReference(receiver)) {
+        if (method === 'setItem') {
+          const key = node.arguments[0] && unwrapExpression(node.arguments[0]);
+          const keyValue = key && (ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key))
+            ? key.text
+            : null;
+          if (keyValue === null || !allowedStorageWriteKeys.has(keyValue)) fail('storage setItem');
+        } else if (method !== 'getItem' && method !== 'key') {
+          fail(`storage ${String(method)}`);
+        }
+      }
+      if (receiver !== null && containsIdentifier(receiver, 'progress')) {
+        fail(`progress method ${String(method)}`);
+      }
+      const callee = unwrapExpression(node.expression);
+      const isMutationUtility = ts.isPropertyAccessExpression(callee)
+        && ts.isIdentifier(callee.expression)
+        && (
+          (callee.expression.text === 'Object' && ['assign', 'defineProperty', 'defineProperties'].includes(callee.name.text))
+          || (callee.expression.text === 'Reflect' && ['set', 'deleteProperty', 'defineProperty'].includes(callee.name.text))
+        );
+      if (
+        isMutationUtility
+        && node.arguments[0]
+        && (containsIdentifier(node.arguments[0], 'progress') || containsStorageReference(node.arguments[0]))
+      ) fail(`${callee.expression.text}.${callee.name.text}`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(callback.body);
+}
+
+export function assertFourSeasE2ESourceContract(source) {
+  const file = ts.createSourceFile(
+    'four-seas-regalia-code-battle.spec.ts',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const independentPages = new Set();
+  const healthAttachedPages = new Set();
+
+  const visit = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      const initializer = unwrapExpression(node.initializer);
+      if (ts.isCallExpression(initializer) && calledPropertyName(initializer) === 'newPage') {
+        independentPages.add(node.name.text);
+      }
+    }
+    if (ts.isCallExpression(node)) {
+      const callee = unwrapExpression(node.expression);
+      if (
+        ts.isIdentifier(callee)
+        && callee.text === 'attachHealth'
+        && node.arguments.length === 1
+        && ts.isIdentifier(unwrapExpression(node.arguments[0]))
+      ) healthAttachedPages.add(unwrapExpression(node.arguments[0]).text);
+
+      if (calledPropertyName(node) === 'evaluate') {
+        const callback = node.arguments[0] && unwrapExpression(node.arguments[0]);
+        if (!callback || (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback))) {
+          throw new Error('Four Seas E2E source contract: evaluate callback must be inline for AST inspection.');
+        }
+        assertReadOnlyEvaluate(callback);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+
+  for (const pageName of independentPages) {
+    if (!healthAttachedPages.has(pageName)) {
+      throw new Error(`Four Seas E2E source contract: independent page ${pageName} is missing health listeners.`);
     }
   }
 }

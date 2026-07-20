@@ -1,7 +1,7 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
-import { DRAGON_PALACE_COLD_BYTES } from '../scripts/budget-limits.mjs'
+import { DRAGON_PALACE_COLD_LOAD_MAX_BYTES } from '../scripts/budget-limits.mjs'
 
 const CURRENT_KEY = 'xiyou-programming-progress-v3'
 const SNAPSHOT_KEY = 'xiyou-programming-progress-snapshot-v3'
@@ -484,10 +484,10 @@ test('@cold cold w1-m1 response bodies stay within the fixed 2.5 MiB budget with
   expect(responses.some((response) => response.url.includes('/assets/dragon-palace/background.webp'))).toBe(true)
   expect(responses.some((response) => /\/assets\/phaser-.*\.js/.test(response.url))).toBe(true)
   expect(responses.some((response) => response.url.startsWith('https://static.blockly.com/'))).toBe(true)
-  expect(total).toBeLessThanOrEqual(DRAGON_PALACE_COLD_BYTES)
+  expect(total).toBeLessThanOrEqual(DRAGON_PALACE_COLD_LOAD_MAX_BYTES)
   console.log(`[dragon-palace-cold-bytes] ${testInfo.project.name}: ${total}`)
   await testInfo.attach('dragon-palace-cold-load.json', {
-    body: Buffer.from(JSON.stringify({ project: testInfo.project.name, bytes: total, limit: DRAGON_PALACE_COLD_BYTES, responses }, null, 2)),
+    body: Buffer.from(JSON.stringify({ project: testInfo.project.name, bytes: total, limit: DRAGON_PALACE_COLD_LOAD_MAX_BYTES, responses }, null, 2)),
     contentType: 'application/json',
   })
 })

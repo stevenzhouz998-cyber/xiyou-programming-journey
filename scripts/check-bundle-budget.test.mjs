@@ -70,6 +70,18 @@ function collectRuntimeSourceClosure(entry) {
   return closure;
 }
 
+async function loadTypeScriptModule(path) {
+  const source = readFileSync(path, 'utf8');
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: path,
+  }).outputText;
+  return import(`data:text/javascript;base64,${Buffer.from(output).toString('base64')}`);
+}
+
 test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
   assert.equal(bundleBudget.DRAGON_PALACE_COLD_LOAD_MAX_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.RUYI_STAFF_COLD_LOAD_MAX_BYTES, 2.5 * 1024 * 1024);
@@ -78,6 +90,21 @@ test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
   assert.equal(bundleBudget.RUYI_STAFF_COLD_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.DRAGON_PALACE_MEDIA_BYTES, 1.25 * 1024 * 1024);
   assert.equal(bundleBudget.SINGLE_RASTER_BYTES, 512 * 1024);
+});
+
+test('derives compatible cold-load aliases from canonical budget constants', () => {
+  const budgetSource = readFileSync(new URL('./budget-limits.mjs', import.meta.url), 'utf8');
+  assert.match(budgetSource, /DRAGON_PALACE_COLD_BYTES\s*=\s*DRAGON_PALACE_COLD_LOAD_MAX_BYTES/);
+  assert.match(budgetSource, /RUYI_STAFF_COLD_BYTES\s*=\s*RUYI_STAFF_COLD_LOAD_MAX_BYTES/);
+  assert.match(budgetSource, /FOUR_SEAS_COLD_BYTES\s*=\s*FOUR_SEAS_COLD_LOAD_MAX_BYTES/);
+  assert.equal(bundleBudget.DRAGON_PALACE_COLD_BYTES, bundleBudget.DRAGON_PALACE_COLD_LOAD_MAX_BYTES);
+  assert.equal(bundleBudget.RUYI_STAFF_COLD_BYTES, bundleBudget.RUYI_STAFF_COLD_LOAD_MAX_BYTES);
+  assert.equal(bundleBudget.FOUR_SEAS_COLD_BYTES, bundleBudget.FOUR_SEAS_COLD_LOAD_MAX_BYTES);
+
+  const dragonSource = readFileSync(new URL('../e2e/dragon-palace-code-battle.spec.ts', import.meta.url), 'utf8');
+  const staffSource = readFileSync(new URL('../e2e/ruyi-staff-code-battle.spec.ts', import.meta.url), 'utf8');
+  assert.match(dragonSource, /import\s*\{\s*DRAGON_PALACE_COLD_LOAD_MAX_BYTES\s*\}/);
+  assert.match(staffSource, /import\s*\{\s*RUYI_STAFF_COLD_LOAD_MAX_BYTES\s*\}/);
 });
 
 test('keeps all three formal experiences route-lazy and Four Seas scene/workspace independently bounded', () => {
@@ -128,6 +155,54 @@ test('keeps Four Seas persistence on a neutral contract outside the lazy UI cata
   assert.doesNotMatch(catalogueSource, /(?:const|let|var)\s+FOUR_SEAS_BLOCK_OPCODE\b/);
 });
 
+test('derives every Four Seas opcode domain from one zero-import neutral definition', async () => {
+  const contractPath = resolve(sourceRoot, 'blockly/fourSeasRegaliaContract.ts');
+  const schemaPath = resolve(sourceRoot, 'progress/schema.ts');
+  const battleTypesPath = resolve(sourceRoot, 'battle/types.ts');
+  const contract = await loadTypeScriptModule(contractPath);
+
+  assert.ok(contract.FOUR_SEAS_BLOCK_DEFINITIONS, 'canonical block definitions must be exported');
+  const definitions = Object.entries(contract.FOUR_SEAS_BLOCK_DEFINITIONS);
+  const opcodes = definitions.map(([, definition]) => definition.opcode);
+  assert.equal(new Set(opcodes).size, definitions.length, 'every block must have a unique opcode');
+  assert.deepEqual(
+    contract.FOUR_SEAS_BLOCK_OPCODE,
+    Object.fromEntries(definitions.map(([blockType, definition]) => [blockType, definition.opcode])),
+  );
+  assert.deepEqual(
+    contract.FOUR_SEAS_TOP_BLOCK_TYPES,
+    definitions.filter(([, definition]) => definition.parentScope === 'top').map(([blockType]) => blockType),
+  );
+  assert.deepEqual(
+    contract.FOUR_SEAS_CHILD_BLOCK_TYPES,
+    definitions.filter(([, definition]) => definition.parentScope !== 'top').map(([blockType]) => blockType),
+  );
+  assert.deepEqual(
+    contract.FOUR_SEAS_OPCODE_PLACEMENT,
+    Object.fromEntries(definitions.map(([, definition]) => [
+      definition.opcode,
+      definition.parentScope === 'top' ? 'top' : 'child',
+    ])),
+  );
+  assert.deepEqual(
+    contract.FOUR_SEAS_OPCODE_PARENT_SCOPE,
+    Object.fromEntries(definitions.map(([, definition]) => [definition.opcode, definition.parentScope])),
+  );
+  for (const [blockType, definition] of definitions) {
+    assert.equal(contract.isFourSeasBlockType(blockType), true);
+    assert.equal(contract.isFourSeasOpcode(definition.opcode), true);
+  }
+  assert.equal(contract.isFourSeasOpcode('future-unregistered-opcode'), false);
+
+  assert.deepEqual(sourceModuleSpecifiers(contractPath), [], 'neutral contract must have zero imports');
+  const schemaSource = readFileSync(schemaPath, 'utf8');
+  assert.doesNotMatch(schemaSource, /const\s+fourSeasOpcodes\b/);
+  assert.doesNotMatch(schemaSource, /const\s+fourSeasOpcodePlacement\b/);
+  const battleTypesSource = readFileSync(battleTypesPath, 'utf8');
+  assert.match(battleTypesSource, /(?:import|export)\s+type\s*\{\s*FourSeasOpcode\s*\}[^;]*fourSeasRegaliaContract/);
+  assert.doesNotMatch(battleTypesSource, /export\s+type\s+FourSeasOpcode\s*=/);
+});
+
 test('forbids Blockly as well as Phaser in the entry static closure', () => {
   const manifest = {
     ...base,
@@ -166,11 +241,36 @@ test('rejects hidden w1-m3 writes and missing health listeners on every independ
   assert.doesNotThrow(() => assertFourSeasE2ESourceContract(actualSource));
 });
 
+test('rejects CURRENT_KEY-indirect persistence writes inside evaluate', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    const CURRENT_KEY = 'xiyou-programming-progress-v3'
+    await page.evaluate((key) => {
+      localStorage.setItem(key, JSON.stringify({ missions: { 'w1-m3': { status: 'completed' } } }))
+    }, CURRENT_KEY)
+  `), /storage|inject|write/i);
+});
+
+test('rejects Object.assign progress injection inside evaluate', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    await page.evaluate(() => {
+      Object.assign(progress.missions, { 'w1-m3': { status: 'completed' } })
+    })
+  `), /progress|inject|write/i);
+});
+
+test('does not accept a commented health attachment for an independent page', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    const externalPage = await page.context().newPage()
+    // attachHealth(externalPage)
+    await externalPage.goto('./')
+  `), /health/i);
+});
+
 test('keeps both formal Phaser scene roots bounded and browser cold gates shared', () => {
   const budgetSource = readFileSync(new URL('./budget-limits.mjs', import.meta.url), 'utf8');
   const bundleSource = readFileSync(new URL('./check-bundle-budget.mjs', import.meta.url), 'utf8');
   const staffE2eSource = readFileSync(new URL('../e2e/ruyi-staff-code-battle.spec.ts', import.meta.url), 'utf8');
-  assert.match(budgetSource, /RUYI_STAFF_COLD_BYTES\s*=\s*2\.5\s*\*\s*1024\s*\*\s*1024/);
+  assert.match(budgetSource, /RUYI_STAFF_COLD_BYTES\s*=\s*RUYI_STAFF_COLD_LOAD_MAX_BYTES/);
   assert.match(bundleSource, /src\/components\/RuyiStaffScene\.tsx/);
   assert.match(staffE2eSource, /from '\.\.\/scripts\/budget-limits\.mjs'/);
   assert.match(staffE2eSource, /'cache-control':\s*'no-store'/);
@@ -201,7 +301,7 @@ test('keeps Dragon Palace budgets in one shared module', () => {
   const budgetSource = readFileSync(new URL('./budget-limits.mjs', import.meta.url), 'utf8');
   const bundleSource = readFileSync(new URL('./check-bundle-budget.mjs', import.meta.url), 'utf8');
   const e2eSource = readFileSync(new URL('../e2e/dragon-palace-code-battle.spec.ts', import.meta.url), 'utf8');
-  assert.match(budgetSource, /DRAGON_PALACE_COLD_BYTES\s*=\s*2\.5\s*\*\s*1024\s*\*\s*1024/);
+  assert.match(budgetSource, /DRAGON_PALACE_COLD_BYTES\s*=\s*DRAGON_PALACE_COLD_LOAD_MAX_BYTES/);
   assert.match(bundleSource, /from '\.\/budget-limits\.mjs'/);
   assert.match(e2eSource, /from '\.\.\/scripts\/budget-limits\.mjs'/);
   assert.doesNotMatch(e2eSource, /const COLD_BYTES_LIMIT/);

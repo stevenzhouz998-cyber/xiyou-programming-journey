@@ -6,6 +6,7 @@ import type {
   FourSeasOpcode,
   FourSeasState,
 } from './types'
+import { FOUR_SEAS_OPCODE_PARENT_SCOPE } from '../blockly/fourSeasRegaliaContract'
 
 const zeroPenalty = { livesLost: 0, resourcesLost: 0, starsLost: 0 } as const
 
@@ -23,19 +24,6 @@ const transitions: Readonly<
   'armor-equipped': { wear_boots: 'regalia-equipped' },
   'regalia-equipped': { verify_regalia: 'regalia-verified' },
 }
-
-const opcodeParentScope = {
-  request_regalia: 'top',
-  collect_gifts: 'top',
-  receive_cloud_boots: 'collect',
-  receive_golden_armor: 'collect',
-  receive_purple_crown: 'collect',
-  equip_regalia: 'top',
-  wear_crown: 'equip',
-  wear_armor: 'equip',
-  wear_boots: 'equip',
-  verify_regalia: 'top',
-} as const satisfies Record<FourSeasOpcode, 'top' | 'collect' | 'equip'>
 
 function instructionEvent(
   type: 'instruction-accepted' | 'instruction-rejected' | 'state-changed',
@@ -59,7 +47,7 @@ function hasCorrectParent(
   collectBlockId: string | null,
   equipBlockId: string | null,
 ): boolean {
-  const scope = opcodeParentScope[instruction.opcode]
+  const scope = FOUR_SEAS_OPCODE_PARENT_SCOPE[instruction.opcode]
   if (scope === 'collect') {
     return collectBlockId !== null && instruction.parentBlockId === collectBlockId
   }

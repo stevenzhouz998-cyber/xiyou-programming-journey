@@ -3,9 +3,11 @@ import type { DragonBlockType } from '../blockly/dragonPalaceBlocks';
 import type { RuyiBlockType } from '../blockly/ruyiStaffBlocks';
 import {
   findFourSeasWorkspaceBoundaryViolation,
+  FOUR_SEAS_OPCODE_PLACEMENT,
   FOUR_SEAS_WORKSPACE_LIMITS,
   isFourSeasBlockType,
   isFourSeasChildBlockType,
+  isFourSeasOpcode,
   type FourSeasBlockType,
 } from '../blockly/fourSeasRegaliaContract';
 import type { FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft';
@@ -102,23 +104,6 @@ const fourSeasStates = new Set<FourSeasState>([
   'golden-armor-received', 'all-gifts-received', 'equipping-regalia', 'crown-equipped',
   'armor-equipped', 'regalia-equipped', 'regalia-verified',
 ]);
-const fourSeasOpcodes = new Set<FourSeasOpcode>([
-  'request_regalia', 'collect_gifts', 'receive_cloud_boots', 'receive_golden_armor',
-  'receive_purple_crown', 'equip_regalia', 'wear_crown', 'wear_armor', 'wear_boots',
-  'verify_regalia',
-]);
-const fourSeasOpcodePlacement = {
-  request_regalia: 'top',
-  collect_gifts: 'top',
-  receive_cloud_boots: 'child',
-  receive_golden_armor: 'child',
-  receive_purple_crown: 'child',
-  equip_regalia: 'top',
-  wear_crown: 'child',
-  wear_armor: 'child',
-  wear_boots: 'child',
-  verify_regalia: 'top',
-} as const satisfies Record<FourSeasOpcode, 'top' | 'child'>;
 const fourSeasEventTypes = new Set<FourSeasBattleEvent['type']>([
   'run-started', 'instruction-accepted', 'instruction-rejected', 'state-changed', 'run-finished',
 ]);
@@ -1143,10 +1128,10 @@ function fourSeasState(value: unknown, field: string): FourSeasState {
 }
 
 function fourSeasOpcode(value: unknown, field: string): FourSeasOpcode {
-  if (typeof value !== 'string' || !fourSeasOpcodes.has(value as FourSeasOpcode)) {
+  if (typeof value !== 'string' || !isFourSeasOpcode(value)) {
     invalid(`${field}操作码无效`);
   }
-  return value as FourSeasOpcode;
+  return value;
 }
 
 function nullableSourceId(value: unknown, field: string): string | null {
@@ -1208,7 +1193,7 @@ function fourSeasTrace(value: unknown, field: string): ParsedFourSeasTrace {
     activeContainer = null;
   };
   for (const item of instructions) {
-    if (fourSeasOpcodePlacement[item.opcode] === 'top') {
+    if (FOUR_SEAS_OPCODE_PLACEMENT[item.opcode] === 'top') {
       closeActiveContainer();
       if (item.parentBlockId !== null) {
         invalid(`${field}顶层指令 ${item.sourceBlockId} 的parentBlockId必须为null`);

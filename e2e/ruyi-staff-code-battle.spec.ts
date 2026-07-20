@@ -1,7 +1,7 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
-import { RUYI_STAFF_COLD_BYTES } from '../scripts/budget-limits.mjs'
+import { RUYI_STAFF_COLD_LOAD_MAX_BYTES } from '../scripts/budget-limits.mjs'
 
 const CURRENT_KEY = 'xiyou-programming-progress-v3'
 const SNAPSHOT_KEY = 'xiyou-programming-progress-snapshot-v3'
@@ -517,7 +517,7 @@ test('@staff-cold cold w1-m2 response bodies stay within fixed 2.5 MiB with fail
   const total = responses.reduce((sum, response) => sum + response.bytes, 0)
   console.log(`[ruyi-staff-cold-responses] ${testInfo.project.name}: ${JSON.stringify(responses)}`)
   console.log(`[ruyi-staff-cold-bytes] ${testInfo.project.name}: ${total}`)
-  expect(total).toBeLessThanOrEqual(RUYI_STAFF_COLD_BYTES)
+  expect(total).toBeLessThanOrEqual(RUYI_STAFF_COLD_LOAD_MAX_BYTES)
 })
 
 test('@staff-parent parent report and V3 export-import preserve exact w1-m2 session', async ({ page }) => {
