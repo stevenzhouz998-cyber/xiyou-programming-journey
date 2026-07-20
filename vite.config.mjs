@@ -33,8 +33,9 @@ export default defineConfig({
           const source = id.replaceAll('\\', '/');
           if (source.endsWith('/src/utils/focus.ts')) return 'focus-shared';
           if (source.endsWith('/src/engine/validation.ts')) return 'validation-shared';
-          if (source.endsWith('/src/course/course.ts')
-            || source.endsWith('/src/components/LazySectionBoundary.tsx')
+          if (source.endsWith('/src/course/formalCourse.ts')) return 'formal-course';
+          if (source.endsWith('/src/course/course.ts')) return 'course-content';
+          if (source.endsWith('/src/components/LazySectionBoundary.tsx')
             || source.endsWith('/src/utils/download.ts')) return 'route-shared';
           if (source.includes('/src/battle/')
             || /\/src\/progress\/(?:progress|schema|session|storage|types)\.ts$/.test(source)

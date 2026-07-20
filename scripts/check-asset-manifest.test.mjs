@@ -335,6 +335,26 @@ test('binds slots to one configured Phaser Scene and fails closed on duplicate o
     }
   }
   assert.deepEqual(acceptedInvalidVariants, []);
+
+  const ruyiPath = 'src/components/RuyiStaffScene.tsx';
+  const ruyiSource = sourceFiles.get(ruyiPath);
+  const demandLoad = "scene.load.image('sabre', assetUrl('/assets/dragon-palace/sabre.webp'))";
+  const demandBranch = "if (event.opcode === 'choose_sabre') {";
+  for (const mutatedSource of [
+    ruyiSource.replace(demandLoad, "scene.load.image('sabre', assetUrl('/assets/dragon-palace/weapons.webp'))"),
+    ruyiSource.replace(demandBranch, "if (event.opcode === 'choose_halberd') {"),
+    ruyiSource.replace(demandLoad, `${demandLoad}\n          scene.load.image('untracked', assetUrl('/assets/world-map.jpg'))`),
+  ]) {
+    assert.notEqual(mutatedSource, ruyiSource, 'the demand-load mutation must match the real shipping source');
+    const mutatedSources = new Map(sourceFiles);
+    mutatedSources.set(ruyiPath, mutatedSource);
+    assert.throws(() => verifyRequiredDragonPalaceInventory({
+      manifestRows: parsed.manifestRows,
+      publicFiles,
+      promptRecords: parsed.promptRecords,
+      sourceFiles: mutatedSources,
+    }), /demand|sabre|unapproved/i);
+  }
 });
 
 test('binds the configured Scene identifier to its exact lexical TypeScript symbol', async () => {

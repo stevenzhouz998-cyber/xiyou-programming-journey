@@ -148,7 +148,9 @@ h1, h2, .brand strong { font-family: 'Songti SC', 'STSong', serif; }
 .battle-feedback p, .unsaved-session p { margin-bottom: 9px; }
 .unsaved-session { border-left: 4px solid var(--gold); background: #fff0d8; color: #5d3c16; }
 .dragon-palace-experience button:focus-visible, .ruyi-staff-experience button:focus-visible, .four-seas-regalia-experience button:focus-visible, .block-program-list li:focus-visible, .battle-feedback:focus-visible { outline: 3px solid #d28f2c; outline-offset: 3px; }
+.four-seas-regalia-experience button { min-height: 44px; }
 .mission-session-summary { margin-top: 8px !important; color: var(--jade-deep) !important; font-weight: 700; }
+.completed-mission-summary { margin-top: 8px !important; color: var(--jade-deep) !important; font-weight: 700; }
 
 .code-workspace, .python-workspace, .ai-lab { padding: 14px 22px 18px; }
 .command-palette { display: flex; align-items: center; justify-content: space-between; gap: 14px; }

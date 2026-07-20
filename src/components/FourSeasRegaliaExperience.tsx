@@ -149,6 +149,7 @@ export function FourSeasRegaliaExperience({
   const [focusBlockId, setFocusBlockId] = useState<string | null>(null)
   const [syncTick, setSyncTick] = useState(0)
   const regionRef = useRef<HTMLDivElement>(null)
+  const sessionRetryRef = useRef<HTMLButtonElement>(null)
   const currentSessionIdentity = sessionIdentity(session)
   const syncedSessionIdentityRef = useRef(currentSessionIdentity)
 
@@ -156,6 +157,10 @@ export function FourSeasRegaliaExperience({
   sessionPersistenceRef.current = onSessionPersistenceActiveChange
   interactionCallbackRef.current = onInteractionLockChange
   missionCompletedRef.current = Boolean(progress.missions[MISSION_ID])
+
+  useEffect(() => {
+    if (sessionOperation?.status === 'unsaved') sessionRetryRef.current?.focus()
+  }, [sessionOperation])
 
   const setInteractionLocked = (active: boolean, reason: FourSeasHintLockReason = active ? 'playback' : 'idle') => {
     if (interactionLockedRef.current === active && interactionReasonRef.current === reason) return
@@ -440,7 +445,7 @@ export function FourSeasRegaliaExperience({
     <div className="four-seas-regalia-feedback-region">
       <FourSeasRegaliaFeedback diagnostic={diagnostic} occurrenceId={occurrenceId} onFocusBlock={setFocusBlockId} onFocusWorkspace={focusWorkspace} />
       {playback.trace.length > 0 ? <section className="execution-provenance" aria-label="本次执行来源"><details open><summary>本次指令的真实积木来源</summary><ol>{playback.trace.map((instruction) => <li key={instruction.instructionId}><code>{instruction.sourceBlockId}</code> <span>parent={instruction.parentBlockId ?? 'top'}</span></li>)}</ol></details></section> : null}
-      {sessionOperation?.status === 'unsaved' ? <div className="unsaved-session" role="status"><p>{sessionOperation.kind === 'compile' ? '编译失败记录尚未保存，请重试。' : '本关尚未保存，请重试。'}</p><button type="button" onClick={retrySessionSave}>{sessionOperation.kind === 'compile' ? '重试保存编译记录' : '重试保存本关'}</button></div> : null}
+      {sessionOperation?.status === 'unsaved' ? <div className="unsaved-session" role="status"><p>{sessionOperation.kind === 'compile' ? '编译失败记录尚未保存，请重试。' : '本关尚未保存，请重试。'}</p><button ref={sessionRetryRef} type="button" onClick={retrySessionSave}>{sessionOperation.kind === 'compile' ? '重试保存编译记录' : '重试保存本关'}</button></div> : null}
       {sessionOperation?.status === 'conflict' ? <div className="unsaved-session" role="alert"><p>{sessionOperation.kind === 'compile' ? '编译失败记录与其他标签页冲突。' : '本关运行记录与其他标签页冲突。'}</p><button type="button" onClick={downloadSessionConflictBackup}>下载本页备份</button><button type="button" onClick={loadExternalSessionProgress}>载入其他标签页版本</button></div> : null}
     </div>
   </div>

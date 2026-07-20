@@ -16,11 +16,18 @@ const tweens = { add: vi.fn((config: Tween) => { queue.push(config); return conf
 const sound = { mute: false }
 const destroys: Array<ReturnType<typeof vi.fn>> = []
 let failHandler: (() => void) | null = null
+let completeHandler: (() => void) | null = null
+let sabreTextureLoaded = false
 
 vi.mock('phaser', () => {
   class Scene {
     scale = { width: 760, height: 320 }
-    load = { image: loadImage, once: vi.fn((_event: string, handler: () => void) => { failHandler = handler }) }
+    textures = { exists: vi.fn((key: string) => key === 'sabre' && sabreTextureLoaded) }
+    load = {
+      image: vi.fn((key: string, url: string) => { loadImage(key, url) }),
+      once: vi.fn((event: string, handler: () => void) => { if (event === 'loaderror') failHandler = handler; else completeHandler = handler }),
+      start: vi.fn(() => { sabreTextureLoaded = true; completeHandler?.() }),
+    }
     add = { image: vi.fn((_x: number, _y: number, key: keyof typeof nodes) => nodes[key]) }
     tweens = tweens
     sound = sound
@@ -48,7 +55,7 @@ const sabre = runRuyiStaffBattle([
 ]).events
 
 beforeEach(() => {
-  vi.clearAllMocks(); queue.length = 0; destroys.length = 0; failHandler = null; sound.mute = false
+  vi.clearAllMocks(); queue.length = 0; destroys.length = 0; failHandler = null; completeHandler = null; sabreTextureLoaded = false; sound.mute = false
   vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('test-browser')
 })
 
@@ -56,16 +63,16 @@ async function flushAllTweens() {
   while (queue.length > 0) await act(async () => queue.shift()?.onComplete?.())
 }
 
-it('loads the approved broad sabre separately instead of presenting the spear cell as a sabre', () => {
+it('defers the approved broad sabre until its command instead of adding it to cold load', () => {
   render(<RuyiStaffScene events={correct} replayToken={1} reducedMotion muted />)
   expect(loadImage.mock.calls).toEqual([
     ['background', '/assets/dragon-palace/background.webp'],
     ['wukong', '/assets/dragon-palace/wukong.webp'],
     ['dragonKing', '/assets/dragon-palace/dragon-king.webp'],
     ['weapons', '/assets/dragon-palace/weapons.webp'],
-    ['sabre', '/assets/dragon-palace/sabre.webp'],
     ['effects', '/assets/dragon-palace/effects.webp'],
   ])
+  expect(loadImage).not.toHaveBeenCalledWith('sabre', '/assets/dragon-palace/sabre.webp')
   const weights = screen.getByLabelText('\u4e09\u4ef6\u5175\u5668\u91cd\u91cf')
   expect(weights.tagName).toBe('DL')
   expect([...weights.children].map((group) => [
@@ -85,6 +92,7 @@ it('shows the selected wrong weapon and blocked effect from real events', () => 
   expect(scene).toHaveAttribute('data-selected-weapon', 'sabre')
   expect(scene).toHaveAttribute('data-effect-cell', 'blocked')
   expect(screen.getByRole('status')).toHaveTextContent('3600\u65a4')
+  expect(loadImage).toHaveBeenCalledWith('sabre', '/assets/dragon-palace/sabre.webp')
   expect(nodes.sabre.setDisplaySize).toHaveBeenCalledWith(132, 198)
   expect(nodes.sabre.setVisible).toHaveBeenLastCalledWith(true)
 })
@@ -140,5 +148,5 @@ it('retries a local asset failure with the same approved asset set', async () =>
   await act(async () => failHandler?.())
   expect(screen.getByRole('alert')).toHaveTextContent('\u9f99\u5bab\u573a\u666f\u8d44\u6e90\u52a0\u8f7d\u5931\u8d25')
   fireEvent.click(screen.getByRole('button', { name: '\u91cd\u65b0\u52a0\u8f7d\u9f99\u5bab\u573a\u666f' }))
-  expect(loadImage).toHaveBeenCalledTimes(12)
+  expect(loadImage).toHaveBeenCalledTimes(10)
 })

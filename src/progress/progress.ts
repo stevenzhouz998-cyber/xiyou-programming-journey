@@ -19,7 +19,7 @@ export type {
 
 export { createInitialProgress } from './schema';
 
-import { allMissions } from '../course/course';
+import { allMissionOutlines } from '../course/courseOutline';
 import { getSessionSupport } from './session';
 
 export interface CompletionInput {
@@ -57,7 +57,7 @@ function safeCount(base: number, increment: number): number {
 }
 
 export function completeMission(progress: ProgressV3, missionId: string, input: CompletionInput): ProgressV3 {
-  if (!allMissions.some((mission) => mission.id === missionId)) throw new Error('任务编号无效');
+  if (!allMissionOutlines.some((mission) => mission.id === missionId)) throw new Error('任务编号无效');
   const previous = progress.missions[missionId];
   const stars = normalizeStars(input.stars);
   const normalizedHints = normalizeHints(input.hintsUsed);
@@ -93,14 +93,14 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
 }
 
 export function isMissionUnlocked(progress: ProgressV3, missionId: string): boolean {
-  const index = allMissions.findIndex((mission) => mission.id === missionId);
+  const index = allMissionOutlines.findIndex((mission) => mission.id === missionId);
   if (index < 0) return false;
   if (index === 0) return true;
-  return progress.missions[allMissions[index - 1].id]?.status === 'completed';
+  return progress.missions[allMissionOutlines[index - 1].id]?.status === 'completed';
 }
 
 export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyReport {
-  const missions = allMissions.filter((mission) => mission.week === week);
+  const missions = allMissionOutlines.filter((mission) => mission.week === week);
   const records = missions.flatMap((mission) => progress.missions[mission.id] ? [progress.missions[mission.id]] : []);
   const missionSupport = missions
     .filter((mission) => (progress.missions[mission.id]?.hintsUsed ?? 0) >= 2)

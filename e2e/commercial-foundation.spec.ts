@@ -169,7 +169,7 @@ test('@legacy home has healthy navigation, assets, responsive layout, and eviden
   }
 });
 
-test('@legacy w1-m3 keeps its world-map backdrop after w1-m1 and w1-m2 become formal', async ({ page }) => {
+test('@legacy w1-m3 formal experience replaces the legacy shell and backdrop', async ({ page }) => {
   const fixture = v3(false);
   fixture.missions = {
     'w1-m1': { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: '2026-07-12T00:00:00.000Z' },
@@ -178,8 +178,9 @@ test('@legacy w1-m3 keeps its world-map backdrop after w1-m1 and w1-m2 become fo
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), { key: currentKey, value: fixture });
   await page.goto('./#/mission/w1-m3');
   await expect(page.getByRole('heading', { name: '四海披挂', level: 1 })).toBeVisible();
-  await expect(page.locator('.legacy-mission-tools')).toHaveAttribute('data-mission-id', 'w1-m3');
-  await expect(page.locator('.mission-page')).toHaveCSS('background-image', /world-map\.jpg/);
+  await expect(page.locator('.legacy-mission-tools')).toHaveCount(0);
+  await expect(page.locator('.four-seas-regalia-workspace .blockly-host')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.mission-page')).toHaveCSS('background-image', 'none');
 });
 
 test('@legacy 320px home, first mission and parent PIN never overflow', async ({ page }) => {
@@ -590,6 +591,7 @@ test('@lazy-boundary DragonPalaceExperience 503 keeps the first mission story an
 });
 
 test('@lazy-boundary MissionTools 503 keeps the legacy mission story and objective with local recovery', async ({ page, browserName }) => {
+  test.setTimeout(90_000);
   const fixture = v3(false);
   fixture.missions = {
     'w1-m1': { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: '2026-07-12T00:00:00.000Z' },
@@ -606,9 +608,17 @@ test('@lazy-boundary MissionTools 503 keeps the legacy mission story and objecti
     return route.fulfill({ status: 503, headers: { 'cache-control': 'no-store' }, body: 'unavailable' });
   });
   await page.goto('./#/mission/w1-m3');
-  await expect(page.getByRole('heading', { name: '四海披挂', level: 1 })).toBeVisible();
-  await expect(page.getByText('其余三海龙王带来金冠、金甲和云履。')).toBeVisible();
-  await expect(page.getByRole('heading', { name: '按原著顺序整理披挂', level: 2 })).toBeVisible();
+  for (const name of [
+    '加入主任务：向东海龙王请求披挂', '加入主任务：收齐三海宝物', '加入主任务：穿戴整副披挂', '加入主任务：检查披挂是否齐全',
+    '加入穿戴子任务：戴上凤翅紫金冠', '加入穿戴子任务：穿上锁子黄金甲', '加入穿戴子任务：踏上藕丝步云履',
+    '加入收集子任务：收下北海的藕丝步云履', '加入收集子任务：收下西海的锁子黄金甲', '加入收集子任务：收下南海的凤翅紫金冠',
+  ]) await page.getByRole('button', { name }).click();
+  await page.getByRole('button', { name: '执行披挂指令' }).click();
+  await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: '继续下一关' }).click();
+  await expect(page.getByRole('heading', { name: '幽冥勾名', level: 1 })).toBeVisible();
+  await expect(page.getByText('悟空被勾魂使者带到幽冥界。')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '查找并处理生死簿中的猴属名号', level: 2 })).toBeVisible();
   await expect(page.getByRole('alert')).toContainText('兼容任务工具加载失败');
   await expect(page.getByRole('button', { name: '重新加载页面' })).toBeVisible();
 });

@@ -128,8 +128,11 @@ type FlyoutWorkspace = Blockly.Workspace & {
 }
 type SvgWorkspace = Blockly.Workspace & {
   getParentSvg(): SVGElement
+  getBlocksBoundingBox(): { getWidth(): number }
   resizeContents(): void
   zoomToFit(): void
+  scale: number
+  setScale(scale: number): void
   scrollX: number
   scrollY: number
   translate(x: number, y: number): void
@@ -171,6 +174,11 @@ function fitNarrowWorkspace(workspace: Blockly.Workspace, host: HTMLElement | nu
     Blockly.svgResize(workspace as Blockly.WorkspaceSvg)
     workspace.resizeContents()
     if (workspace.getAllBlocks(false).length > 0) workspace.zoomToFit()
+    const renderedBlockWidth = workspace.getBlocksBoundingBox().getWidth() * workspace.scale
+    const availableBlockWidth = Math.max(0, hostWidth - 24)
+    if (renderedBlockWidth > availableBlockWidth && availableBlockWidth > 0) {
+      workspace.setScale(workspace.scale * availableBlockWidth / renderedBlockWidth)
+    }
     workspace.scrollX = 0
     workspace.scrollY = 0
     workspace.translate(0, 0)
@@ -384,6 +392,7 @@ export function FourSeasRegaliaBlocklyWorkspace({
   const regionRef = useRef<HTMLElement>(null)
   const hostRef = useRef<HTMLDivElement>(null)
   const lockMessageRef = useRef<HTMLParagraphElement>(null)
+  const draftRetryRef = useRef<HTMLButtonElement>(null)
   const workspaceRef = useRef<Blockly.Workspace | null>(null)
   const itemRefs = useRef(new Map<string, HTMLLIElement>())
   const onDraftRef = useRef(onDraftChange)
@@ -417,6 +426,10 @@ export function FourSeasRegaliaBlocklyWorkspace({
   const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'pending' | 'saved' | 'unsaved' | 'conflict'>('idle')
   const [recoveryFailed, setRecoveryFailed] = useState(false)
   const interactionLocked = locked || recoveryFailed
+
+  useEffect(() => {
+    if (draftSaveStatus === 'unsaved') draftRetryRef.current?.focus()
+  }, [draftSaveStatus])
 
   onDraftRef.current = onDraftChange
   onFocusHandledRef.current = onFocusHandled
@@ -855,7 +868,7 @@ export function FourSeasRegaliaBlocklyWorkspace({
       {!interactionLocked && draftSaveStatus === 'unsaved' ? (
         <div className="unsaved-session" role="alert">
           <p>这次积木更改还没有保存。</p>
-          <button type="button" onClick={retryDraftSave}>重试保存积木</button>
+          <button ref={draftRetryRef} type="button" onClick={retryDraftSave}>重试保存积木</button>
         </div>
       ) : null}
       {!interactionLocked && draftSaveStatus === 'conflict' ? (

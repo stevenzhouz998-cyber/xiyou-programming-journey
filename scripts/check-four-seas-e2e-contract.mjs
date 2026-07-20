@@ -501,6 +501,22 @@ function assertExpectedNavigationAbort(file) {
   return helper;
 }
 
+function assertExpectedLazyChunkFailure(file) {
+  const helper = file.statements.find((statement) => (
+    ts.isFunctionDeclaration(statement) && statement.name?.text === 'expectedLazyChunkFailure'
+  ));
+  if (!helper || helper.parent !== file || helper.parameters.length !== 1
+    || !ts.isIdentifier(helper.parameters[0].name) || helper.parameters[0].name.text !== 'event'
+    || !helper.body) {
+    throw new Error('Four Seas E2E source contract: expectedLazyChunkFailure must be one exact top-level event predicate.');
+  }
+  const expectedBody = "{if(expectedChunkFailureUrl===null)returnfalseif(event.kind==='requestfailed')returnevent.url===expectedChunkFailureUrl&&/ABORTED|cancelled/i.test(event.detail)if(event.kind!=='console')returnfalseif(event.url===expectedChunkFailureUrl&&event.detail==='Failedtoloadresource:theserverrespondedwithastatusof503(ServiceUnavailable)')returntrueconstfailure=`Failedtofetchdynamicallyimportedmodule:${expectedChunkFailureUrl}`returnevent.detail===failure||event.detail===`TypeError:${failure}`}";
+  if (compactNodeText(helper.body, file) !== expectedBody) {
+    throw new Error('Four Seas E2E source contract: expectedLazyChunkFailure may filter only the active exact lazy chunk URL and approved failure signatures.');
+  }
+  return helper;
+}
+
 function assertRequestFailedListener(callback, file) {
   if (!ts.isBlock(callback.body) || callback.body.statements.length !== 2) {
     throw new Error('Four Seas E2E source contract: requestfailed listener must normalize one event before its navigation-abort gate.');
@@ -518,8 +534,8 @@ function assertRequestFailedListener(callback, file) {
     throw new Error('Four Seas E2E source contract: requestfailed listener must preserve unknown failures in one complete normalized event.');
   }
   if (compactNodeText(callback.body.statements[1], file)
-    !== 'if(!expectedNavigationAbort(event))healthEvents.push(event)') {
-    throw new Error('Four Seas E2E source contract: requestfailed listener may skip only expectedNavigationAbort(event) and must push every other event.');
+    !== 'if(!expectedNavigationAbort(event)&&!expectedLazyChunkFailure(event))healthEvents.push(event)') {
+    throw new Error('Four Seas E2E source contract: requestfailed listener may skip only approved navigation aborts or the active exact lazy chunk failure.');
   }
 }
 
@@ -602,14 +618,17 @@ function assertGlobalHealthReferences(
   healthDeclaration,
   attachHealth,
   expectedNavigationAbort,
+  expectedLazyChunkFailure,
   afterEachCallback,
   beforeEachCalls,
 ) {
   const allowedHealthReferences = new Set([healthDeclaration.name]);
   const allowedAbortReferences = new Set([expectedNavigationAbort.name]);
+  const allowedLazyReferences = new Set([expectedLazyChunkFailure.name]);
   collectNamedIdentifiers(attachHealth.body, 'healthEvents', allowedHealthReferences);
   collectNamedIdentifiers(afterEachCallback.body, 'healthEvents', allowedHealthReferences);
   collectNamedIdentifiers(attachHealth.body, 'expectedNavigationAbort', allowedAbortReferences);
+  collectNamedIdentifiers(attachHealth.body, 'expectedLazyChunkFailure', allowedLazyReferences);
   assertMainHealthReset(file, beforeEachCalls, allowedHealthReferences);
 
   const visit = (node) => {
@@ -618,6 +637,9 @@ function assertGlobalHealthReferences(
     }
     if (ts.isIdentifier(node) && node.text === 'expectedNavigationAbort' && !allowedAbortReferences.has(node)) {
       throw new Error('Four Seas E2E source contract: expectedNavigationAbort may only be declared and called by the validated requestfailed listener.');
+    }
+    if (ts.isIdentifier(node) && node.text === 'expectedLazyChunkFailure' && !allowedLazyReferences.has(node)) {
+      throw new Error('Four Seas E2E source contract: expectedLazyChunkFailure may only be declared and called by the validated health listeners.');
     }
     ts.forEachChild(node, visit);
   };
@@ -645,7 +667,7 @@ function assertHealthContract(file, attachHealth, afterEachCalls, beforeEachCall
     throw new Error('Four Seas E2E source contract: attachHealth must register exactly console, pageerror, and requestfailed.');
   }
   const expectedListenerBodies = new Map([
-    ['console', "{if(message.type()==='error')healthEvents.push({kind:'console',url:message.location().url||page.url(),detail:message.text()})}"],
+    ['console', "{if(message.type()==='error'){constevent:HealthEvent={kind:'console',url:message.location().url||page.url(),detail:message.text()}if(!expectedLazyChunkFailure(event))healthEvents.push(event)}}"],
     ['pageerror', "healthEvents.push({kind:'pageerror',url:page.url(),detail:error.message})"],
   ]);
   const expectedParameterNames = new Map([
@@ -678,12 +700,14 @@ function assertHealthContract(file, attachHealth, afterEachCalls, beforeEachCall
     throw new Error('Four Seas E2E source contract: attachHealth must cover console, pageerror, and requestfailed exactly once.');
   }
   const expectedNavigationAbort = assertExpectedNavigationAbort(file);
+  const expectedLazyChunkFailure = assertExpectedLazyChunkFailure(file);
   const afterEachCallback = assertAfterEachHealth(file, afterEachCalls);
   assertGlobalHealthReferences(
     file,
     healthDeclaration,
     attachHealth,
     expectedNavigationAbort,
+    expectedLazyChunkFailure,
     afterEachCallback,
     beforeEachCalls,
   );

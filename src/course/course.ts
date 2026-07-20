@@ -1,4 +1,5 @@
 import type { CanonRef, CourseManifest, MissionMode, MissionSpec, StoryBeat } from './types';
+import { formalWeekOneCanon, formalWeekOneMissions } from './formalCourse';
 
 const SOURCE_ROOT = 'https://zh.wikisource.org/zh-hans/西游记';
 
@@ -38,7 +39,7 @@ const mission = (input: MissionInput): MissionSpec => ({
   mode: input.mode ?? 'blockly',
 });
 
-const c3 = canon([3], '第三回　四海千山皆拱伏　九幽十类尽除名');
+const c3 = formalWeekOneCanon;
 const c4to7 = canon([4, 5, 6, 7], '第四至七回　官封弼马温至五行山定心猿');
 const c18to19 = canon([18, 19], '第十八至十九回　高老庄大圣降魔　云栈洞悟空收八戒');
 const c27 = canon([27], '第二十七回　尸魔三戏唐三藏　圣僧恨逐美猴王');
@@ -58,9 +59,7 @@ export const course: CourseManifest = {
       theme: '顺序 · 指令 · 基础算法',
       canon: c3,
       missions: [
-        mission({ week: 1, order: 1, title: '龙宫求兵', subtitle: '按先后试遍兵器', objective: '排列求兵的正确步骤', knowledge: '顺序执行', canon: c3, storyBeats: [beat('入东海龙宫', '悟空来到东海龙宫求一件趁手兵器。'), beat('试用兵器', '龙王先后命人抬出兵器，悟空都嫌太轻。')], expectedSequence: ['enter_palace', 'ask_weapon', 'test_weapon'] }),
-        mission({ week: 1, order: 2, title: '定海神针', subtitle: '找到称心的如意兵器', objective: '比较兵器重量并选出金箍棒', knowledge: '数值比较', canon: c3, storyBeats: [beat('神珍放光', '海藏中的定海神珍铁放出霞光。'), beat('随心变化', '神珍依悟空心意变小，成为如意金箍棒。')], expectedSequence: ['inspect_weight', 'choose_heaviest', 'shrink_staff'] }),
-        mission({ week: 1, order: 3, title: '四海披挂', subtitle: '把装备步骤排整齐', objective: '按原著顺序整理披挂', knowledge: '分解任务', canon: c3, storyBeats: [beat('再求披挂', '悟空得棒后又向龙王索求披挂。'), beat('三海送宝', '其余三海龙王带来金冠、金甲和云履。')], expectedSequence: ['request_armor', 'receive_crown', 'receive_armor', 'receive_boots'] }),
+        ...formalWeekOneMissions,
         mission({ week: 1, order: 4, title: '幽冥勾名', subtitle: '在名册里找到猴属', objective: '查找并处理生死簿中的猴属名号', knowledge: '查找与删除', canon: c3, storyBeats: [beat('梦入幽冥', '悟空被勾魂使者带到幽冥界。'), beat('勾去猴属', '悟空查看生死簿，将猴属有名者一概勾去。')], expectedSequence: ['open_register', 'find_monkeys', 'remove_names'] }),
         mission({ week: 1, order: 5, title: '第三回总试炼', subtitle: '重建龙宫到幽冥的因果链', objective: '完整排列第三回关键事件', knowledge: '算法复盘', canon: c3, storyBeats: [beat('龙宫得宝', '悟空从龙宫取得金箍棒与披挂。'), beat('幽冥勾名', '随后在幽冥勾去猴属名号。')], expectedSequence: ['enter_palace', 'get_staff', 'get_armor', 'enter_underworld', 'remove_names'] }),
       ],

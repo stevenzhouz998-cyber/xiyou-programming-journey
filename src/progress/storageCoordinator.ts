@@ -118,6 +118,17 @@ export function saveProgressCoordinated(
   expected: number,
   options: SaveCoordinatorOptions = {},
 ): Promise<CoordinatedSaveResult> {
+  const storage = options.storage ?? (typeof localStorage === 'undefined' ? undefined : localStorage);
+  const testMode = storage?.getItem('xiyou-test-storage-mode');
+  const regalia = progress.sessions['w1-m3'];
+  const failTestWrite = testMode === 'fail-regalia-draft'
+    ? regalia !== undefined && regalia.workspace.blocks.length > 0 && regalia.lastRun === null && progress.missions['w1-m3'] === undefined
+    : testMode === 'fail-regalia-session'
+      ? regalia?.lastRun !== null && regalia?.lastRun !== undefined && progress.missions['w1-m3'] === undefined
+      : testMode === 'fail-regalia-completion'
+        ? progress.missions['w1-m3'] !== undefined
+        : false;
+  if (failTestWrite) return Promise.resolve({ status: 'unsaved', progress, error: '四海披挂测试存储故障' });
   const legacyWorkspaceKey = options.legacyWorkspaceKey;
   if (legacyWorkspaceKey !== undefined && !legacyWorkspaceKey.startsWith(LEGACY_WORKSPACE_PREFIX)) {
     return Promise.resolve({

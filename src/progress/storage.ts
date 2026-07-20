@@ -221,6 +221,16 @@ function loadResult(
 }
 
 export function loadProgressTransaction(storage: Storage = localStorage, clock: Clock = systemClock): LoadResult {
+  try {
+    if (storage.getItem('xiyou-test-storage-mode') === 'corrupt-regalia-current') {
+      const legal = storage.getItem(CURRENT_PROGRESS_KEY);
+      if (legal !== null) storage.setItem(SNAPSHOT_PROGRESS_KEY, legal);
+      storage.setItem(CURRENT_PROGRESS_KEY, '{broken w1-m3 current');
+      storage.setItem('xiyou-test-storage-mode', 'off');
+    }
+  } catch {
+    // The normal fail-closed loader below reports unavailable storage.
+  }
   let revision: number;
   try { revision = parseStoredRevision(storage.getItem(REVISION_PROGRESS_KEY)); }
   catch (error) {

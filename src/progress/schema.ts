@@ -1,4 +1,4 @@
-import { allMissions } from '../course/course';
+import { allMissionOutlines } from '../course/courseOutline';
 import type { DragonBlockType } from '../blockly/dragonPalaceBlocks';
 import type { RuyiBlockType } from '../blockly/ruyiStaffBlocks';
 import {
@@ -78,7 +78,7 @@ export const createInitialProgress = (): ProgressV3 => ({
   savedAt: new Date(0).toISOString(),
 });
 
-const missionIds = new Set(allMissions.map((mission) => mission.id));
+const missionIds = new Set(allMissionOutlines.map((mission) => mission.id));
 const dragonBlockTypes = new Set<DragonBlockType>([
   'xiyou_enter_palace', 'xiyou_request_weapon', 'xiyou_test_weapon',
 ]);

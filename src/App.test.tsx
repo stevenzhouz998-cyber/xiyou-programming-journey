@@ -828,6 +828,20 @@ describe('西游编程记', () => {
     expect(await screen.findByText('运行 5 次 · 调整 3 次')).toBeVisible();
   });
 
+  it('names completed missions in the protected parent report', async () => {
+    let progress = withParentAccess(createInitialProgress());
+    progress.privacy.localDataNoticeSeen = true;
+    progress = completeMission(progress, 'w1-m1', { stars: 3, hintsUsed: 0 });
+    progress = completeMission(progress, 'w1-m2', { stars: 3, hintsUsed: 0 });
+    progress = completeMission(progress, 'w1-m3', { stars: 3, hintsUsed: 0 });
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
+    fireEvent.change(await screen.findByLabelText('家长 PIN'), { target: { value: '4826' } });
+    fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
+    expect(await screen.findByText('已完成：龙宫求兵、定海神针、四海披挂')).toBeVisible();
+  });
+
   it('submits the parent PIN through the form keyboard path', async () => {
     render(<App />);
     await acknowledgePrivacySuccessfully();

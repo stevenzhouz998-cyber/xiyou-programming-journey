@@ -18,14 +18,26 @@ const sourceRoot = fileURLToPath(new URL('../src/', import.meta.url));
 
 const validHealthCore = `
   let healthEvents = []
+  let expectedChunkFailureUrl = null
+  function expectedLazyChunkFailure(event) {
+    if (expectedChunkFailureUrl === null) return false
+    if (event.kind === 'requestfailed') return event.url === expectedChunkFailureUrl && /ABORTED|cancelled/i.test(event.detail)
+    if (event.kind !== 'console') return false
+    if (event.url === expectedChunkFailureUrl && event.detail === 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)') return true
+    const failure = ` + "`Failed to fetch dynamically imported module: ${expectedChunkFailureUrl}`" + `
+    return event.detail === failure || event.detail === ` + "`TypeError: ${failure}`" + `
+  }
   function attachHealth(page) {
     page.on('console', (message) => {
-      if (message.type() === 'error') healthEvents.push({ kind: 'console', url: message.location().url || page.url(), detail: message.text() })
+      if (message.type() === 'error') {
+        const event: HealthEvent = { kind: 'console', url: message.location().url || page.url(), detail: message.text() }
+        if (!expectedLazyChunkFailure(event)) healthEvents.push(event)
+      }
     })
     page.on('pageerror', (error) => healthEvents.push({ kind: 'pageerror', url: page.url(), detail: error.message }))
     page.on('requestfailed', (request) => {
       const event = { kind: 'requestfailed', url: request.url(), detail: request.failure()?.errorText ?? 'unknown' }
-      if (!expectedNavigationAbort(event)) healthEvents.push(event)
+      if (!expectedNavigationAbort(event) && !expectedLazyChunkFailure(event)) healthEvents.push(event)
     })
   }
   function expectedNavigationAbort(event) {
@@ -130,13 +142,17 @@ function loadHealthRuntimeFromTypeScriptSource(source) {
       && statement.declarationList.declarations.some((declaration) => (
         ts.isIdentifier(declaration.name) && declaration.name.text === 'healthEvents'
       )))
+    || (ts.isVariableStatement(statement)
+      && statement.declarationList.declarations.some((declaration) => (
+        ts.isIdentifier(declaration.name) && declaration.name.text === 'expectedChunkFailureUrl'
+      )))
     || (ts.isFunctionDeclaration(statement)
-      && (statement.name?.text === 'attachHealth' || statement.name?.text === 'expectedNavigationAbort'))
+      && ['attachHealth', 'expectedNavigationAbort', 'expectedLazyChunkFailure'].includes(statement.name?.text))
   ));
   const output = ts.transpileModule(healthStatements.map((statement) => statement.getText(file)).join('\n'), {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  return Function(`${output}\nreturn { attachHealth, readHealthEvents: () => healthEvents }`)();
+  return Function(`${output}\nreturn { attachHealth, readHealthEvents: () => healthEvents, setExpectedChunkFailureUrl: (url) => { expectedChunkFailureUrl = url } }`)();
 }
 
 test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
@@ -364,6 +380,35 @@ test('actual requestfailed collection keeps unknown failures and skips only appr
     url: 'https://example.test/api',
     detail: 'net::ERR_CONNECTION_REFUSED',
   }]);
+});
+
+test('actual lazy-failure collection gates only the active exact chunk signatures', () => {
+  const source = readFileSync(new URL('../e2e/four-seas-regalia-code-battle.spec.ts', import.meta.url), 'utf8');
+  const { attachHealth, readHealthEvents, setExpectedChunkFailureUrl } = loadHealthRuntimeFromTypeScriptSource(source);
+  const listeners = new Map();
+  attachHealth({
+    on: (name, listener) => listeners.set(name, listener),
+    url: () => 'http://127.0.0.1:4173/',
+  });
+  const target = 'http://127.0.0.1:4173/assets/FourSeasRegaliaExperience.js';
+  setExpectedChunkFailureUrl(target);
+  const request = (url, detail) => Object.freeze({ url: () => url, failure: () => ({ errorText: detail }) });
+  const consoleMessage = (url, detail) => Object.freeze({
+    type: () => 'error',
+    location: () => ({ url }),
+    text: () => detail,
+  });
+  listeners.get('requestfailed')(request(target, 'net::ERR_ABORTED'));
+  listeners.get('console')(consoleMessage(target, 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)'));
+  listeners.get('console')(consoleMessage('http://127.0.0.1:4173/assets/vendor.js', `TypeError: Failed to fetch dynamically imported module: ${target}`));
+  listeners.get('requestfailed')(request('http://127.0.0.1:4173/api', 'net::ERR_ABORTED'));
+  listeners.get('console')(consoleMessage('http://127.0.0.1:4173/assets/Other.js', 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)'));
+  listeners.get('console')(consoleMessage(target, 'Failed to load resource: the server responded with a status of 500 (Internal Server Error)'));
+  assert.deepEqual(readHealthEvents(), [
+    { kind: 'requestfailed', url: 'http://127.0.0.1:4173/api', detail: 'net::ERR_ABORTED' },
+    { kind: 'console', url: 'http://127.0.0.1:4173/assets/Other.js', detail: 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)' },
+    { kind: 'console', url: target, detail: 'Failed to load resource: the server responded with a status of 500 (Internal Server Error)' },
+  ]);
 });
 
 test('allows the exact prerequisite init helper without w1-m3 state', () => {
@@ -722,6 +767,15 @@ test('rejects replacing expectedNavigationAbort in a test body', () => {
   `), /expectedNavigationAbort|mutation|alias|write/i);
 });
 
+test('rejects replacing the exact lazy failure predicate in a test body', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    ${validHealthHarness}
+    test('forged lazy filter', () => {
+      expectedLazyChunkFailure = () => true
+    })
+  `), /expectedLazyChunkFailure|mutation|alias|write/i);
+});
+
 test('rejects a non-let healthEvents collection declaration', () => {
   assert.throws(() => assertFourSeasE2ESourceContract(
     validHealthHarness.replace('let healthEvents = []', 'const healthEvents = []'),
@@ -885,6 +939,21 @@ test('keeps the browser matrix at the five approved projects', () => {
   assert.equal([...configSource.matchAll(/\bname:\s*'/g)].length, 5);
   assert.doesNotMatch(configSource, /visual-chromium/);
   assert.match(configSource, /desktop-chromium-1440x1024'[\s\S]*?grep:\s*\/.*@visual/);
+});
+
+test('assigns the Four Seas browser evidence tags honestly across the five projects', () => {
+  const configSource = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
+  const project = (name) => configSource.match(new RegExp(`name: '${name}'[\\s\\S]*?grep: \\/([^\\n]+)\\/`))?.[1] ?? '';
+  const desktop = project('desktop-chromium-1440x1024');
+  const tablet = project('tablet-webkit-768x1024');
+  const mobile = project('mobile-chromium-390x844');
+  const firefox = project('desktop-firefox-1440x1024');
+  const narrow = project('narrow-chromium-320x844');
+  for (const tag of ['@regalia-full', '@regalia-storage', '@regalia-keyboard', '@regalia-parity', '@regalia-external', '@regalia-corrupt', '@regalia-cold', '@regalia-parent', '@regalia-lazy', '@visual']) assert.match(desktop, new RegExp(tag));
+  for (const tag of ['@regalia-full', '@regalia-parity', '@regalia-corrupt', '@regalia-cold']) assert.match(tablet, new RegExp(tag));
+  for (const tag of ['@regalia-full', '@regalia-parity', '@regalia-cold', '@regalia-narrow']) assert.match(mobile, new RegExp(tag));
+  for (const tag of ['@regalia-full', '@regalia-keyboard', '@regalia-corrupt', '@regalia-cold']) assert.match(firefox, new RegExp(tag));
+  for (const tag of ['@regalia-full', '@regalia-narrow', '@regalia-cold']) assert.match(narrow, new RegExp(tag));
 });
 
 test('fails an entry static closure over 180 KiB gzip', () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { course, validateCourse } from './course';
+import { courseOutline } from './courseOutline';
 import { commandLabel } from '../engine/commandLabels';
 
 describe('course manifest', () => {
@@ -33,6 +34,17 @@ describe('course manifest', () => {
     expect(course.weeks[3].missions.some((mission) => mission.mode === 'python')).toBe(true);
     expect(course.weeks[5].missions.some((mission) => mission.mode === 'ai-lab')).toBe(true);
     expect(validateCourse(course)).toEqual([]);
+  });
+
+  it('keeps the lightweight navigation outline exactly aligned with the full course', () => {
+    expect(courseOutline.weeks.map(({ id, week, title, theme, missions }) => ({
+      id, week, title, theme, missions,
+    }))).toEqual(course.weeks.map(({ id, week, title, theme, missions }) => ({
+      id, week, title, theme,
+      missions: missions.map(({ id: missionId, week: missionWeek, order, title: missionTitle, knowledge, isBoss }) => ({
+        id: missionId, week: missionWeek, order, title: missionTitle, knowledge, isBoss,
+      })),
+    })));
   });
 
   it('gives every selectable command a child-readable Chinese label', () => {

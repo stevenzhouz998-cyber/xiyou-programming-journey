@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { LockKey } from '@phosphor-icons/react/dist/icons/LockKey';
 import { Medal } from '@phosphor-icons/react/dist/icons/Medal';
-import { allMissions, getMission } from '../course/course';
+import { allMissionOutlines } from '../course/courseOutline';
+import { getFormalMission } from '../course/formalCourse';
+import type { MissionSpec } from '../course/types';
 import { useProgress } from '../context/ProgressContext';
 import { validateSequence } from '../engine/validation';
 import { isMissionUnlocked } from '../progress/progress';
@@ -86,9 +88,8 @@ interface MissionPageProps {
   onCompletionPersistenceActiveChange: (active: boolean) => void;
 }
 
-function MissionPageForId({ id, reducedMotion, onGlobalModalOpenChange, onCompletionPersistenceActiveChange }: MissionPageProps & { id: string }) {
+function MissionPageForId({ id, mission, reducedMotion, onGlobalModalOpenChange, onCompletionPersistenceActiveChange }: MissionPageProps & { id: string; mission: MissionSpec | undefined }) {
   const navigate = useNavigate();
-  const mission = getMission(id);
   const { progress, complete, recordMissionHint, retrySave, saveError, createBackup, reloadExternalProgress } = useProgress();
   const [hintsUsed, setHintsUsed] = useState(0);
   const [feedback, setFeedback] = useState('');
@@ -106,7 +107,11 @@ function MissionPageForId({ id, reducedMotion, onGlobalModalOpenChange, onComple
   const requestGenerationRef = useRef(0);
   type CompletionSave = { requestId: number; stars: number; hintsUsed: number; status: 'pending' | 'unsaved' | 'conflict' };
   const completionSaveRef = useRef<CompletionSave | null>(null);
+  const completionRetryRef = useRef<HTMLButtonElement>(null);
   const [completionSave, setCompletionSave] = useState<CompletionSave | null>(null);
+  useEffect(() => {
+    if (mission?.id === 'w1-m3' && completionSave?.status === 'unsaved') completionRetryRef.current?.focus();
+  }, [completionSave, mission?.id]);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -172,7 +177,7 @@ function MissionPageForId({ id, reducedMotion, onGlobalModalOpenChange, onComple
     setFeedback(result.feedback);
     if (result.passed) pass(result.stars);
   };
-  const next = allMissions[allMissions.findIndex((item) => item.id === mission.id) + 1];
+  const next = allMissionOutlines[allMissionOutlines.findIndex((item) => item.id === mission.id) + 1];
   const toolProps = mission.mode === 'blockly'
     ? { missionId: mission.id, commands: mission.expectedSequence, onRun: validate }
     : mission.mode === 'python'
@@ -189,10 +194,30 @@ function MissionPageForId({ id, reducedMotion, onGlobalModalOpenChange, onComple
           ? '运行结果尚未保存，请先完成保存恢复。'
           : '战斗指令正在执行，提示会在本次播放结束后恢复。';
 
-  return <main className="mission-page"><div data-testid="mission-background" inert={success ? true : undefined} aria-hidden={success ? true : undefined}><header className="mission-header"><button className="back-button" type="button" onClick={() => navigate('/')}><ArrowLeft size={21} />成长地图</button><div><span>第{mission.week}周 · 第{mission.order}关{mission.isBoss ? ' · BOSS' : ''}</span><h1>{mission.title}</h1></div><div className="canon-badge"><BookOpenText size={20} /><span>{mission.canon.title}</span></div></header><div className="mission-layout"><aside className="story-column"><span className="eyebrow">原著故事层</span><h2>{mission.subtitle}</h2>{mission.storyBeats.map((item) => <article className="story-beat" key={item.title}><CheckCircle size={20} weight="fill" /><div><strong>{item.title}</strong><p>{item.summary}</p></div></article>)}<a className="canon-link" href={mission.canon.sourceUrl} target="_blank" rel="noreferrer">查看原著第{mission.canon.chapters.map(chapterLabel).join('、')}回</a><HintPanel hints={mission.hints} disabled={hintsLocked} disabledReason={hintLockReason} onUse={(tier) => { if (mission.id === 'w1-m1' || mission.id === 'w1-m2' || mission.id === 'w1-m3') { if (!progress.sessions[mission.id]?.usedHintTiers.includes(tier)) recordMissionHint(mission.id, tier); } else setHintsUsed((count) => count + 1); }} /></aside><section className="play-column"><div className="mission-objective"><span>今日任务</span><h2>{mission.objective}</h2><p>知识法宝：{mission.knowledge}</p></div>{mission.id === 'w1-m1' ? <LazySectionBoundary label="龙宫求兵任务"><Suspense fallback={<p className="mission-tools-loading" role="status">龙宫求兵任务加载中，请稍候……</p>}><DragonPalaceExperience reducedMotion={reducedMotion} muted={progress.settings.muted} onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)} /></Suspense></LazySectionBoundary> : mission.id === 'w1-m2' ? <LazySectionBoundary label="定海神针任务"><Suspense fallback={<p className="mission-tools-loading" role="status">定海神针任务加载中，请稍候……</p>}><RuyiStaffExperience reducedMotion={reducedMotion} muted={progress.settings.muted} locked={completionSave !== null} onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)} onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange} onInteractionLockChange={setBattleInteractionLocked} /></Suspense></LazySectionBoundary> : mission.id === 'w1-m3' ? <FourSeasRegaliaRouteBoundary reducedMotion={reducedMotion} muted={progress.settings.muted} locked={completionSave !== null} onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)} onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange} onInteractionLockChange={setBattleInteractionLocked} /> : <LazySectionBoundary label="兼容任务工具"><Suspense fallback={<p className="mission-tools-loading" role="status">兼容任务工具加载中，请稍候……</p>}><MissionTools missionId={mission.id} mode={mission.mode} sceneProps={{ activeStep, reducedMotion }} toolProps={toolProps} /></Suspense></LazySectionBoundary>}{feedback && !success && <div className="feedback-message">{feedback}</div>}{completionSave ? <div className="completion-save-status" role={completionSave.status === 'pending' ? 'status' : 'alert'} aria-live={completionSave.status === 'pending' ? 'polite' : 'assertive'}><p>{completionSave.status === 'pending' ? '正在保存通关结果…' : completionSave.status === 'conflict' ? '通关待保存：其他标签页已经更新，请选择保留本页备份或载入其他标签页版本。' : '通关待保存：进度尚未安全写入这台电脑。'}</p>{completionSave.status === 'unsaved' && saveError ? <p>{saveError}</p> : null}{completionSave.status === 'unsaved' ? <button type="button" className="button button-primary" onClick={retryCompletionSave}>重试保存通关</button> : null}{completionSave.status === 'conflict' ? <><button type="button" onClick={downloadCompletionConflictBackup}>下载本页备份</button><button type="button" onClick={loadExternalCompletionProgress}>载入其他标签页版本</button></> : null}</div> : null}</section></div></div>{success && <SuccessDialog stars={stars} feedback={feedback} hasNext={Boolean(next)} onMap={() => navigate('/')} onNext={() => next && navigate(`/mission/${next.id}`)} onOpenChange={onGlobalModalOpenChange} />}</main>;
+  return <main className="mission-page"><div data-testid="mission-background" inert={success ? true : undefined} aria-hidden={success ? true : undefined}><header className="mission-header"><button className="back-button" type="button" onClick={() => navigate('/')}><ArrowLeft size={21} />成长地图</button><div><span>第{mission.week}周 · 第{mission.order}关{mission.isBoss ? ' · BOSS' : ''}</span><h1>{mission.title}</h1></div><div className="canon-badge"><BookOpenText size={20} /><span>{mission.canon.title}</span></div></header><div className="mission-layout"><aside className="story-column"><span className="eyebrow">原著故事层</span><h2>{mission.subtitle}</h2>{mission.storyBeats.map((item) => <article className="story-beat" key={item.title}><CheckCircle size={20} weight="fill" /><div><strong>{item.title}</strong><p>{item.summary}</p></div></article>)}<a className="canon-link" href={mission.canon.sourceUrl} target="_blank" rel="noreferrer">查看原著第{mission.canon.chapters.map(chapterLabel).join('、')}回</a><HintPanel hints={mission.hints} disabled={hintsLocked} disabledReason={hintLockReason} onUse={(tier) => { if (mission.id === 'w1-m1' || mission.id === 'w1-m2' || mission.id === 'w1-m3') { if (!progress.sessions[mission.id]?.usedHintTiers.includes(tier)) recordMissionHint(mission.id, tier); } else setHintsUsed((count) => count + 1); }} /></aside><section className="play-column"><div className="mission-objective"><span>今日任务</span><h2>{mission.objective}</h2><p>知识法宝：{mission.knowledge}</p></div>{mission.id === 'w1-m1' ? <LazySectionBoundary label="龙宫求兵任务"><Suspense fallback={<p className="mission-tools-loading" role="status">龙宫求兵任务加载中，请稍候……</p>}><DragonPalaceExperience reducedMotion={reducedMotion} muted={progress.settings.muted} onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)} /></Suspense></LazySectionBoundary> : mission.id === 'w1-m2' ? <LazySectionBoundary label="定海神针任务"><Suspense fallback={<p className="mission-tools-loading" role="status">定海神针任务加载中，请稍候……</p>}><RuyiStaffExperience reducedMotion={reducedMotion} muted={progress.settings.muted} locked={completionSave !== null} onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)} onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange} onInteractionLockChange={setBattleInteractionLocked} /></Suspense></LazySectionBoundary> : mission.id === 'w1-m3' ? <FourSeasRegaliaRouteBoundary reducedMotion={reducedMotion} muted={progress.settings.muted} locked={completionSave !== null} onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)} onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange} onInteractionLockChange={setBattleInteractionLocked} /> : <LazySectionBoundary label="兼容任务工具"><Suspense fallback={<p className="mission-tools-loading" role="status">兼容任务工具加载中，请稍候……</p>}><MissionTools missionId={mission.id} mode={mission.mode} sceneProps={{ activeStep, reducedMotion }} toolProps={toolProps} /></Suspense></LazySectionBoundary>}{feedback && !success && <div className="feedback-message">{feedback}</div>}{completionSave ? <div className="completion-save-status" role={completionSave.status === 'pending' ? 'status' : 'alert'} aria-live={completionSave.status === 'pending' ? 'polite' : 'assertive'}><p>{completionSave.status === 'pending' ? '正在保存通关结果…' : completionSave.status === 'conflict' ? '通关待保存：其他标签页已经更新，请选择保留本页备份或载入其他标签页版本。' : '通关待保存：进度尚未安全写入这台电脑。'}</p>{completionSave.status === 'unsaved' && saveError ? <p>{saveError}</p> : null}{completionSave.status === 'unsaved' ? <button ref={completionRetryRef} type="button" className="button button-primary" onClick={retryCompletionSave}>重试保存通关</button> : null}{completionSave.status === 'conflict' ? <><button type="button" onClick={downloadCompletionConflictBackup}>下载本页备份</button><button type="button" onClick={loadExternalCompletionProgress}>载入其他标签页版本</button></> : null}</div> : null}</section></div></div>{success && <SuccessDialog stars={stars} feedback={feedback} hasNext={Boolean(next)} onMap={() => navigate('/')} onNext={() => next && navigate(`/mission/${next.id}`)} onOpenChange={onGlobalModalOpenChange} />}</main>;
 }
 
 export function MissionPageContent(props: MissionPageProps) {
   const { id = '' } = useParams();
-  return <MissionPageForId key={id} id={id} {...props} />;
+  const formalMission = getFormalMission(id);
+  const [legacyLoad, setLegacyLoad] = useState<{ id: string; status: 'loading' | 'ready' | 'error'; mission?: MissionSpec }>({ id: '', status: 'loading' });
+  const [legacyRetry, setLegacyRetry] = useState(0);
+  useEffect(() => {
+    if (formalMission) return;
+    let active = true;
+    setLegacyLoad({ id, status: 'loading' });
+    import('../course/course').then(({ getMission }) => {
+      if (active) setLegacyLoad({ id, status: 'ready', mission: getMission(id) });
+    }).catch(() => {
+      if (active) setLegacyLoad({ id, status: 'error' });
+    });
+    return () => { active = false; };
+  }, [formalMission, id, legacyRetry]);
+  if (!formalMission && (legacyLoad.id !== id || legacyLoad.status === 'loading')) {
+    return <main className="mission-page"><p className="mission-tools-loading" role="status">关卡故事加载中，请稍候……</p></main>;
+  }
+  if (!formalMission && legacyLoad.status === 'error') {
+    return <main className="mission-page"><div className="mission-tools-error" role="alert"><p>关卡故事暂时没有加载成功。</p><button type="button" onClick={() => setLegacyRetry((value) => value + 1)}>重试加载</button></div></main>;
+  }
+  return <MissionPageForId key={id} id={id} mission={formalMission ?? legacyLoad.mission} {...props} />;
 }

@@ -70,7 +70,7 @@ const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
     { sourcePath: 'src/components/RuyiStaffScene.tsx', loaderKey: 'weapons' },
   ]],
   ['assets/dragon-palace/sabre.webp', [
-    { sourcePath: 'src/components/RuyiStaffScene.tsx', loaderKey: 'sabre' },
+    { sourcePath: 'src/components/RuyiStaffScene.tsx', loaderKey: 'sabre', demandOpcode: 'choose_sabre' },
   ]],
   ['assets/dragon-palace/effects.webp', [
     { sourcePath: 'src/components/GameScene.tsx', loaderKey: 'effects' },
@@ -387,6 +387,53 @@ function configuredPhaserPreloadAssets(sourcePath, source) {
   return keyToPath;
 }
 
+function configuredPhaserDemandAssets(sourcePath, source) {
+  const sourceFile = ts.createSourceFile(sourcePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  if (sourceFile.parseDiagnostics.length > 0) {
+    throw new Error(`Asset manifest: ${sourcePath} cannot be parsed as TypeScript for demand-load verification.`);
+  }
+  const demandAssets = new Map();
+  const visit = (node) => {
+    if (ts.isCallExpression(node)) {
+      const imageAccess = node.expression;
+      const loadAccess = ts.isPropertyAccessExpression(imageAccess) && imageAccess.name.text === 'image'
+        ? imageAccess.expression
+        : null;
+      if (loadAccess && ts.isPropertyAccessExpression(loadAccess) && loadAccess.name.text === 'load'
+        && ts.isIdentifier(loadAccess.expression) && loadAccess.expression.text === 'scene') {
+        if (node.questionDotToken || node.arguments.length !== 2 || node.arguments.some(ts.isSpreadElement)) {
+          throw new Error(`Asset manifest: ${sourcePath} demand image calls require exactly two direct arguments.`);
+        }
+        const [loaderKeyNode, assetUrlCall] = node.arguments;
+        if (!ts.isStringLiteral(loaderKeyNode) || !ts.isCallExpression(assetUrlCall)
+          || !ts.isIdentifier(assetUrlCall.expression) || assetUrlCall.expression.text !== 'assetUrl'
+          || assetUrlCall.arguments.length !== 1 || !ts.isStringLiteral(assetUrlCall.arguments[0])) {
+          throw new Error(`Asset manifest: ${sourcePath} demand image calls require literal key and direct assetUrl(literal path).`);
+        }
+        let owner = node.parent;
+        let demandOpcode = null;
+        while (owner && owner !== sourceFile) {
+          if (ts.isIfStatement(owner)) {
+            const condition = owner.expression.getText(sourceFile).replace(/\s+/g, '');
+            const match = /^event\.opcode==='([^']+)'$/.exec(condition);
+            if (match) { demandOpcode = match[1]; break; }
+          }
+          owner = owner.parent;
+        }
+        if (demandOpcode === null) {
+          throw new Error(`Asset manifest: ${sourcePath} demand image call must be inside one exact event.opcode branch.`);
+        }
+        const loaderKey = loaderKeyNode.text;
+        if (demandAssets.has(loaderKey)) throw new Error(`Asset manifest: ${sourcePath} has duplicate demand image key ${loaderKey}.`);
+        demandAssets.set(loaderKey, { publicPath: assetUrlCall.arguments[0].text, demandOpcode });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return demandAssets;
+}
+
 function splitMarkdownRow(line) {
   return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
 }
@@ -574,36 +621,50 @@ export function verifyRequiredDragonPalaceInventory({
   if (!(sourceFiles instanceof Map)) throw new Error('Asset manifest: formal scene source files are required for slot verification.');
   const expectedAssetsBySource = new Map();
   for (const [assetId, slots] of REQUIRED_DRAGON_PALACE_SLOTS) {
-    for (const { sourcePath, loaderKey } of slots) {
+    for (const { sourcePath, loaderKey, demandOpcode = null } of slots) {
       if (!expectedAssetsBySource.has(sourcePath)) expectedAssetsBySource.set(sourcePath, new Map());
       const expectedAssets = expectedAssetsBySource.get(sourcePath);
       if (expectedAssets.has(loaderKey)) {
         throw new Error(`Asset manifest: required Dragon Palace slots contain duplicate loader key ${loaderKey} for ${sourcePath}.`);
       }
-      expectedAssets.set(loaderKey, `/${assetId}`);
+      expectedAssets.set(loaderKey, { publicPath: `/${assetId}`, demandOpcode });
     }
   }
   const parsedSources = new Map();
   for (const [sourcePath, source] of sourceFiles) {
     if (typeof source !== 'string') throw new Error(`Asset manifest: formal scene source ${sourcePath} must be text.`);
-    parsedSources.set(sourcePath, configuredPhaserPreloadAssets(sourcePath, source));
+    parsedSources.set(sourcePath, {
+      preload: configuredPhaserPreloadAssets(sourcePath, source),
+      demand: configuredPhaserDemandAssets(sourcePath, source),
+    });
   }
   for (const [sourcePath, expectedAssets] of expectedAssetsBySource) {
-    const preloadAssets = parsedSources.get(sourcePath);
-    if (!(preloadAssets instanceof Map)) {
+    const parsed = parsedSources.get(sourcePath);
+    if (!parsed || !(parsed.preload instanceof Map) || !(parsed.demand instanceof Map)) {
       throw new Error(`Asset manifest: required formal scene source ${sourcePath} is missing.`);
     }
-    if (preloadAssets.size !== expectedAssets.size) {
-      throw new Error(`Asset manifest: ${sourcePath} preload must contain exactly ${expectedAssets.size} approved Dragon Palace image loads; found ${preloadAssets.size}.`);
+    const expectedPreload = new Map([...expectedAssets].filter(([, slot]) => slot.demandOpcode === null));
+    const expectedDemand = new Map([...expectedAssets].filter(([, slot]) => slot.demandOpcode !== null));
+    if (parsed.preload.size !== expectedPreload.size) {
+      throw new Error(`Asset manifest: ${sourcePath} preload must contain exactly ${expectedPreload.size} approved Dragon Palace image loads; found ${parsed.preload.size}.`);
     }
-    for (const [loaderKey, publicPath] of expectedAssets) {
-      if (preloadAssets.get(loaderKey) !== publicPath) {
-        throw new Error(`Asset manifest: ${publicPath.slice(1)} is missing its exact Phaser preload slot ${sourcePath} with loader key ${loaderKey}.`);
+    for (const [loaderKey, slot] of expectedPreload) {
+      if (parsed.preload.get(loaderKey) !== slot.publicPath) {
+        throw new Error(`Asset manifest: ${slot.publicPath.slice(1)} is missing its exact Phaser preload slot ${sourcePath} with loader key ${loaderKey}.`);
       }
     }
-    for (const [loaderKey, publicPath] of preloadAssets) {
-      if (expectedAssets.get(loaderKey) !== publicPath) {
+    for (const [loaderKey, publicPath] of parsed.preload) {
+      if (expectedPreload.get(loaderKey)?.publicPath !== publicPath) {
         throw new Error(`Asset manifest: ${sourcePath} contains unapproved Phaser image load ${loaderKey} -> ${publicPath}.`);
+      }
+    }
+    if (parsed.demand.size !== expectedDemand.size) {
+      throw new Error(`Asset manifest: ${sourcePath} must contain exactly ${expectedDemand.size} approved demand image loads; found ${parsed.demand.size}.`);
+    }
+    for (const [loaderKey, slot] of expectedDemand) {
+      const actual = parsed.demand.get(loaderKey);
+      if (actual?.publicPath !== slot.publicPath || actual?.demandOpcode !== slot.demandOpcode) {
+        throw new Error(`Asset manifest: ${slot.publicPath.slice(1)} is missing its exact ${slot.demandOpcode} demand-load slot ${sourcePath} with loader key ${loaderKey}.`);
       }
     }
   }
