@@ -316,6 +316,7 @@ test('allows the exact prerequisite init helper without w1-m3 state', () => {
       }, { key: CURRENT_KEY, value: fourSeasPrerequisiteFixture() })
     }
     test.beforeEach(async ({ page }) => {
+      healthEvents = []
       attachHealth(page)
       await installFourSeasPrerequisites(page)
     })
@@ -593,6 +594,69 @@ test('allows one top-level unexpected healthEvents filter before the empty asser
       expect(unexpected, 'unexpected Four Seas browser health events').toEqual([])
     })
   `));
+});
+
+test('rejects resetting healthEvents in a test body after navigation', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    ${validHealthHarness}
+    test('forged health', async ({ page }) => {
+      await page.goto('./')
+      healthEvents = []
+    })
+  `), /healthEvents|reset|navigation|mutation/i);
+});
+
+test('rejects resetting healthEvents in beforeEach after navigation', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    ${validHealthHarness}
+    test.beforeEach(async ({ page }) => {
+      attachHealth(page)
+      await page.goto('./')
+      healthEvents = []
+    })
+  `), /healthEvents|reset|navigation|beforeEach|mutation/i);
+});
+
+test('rejects direct, reflective, escaping, and aliased healthEvents mutations', () => {
+  const mutations = [
+    'healthEvents.length = 0',
+    'healthEvents[0] = forgedEvent',
+    'healthEvents.length += 1',
+    'delete healthEvents[0]',
+    'healthEvents.length++',
+    'healthEvents.splice(0)',
+    'healthEvents.pop()',
+    'healthEvents.shift()',
+    'healthEvents.unshift(forgedEvent)',
+    'healthEvents.push(forgedEvent)',
+    'healthEvents.clear()',
+    'Object.assign(healthEvents, { length: 0 })',
+    "Reflect.set(healthEvents, 'length', 0)",
+    'const alias = healthEvents; alias.splice(0)',
+    'consume(healthEvents)',
+    'return healthEvents',
+  ];
+  for (const mutation of mutations) {
+    assert.throws(() => assertFourSeasE2ESourceContract(`
+      ${validHealthHarness}
+      function mutateHealth() { ${mutation} }
+    `), /healthEvents|mutation|alias|escape|write/i, mutation);
+  }
+});
+
+test('rejects replacing expectedNavigationAbort in a test body', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    ${validHealthHarness}
+    test('forged filter', () => {
+      expectedNavigationAbort = () => true
+    })
+  `), /expectedNavigationAbort|mutation|alias|write/i);
+});
+
+test('rejects a non-let healthEvents collection declaration', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(
+    validHealthHarness.replace('let healthEvents = []', 'const healthEvents = []'),
+  ), /healthEvents|top-level|let|collection/i);
 });
 
 test('allows locator geometry evaluate and Node-side map', () => {

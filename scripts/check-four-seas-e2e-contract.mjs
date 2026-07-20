@@ -324,6 +324,7 @@ function assertExpectedNavigationAbort(file) {
   if (compactNodeText(helper.body.statements[0].expression, file) !== expectedExpression) {
     throw new Error('Four Seas E2E source contract: expectedNavigationAbort must filter only the approved navigation aborts.');
   }
+  return helper;
 }
 
 function assertUnexpectedHealthFilter(node) {
@@ -396,7 +397,7 @@ function assertAfterEachHealth(file, afterEachCalls) {
       : null;
     const filterCall = expectCall?.arguments[0] && assertUnexpectedHealthFilter(expectCall.arguments[0]);
     assertPositiveEmptyExpectation(statements[0], filterCall);
-    return;
+    return callback;
   }
   if (statements.length === 2 && ts.isVariableStatement(statements[0])
     && (statements[0].declarationList.flags & ts.NodeFlags.Const)
@@ -406,13 +407,75 @@ function assertAfterEachHealth(file, afterEachCalls) {
       && declaration.initializer) {
       assertUnexpectedHealthFilter(declaration.initializer);
       assertPositiveEmptyExpectation(statements[1], 'unexpected');
-      return;
+      return callback;
     }
   }
   throw new Error('Four Seas E2E source contract: afterEach health assertion has invalid conditional, reset, or control-flow structure.');
 }
 
-function assertHealthContract(file, attachHealth, afterEachCalls) {
+function collectNamedIdentifiers(root, name, target) {
+  const visit = (node) => {
+    if (ts.isIdentifier(node) && node.text === name) target.add(node);
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+}
+
+function assertMainHealthReset(file, beforeEachCalls, allowedHealthReferences) {
+  if (beforeEachCalls.length === 0) return;
+  if (beforeEachCalls.length !== 1) {
+    throw new Error('Four Seas E2E source contract: exactly one main beforeEach health reset is allowed.');
+  }
+  const call = beforeEachCalls[0];
+  const callback = call.arguments[0] && unwrapExpression(call.arguments[0]);
+  if (!ts.isExpressionStatement(call.parent) || call.parent.parent !== file
+    || !callback || !ts.isArrowFunction(callback) || !ts.isBlock(callback.body)
+    || callback.body.statements.length === 0) {
+    throw new Error('Four Seas E2E source contract: main beforeEach health reset must be top-level and inspectable.');
+  }
+  const resetStatement = callback.body.statements[0];
+  const reset = ts.isExpressionStatement(resetStatement)
+    ? unwrapExpression(resetStatement.expression)
+    : null;
+  if (!reset || !ts.isBinaryExpression(reset)
+    || reset.operatorToken.kind !== ts.SyntaxKind.EqualsToken
+    || !ts.isIdentifier(unwrapExpression(reset.left))
+    || unwrapExpression(reset.left).text !== 'healthEvents'
+    || !ts.isArrayLiteralExpression(unwrapExpression(reset.right))
+    || unwrapExpression(reset.right).elements.length !== 0) {
+    throw new Error('Four Seas E2E source contract: beforeEach must synchronously reset healthEvents first, before attach, navigation, init, or await.');
+  }
+  allowedHealthReferences.add(unwrapExpression(reset.left));
+}
+
+function assertGlobalHealthReferences(
+  file,
+  healthDeclaration,
+  attachHealth,
+  expectedNavigationAbort,
+  afterEachCallback,
+  beforeEachCalls,
+) {
+  const allowedHealthReferences = new Set([healthDeclaration.name]);
+  const allowedAbortReferences = new Set([expectedNavigationAbort.name]);
+  collectNamedIdentifiers(attachHealth.body, 'healthEvents', allowedHealthReferences);
+  collectNamedIdentifiers(afterEachCallback.body, 'healthEvents', allowedHealthReferences);
+  collectNamedIdentifiers(afterEachCallback.body, 'expectedNavigationAbort', allowedAbortReferences);
+  assertMainHealthReset(file, beforeEachCalls, allowedHealthReferences);
+
+  const visit = (node) => {
+    if (ts.isIdentifier(node) && node.text === 'healthEvents' && !allowedHealthReferences.has(node)) {
+      throw new Error('Four Seas E2E source contract: healthEvents reference is an unapproved mutation, alias, or escape.');
+    }
+    if (ts.isIdentifier(node) && node.text === 'expectedNavigationAbort' && !allowedAbortReferences.has(node)) {
+      throw new Error('Four Seas E2E source contract: expectedNavigationAbort may only be declared and called by the validated afterEach filter.');
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+}
+
+function assertHealthContract(file, attachHealth, afterEachCalls, beforeEachCalls) {
   if (!attachHealth || attachHealth.parent !== file || attachHealth.parameters.length !== 1
     || !attachHealth.body || !ts.isIdentifier(attachHealth.parameters[0].name)
     || attachHealth.parameters[0].name.text !== 'page') {
@@ -423,9 +486,11 @@ function assertHealthContract(file, attachHealth, afterEachCalls) {
   )).filter((declaration) => ts.isIdentifier(declaration.name) && declaration.name.text === 'healthEvents');
   const healthDeclaration = healthDeclarations[0];
   if (healthDeclarations.length !== 1 || !healthDeclaration?.initializer
+    || !ts.isVariableDeclarationList(healthDeclaration.parent)
+    || !(healthDeclaration.parent.flags & ts.NodeFlags.Let)
     || !ts.isArrayLiteralExpression(unwrapExpression(healthDeclaration.initializer))
     || unwrapExpression(healthDeclaration.initializer).elements.length !== 0) {
-    throw new Error('Four Seas E2E source contract: healthEvents must be one top-level empty event collection.');
+    throw new Error('Four Seas E2E source contract: healthEvents must be one top-level let initialized to an empty event collection.');
   }
   if (attachHealth.body.statements.length !== 3) {
     throw new Error('Four Seas E2E source contract: attachHealth must register exactly console, pageerror, and requestfailed.');
@@ -461,8 +526,16 @@ function assertHealthContract(file, attachHealth, afterEachCalls) {
   if ([...seenEvents].sort().join(',') !== 'console,pageerror,requestfailed') {
     throw new Error('Four Seas E2E source contract: attachHealth must cover console, pageerror, and requestfailed exactly once.');
   }
-  assertExpectedNavigationAbort(file);
-  assertAfterEachHealth(file, afterEachCalls);
+  const expectedNavigationAbort = assertExpectedNavigationAbort(file);
+  const afterEachCallback = assertAfterEachHealth(file, afterEachCalls);
+  assertGlobalHealthReferences(
+    file,
+    healthDeclaration,
+    attachHealth,
+    expectedNavigationAbort,
+    afterEachCallback,
+    beforeEachCalls,
+  );
 }
 
 
@@ -652,7 +725,7 @@ export function assertFourSeasE2ESourceContract(source) {
     else assertReadOnlyEvaluate(callback);
   }
   if (attachHealth || beforeEachCalls.length > 0 || newPageCalls.length > 0) {
-    assertHealthContract(file, attachHealth, afterEachCalls);
+    assertHealthContract(file, attachHealth, afterEachCalls, beforeEachCalls);
   }
   assertMainBeforeEachHealth(file, beforeEachCalls);
 }
