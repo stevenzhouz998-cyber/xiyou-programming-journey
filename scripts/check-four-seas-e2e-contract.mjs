@@ -131,6 +131,65 @@ const safeReadCalls = new Set([
   'sessionStorage.getItem',
 ]);
 
+const dynamicExecutorNames = new Set(['eval', 'Function']);
+const dynamicTimerNames = new Set(['setTimeout', 'setInterval']);
+
+const isGlobalObjectExpression = (node) => {
+  const expression = unwrapExpression(node);
+  return ts.isIdentifier(expression) && (expression.text === 'globalThis' || expression.text === 'window');
+};
+
+const isInlineTimerCallback = (node) => {
+  const callback = node && unwrapExpression(node);
+  return callback && (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback));
+};
+
+function assertNoDynamicExecution(file) {
+  const fail = (detail) => {
+    throw new Error(`Four Seas E2E source contract: dynamic code execution is forbidden (${detail}).`);
+  };
+  const visit = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name)
+      && node.initializer && isGlobalObjectExpression(node.initializer)
+      && node.name.elements.some((element) => element.propertyName && ts.isComputedPropertyName(element.propertyName))) {
+      fail('computed global destructuring');
+    }
+    if (ts.isElementAccessExpression(node) && isGlobalObjectExpression(node.expression)) {
+      const name = staticPropertyName(node);
+      if (name === null || dynamicExecutorNames.has(name) || dynamicTimerNames.has(name)) {
+        fail(`computed global access ${String(name)}`);
+      }
+    }
+    if (ts.isIdentifier(node) && dynamicExecutorNames.has(node.text)) {
+      fail(node.text);
+    }
+    if (ts.isIdentifier(node) && dynamicTimerNames.has(node.text)) {
+      const parent = node.parent;
+      if (ts.isPropertyAccessExpression(parent) && parent.name === node) {
+        if (!isGlobalObjectExpression(parent.expression)) {
+          ts.forEachChild(node, visit);
+          return;
+        }
+        const call = ts.isCallExpression(parent.parent)
+          && unwrapExpression(parent.parent.expression) === parent
+          ? parent.parent
+          : null;
+        if (call && isInlineTimerCallback(call.arguments[0])) {
+          ts.forEachChild(node, visit);
+          return;
+        }
+      } else if (ts.isCallExpression(parent) && unwrapExpression(parent.expression) === node
+        && isInlineTimerCallback(parent.arguments[0])) {
+        ts.forEachChild(node, visit);
+        return;
+      }
+      fail(`${node.text} alias or string callback`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+}
+
 const qualifiedCallName = (call) => {
   const callee = unwrapExpression(call.expression);
   if (ts.isIdentifier(callee)) return callee.text;
@@ -627,6 +686,7 @@ export function assertFourSeasE2ESourceContract(source) {
   if (file.parseDiagnostics.length > 0) {
     throw new Error('Four Seas E2E source contract: source must parse before safety inspection.');
   }
+  assertNoDynamicExecution(file);
 
   const topLevelFunctions = new Map(file.statements
     .filter((statement) => ts.isFunctionDeclaration(statement) && statement.name)

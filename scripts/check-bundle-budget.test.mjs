@@ -659,6 +659,40 @@ test('rejects a non-let healthEvents collection declaration', () => {
   ), /healthEvents|top-level|let|collection/i);
 });
 
+const dynamicExecutionCases = [
+  ['direct eval', "eval('healthEvents = []')"],
+  ['globalThis.eval', "globalThis.eval('healthEvents = []')"],
+  ['window.eval', "window.eval('healthEvents = []')"],
+  ['computed globalThis eval', "globalThis['eval']('healthEvents = []')"],
+  ['computed globalThis eval alias', "const run = globalThis['eval']; run('healthEvents = []')"],
+  ['indirect comma eval', "(0, eval)('healthEvents = []')"],
+  ['eval.call', "eval.call(globalThis, 'healthEvents = []')"],
+  ['eval.apply', "eval.apply(globalThis, ['healthEvents = []'])"],
+  ['new Function', "new Function('healthEvents = []')()"],
+  ['Function call', "Function('healthEvents = []')()"],
+  ['string setTimeout', "setTimeout('healthEvents = []', 0)"],
+  ['string setInterval', "setInterval('healthEvents = []', 0)"],
+  ['eval alias', "const run = eval; run('healthEvents = []')"],
+  ['global eval property alias', "const run = globalThis.eval; run('healthEvents = []')"],
+  ['eval destructure alias', "const { eval: run } = globalThis; run('healthEvents = []')"],
+  ['computed eval destructure alias', "const { ['eval']: run } = globalThis; run('healthEvents = []')"],
+  ['dynamic-key eval destructure alias', "const key = 'eval'; const { [key]: run } = globalThis; run('healthEvents = []')"],
+  ['Function alias', "const build = Function; build('healthEvents = []')()"],
+  ['timer alias', "const later = setTimeout; later('healthEvents = []', 0)"],
+];
+
+for (const [name, dynamicCode] of dynamicExecutionCases) {
+  test(`rejects dynamic E2E code execution through ${name}`, () => {
+    assert.throws(() => assertFourSeasE2ESourceContract(`
+      ${validHealthHarness}
+      test('dynamic bypass', async ({ page }) => {
+        await page.goto('./')
+        ${dynamicCode}
+      })
+    `), /dynamic|eval|Function|timer|execution/i);
+  });
+}
+
 test('allows locator geometry evaluate and Node-side map', () => {
   assert.doesNotThrow(() => assertFourSeasE2ESourceContract(`
     const rect = await page.locator('.cell').evaluate((element) => element.getBoundingClientRect())
