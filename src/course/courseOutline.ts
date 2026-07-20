@@ -1,4 +1,4 @@
-import type { CourseWeek, MissionSpec } from './types';
+import type { CourseWeek, FormalMissionSpec, HintSet, MissionSpec } from './types';
 
 export interface CourseOutlineMission {
   id: string;
@@ -51,7 +51,9 @@ export const courseOutline: { weeks: CourseOutlineWeek[] } = {
 
 export const allMissionOutlines = courseOutline.weeks.flatMap((week) => week.missions);
 
-export type MissionExtension = Omit<MissionSpec, keyof CourseOutlineMission | 'hints'>;
+type MissionPresentationExtension = Omit<MissionSpec, keyof CourseOutlineMission | 'hints' | 'expectedSequence'>;
+export type MissionExtension = MissionPresentationExtension & Pick<MissionSpec, 'expectedSequence'>;
+export type FormalMissionExtension = MissionPresentationExtension;
 export type CourseWeekExtension = Omit<CourseWeek, keyof CourseOutlineWeek | 'missions'> & { missions: MissionSpec[] };
 
 export function getMissionOutline(id: string): CourseOutlineMission | undefined {
@@ -62,18 +64,28 @@ export function isFormalMissionOutline(outline: CourseOutlineMission | undefined
   return outline?.week === 1 && outline.order <= 3;
 }
 
+function deriveHints(extension: MissionPresentationExtension, stepCount: number): HintSet {
+  return {
+    observe: `先看清“${extension.objective}”里谁先发生、谁后发生。`,
+    think: `把大任务拆成 ${Math.max(2, stepCount)} 个小步骤，再逐个检查。`,
+    partial: `先从“${extension.storyBeats[0].title}”开始，后面的步骤按原著因果接上。`,
+  };
+}
+
 export function deriveMissionFromOutline(id: string, extension: MissionExtension): MissionSpec {
   const outline = getMissionOutline(id);
   if (!outline) throw new Error(`Unknown course outline mission: ${id}`);
   return {
     ...outline,
     ...extension,
-    hints: {
-      observe: `先看清“${extension.objective}”里谁先发生、谁后发生。`,
-      think: `把大任务拆成 ${Math.max(2, extension.expectedSequence.length)} 个小步骤，再逐个检查。`,
-      partial: `先从“${extension.storyBeats[0].title}”开始，后面的步骤按原著因果接上。`,
-    },
+    hints: deriveHints(extension, extension.expectedSequence.length),
   };
+}
+
+export function deriveFormalMissionFromOutline(id: string, extension: FormalMissionExtension): FormalMissionSpec {
+  const outline = getMissionOutline(id);
+  if (!outline || !isFormalMissionOutline(outline)) throw new Error(`Unknown formal course outline mission: ${id}`);
+  return { ...outline, ...extension, hints: deriveHints(extension, extension.storyBeats.length) };
 }
 
 export function deriveWeekFromOutline(id: string, extension: CourseWeekExtension): CourseWeek {

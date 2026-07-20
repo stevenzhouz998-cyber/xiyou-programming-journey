@@ -340,9 +340,11 @@ test('binds slots to one configured Phaser Scene and fails closed on duplicate o
   const ruyiSource = sourceFiles.get(ruyiPath);
   const demandLoad = "scene.load.image('sabre', assetUrl('/assets/dragon-palace/sabre.webp'))";
   const demandBranch = "if (event.opcode === 'choose_sabre') {";
+  const inspectBranch = "if (event.state === 'weights-inspected') {";
   for (const mutatedSource of [
     ruyiSource.replace(demandLoad, "scene.load.image('sabre', assetUrl('/assets/dragon-palace/weapons.webp'))"),
     ruyiSource.replace(demandBranch, "if (event.opcode === 'choose_halberd') {"),
+    ruyiSource.replace(inspectBranch, "if (event.state === 'ruyi-staff-selected') {"),
     ruyiSource.replace(demandLoad, `${demandLoad}\n          scene.load.image('untracked', assetUrl('/assets/world-map.jpg'))`),
   ]) {
     assert.notEqual(mutatedSource, ruyiSource, 'the demand-load mutation must match the real shipping source');

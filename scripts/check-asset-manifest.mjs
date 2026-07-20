@@ -70,7 +70,7 @@ const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
     { sourcePath: 'src/components/RuyiStaffScene.tsx', loaderKey: 'weapons' },
   ]],
   ['assets/dragon-palace/sabre.webp', [
-    { sourcePath: 'src/components/RuyiStaffScene.tsx', loaderKey: 'sabre', demandOpcode: 'choose_sabre' },
+    { sourcePath: 'src/components/RuyiStaffScene.tsx', loaderKey: 'sabre', demandTriggers: ['opcode:choose_sabre', 'state:weights-inspected'] },
   ]],
   ['assets/dragon-palace/effects.webp', [
     { sourcePath: 'src/components/GameScene.tsx', loaderKey: 'effects' },
@@ -411,26 +411,55 @@ function configuredPhaserDemandAssets(sourcePath, source) {
           throw new Error(`Asset manifest: ${sourcePath} demand image calls require literal key and direct assetUrl(literal path).`);
         }
         let owner = node.parent;
-        let demandOpcode = null;
+        let demandFunctionName = null;
         while (owner && owner !== sourceFile) {
-          if (ts.isIfStatement(owner)) {
-            const condition = owner.expression.getText(sourceFile).replace(/\s+/g, '');
-            const match = /^event\.opcode==='([^']+)'$/.exec(condition);
-            if (match) { demandOpcode = match[1]; break; }
+          if ((ts.isArrowFunction(owner) || ts.isFunctionExpression(owner))
+            && ts.isVariableDeclaration(owner.parent) && ts.isIdentifier(owner.parent.name)) {
+            demandFunctionName = owner.parent.name.text;
+            break;
           }
           owner = owner.parent;
         }
-        if (demandOpcode === null) {
-          throw new Error(`Asset manifest: ${sourcePath} demand image call must be inside one exact event.opcode branch.`);
+        if (demandFunctionName === null) {
+          throw new Error(`Asset manifest: ${sourcePath} demand image call must be owned by one exact named demand loader.`);
         }
         const loaderKey = loaderKeyNode.text;
         if (demandAssets.has(loaderKey)) throw new Error(`Asset manifest: ${sourcePath} has duplicate demand image key ${loaderKey}.`);
-        demandAssets.set(loaderKey, { publicPath: assetUrlCall.arguments[0].text, demandOpcode });
+        demandAssets.set(loaderKey, { publicPath: assetUrlCall.arguments[0].text, demandFunctionName, demandTriggers: [] });
       }
     }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
+  for (const demand of demandAssets.values()) {
+    const triggers = new Set();
+    const inspectCalls = (node) => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)
+        && node.expression.text === demand.demandFunctionName) {
+        let owner = node.parent;
+        let insideDefinition = false;
+        let trigger = null;
+        while (owner && owner !== sourceFile) {
+          if ((ts.isArrowFunction(owner) || ts.isFunctionExpression(owner))
+            && ts.isVariableDeclaration(owner.parent) && ts.isIdentifier(owner.parent.name)
+            && owner.parent.name.text === demand.demandFunctionName) insideDefinition = true;
+          if (ts.isIfStatement(owner)) {
+            const condition = owner.expression.getText(sourceFile).replace(/\s+/g, '');
+            const match = /^event\.(opcode|state)==='([^']+)'$/.exec(condition);
+            if (match) trigger = `${match[1]}:${match[2]}`;
+          }
+          owner = owner.parent;
+        }
+        if (!insideDefinition) {
+          if (trigger === null) throw new Error(`Asset manifest: ${sourcePath} demand loader calls must be inside one exact event opcode or state branch.`);
+          triggers.add(trigger);
+        }
+      }
+      ts.forEachChild(node, inspectCalls);
+    };
+    inspectCalls(sourceFile);
+    demand.demandTriggers = [...triggers].sort();
+  }
   return demandAssets;
 }
 
@@ -621,13 +650,13 @@ export function verifyRequiredDragonPalaceInventory({
   if (!(sourceFiles instanceof Map)) throw new Error('Asset manifest: formal scene source files are required for slot verification.');
   const expectedAssetsBySource = new Map();
   for (const [assetId, slots] of REQUIRED_DRAGON_PALACE_SLOTS) {
-    for (const { sourcePath, loaderKey, demandOpcode = null } of slots) {
+    for (const { sourcePath, loaderKey, demandTriggers = null } of slots) {
       if (!expectedAssetsBySource.has(sourcePath)) expectedAssetsBySource.set(sourcePath, new Map());
       const expectedAssets = expectedAssetsBySource.get(sourcePath);
       if (expectedAssets.has(loaderKey)) {
         throw new Error(`Asset manifest: required Dragon Palace slots contain duplicate loader key ${loaderKey} for ${sourcePath}.`);
       }
-      expectedAssets.set(loaderKey, { publicPath: `/${assetId}`, demandOpcode });
+      expectedAssets.set(loaderKey, { publicPath: `/${assetId}`, demandTriggers });
     }
   }
   const parsedSources = new Map();
@@ -643,8 +672,8 @@ export function verifyRequiredDragonPalaceInventory({
     if (!parsed || !(parsed.preload instanceof Map) || !(parsed.demand instanceof Map)) {
       throw new Error(`Asset manifest: required formal scene source ${sourcePath} is missing.`);
     }
-    const expectedPreload = new Map([...expectedAssets].filter(([, slot]) => slot.demandOpcode === null));
-    const expectedDemand = new Map([...expectedAssets].filter(([, slot]) => slot.demandOpcode !== null));
+    const expectedPreload = new Map([...expectedAssets].filter(([, slot]) => slot.demandTriggers === null));
+    const expectedDemand = new Map([...expectedAssets].filter(([, slot]) => slot.demandTriggers !== null));
     if (parsed.preload.size !== expectedPreload.size) {
       throw new Error(`Asset manifest: ${sourcePath} preload must contain exactly ${expectedPreload.size} approved Dragon Palace image loads; found ${parsed.preload.size}.`);
     }
@@ -663,8 +692,9 @@ export function verifyRequiredDragonPalaceInventory({
     }
     for (const [loaderKey, slot] of expectedDemand) {
       const actual = parsed.demand.get(loaderKey);
-      if (actual?.publicPath !== slot.publicPath || actual?.demandOpcode !== slot.demandOpcode) {
-        throw new Error(`Asset manifest: ${slot.publicPath.slice(1)} is missing its exact ${slot.demandOpcode} demand-load slot ${sourcePath} with loader key ${loaderKey}.`);
+      if (actual?.publicPath !== slot.publicPath
+        || JSON.stringify(actual?.demandTriggers) !== JSON.stringify([...slot.demandTriggers].sort())) {
+        throw new Error(`Asset manifest: ${slot.publicPath.slice(1)} is missing its exact ${slot.demandTriggers.join(' + ')} demand-load slots ${sourcePath} with loader key ${loaderKey}.`);
       }
     }
   }

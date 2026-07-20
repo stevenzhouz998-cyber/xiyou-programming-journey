@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { course, validateCourse } from './course';
 import { courseOutline } from './courseOutline';
 import { commandLabel } from '../engine/commandLabels';
+import { formalWeekOneMissions } from './formalCourse';
 
 describe('course manifest', () => {
   it('contains six weeks with four main missions and one boss each', () => {
@@ -56,7 +57,7 @@ describe('course manifest', () => {
     }
     expect(legacySource).not.toMatch(/\{\s*id:\s*'week-/);
     expect(legacySource).toMatch(/deriveMissionFromOutline/);
-    expect(formalSource).toMatch(/deriveMissionFromOutline/);
+    expect(formalSource).toMatch(/deriveFormalMissionFromOutline/);
   });
 
   it('loads formal and legacy story catalogs independently without a formal-route fallback', () => {
@@ -68,6 +69,15 @@ describe('course manifest', () => {
     expect(pageSource).toMatch(/isFormalMissionOutline\(outline\)/);
     expect(pageSource).not.toMatch(/formalMission\s*\?\?\s*legacy/);
     expect(appSource).not.toMatch(/from ['"]\.\/course\/(?:course|formalCourse)['"]/);
+  });
+
+  it('keeps formal Blockly missions free of legacy flat expectedSequence execution data', () => {
+    expect(formalWeekOneMissions).toHaveLength(3);
+    for (const mission of formalWeekOneMissions) expect(mission).not.toHaveProperty('expectedSequence');
+    const formalSource = readFileSync('src/course/formalCourse.ts', 'utf8');
+    expect(formalSource).not.toMatch(/request_armor|receive_crown|receive_armor|receive_boots/);
+    const pageSource = readFileSync('src/components/MissionPageContent.tsx', 'utf8');
+    expect(pageSource).toMatch(/mission\.id === 'w1-m3'[\s\S]*FourSeasRegaliaRouteBoundary/);
   });
 
   it('gives every selectable command a child-readable Chinese label', () => {

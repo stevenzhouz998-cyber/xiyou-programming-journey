@@ -28,6 +28,7 @@ const RUNTIME_COPY: Record<string, string> = {
   'four-seas.wrong-scope.wear_crown': '“戴上金冠”应放在“穿戴整副披挂”任务组中。',
   'four-seas.incomplete.all-gifts-received': '三件宝物已收齐，还要把穿戴步骤分解完整。',
   'four-seas-regalia.sequence-precondition.collecting-gifts.receive_purple_crown': '北海龙王还没有送来云履，现在不能先收金冠。',
+  'four-seas-regalia.sequence-precondition.all-gifts-received.receive_purple_crown': '金冠已经收下，三件宝物都齐了；下一步应开始穿戴整副披挂。',
   'four-seas-regalia.container-scope.collecting-gifts.wear_crown': '“戴上金冠”应放在“穿戴整副披挂”任务组中。',
   'four-seas-regalia.program-ended-incomplete.all-gifts-received': '三件宝物已收齐，还要把穿戴步骤分解完整。',
 }
@@ -47,7 +48,7 @@ function runtimeFallback(diagnostic: FourSeasBattleDiagnostic): string {
     if (diagnostic.opcode === 'wear_crown') return RUNTIME_COPY['four-seas.wrong-scope.wear_crown']
     return '这一步放错任务组了，收宝物和穿戴披挂要分别放在对应组中。'
   }
-  if (diagnostic.opcode === 'receive_purple_crown') return RUNTIME_COPY['four-seas.wrong-order.receive_purple_crown']
+  if (diagnostic.opcode === 'receive_purple_crown' && diagnostic.state === 'collecting-gifts') return RUNTIME_COPY['four-seas.wrong-order.receive_purple_crown']
   return '这一步和当前故事顺序对不上，请检查同一任务组里的先后次序。'
 }
 

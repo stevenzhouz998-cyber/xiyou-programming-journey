@@ -8,6 +8,8 @@ interface Nodes { background: Phaser.GameObjects.Image; dragonKing: Phaser.GameO
 type Effect = 'none' | 'accepted' | 'blocked' | 'success'
 type Selected = 'none' | 'all' | 'sabre' | 'halberd' | 'ruyi-staff' | 'ruyi-staff-shrunk'
 type SabreAssetState = 'idle' | 'loading' | 'ready' | 'error'
+type SabrePresentation = 'inspect' | 'wrong-choice'
+type SabreLoadOutcome = 'ready' | 'error' | 'cancelled'
 const STARTS = [0, 341, 682] as const; const WIDTHS = [341, 341, 342] as const; const SHEET_HEIGHT = 512
 const opcodeLabels: Record<RuyiStaffOpcode, string> = {
   inspect_weights: '查看三件兵器重量', choose_sabre: '选择大捍刀', choose_halberd: '选择方天画戟', choose_ruyi_staff: '选择定海神针', shrink_ruyi_staff: '缩小定海神针',
@@ -52,11 +54,13 @@ export function RuyiStaffScene({ events, replayToken, reducedMotion, muted, onPl
   const ownerRef = useRef<symbol | null>(null); const gameRef = useRef<{ owner: symbol; game: Phaser.Game } | null>(null)
   const sceneRef = useRef<{ owner: symbol; scene: Phaser.Scene } | null>(null); const nodesRef = useRef<{ owner: symbol; nodes: Nodes } | null>(null)
   const generationRef = useRef(0); const activeRef = useRef(false); const requestRef = useRef(0); const completedRef = useRef<number | null>(null)
-  const pendingSabreCancelRef = useRef<(() => void) | null>(null); const sabreRetryRef = useRef<(() => Promise<void>) | null>(null); const sabreAlertRef = useRef<HTMLDivElement>(null)
+  const pendingSabreCancelRef = useRef<(() => void) | null>(null); const sabreRetryRef = useRef<(() => Promise<SabreLoadOutcome>) | null>(null); const sabreAlertRef = useRef<HTMLDivElement>(null)
+  const resumeAfterSabreRetryRef = useRef<(() => void) | null>(null)
   const previousReducedRef = useRef(reducedMotion); const eventsRef = useRef(events); const reducedRef = useRef(reducedMotion); const mutedRef = useRef(muted); const completeRef = useRef(onPlaybackComplete)
   const startRef = useRef<() => void>(() => undefined); const [attempt, setAttempt] = useState(0); const [loadError, setLoadError] = useState<string | null>(null)
   const [state, setState] = useState<RuyiStaffState>('awaiting-inspection'); const [effect, setEffect] = useState<Effect>('none'); const [selected, setSelected] = useState<Selected>('none'); const [messages, setMessages] = useState<string[]>([])
   const [sabreAssetState, setSabreAssetState] = useState<SabreAssetState>('idle'); const [sabreSpriteVisible, setSabreSpriteVisible] = useState(false)
+  const [sabrePresentation, setSabrePresentation] = useState<SabrePresentation | null>(null); const [visibleWeapons, setVisibleWeapons] = useState('')
   eventsRef.current = events; reducedRef.current = reducedMotion; mutedRef.current = muted; completeRef.current = onPlaybackComplete
 
   const owned = () => {
@@ -72,11 +76,56 @@ export function RuyiStaffScene({ events, replayToken, reducedMotion, muted, onPl
     nodes.dragonKing.setX(width * .82).setY(height * .55).setVisible(true)
     nodes.sabre?.setX(width * .55).setY(height * .6); nodes.halberd.setX(width * .55).setY(height * .6); nodes.staff.setX(width * .55).setY(height * .6); hideWeapons(nodes)
     nodes.effects.setX(width * .55).setY(height * .44).setCrop().setVisible(false)
-    setEffect('none'); setSelected('none'); setSabreAssetState('idle'); setSabreSpriteVisible(false)
+    setEffect('none'); setSelected('none'); setSabreAssetState('idle'); setSabreSpriteVisible(false); setSabrePresentation(null); setVisibleWeapons('')
   }
-  const apply = (owner: symbol, scene: Phaser.Scene, nodes: Nodes, event: RuyiStaffBattleEvent): Promise<void> | null => {
+  const demandSabre = (owner: symbol, scene: Phaser.Scene, nodes: Nodes, presentation: SabrePresentation) => new Promise<SabreLoadOutcome>((resolve) => {
+    const generation = generationRef.current
+    let settled = false
+    const cleanup = () => {
+      scene.load.off('complete', ready)
+      scene.load.off('loaderror', failed)
+      if (pendingSabreCancelRef.current === cancel) pendingSabreCancelRef.current = null
+    }
+    const settle = (outcome: SabreLoadOutcome) => { if (settled) return; settled = true; cleanup(); resolve(outcome) }
+    const current = () => generation === generationRef.current && ownerRef.current === owner
+    const cancel = () => settle('cancelled')
+    const publish = () => {
+      if (nodes.sabre === null) nodes.sabre = scene.add.image(scene.scale.width * .55, scene.scale.height * .6, 'sabre').setOrigin(.5, .5)
+      nodes.sabre.setTexture('sabre')
+      if (presentation === 'inspect') {
+        nodes.sabre.setX(scene.scale.width * .43); showSabre(nodes.sabre, 90, 135)
+        setSelected('all'); setVisibleWeapons('sabre,halberd,ruyi-staff')
+      } else {
+        nodes.sabre.setX(scene.scale.width * .55); showSabre(nodes.sabre)
+        setSelected('sabre'); setVisibleWeapons('sabre')
+      }
+      setSabreAssetState('ready'); setSabreSpriteVisible(true); sabreRetryRef.current = null
+    }
+    const failed = () => {
+      if (!current()) { settle('cancelled'); return }
+      nodes.sabre?.setVisible(false); setSabreAssetState('error'); setSabreSpriteVisible(false); setSelected('none')
+      if (presentation === 'inspect') setVisibleWeapons('halberd,ruyi-staff')
+      else setVisibleWeapons('')
+      sabreRetryRef.current = () => demandSabre(owner, scene, nodes, presentation); settle('error')
+    }
+    const ready = () => {
+      if (!current()) { settle('cancelled'); return }
+      if (!scene.textures.exists('sabre')) { failed(); return }
+      publish(); settle('ready')
+    }
+    pendingSabreCancelRef.current = cancel
+    setSabrePresentation(presentation); setSabreAssetState('loading'); setSabreSpriteVisible(false); setSelected('none')
+    if (presentation === 'inspect') setVisibleWeapons('halberd,ruyi-staff')
+    else setVisibleWeapons('')
+    if (scene.textures.exists('sabre')) { ready(); return }
+    scene.load.once('complete', ready)
+    scene.load.once('loaderror', failed)
+    scene.load.image('sabre', assetUrl('/assets/dragon-palace/sabre.webp'))
+    scene.load.start()
+  })
+  const apply = (owner: symbol, scene: Phaser.Scene, nodes: Nodes, event: RuyiStaffBattleEvent): Promise<SabreLoadOutcome> | null => {
     if (ownerRef.current !== owner) return null
-    let pending: Promise<void> | null = null
+    let pending: Promise<SabreLoadOutcome> | null = null
     if (event.type === 'run-started') reset(owner, scene, nodes)
     if (event.type === 'instruction-accepted') { showCell(nodes.effects, 0, 150, 120); setEffect('accepted') }
     if (event.type === 'state-changed') {
@@ -84,52 +133,21 @@ export function RuyiStaffScene({ events, replayToken, reducedMotion, muted, onPl
       if (event.state === 'weights-inspected') {
         hideWeapons(nodes)
         setSabreSpriteVisible(false)
-        if (nodes.sabre && scene.textures.exists('sabre')) { showSabre(nodes.sabre.setTexture('sabre'), 90, 135); nodes.sabre.setX(scene.scale.width * .43); setSabreAssetState('ready'); setSabreSpriteVisible(true) }
         showCell(nodes.halberd, 1, 90, 135); showCell(nodes.staff, 2, 90, 135)
         nodes.halberd.setX(scene.scale.width * .55); nodes.staff.setX(scene.scale.width * .67)
-        setSelected('all')
+        setVisibleWeapons('halberd,ruyi-staff'); setSelected('none')
+        pending = demandSabre(owner, scene, nodes, 'inspect')
       }
-      if (event.state === 'ruyi-staff-selected') { hideWeapons(nodes); setSabreSpriteVisible(false); nodes.staff.setX(scene.scale.width * .55); showCell(nodes.staff, 2); setSelected('ruyi-staff') }
-      if (event.state === 'ruyi-staff-shrunk') { hideWeapons(nodes); setSabreSpriteVisible(false); nodes.staff.setX(scene.scale.width * .55); showCell(nodes.staff, 2, 52, 78); setSelected('ruyi-staff-shrunk') }
+      if (event.state === 'ruyi-staff-selected') { hideWeapons(nodes); setSabreSpriteVisible(false); nodes.staff.setX(scene.scale.width * .55); showCell(nodes.staff, 2); setSelected('ruyi-staff'); setVisibleWeapons('ruyi-staff') }
+      if (event.state === 'ruyi-staff-shrunk') { hideWeapons(nodes); setSabreSpriteVisible(false); nodes.staff.setX(scene.scale.width * .55); showCell(nodes.staff, 2, 52, 78); setSelected('ruyi-staff-shrunk'); setVisibleWeapons('ruyi-staff') }
     }
     if (event.type === 'instruction-rejected') {
       showCell(nodes.effects, 1, 150, 120); setEffect('blocked')
       if (event.opcode === 'choose_sabre') {
         hideWeapons(nodes); setSabreSpriteVisible(false); setSelected('none')
-        const generation = generationRef.current
-        const loadSabre = () => new Promise<void>((resolve) => {
-          let settled = false
-          const cleanup = () => {
-            scene.load.off('complete', ready)
-            scene.load.off('loaderror', failed)
-            if (pendingSabreCancelRef.current === cancel) pendingSabreCancelRef.current = null
-          }
-          const settle = () => { if (settled) return; settled = true; cleanup(); resolve() }
-          const current = () => generation === generationRef.current && ownerRef.current === owner
-          const cancel = () => settle()
-          const failed = () => {
-            if (!current()) { settle(); return }
-            nodes.sabre?.setVisible(false); setSabreAssetState('error'); setSabreSpriteVisible(false); setSelected('none')
-            sabreRetryRef.current = loadSabre; settle()
-          }
-          const ready = () => {
-            if (!current()) { settle(); return }
-            if (!scene.textures.exists('sabre')) { failed(); return }
-            if (nodes.sabre === null) nodes.sabre = scene.add.image(scene.scale.width * .55, scene.scale.height * .6, 'sabre').setOrigin(.5, .5)
-            nodes.sabre.setTexture('sabre').setX(scene.scale.width * .55); showSabre(nodes.sabre)
-            setSabreAssetState('ready'); setSabreSpriteVisible(true); setSelected('sabre'); sabreRetryRef.current = null; settle()
-          }
-          pendingSabreCancelRef.current = cancel
-          setSabreAssetState('loading'); setSabreSpriteVisible(false); setSelected('none')
-          if (scene.textures.exists('sabre')) { ready(); return }
-          scene.load.once('complete', ready)
-          scene.load.once('loaderror', failed)
-          scene.load.image('sabre', assetUrl('/assets/dragon-palace/sabre.webp'))
-          scene.load.start()
-        })
-        pending = loadSabre()
+        pending = demandSabre(owner, scene, nodes, 'wrong-choice')
       }
-      if (event.opcode === 'choose_halberd') { hideWeapons(nodes); setSabreSpriteVisible(false); nodes.halberd.setX(scene.scale.width * .55); showCell(nodes.halberd, 1); setSelected('halberd') }
+      if (event.opcode === 'choose_halberd') { hideWeapons(nodes); setSabreSpriteVisible(false); nodes.halberd.setX(scene.scale.width * .55); showCell(nodes.halberd, 1); setSelected('halberd'); setVisibleWeapons('halberd') }
     }
     if (event.type === 'run-finished' && event.messageCode.endsWith('.completed')) { showCell(nodes.effects, 2, 150, 120); setEffect('success') }
     setState(event.state); setMessages((current) => [...current, transcript(event)])
@@ -137,7 +155,7 @@ export function RuyiStaffScene({ events, replayToken, reducedMotion, muted, onPl
   }
   const start = () => {
     const current = owned(); if (!current || loadError) return
-    cancelPendingSabre(); sabreRetryRef.current = null
+    cancelPendingSabre(); sabreRetryRef.current = null; resumeAfterSabreRetryRef.current = null
     const { owner, scene, nodes } = current; const generation = ++generationRef.current; const request = requestRef.current; const requested = eventsRef.current
     activeRef.current = true; scene.tweens.killAll(); reset(owner, scene, nodes); setState('awaiting-inspection'); setMessages([])
     const finish = () => { if (generation !== generationRef.current || ownerRef.current !== owner) return; activeRef.current = false; if (completedRef.current === request) return; completedRef.current = request; completeRef.current?.() }
@@ -147,7 +165,10 @@ export function RuyiStaffScene({ events, replayToken, reducedMotion, muted, onPl
         const event = requested[index]
         if (!event) { finish(); return }
         const pending = apply(owner, scene, nodes, event)
-        if (pending) void pending.then(() => reducedNext(index + 1))
+        if (pending) void pending.then((outcome) => {
+          if (outcome === 'ready') reducedNext(index + 1)
+          else if (outcome === 'error') { resumeAfterSabreRetryRef.current = () => reducedNext(index + 1); finish() }
+        })
         else reducedNext(index + 1)
       }
       reducedNext(0); return
@@ -156,7 +177,7 @@ export function RuyiStaffScene({ events, replayToken, reducedMotion, muted, onPl
     const next = () => {
       if (generation !== generationRef.current || ownerRef.current !== owner) return
       const event = requested[index++]; if (!event) { finish(); return }
-      scene.tweens.add({ targets: nodes.wukong, x: xFor(event.state, scene.scale.width), duration: event.type === 'state-changed' ? 360 : 140, ease: 'Sine.inOut', onComplete: () => { if (generation !== generationRef.current || ownerRef.current !== owner) return; const pending = apply(owner, scene, nodes, event); if (pending) void pending.then(next); else next() } })
+      scene.tweens.add({ targets: nodes.wukong, x: xFor(event.state, scene.scale.width), duration: event.type === 'state-changed' ? 360 : 140, ease: 'Sine.inOut', onComplete: () => { if (generation !== generationRef.current || ownerRef.current !== owner) return; const pending = apply(owner, scene, nodes, event); if (pending) void pending.then((outcome) => { if (outcome === 'ready') next(); else if (outcome === 'error') { resumeAfterSabreRetryRef.current = next; finish() } }); else next() } })
     }
     next()
   }
@@ -191,7 +212,7 @@ export function RuyiStaffScene({ events, replayToken, reducedMotion, muted, onPl
     }
     game = new Phaser.Game({ type: Phaser.AUTO, parent: id, width: 760, height: 320, transparent: true, scene: Scene, render: { antialias: true, pixelArt: false } })
     if (owns()) gameRef.current = { owner, game }
-    return () => { cancelled = true; cancelPendingSabre(); sabreRetryRef.current = null; if (ownerRef.current === owner) { ownerRef.current = null; generationRef.current += 1; activeRef.current = false } if (sceneRef.current?.owner === owner) sceneRef.current = null; if (nodesRef.current?.owner === owner) nodesRef.current = null; if (gameRef.current?.owner === owner) gameRef.current = null; game?.destroy(true) }
+    return () => { cancelled = true; cancelPendingSabre(); sabreRetryRef.current = null; resumeAfterSabreRetryRef.current = null; if (ownerRef.current === owner) { ownerRef.current = null; generationRef.current += 1; activeRef.current = false } if (sceneRef.current?.owner === owner) sceneRef.current = null; if (nodesRef.current?.owner === owner) nodesRef.current = null; if (gameRef.current?.owner === owner) gameRef.current = null; game?.destroy(true) }
   }, [id, attempt])
   useEffect(() => { const current = owned(); if (current) current.scene.sound.mute = muted }, [muted])
   useEffect(() => { if (sabreAssetState === 'error') sabreAlertRef.current?.focus() }, [sabreAssetState])
@@ -199,15 +220,20 @@ export function RuyiStaffScene({ events, replayToken, reducedMotion, muted, onPl
     const retry = sabreRetryRef.current
     if (!retry) return
     cancelPendingSabre()
-    void retry()
+    void retry().then((outcome) => {
+      if (outcome !== 'ready') return
+      const resume = resumeAfterSabreRetryRef.current
+      resumeAfterSabreRetryRef.current = null
+      resume?.()
+    })
   }
-  const retry = () => { cancelPendingSabre(); sabreRetryRef.current = null; generationRef.current += 1; activeRef.current = false; setLoadError(null); setState('awaiting-inspection'); setSelected('none'); setSabreAssetState('idle'); setSabreSpriteVisible(false); setMessages([]); setAttempt((value) => value + 1) }
+  const retry = () => { cancelPendingSabre(); sabreRetryRef.current = null; resumeAfterSabreRetryRef.current = null; generationRef.current += 1; activeRef.current = false; setLoadError(null); setState('awaiting-inspection'); setSelected('none'); setSabreAssetState('idle'); setSabreSpriteVisible(false); setSabrePresentation(null); setVisibleWeapons(''); setMessages([]); setAttempt((value) => value + 1) }
 
   return <div className="game-scene-frame ruyi-staff-scene-frame">
-    <div id={id} className="game-scene" style={{ backgroundImage: 'none', backgroundColor: '#e8e0cf' }} role="img" aria-label="龙宫定海神针代码执行场景" data-motion-mode={reducedMotion ? 'reduced' : 'standard'} data-scene-state={loadError ? undefined : state} data-selected-weapon={loadError || selected === 'none' ? undefined : selected} data-effect-cell={loadError ? undefined : effect} data-sabre-asset-state={loadError ? undefined : sabreAssetState} data-sabre-sprite-visible={loadError ? undefined : String(sabreSpriteVisible)} />
+    <div id={id} className="game-scene" style={{ backgroundImage: 'none', backgroundColor: '#e8e0cf' }} role="img" aria-label="龙宫定海神针代码执行场景" data-motion-mode={reducedMotion ? 'reduced' : 'standard'} data-scene-state={loadError ? undefined : state} data-selected-weapon={loadError || selected === 'none' ? undefined : selected} data-visible-weapons={loadError ? undefined : visibleWeapons} data-effect-cell={loadError ? undefined : effect} data-sabre-asset-state={loadError ? undefined : sabreAssetState} data-sabre-sprite-visible={loadError ? undefined : String(sabreSpriteVisible)} />
     <dl className="ruyi-weight-list" aria-label="三件兵器重量"><div><dt>大捍刀</dt><dd>3600斤</dd></div><div><dt>方天画戟</dt><dd>7200斤</dd></div><div><dt>定海神针</dt><dd>13500斤</dd></div></dl>
     {sabreAssetState === 'loading' ? <p role="status" aria-label="大捍刀画面状态">正在取来大捍刀画面，请稍候……</p> : null}
-    {sabreAssetState === 'error' ? <div ref={sabreAlertRef} role="alert" tabIndex={-1}><p>大捍刀画面没有加载成功。战斗结果已保留，你可以只重试画面。</p><button type="button" onClick={retrySabre}>重试大捍刀画面</button></div> : null}
+    {sabreAssetState === 'error' ? <div ref={sabreAlertRef} role="alert" tabIndex={-1}><p>{sabrePresentation === 'inspect' ? '三件兵器画面还没有齐。战斗结果已保留，你可以只重试画面。' : '大捍刀画面没有加载成功。战斗结果已保留，你可以只重试画面。'}</p><button type="button" onClick={retrySabre}>{sabrePresentation === 'inspect' ? '重试三件兵器画面' : '重试大捍刀画面'}</button></div> : null}
     {loadError ? <div className="game-scene-error" role="alert"><p>{loadError}</p><button type="button" onClick={retry}>重新加载龙宫场景</button></div> : null}
     <p className="battle-transcript" role="status" aria-live="polite" aria-atomic="true">{messages.join(' ')}</p>
   </div>

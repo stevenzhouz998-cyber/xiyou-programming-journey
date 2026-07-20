@@ -18,6 +18,15 @@ const mission = (id: string, extension: LegacyMissionExtension): MissionSpec => 
 );
 
 const c3 = formalWeekOneCanon;
+const legacyFormalSequences = [
+  ['enter_palace', 'ask_weapon', 'test_weapon'],
+  ['inspect_weight', 'choose_heaviest', 'shrink_staff'],
+  ['request_armor', 'receive_crown', 'receive_armor', 'receive_boots'],
+] as const;
+const legacyFormalWeekOneMissions: MissionSpec[] = formalWeekOneMissions.map((formalMission, index) => ({
+  ...formalMission,
+  expectedSequence: [...legacyFormalSequences[index]],
+}));
 const c4to7 = canon([4, 5, 6, 7], '第四至七回　官封弼马温至五行山定心猿');
 const c18to19 = canon([18, 19], '第十八至十九回　高老庄大圣降魔　云栈洞悟空收八戒');
 const c27 = canon([27], '第二十七回　尸魔三戏唐三藏　圣僧恨逐美猴王');
@@ -33,7 +42,7 @@ export const course: CourseManifest = {
       subtitle: '让每一道指令都有先后',
       canon: c3,
       missions: [
-        ...formalWeekOneMissions,
+        ...legacyFormalWeekOneMissions,
         mission('w1-m4', { subtitle: '在名册里找到猴属', objective: '查找并处理生死簿中的猴属名号', canon: c3, storyBeats: [beat('梦入幽冥', '悟空被勾魂使者带到幽冥界。'), beat('勾去猴属', '悟空查看生死簿，将猴属有名者一概勾去。')], expectedSequence: ['open_register', 'find_monkeys', 'remove_names'] }),
         mission('w1-m5', { subtitle: '重建龙宫到幽冥的因果链', objective: '完整排列第三回关键事件', canon: c3, storyBeats: [beat('龙宫得宝', '悟空从龙宫取得金箍棒与披挂。'), beat('幽冥勾名', '随后在幽冥勾去猴属名号。')], expectedSequence: ['enter_palace', 'get_staff', 'get_armor', 'enter_underworld', 'remove_names'] }),
       ],

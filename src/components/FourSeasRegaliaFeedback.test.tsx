@@ -80,6 +80,23 @@ it('routes the action to the exact source block or to the workspace', () => {
   expect(onFocusWorkspace).toHaveBeenCalledOnce()
 })
 
+it('does not claim cloud boots are missing when a crown is repeated after all gifts were received', () => {
+  const diagnostic: FourSeasBattleDiagnostic = {
+    type: 'instruction-rejected',
+    concept: 'sequence-precondition',
+    state: 'all-gifts-received',
+    instructionId: 'instruction:repeat-crown',
+    sourceBlockId: 'repeat-crown',
+    parentBlockId: 'collect-block',
+    opcode: 'receive_purple_crown',
+    messageCode: 'four-seas-regalia.sequence-precondition.all-gifts-received.receive_purple_crown',
+  }
+  render(<FourSeasRegaliaFeedback diagnostic={diagnostic} occurrenceId={1} onFocusBlock={() => undefined} onFocusWorkspace={() => undefined} />)
+  expect(screen.getByRole('alert')).toHaveTextContent('金冠已经收下，三件宝物都齐了')
+  expect(screen.getByRole('alert')).toHaveTextContent('下一步应开始穿戴整副披挂')
+  expect(screen.getByRole('alert')).not.toHaveTextContent('北海龙王还没有送来云履')
+})
+
 it('explains structural compiler failures without exposing internal codes', () => {
   const diagnostic: CompileDiagnostic = {
     code: 'missing-child-chain',

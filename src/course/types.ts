@@ -37,6 +37,8 @@ export interface MissionSpec {
   aiDataset?: Array<Record<string, string | number | boolean>>;
 }
 
+export type FormalMissionSpec = Omit<MissionSpec, 'expectedSequence'>;
+
 export interface CourseWeek {
   id: string;
   week: number;

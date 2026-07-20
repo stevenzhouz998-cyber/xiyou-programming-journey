@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { LockKey } from '@phosphor-icons/react/dist/icons/LockKey';
 import { Medal } from '@phosphor-icons/react/dist/icons/Medal';
 import { allMissionOutlines, getMissionOutline, isFormalMissionOutline } from '../course/courseOutline';
-import type { MissionSpec } from '../course/types';
+import type { FormalMissionSpec, MissionSpec } from '../course/types';
 import { useProgress } from '../context/ProgressContext';
 import { validateSequence } from '../engine/validation';
 import { isMissionUnlocked } from '../progress/progress';
@@ -87,7 +87,7 @@ interface MissionPageProps {
   onCompletionPersistenceActiveChange: (active: boolean) => void;
 }
 
-function MissionPageForId({ id, mission, reducedMotion, onGlobalModalOpenChange, onCompletionPersistenceActiveChange }: MissionPageProps & { id: string; mission: MissionSpec | undefined }) {
+function MissionPageForId({ id, mission, reducedMotion, onGlobalModalOpenChange, onCompletionPersistenceActiveChange }: MissionPageProps & { id: string; mission: MissionSpec | FormalMissionSpec | undefined }) {
   const navigate = useNavigate();
   const { progress, complete, recordMissionHint, retrySave, saveError, createBackup, reloadExternalProgress } = useProgress();
   const [hintsUsed, setHintsUsed] = useState(0);
@@ -170,18 +170,20 @@ function MissionPageForId({ id, mission, reducedMotion, onGlobalModalOpenChange,
     setCompletionSave(null);
     onCompletionPersistenceActiveChange(false);
   };
+  const legacySequence = 'expectedSequence' in mission ? mission.expectedSequence : null;
   const validate = (sequence: string[]) => {
+    if (legacySequence === null) throw new Error('正式 Blockly 任务不使用兼容序列执行');
     setActiveStep(sequence.length);
-    const result = validateSequence(sequence, mission.expectedSequence, hintsUsed);
+    const result = validateSequence(sequence, legacySequence, hintsUsed);
     setFeedback(result.feedback);
     if (result.passed) pass(result.stars);
   };
   const next = allMissionOutlines[allMissionOutlines.findIndex((item) => item.id === mission.id) + 1];
   const toolProps = mission.mode === 'blockly'
-    ? { missionId: mission.id, commands: mission.expectedSequence, onRun: validate }
+    ? { missionId: mission.id, commands: legacySequence ?? [], onRun: validate }
     : mission.mode === 'python'
       ? { starterCode: mission.starterCode ?? '', expectedOutput: mission.expectedOutput ?? '', onPass: () => pass(hintsUsed === 0 ? 3 : hintsUsed === 1 ? 2 : 1) }
-      : { commands: mission.expectedSequence, onRun: validate };
+      : { commands: legacySequence ?? [], onRun: validate };
   const hintsLocked = (mission.id === 'w1-m2' || mission.id === 'w1-m3') && (battleInteractionLocked || completionSave !== null);
   const hintLockReason = completionSave?.status === 'pending'
     ? '通关结果正在保存，请等保存完成后再使用提示。'
@@ -200,7 +202,7 @@ export function MissionPageContent(props: MissionPageProps) {
   const { id = '' } = useParams();
   const outline = getMissionOutline(id);
   const formal = isFormalMissionOutline(outline);
-  const [missionLoad, setMissionLoad] = useState<{ id: string; status: 'loading' | 'ready' | 'error'; mission?: MissionSpec }>({ id: '', status: 'loading' });
+  const [missionLoad, setMissionLoad] = useState<{ id: string; status: 'loading' | 'ready' | 'error'; mission?: MissionSpec | FormalMissionSpec }>({ id: '', status: 'loading' });
   const [missionRetry, setMissionRetry] = useState(0);
   useEffect(() => {
     let active = true;

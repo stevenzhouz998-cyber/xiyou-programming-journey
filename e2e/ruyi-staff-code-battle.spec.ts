@@ -195,8 +195,20 @@ async function expectNarrowWorkspaceUsable(page: Page) {
   }
 }
 
-async function wrongThenCorrect(page: Page, keyboard = false) {
-  await add(page, '查看三件兵器重量', keyboard)
+async function inspectThreeVisibleWeapons(page: Page) {
+  await add(page, '查看三件兵器重量')
+  await activate(page, '执行战斗指令')
+  const scene = page.locator('.ruyi-staff-scene-frame .game-scene')
+  await expect(scene).toHaveAttribute('data-sabre-asset-state', 'ready')
+  await expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'true')
+  await expect(scene).toHaveAttribute('data-selected-weapon', 'all')
+  await expect(scene).toHaveAttribute('data-visible-weapons', 'sabre,halberd,ruyi-staff')
+  await expect(scene.locator('canvas')).toBeVisible()
+  await expect(page.getByRole('alert').filter({ hasText: '还要选择最重的13500斤定海神针' })).toBeFocused()
+}
+
+async function wrongThenCorrect(page: Page, keyboard = false, inspectAlreadyAdded = false) {
+  if (!inspectAlreadyAdded) await add(page, '查看三件兵器重量', keyboard)
   await add(page, '选择方天画戟（7200斤）', keyboard)
   await add(page, '缩小定海神针', keyboard)
   await activate(page, '执行战斗指令', keyboard)
@@ -241,13 +253,14 @@ test('@staff-full visible wrong choice is corrected in the same Blockly workspac
     const progress = JSON.parse(localStorage.getItem(key)!)
     return { mission: progress.missions['w1-m2'], session: progress.sessions['w1-m2'] }
   }, CURRENT_KEY)).toEqual({ mission: undefined, session: undefined })
-  await wrongThenCorrect(page)
+  await inspectThreeVisibleWeapons(page)
+  await wrongThenCorrect(page, false, true)
   const before = await readEvidence(page)
   expect(before.trace.map((item: { opcode: string }) => item.opcode)).toEqual(['inspect_weights', 'choose_ruyi_staff', 'shrink_ruyi_staff'])
   expect(before.trace.map((item: { sourceBlockId: string }) => item.sourceBlockId).sort()).toEqual(before.blockIds)
   expect(before.finalState).toBe('ruyi-staff-shrunk')
-  expect(before.totalRuns).toBe(2)
-  expect(before.runtimeFailures).toBe(1)
+  expect(before.totalRuns).toBe(3)
+  expect(before.runtimeFailures).toBe(2)
   await page.reload()
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeHidden()
   await expect(page.locator('.ruyi-staff-scene-frame .game-scene')).toHaveAttribute('data-scene-state', 'ruyi-staff-shrunk', { timeout: 15_000 })
@@ -344,17 +357,17 @@ test('@staff-storage standalone broad sabre drives the visible 3600-jin wrong ac
   await expect(scene).toHaveAttribute('data-sabre-asset-state', 'error')
   await expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'false')
   await expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
-  const alert = page.getByRole('alert').filter({ hasText: '大捍刀画面没有加载成功' })
+  const alert = page.getByRole('alert').filter({ hasText: '三件兵器画面还没有齐' })
   await expect(alert).toBeVisible()
   await expect(alert).toBeFocused()
-  await expect(page.getByRole('button', { name: '重试大捍刀画面' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '重试三件兵器画面' })).toBeVisible()
   await expect(page.getByRole('button', { name: '重播最近一次' })).toBeEnabled()
   await expect(lockedHost).not.toHaveAttribute('aria-disabled')
   await expect(lockedHost).not.toHaveAttribute('inert')
   await expect(page.getByRole('button', { name: '执行战斗指令' })).toBeEnabled()
   expect(await readEvidence(page)).toEqual(beforeVisualRetry)
 
-  await activate(page, '重试大捍刀画面')
+  await activate(page, '重试三件兵器画面')
   await expect(scene).toHaveAttribute('data-sabre-asset-state', 'loading')
   await expect(page.getByRole('status', { name: '大捍刀画面状态' })).toBeVisible()
   await expect(lockedHost).not.toHaveAttribute('inert')
