@@ -207,7 +207,8 @@ function assertNoBuiltInMonkeypatch(file) {
         && (initializerName === 'Object' || initializerName === 'Reflect')) {
         for (const element of node.name.elements) {
           const name = bindingPropertyName(element);
-          if (name === null || forbiddenObjectMutators.has(name)) {
+          if (name === null || forbiddenObjectMutators.has(name)
+            || (initializerName === 'Reflect' && name === 'set')) {
             fail(`${initializerName} mutator destructuring`);
           }
           if (initializerName === 'Object' && name === 'assign' && ts.isIdentifier(element.name)) {
@@ -220,7 +221,8 @@ function assertNoBuiltInMonkeypatch(file) {
       const receiverName = directIdentifierName(node.expression);
       const name = staticPropertyName(node);
       if ((receiverName === 'Object' || receiverName === 'Reflect')
-        && (name === null || forbiddenObjectMutators.has(name))) {
+        && (name === null || forbiddenObjectMutators.has(name)
+          || (receiverName === 'Reflect' && name === 'set'))) {
         fail(`${receiverName}.${String(name)}`);
       }
     }

@@ -732,6 +732,27 @@ for (const [name, monkeypatchCode] of monkeypatchCases) {
   });
 }
 
+const reflectSetCases = [
+  ['direct call on a prototype', "Reflect.set(Array.prototype, 'filter', () => [])"],
+  ['computed call on an ordinary target', "Reflect['set']({}, 'forged', true)"],
+  ['alias on an ordinary target', "const set = Reflect.set; set({}, 'forged', true)"],
+  ['destructure on an ordinary target', "const { set } = Reflect; set({}, 'forged', true)"],
+  ['call indirection on an ordinary target', "Reflect.set.call(null, {}, 'forged', true)"],
+  ['apply indirection on an ordinary target', "Reflect.set.apply(null, [{}, 'forged', true])"],
+  ['bind indirection on an ordinary target', "const set = Reflect.set.bind(null); set({}, 'forged', true)"],
+];
+
+for (const [name, reflectSetCode] of reflectSetCases) {
+  test(`rejects E2E Reflect.set through ${name}`, () => {
+    assert.throws(() => assertFourSeasE2ESourceContract(`
+      ${validHealthHarness}
+      test('Reflect.set bypass', () => {
+        ${reflectSetCode}
+      })
+    `), /Reflect\.set|mutation|write|monkeypatch/i);
+  });
+}
+
 test('allows locator geometry evaluate and Node-side map', () => {
   assert.doesNotThrow(() => assertFourSeasE2ESourceContract(`
     const rect = await page.locator('.cell').evaluate((element) => element.getBoundingClientRect())
