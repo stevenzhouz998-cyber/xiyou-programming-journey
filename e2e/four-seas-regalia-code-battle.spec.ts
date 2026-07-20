@@ -201,15 +201,20 @@ async function expectResponsiveWorkspace(page: Page) {
   const feedbackBox = await page.locator('.four-seas-regalia-feedback-region').boundingBox()
   const order = [sceneBox?.y ?? -1, programBox?.y ?? -1, feedbackBox?.y ?? -1]
   expect(order).toEqual([...order].sort((left, right) => left - right))
-  const hostBox = await page.locator('.four-seas-regalia-workspace .blockly-host').boundingBox()
+  const host = page.locator('.four-seas-regalia-workspace .blockly-host')
+  await host.scrollIntoViewIfNeeded()
+  const hostBox = await host.boundingBox()
   expect(hostBox).not.toBeNull()
   const session = await readOnlyW1M3Session(page)
   const blockIds = session?.workspace?.blocks?.map((block: { id: string }) => block.id) ?? []
   for (const blockId of blockIds) {
     const box = await page.locator(`.four-seas-regalia-workspace .blocklyDraggable[data-id="${blockId}"]`).boundingBox()
+    expect(box, `${blockId} must be rendered in the visible Blockly graph`).not.toBeNull()
     if (!box || !hostBox) continue
     expect(box.x, `${blockId} left edge`).toBeGreaterThanOrEqual(hostBox.x - 1)
     expect(box.x + box.width, `${blockId} right edge`).toBeLessThanOrEqual(hostBox.x + hostBox.width + 1)
+    expect(box.y, `${blockId} top edge`).toBeGreaterThanOrEqual(hostBox.y - 1)
+    expect(box.y + box.height, `${blockId} bottom edge`).toBeLessThanOrEqual(hostBox.y + hostBox.height + 1)
   }
   const controls = page.locator('.four-seas-regalia-experience button:visible:not(:disabled)')
   for (let index = 0; index < await controls.count(); index += 1) {
@@ -239,6 +244,7 @@ test('@regalia-full @visual visible wrong nested order is corrected, persisted, 
   const alert = page.getByRole('alert').filter({ hasText: '北海龙王还没有送来云履' })
   await expect(alert).toBeFocused()
   await expect(page.locator('.four-seas-regalia-scene-frame .game-scene')).toHaveAttribute('data-effect-cell', 'blocked')
+  await expectResponsiveWorkspace(page)
   await captureEvidence(page, testInfo, true)
   await alert.getByRole('button', { name: '回到问题积木' }).click()
   const wrongItem = page.locator('.four-seas-program-tree li').filter({ hasText: '收下南海的凤翅紫金冠' })
@@ -290,7 +296,7 @@ test('@regalia-full @visual visible wrong nested order is corrected, persisted, 
   expect(await visibleTracePairs(page)).toEqual(traceBefore)
   expect(await readOnlyW1M3CompletionIdentity(page)).toEqual(completionBeforeReplay)
 
-  if ((page.viewportSize()?.width ?? 0) <= 390) await expectResponsiveWorkspace(page)
+  await expectResponsiveWorkspace(page)
   await captureEvidence(page, testInfo)
 
   await page.getByRole('button', { name: '成长地图' }).first().click()
