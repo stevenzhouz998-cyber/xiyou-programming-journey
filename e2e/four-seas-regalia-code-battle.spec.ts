@@ -12,7 +12,10 @@ function attachHealth(page: Page) {
     if (message.type() === 'error') healthEvents.push({ kind: 'console', url: message.location().url || page.url(), detail: message.text() })
   })
   page.on('pageerror', (error) => healthEvents.push({ kind: 'pageerror', url: page.url(), detail: error.message }))
-  page.on('requestfailed', (request) => healthEvents.push({ kind: 'requestfailed', url: request.url(), detail: request.failure()?.errorText ?? 'unknown' }))
+  page.on('requestfailed', (request) => {
+    const event: HealthEvent = { kind: 'requestfailed', url: request.url(), detail: request.failure()?.errorText ?? 'unknown' }
+    if (!expectedNavigationAbort(event)) healthEvents.push(event)
+  })
 }
 
 function expectedNavigationAbort(event: HealthEvent) {
@@ -53,7 +56,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test.afterEach(() => {
-  expect(healthEvents.filter((event) => !expectedNavigationAbort(event)), 'unexpected Four Seas browser health events').toEqual([])
+  expect(healthEvents, 'unexpected Four Seas browser health events').toEqual([])
 })
 
 async function add(page: Page, name: string) {

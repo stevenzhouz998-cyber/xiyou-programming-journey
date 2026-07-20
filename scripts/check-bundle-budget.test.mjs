@@ -23,7 +23,10 @@ const validHealthCore = `
       if (message.type() === 'error') healthEvents.push({ kind: 'console', url: message.location().url || page.url(), detail: message.text() })
     })
     page.on('pageerror', (error) => healthEvents.push({ kind: 'pageerror', url: page.url(), detail: error.message }))
-    page.on('requestfailed', (request) => healthEvents.push({ kind: 'requestfailed', url: request.url(), detail: request.failure()?.errorText ?? 'unknown' }))
+    page.on('requestfailed', (request) => {
+      const event = { kind: 'requestfailed', url: request.url(), detail: request.failure()?.errorText ?? 'unknown' }
+      if (!expectedNavigationAbort(event)) healthEvents.push(event)
+    })
   }
   function expectedNavigationAbort(event) {
     return event.kind === 'requestfailed' && (
@@ -37,7 +40,7 @@ const validHealthCore = `
 const validHealthHarness = `
   ${validHealthCore}
   test.afterEach(() => {
-    expect(healthEvents.filter((event) => !expectedNavigationAbort(event)), 'unexpected Four Seas browser health events').toEqual([])
+    expect(healthEvents, 'unexpected Four Seas browser health events').toEqual([])
   })
 `;
 
@@ -118,6 +121,22 @@ function loadNamedFunctionFromTypeScriptSource(source, name) {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
   }).outputText;
   return Function(`${output}\nreturn ${name}`)();
+}
+
+function loadHealthRuntimeFromTypeScriptSource(source) {
+  const file = ts.createSourceFile('source.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const healthStatements = file.statements.filter((statement) => (
+    (ts.isVariableStatement(statement)
+      && statement.declarationList.declarations.some((declaration) => (
+        ts.isIdentifier(declaration.name) && declaration.name.text === 'healthEvents'
+      )))
+    || (ts.isFunctionDeclaration(statement)
+      && (statement.name?.text === 'attachHealth' || statement.name?.text === 'expectedNavigationAbort'))
+  ));
+  const output = ts.transpileModule(healthStatements.map((statement) => statement.getText(file)).join('\n'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  return Function(`${output}\nreturn { attachHealth, readHealthEvents: () => healthEvents }`)();
 }
 
 test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
@@ -288,7 +307,7 @@ test('rejects hidden w1-m3 writes and missing health listeners on every independ
   assert.doesNotThrow(() => assertFourSeasE2ESourceContract(actualSource));
 });
 
-test('keeps the actual navigation-abort filter pure and narrow for synthetic health events', () => {
+test('keeps the actual navigation-abort predicate pure and narrow for synthetic health events', () => {
   const source = readFileSync(new URL('../e2e/four-seas-regalia-code-battle.spec.ts', import.meta.url), 'utf8');
   const expectedNavigationAbort = loadNamedFunctionFromTypeScriptSource(source, 'expectedNavigationAbort');
   const events = [
@@ -301,7 +320,50 @@ test('keeps the actual navigation-abort filter pure and narrow for synthetic hea
   ];
   const snapshots = events.map((event) => ({ ...event }));
   assert.deepEqual(events.map(expectedNavigationAbort), [false, false, false, true, true, true]);
-  assert.deepEqual(events, snapshots, 'the filter must not mutate synthetic health events');
+  assert.deepEqual(events, snapshots, 'the predicate must not mutate synthetic health events');
+});
+
+test('rejects an actual-style afterEach that filters healthEvents before assertion', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    ${validHealthCore}
+    test.afterEach(() => {
+      expect(healthEvents.filter((event) => !expectedNavigationAbort(event)), 'unexpected Four Seas browser health events').toEqual([])
+    })
+  `), /afterEach|healthEvents|direct|filter|raw/i);
+});
+
+test('accepts only the raw healthEvents array after request failures are gated at collection', () => {
+  assert.doesNotThrow(() => assertFourSeasE2ESourceContract(`
+    ${validHealthCore}
+    test.afterEach(() => {
+      expect(healthEvents, 'unexpected Four Seas browser health events').toEqual([])
+    })
+  `));
+});
+
+test('actual requestfailed collection keeps unknown failures and skips only approved aborts', () => {
+  const source = readFileSync(new URL('../e2e/four-seas-regalia-code-battle.spec.ts', import.meta.url), 'utf8');
+  const { attachHealth, readHealthEvents } = loadHealthRuntimeFromTypeScriptSource(source);
+  const listeners = new Map();
+  attachHealth({
+    on: (name, listener) => listeners.set(name, listener),
+    url: () => 'https://example.test/',
+  });
+  const unknownFailure = Object.freeze({
+    url: () => 'https://example.test/api',
+    failure: () => ({ errorText: 'net::ERR_CONNECTION_REFUSED' }),
+  });
+  const approvedAbort = Object.freeze({
+    url: () => 'https://fonts.gstatic.com/font.woff2',
+    failure: () => ({ errorText: 'net::ERR_ABORTED' }),
+  });
+  listeners.get('requestfailed')(unknownFailure);
+  listeners.get('requestfailed')(approvedAbort);
+  assert.deepEqual(readHealthEvents(), [{
+    kind: 'requestfailed',
+    url: 'https://example.test/api',
+    detail: 'net::ERR_CONNECTION_REFUSED',
+  }]);
 });
 
 test('allows the exact prerequisite init helper without w1-m3 state', () => {
@@ -586,14 +648,21 @@ test('rejects listener callbacks whose healthEvents pushes are unreachable', () 
   `), /attachHealth|listener|console|pageerror|requestfailed|push/i);
 });
 
-test('allows one top-level unexpected healthEvents filter before the empty assertion', () => {
-  assert.doesNotThrow(() => assertFourSeasE2ESourceContract(`
-    ${validHealthCore}
-    test.afterEach(() => {
-      const unexpected = healthEvents.filter((event) => !expectedNavigationAbort(event))
-      expect(unexpected, 'unexpected Four Seas browser health events').toEqual([])
-    })
-  `));
+test('rejects every intermediate healthEvents filter, map, or copy before the empty assertion', () => {
+  const transformations = [
+    'healthEvents.filter((event) => !expectedNavigationAbort(event))',
+    'healthEvents.map((event) => event)',
+    '[...healthEvents]',
+  ];
+  for (const transformation of transformations) {
+    assert.throws(() => assertFourSeasE2ESourceContract(`
+      ${validHealthCore}
+      test.afterEach(() => {
+        const unexpected = ${transformation}
+        expect(unexpected, 'unexpected Four Seas browser health events').toEqual([])
+      })
+    `), /afterEach|healthEvents|direct|filter|structure/i);
+  }
 });
 
 test('rejects resetting healthEvents in a test body after navigation', () => {

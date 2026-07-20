@@ -501,51 +501,43 @@ function assertExpectedNavigationAbort(file) {
   return helper;
 }
 
-function assertUnexpectedHealthFilter(node) {
-  const filterCall = directMethodCall(node, 'healthEvents', 'filter');
-  if (filterCall === null || filterCall.arguments.length !== 1) {
-    throw new Error('Four Seas E2E source contract: afterEach must filter the shared healthEvents exactly once.');
+function assertRequestFailedListener(callback, file) {
+  if (!ts.isBlock(callback.body) || callback.body.statements.length !== 2) {
+    throw new Error('Four Seas E2E source contract: requestfailed listener must normalize one event before its navigation-abort gate.');
   }
-  const predicate = unwrapExpression(filterCall.arguments[0]);
-  if (!ts.isArrowFunction(predicate) || predicate.parameters.length !== 1
-    || !ts.isIdentifier(predicate.parameters[0].name)) {
-    throw new Error('Four Seas E2E source contract: healthEvents filter must use one inspectable event predicate.');
+  const declarationStatement = callback.body.statements[0];
+  if (!ts.isVariableStatement(declarationStatement)
+    || !(declarationStatement.declarationList.flags & ts.NodeFlags.Const)
+    || declarationStatement.declarationList.declarations.length !== 1) {
+    throw new Error('Four Seas E2E source contract: requestfailed listener must declare one normalized const event.');
   }
-  const eventName = predicate.parameters[0].name.text;
-  const body = unwrapExpression(predicate.body);
-  const navigationCall = ts.isPrefixUnaryExpression(body)
-    && body.operator === ts.SyntaxKind.ExclamationToken
-    ? directIdentifierCall(body.operand, 'expectedNavigationAbort')
-    : null;
-  if (navigationCall === null || navigationCall.arguments.length !== 1
-    || !ts.isIdentifier(unwrapExpression(navigationCall.arguments[0]))
-    || unwrapExpression(navigationCall.arguments[0]).text !== eventName) {
-    throw new Error('Four Seas E2E source contract: healthEvents filter may exclude only expectedNavigationAbort(event).');
+  const declaration = declarationStatement.declarationList.declarations[0];
+  if (!ts.isIdentifier(declaration.name) || declaration.name.text !== 'event'
+    || !declaration.initializer
+    || compactNodeText(declaration.initializer, file) !== "{kind:'requestfailed',url:request.url(),detail:request.failure()?.errorText??'unknown'}") {
+    throw new Error('Four Seas E2E source contract: requestfailed listener must preserve unknown failures in one complete normalized event.');
   }
-  return filterCall;
+  if (compactNodeText(callback.body.statements[1], file)
+    !== 'if(!expectedNavigationAbort(event))healthEvents.push(event)') {
+    throw new Error('Four Seas E2E source contract: requestfailed listener may skip only expectedNavigationAbort(event) and must push every other event.');
+  }
 }
 
-function assertPositiveEmptyExpectation(statement, expectedArgument) {
+function assertPositiveEmptyExpectation(statement) {
   const matcher = expressionStatementCall(statement);
   const callee = matcher && unwrapExpression(matcher.expression);
   const expectCall = callee && ts.isPropertyAccessExpression(callee)
     ? directIdentifierCall(callee.expression, 'expect')
     : null;
   if (matcher === null || calledPropertyName(matcher) !== 'toEqual'
-    || expectCall === null || expectCall.arguments.length < 1 || expectCall.arguments.length > 2
-    || (expectCall.arguments.length === 2 && !ts.isStringLiteral(unwrapExpression(expectCall.arguments[1])))
+    || expectCall === null || expectCall.arguments.length !== 2
+    || !ts.isIdentifier(unwrapExpression(expectCall.arguments[0]))
+    || unwrapExpression(expectCall.arguments[0]).text !== 'healthEvents'
+    || !ts.isStringLiteral(unwrapExpression(expectCall.arguments[1]))
     || matcher.arguments.length !== 1
     || !ts.isArrayLiteralExpression(unwrapExpression(matcher.arguments[0]))
     || unwrapExpression(matcher.arguments[0]).elements.length !== 0) {
-    throw new Error('Four Seas E2E source contract: afterEach must make one unconditional positive empty-array assertion.');
-  }
-  const actual = unwrapExpression(expectCall.arguments[0]);
-  if (typeof expectedArgument === 'string') {
-    if (!ts.isIdentifier(actual) || actual.text !== expectedArgument) {
-      throw new Error('Four Seas E2E source contract: afterEach must assert the validated unexpected healthEvents value.');
-    }
-  } else if (actual !== expectedArgument) {
-    throw new Error('Four Seas E2E source contract: afterEach must directly assert the validated healthEvents filter.');
+    throw new Error('Four Seas E2E source contract: afterEach must directly assert raw healthEvents with one message and no filter, copy, or transformation.');
   }
 }
 
@@ -564,27 +556,10 @@ function assertAfterEachHealth(file, afterEachCalls) {
   }
   const statements = callback.body.statements;
   if (statements.length === 1) {
-    const matcher = expressionStatementCall(statements[0]);
-    const callee = matcher && unwrapExpression(matcher.expression);
-    const expectCall = callee && ts.isPropertyAccessExpression(callee)
-      ? directIdentifierCall(callee.expression, 'expect')
-      : null;
-    const filterCall = expectCall?.arguments[0] && assertUnexpectedHealthFilter(expectCall.arguments[0]);
-    assertPositiveEmptyExpectation(statements[0], filterCall);
+    assertPositiveEmptyExpectation(statements[0]);
     return callback;
   }
-  if (statements.length === 2 && ts.isVariableStatement(statements[0])
-    && (statements[0].declarationList.flags & ts.NodeFlags.Const)
-    && statements[0].declarationList.declarations.length === 1) {
-    const declaration = statements[0].declarationList.declarations[0];
-    if (ts.isIdentifier(declaration.name) && declaration.name.text === 'unexpected'
-      && declaration.initializer) {
-      assertUnexpectedHealthFilter(declaration.initializer);
-      assertPositiveEmptyExpectation(statements[1], 'unexpected');
-      return callback;
-    }
-  }
-  throw new Error('Four Seas E2E source contract: afterEach health assertion has invalid conditional, reset, or control-flow structure.');
+  throw new Error('Four Seas E2E source contract: afterEach must contain only one direct raw healthEvents assertion with no filter, reset, copy, or control flow.');
 }
 
 function collectNamedIdentifiers(root, name, target) {
@@ -634,7 +609,7 @@ function assertGlobalHealthReferences(
   const allowedAbortReferences = new Set([expectedNavigationAbort.name]);
   collectNamedIdentifiers(attachHealth.body, 'healthEvents', allowedHealthReferences);
   collectNamedIdentifiers(afterEachCallback.body, 'healthEvents', allowedHealthReferences);
-  collectNamedIdentifiers(afterEachCallback.body, 'expectedNavigationAbort', allowedAbortReferences);
+  collectNamedIdentifiers(attachHealth.body, 'expectedNavigationAbort', allowedAbortReferences);
   assertMainHealthReset(file, beforeEachCalls, allowedHealthReferences);
 
   const visit = (node) => {
@@ -642,7 +617,7 @@ function assertGlobalHealthReferences(
       throw new Error('Four Seas E2E source contract: healthEvents reference is an unapproved mutation, alias, or escape.');
     }
     if (ts.isIdentifier(node) && node.text === 'expectedNavigationAbort' && !allowedAbortReferences.has(node)) {
-      throw new Error('Four Seas E2E source contract: expectedNavigationAbort may only be declared and called by the validated afterEach filter.');
+      throw new Error('Four Seas E2E source contract: expectedNavigationAbort may only be declared and called by the validated requestfailed listener.');
     }
     ts.forEachChild(node, visit);
   };
@@ -672,7 +647,6 @@ function assertHealthContract(file, attachHealth, afterEachCalls, beforeEachCall
   const expectedListenerBodies = new Map([
     ['console', "{if(message.type()==='error')healthEvents.push({kind:'console',url:message.location().url||page.url(),detail:message.text()})}"],
     ['pageerror', "healthEvents.push({kind:'pageerror',url:page.url(),detail:error.message})"],
-    ['requestfailed', "healthEvents.push({kind:'requestfailed',url:request.url(),detail:request.failure()?.errorText??'unknown'})"],
   ]);
   const expectedParameterNames = new Map([
     ['console', 'message'],
@@ -691,8 +665,11 @@ function assertHealthContract(file, attachHealth, afterEachCalls, beforeEachCall
     const expectedParameterName = expectedParameterNames.get(eventName);
     if (!expectedParameterName || seenEvents.has(eventName) || !ts.isArrowFunction(callback)
       || callback.parameters.length !== 1 || !ts.isIdentifier(callback.parameters[0].name)
-      || callback.parameters[0].name.text !== expectedParameterName
-      || compactNodeText(callback.body, file) !== expectedListenerBodies.get(eventName)) {
+      || callback.parameters[0].name.text !== expectedParameterName) {
+      throw new Error(`Four Seas E2E source contract: ${eventName} listener must have one exact event parameter.`);
+    }
+    if (eventName === 'requestfailed') assertRequestFailedListener(callback, file);
+    else if (compactNodeText(callback.body, file) !== expectedListenerBodies.get(eventName)) {
       throw new Error(`Four Seas E2E source contract: ${eventName} listener must directly push one complete normalized event.`);
     }
     seenEvents.add(eventName);
