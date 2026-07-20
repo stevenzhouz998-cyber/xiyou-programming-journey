@@ -144,7 +144,7 @@ it('keeps inspect_weights failure visible and retries the same three-weapon pres
   expect(scene).toHaveAttribute('data-sabre-asset-state', 'error')
   expect(scene).not.toHaveAttribute('data-selected-weapon', 'all')
   expect(screen.getByRole('alert')).toHaveTextContent('三件兵器画面还没有齐')
-  expect(onComplete).toHaveBeenCalledOnce()
+  expect(onComplete).not.toHaveBeenCalled()
 
   fireEvent.click(screen.getByRole('button', { name: '重试三件兵器画面' }))
   sabreTextureLoaded = true
@@ -189,7 +189,7 @@ it('does not continue after a failed retry and resumes the blocked scene only af
   expect(scene).toHaveAttribute('data-sabre-asset-state', 'error')
   expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'false')
   expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
-  expect(onComplete).toHaveBeenCalledOnce()
+  expect(onComplete).not.toHaveBeenCalled()
   const alert = screen.getByRole('alert')
   expect(alert).toHaveTextContent('三件兵器画面还没有齐')
   expect(alert).toHaveTextContent('战斗结果已保留')
@@ -198,13 +198,13 @@ it('does not continue after a failed retry and resumes the blocked scene only af
   fireEvent.click(screen.getByRole('button', { name: '重试三件兵器画面' }))
   expect(scene).toHaveAttribute('data-sabre-asset-state', 'loading')
   expect(screen.getByRole('status', { name: '大捍刀画面状态' })).toBeVisible()
-  expect(onComplete).toHaveBeenCalledOnce()
+  expect(onComplete).not.toHaveBeenCalled()
 
   await act(async () => failHandler?.())
   expect(screen.getByRole('alert')).toHaveFocus()
   expect(scene).toHaveAttribute('data-scene-state', 'weights-inspected')
   expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
-  expect(onComplete).toHaveBeenCalledOnce()
+  expect(onComplete).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: '重试三件兵器画面' }))
   sabreTextureLoaded = true
   await act(async () => completeHandler?.())

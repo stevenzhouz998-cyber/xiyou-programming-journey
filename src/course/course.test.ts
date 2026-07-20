@@ -74,14 +74,22 @@ describe('course manifest', () => {
   it('keeps formal Blockly missions free of legacy flat expectedSequence execution data', () => {
     expect(formalWeekOneMissions).toHaveLength(3);
     for (const mission of formalWeekOneMissions) expect(mission).not.toHaveProperty('expectedSequence');
+    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3']);
+    for (const mission of course.weeks.flatMap((week) => week.missions)) {
+      if (formalIds.has(mission.id)) expect(mission).not.toHaveProperty('expectedSequence');
+      else expect(mission).toHaveProperty('expectedSequence', expect.any(Array));
+    }
     const formalSource = readFileSync('src/course/formalCourse.ts', 'utf8');
+    const courseSource = readFileSync('src/course/course.ts', 'utf8');
     expect(formalSource).not.toMatch(/request_armor|receive_crown|receive_armor|receive_boots/);
+    expect(courseSource).not.toMatch(/legacyFormalSequences|legacyFormalWeekOneMissions/);
     const pageSource = readFileSync('src/components/MissionPageContent.tsx', 'utf8');
     expect(pageSource).toMatch(/mission\.id === 'w1-m3'[\s\S]*FourSeasRegaliaRouteBoundary/);
+    expect(pageSource).not.toMatch(/legacySequence\s*\?\?\s*\[\]/);
   });
 
   it('gives every selectable command a child-readable Chinese label', () => {
-    for (const command of course.weeks.flatMap((week) => week.missions.flatMap((mission) => mission.expectedSequence))) {
+    for (const command of course.weeks.flatMap((week) => week.missions.flatMap((mission) => 'expectedSequence' in mission ? mission.expectedSequence : []))) {
       expect(commandLabel(command)).not.toContain('_');
       expect(commandLabel(command)).toMatch(/[\u4e00-\u9fff]/);
     }

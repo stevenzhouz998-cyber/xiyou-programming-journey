@@ -167,7 +167,7 @@ export function RuyiStaffScene({ events, replayToken, reducedMotion, muted, onPl
         const pending = apply(owner, scene, nodes, event)
         if (pending) void pending.then((outcome) => {
           if (outcome === 'ready') reducedNext(index + 1)
-          else if (outcome === 'error') { resumeAfterSabreRetryRef.current = () => reducedNext(index + 1); finish() }
+          else if (outcome === 'error') resumeAfterSabreRetryRef.current = () => reducedNext(index + 1)
         })
         else reducedNext(index + 1)
       }
@@ -177,7 +177,7 @@ export function RuyiStaffScene({ events, replayToken, reducedMotion, muted, onPl
     const next = () => {
       if (generation !== generationRef.current || ownerRef.current !== owner) return
       const event = requested[index++]; if (!event) { finish(); return }
-      scene.tweens.add({ targets: nodes.wukong, x: xFor(event.state, scene.scale.width), duration: event.type === 'state-changed' ? 360 : 140, ease: 'Sine.inOut', onComplete: () => { if (generation !== generationRef.current || ownerRef.current !== owner) return; const pending = apply(owner, scene, nodes, event); if (pending) void pending.then((outcome) => { if (outcome === 'ready') next(); else if (outcome === 'error') { resumeAfterSabreRetryRef.current = next; finish() } }); else next() } })
+      scene.tweens.add({ targets: nodes.wukong, x: xFor(event.state, scene.scale.width), duration: event.type === 'state-changed' ? 360 : 140, ease: 'Sine.inOut', onComplete: () => { if (generation !== generationRef.current || ownerRef.current !== owner) return; const pending = apply(owner, scene, nodes, event); if (pending) void pending.then((outcome) => { if (outcome === 'ready') next(); else if (outcome === 'error') resumeAfterSabreRetryRef.current = next }); else next() } })
     }
     next()
   }

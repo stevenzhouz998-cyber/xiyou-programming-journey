@@ -292,19 +292,21 @@ test('@staff-keyboard keyboard buttons edit the same workspace and complete', as
   expect((await readEvidence(page)).finalState).toBe('ruyi-staff-shrunk')
 })
 
-test('@staff-storage standalone broad sabre drives the visible 3600-jin wrong action', async ({ page }) => {
+test('@staff-storage correct trace stays locked through repeated inspect asset failures and completes only after recovery', async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 })
   let releaseFirstFailure: (() => void) | null = null
   const firstFailureGate = new Promise<void>((resolve) => { releaseFirstFailure = resolve })
+  let releaseSecondFailure: (() => void) | null = null
+  const secondFailureGate = new Promise<void>((resolve) => { releaseSecondFailure = resolve })
   let releaseSabre: (() => void) | null = null
   const sabreGate = new Promise<void>((resolve) => { releaseSabre = resolve })
   let sabreRequests = 0
   let expectedSabreFailureUrl: string | null = null
   await page.route('**/assets/dragon-palace/sabre.webp', async (route) => {
     sabreRequests += 1
-    if (sabreRequests === 1) {
+    if (sabreRequests <= 2) {
       expectedSabreFailureUrl = route.request().url()
-      await firstFailureGate
+      await (sabreRequests === 1 ? firstFailureGate : secondFailureGate)
       await route.fulfill({ status: 503, contentType: 'text/plain', body: 'injected sabre failure' })
       return
     }
@@ -318,7 +320,7 @@ test('@staff-storage standalone broad sabre drives the visible 3600-jin wrong ac
   })
   await openMission(page)
   await add(page, '查看三件兵器重量')
-  await add(page, '选择大捍刀（3600斤）')
+  await add(page, '选择定海神针（13500斤）')
   await add(page, '缩小定海神针')
   await activate(page, '执行战斗指令')
   const scene = page.locator('.ruyi-staff-scene-frame .game-scene')
@@ -328,7 +330,7 @@ test('@staff-storage standalone broad sabre drives the visible 3600-jin wrong ac
   await expect(lockedHost).toHaveAttribute('aria-disabled', 'true')
   await expect(lockedHost).toHaveAttribute('inert', '')
   await expect(lockedHost).toHaveAttribute('tabindex', '-1')
-  await expect(page.getByText('战斗画面正在播放，先不要改动指令卷轴。播放完成或画面加载失败后就能继续操作。')).toBeVisible()
+  await expect(page.getByText('战斗画面正在播放，先不要改动指令卷轴。播放完成或画面素材恢复成功后才能继续操作。')).toBeVisible()
   const blockedControls = [
     page.getByRole('button', { name: '执行战斗指令' }),
     page.getByRole('button', { name: '加入：查看三件兵器重量' }),
@@ -342,16 +344,6 @@ test('@staff-storage standalone broad sabre drives the visible 3600-jin wrong ac
   await expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
   const beforeVisualRetry = await readEvidence(page)
   expect(beforeVisualRetry.totalRuns).toBe(1)
-  for (const control of blockedControls) {
-    await control.evaluate((button) => {
-      button.removeAttribute('disabled')
-      button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
-    })
-  }
-  await lockedHost.dispatchEvent('keydown', { key: 'Enter', code: 'Enter' })
-  await lockedHost.dispatchEvent('keydown', { key: 'Delete', code: 'Delete' })
-  await lockedHost.dispatchEvent('keydown', { key: 'v', code: 'KeyV', ctrlKey: true })
-  expect(await readEvidence(page)).toEqual(beforeVisualRetry)
 
   releaseFirstFailure?.()
   await expect(scene).toHaveAttribute('data-sabre-asset-state', 'error')
@@ -361,28 +353,55 @@ test('@staff-storage standalone broad sabre drives the visible 3600-jin wrong ac
   await expect(alert).toBeVisible()
   await expect(alert).toBeFocused()
   await expect(page.getByRole('button', { name: '重试三件兵器画面' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '重播最近一次' })).toBeEnabled()
-  await expect(lockedHost).not.toHaveAttribute('aria-disabled')
-  await expect(lockedHost).not.toHaveAttribute('inert')
-  await expect(page.getByRole('button', { name: '执行战斗指令' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '重播最近一次' })).toBeDisabled()
+  await expect(lockedHost).toHaveAttribute('aria-disabled', 'true')
+  await expect(lockedHost).toHaveAttribute('inert', '')
+  for (const control of blockedControls) await expect(control).toBeDisabled()
+  await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeHidden()
+  expect((await readEvidence(page)).mission).toBeNull()
   expect(await readEvidence(page)).toEqual(beforeVisualRetry)
+
+  const mapPage = await page.context().newPage()
+  attachStaffHealth(mapPage)
+  await mapPage.goto(new URL('./#/', page.url()).toString())
+  await expect(mapPage.getByRole('button', { name: '四海披挂，未解锁' })).toBeDisabled()
 
   await activate(page, '重试三件兵器画面')
   await expect(scene).toHaveAttribute('data-sabre-asset-state', 'loading')
   await expect(page.getByRole('status', { name: '大捍刀画面状态' })).toBeVisible()
-  await expect(lockedHost).not.toHaveAttribute('inert')
+  await expect(lockedHost).toHaveAttribute('inert', '')
   await expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'false')
   await expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
+
+  releaseSecondFailure?.()
+  await expect(scene).toHaveAttribute('data-sabre-asset-state', 'error')
+  await expect(alert).toBeFocused()
+  await expect(lockedHost).toHaveAttribute('inert', '')
+  for (const control of blockedControls) await expect(control).toBeDisabled()
+  await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeHidden()
+  expect((await readEvidence(page)).mission).toBeNull()
+  await mapPage.reload()
+  await expect(mapPage.getByRole('button', { name: '四海披挂，未解锁' })).toBeDisabled()
+
+  await activate(page, '重试三件兵器画面')
+  await expect(scene).toHaveAttribute('data-sabre-asset-state', 'loading')
+  await expect(lockedHost).toHaveAttribute('inert', '')
   releaseSabre?.()
-  await expect(scene).toHaveAttribute('data-selected-weapon', 'sabre')
   await expect(scene).toHaveAttribute('data-sabre-asset-state', 'ready')
   await expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'true')
   await expect(scene.locator('canvas')).toBeVisible()
-  await expect(scene).toHaveAttribute('data-effect-cell', 'blocked')
-  await expect(page.getByRole('alert').filter({ hasText: '3600斤比13500斤轻' })).toBeVisible()
-  expect(sabreRequests).toBe(2)
+  await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 15_000 })
+  await expect(scene).toHaveAttribute('data-scene-state', 'ruyi-staff-shrunk')
+  await expect(scene).toHaveAttribute('data-selected-weapon', 'ruyi-staff-shrunk')
+  await expect(lockedHost).not.toHaveAttribute('inert')
+  expect(sabreRequests).toBe(3)
   expect(loadedSabre).toHaveLength(1)
-  expect(await readEvidence(page)).toEqual(beforeVisualRetry)
+  const afterRecovery = await readEvidence(page)
+  expect(afterRecovery).toMatchObject({ attempts: 1, finalState: 'ruyi-staff-shrunk', totalRuns: 1, runtimeFailures: 0 })
+  expect(afterRecovery.mission).toMatchObject({ status: 'completed', attempts: 1 })
+  await mapPage.reload()
+  await expect(mapPage.getByRole('button', { name: '四海披挂' })).toBeEnabled()
+  await mapPage.close()
   if (updateEvidence) await page.screenshot({ path: path.resolve('docs/verification/screenshots/ruyi-staff-sabre-768.png'), fullPage: true, animations: 'disabled' })
 })
 

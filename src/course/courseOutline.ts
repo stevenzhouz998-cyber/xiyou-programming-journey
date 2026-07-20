@@ -1,4 +1,4 @@
-import type { CourseWeek, FormalMissionSpec, HintSet, MissionSpec } from './types';
+import type { CourseMissionSpec, CourseWeek, FormalMissionSpec, HintSet, MissionSpec } from './types';
 
 export interface CourseOutlineMission {
   id: string;
@@ -54,7 +54,7 @@ export const allMissionOutlines = courseOutline.weeks.flatMap((week) => week.mis
 type MissionPresentationExtension = Omit<MissionSpec, keyof CourseOutlineMission | 'hints' | 'expectedSequence'>;
 export type MissionExtension = MissionPresentationExtension & Pick<MissionSpec, 'expectedSequence'>;
 export type FormalMissionExtension = MissionPresentationExtension;
-export type CourseWeekExtension = Omit<CourseWeek, keyof CourseOutlineWeek | 'missions'> & { missions: MissionSpec[] };
+export type CourseWeekExtension = Omit<CourseWeek, keyof CourseOutlineWeek | 'missions'> & { missions: CourseMissionSpec[] };
 
 export function getMissionOutline(id: string): CourseOutlineMission | undefined {
   return allMissionOutlines.find((missionOutline) => missionOutline.id === id);

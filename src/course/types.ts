@@ -38,6 +38,7 @@ export interface MissionSpec {
 }
 
 export type FormalMissionSpec = Omit<MissionSpec, 'expectedSequence'>;
+export type CourseMissionSpec = MissionSpec | FormalMissionSpec;
 
 export interface CourseWeek {
   id: string;
@@ -46,7 +47,7 @@ export interface CourseWeek {
   subtitle: string;
   theme: string;
   canon: CanonRef;
-  missions: MissionSpec[];
+  missions: CourseMissionSpec[];
 }
 
 export interface CourseManifest {
