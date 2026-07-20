@@ -15,6 +15,18 @@ const base = {
 
 const sourceRoot = fileURLToPath(new URL('../src/', import.meta.url));
 
+const validHealthHarness = `
+  let healthEvents = []
+  function attachHealth(page) {
+    page.on('console', (event) => healthEvents.push(event))
+    page.on('pageerror', (event) => healthEvents.push(event))
+    page.on('requestfailed', (event) => healthEvents.push(event))
+  }
+  test.afterEach(() => {
+    expect(healthEvents.filter((event) => event.unexpected)).toEqual([])
+  })
+`;
+
 function sourceModuleSpecifiers(path) {
   const source = readFileSync(path, 'utf8');
   const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true);
@@ -90,6 +102,12 @@ test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
   assert.equal(bundleBudget.RUYI_STAFF_COLD_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.DRAGON_PALACE_MEDIA_BYTES, 1.25 * 1024 * 1024);
   assert.equal(bundleBudget.SINGLE_RASTER_BYTES, 512 * 1024);
+});
+
+test('keeps the Four Seas E2E AST contract isolated from bundle analysis', () => {
+  const source = readFileSync(new URL('./check-bundle-budget.mjs', import.meta.url), 'utf8');
+  assert.match(source, /from ['"]\.\/check-four-seas-e2e-contract\.mjs['"]/);
+  assert.doesNotMatch(source, /ts\.createSourceFile/);
 });
 
 test('derives compatible cold-load aliases from canonical budget constants', () => {
@@ -217,7 +235,7 @@ test('forbids Blockly as well as Phaser in the entry static closure', () => {
 
 test('rejects hidden w1-m3 writes and missing health listeners on every independent E2E page', () => {
   const good = `
-    function attachHealth(page) {}
+    ${validHealthHarness}
     async function newHealthyPage(context) {
       const page = await context.newPage()
       attachHealth(page)
@@ -247,7 +265,7 @@ test('rejects hidden w1-m3 writes and missing health listeners on every independ
 
 test('allows the exact prerequisite init helper without w1-m3 state', () => {
   assert.doesNotThrow(() => assertFourSeasE2ESourceContract(`
-    function attachHealth(page) {}
+    ${validHealthHarness}
     function fourSeasPrerequisiteFixture() {
       return { missions: { 'w1-m1': {}, 'w1-m2': {} }, sessions: {} }
     }
@@ -377,6 +395,108 @@ test('rejects an aliased evaluate method that writes progress', () => {
       }))
     })
   `), /alias|evaluate|browser-context/i);
+});
+
+test('rejects a destructured evaluate alias invoked with call', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    const { evaluate: run } = page
+    await run.call(page, () => localStorage.setItem('xiyou-programming-progress-v3', '{}'))
+  `), /alias|evaluate|browser-context|dynamic/i);
+});
+
+test('rejects evaluate aliases invoked through apply or bind', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    const { evaluate: run } = page
+    await run.apply(page, [() => localStorage.setItem('xiyou-programming-progress-v3', '{}')])
+  `), /alias|evaluate|browser-context|dynamic/i);
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    const run = page.evaluate.bind(page)
+    await run(() => localStorage.setItem('xiyou-programming-progress-v3', '{}'))
+  `), /alias|evaluate|browser-context|dynamic/i);
+});
+
+test('rejects an identifier-computed Page method call', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    const method = 'evaluate'
+    await page[method](() => localStorage.setItem('xiyou-programming-progress-v3', '{}'))
+  `), /dynamic|element|browser-context|evaluate/i);
+});
+
+test('rejects a concatenated Page method call', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    await page['eval' + 'uate'](() => localStorage.setItem('xiyou-programming-progress-v3', '{}'))
+  `), /dynamic|element|browser-context|evaluate/i);
+});
+
+test('rejects Reflect.get browser method access', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    await Reflect.get(page, 'evaluate').call(page, () => {
+      localStorage.setItem('xiyou-programming-progress-v3', '{}')
+    })
+  `), /Reflect|get|dynamic|browser-context/i);
+});
+
+test('rejects a computed newPage call from page.context', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    const method = 'newPage'
+    const externalPage = await page.context()[method]()
+  `), /dynamic|element|newPage|browser-context/i);
+});
+
+test('rejects a forged prerequisite else branch', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    ${validHealthHarness}
+    function fourSeasPrerequisiteFixture() {
+      return { missions: { 'w1-m1': {}, 'w1-m2': {} }, sessions: {} }
+    }
+    async function installFourSeasPrerequisites(page) {
+      await page.addInitScript(({ key, value }) => {
+        if (localStorage.getItem(key) === null) localStorage.setItem(key, JSON.stringify(value))
+        else localStorage.setItem(key, JSON.stringify({ missions: { 'w1-m3': forgedW1M3 } }))
+      }, { key: CURRENT_KEY, value: fourSeasPrerequisiteFixture() })
+    }
+    test.beforeEach(async ({ page }) => {
+      attachHealth(page)
+      await installFourSeasPrerequisites(page)
+    })
+  `), /prerequisite|else|init|fixture/i);
+});
+
+test('rejects an empty attachHealth helper even when it is called', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    let healthEvents = []
+    function attachHealth(page) {}
+    test.beforeEach(async ({ page }) => {
+      attachHealth(page)
+    })
+    test.afterEach(() => {
+      expect(healthEvents.filter((event) => event.unexpected)).toEqual([])
+    })
+  `), /attachHealth|console|pageerror|requestfailed|health/i);
+});
+
+test('rejects an afterEach that negates the shared healthEvents empty assertion', () => {
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    let healthEvents = []
+    function attachHealth(page) {
+      page.on('console', (event) => healthEvents.push(event))
+      page.on('pageerror', (event) => healthEvents.push(event))
+      page.on('requestfailed', (event) => healthEvents.push(event))
+    }
+    test.beforeEach(async ({ page }) => {
+      attachHealth(page)
+    })
+    test.afterEach(() => {
+      expect(healthEvents).not.toEqual([])
+    })
+  `), /afterEach|healthEvents|empty|unexpected/i);
+});
+
+test('allows locator geometry evaluate and Node-side map', () => {
+  assert.doesNotThrow(() => assertFourSeasE2ESourceContract(`
+    const rect = await page.locator('.cell').evaluate((element) => element.getBoundingClientRect())
+    const dimensions = [rect.width, rect.height].map((value) => Math.round(value))
+  `));
 });
 
 test('keeps both formal Phaser scene roots bounded and browser cold gates shared', () => {
