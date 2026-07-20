@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:e2e": "XIYOU_E2E_STORAGE_FAULTS=1 vite build",
     "preview": "vite preview",
     "test": "npm run test:unit && npm run test:bundle-script && npm run test:assets",
     "test:unit": "vitest run",

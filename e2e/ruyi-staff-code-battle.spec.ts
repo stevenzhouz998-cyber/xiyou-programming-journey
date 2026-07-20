@@ -9,7 +9,7 @@ const TEST_PARENT_ACCESS = 'access-v1:cf7667b114bf7a735116fc8439f0d17f3213159c48
 const NOW = '2026-07-16T00:00:00.000Z'
 const updateEvidence = process.env.XIYOU_UPDATE_EVIDENCE === '1'
 
-type StaffHealthEvent = { kind: 'console' | 'pageerror' | 'requestfailed'; url: string; detail: string }
+type StaffHealthEvent = { kind: 'console' | 'pageerror' | 'requestfailed' | 'response'; url: string; detail: string; status?: number }
 let staffHealthEvents: StaffHealthEvent[] = []
 let allowStaffHealth: (event: StaffHealthEvent) => boolean = () => false
 
@@ -21,6 +21,7 @@ const expectedNavigationAbort = (event: StaffHealthEvent) => event.kind === 'req
 
 function isExactInjectedChunkFailure(event: StaffHealthEvent, targetUrl: string | null) {
   if (targetUrl === null) return false
+  if (event.kind === 'response') return event.url === targetUrl && event.status === 503
   if (event.kind === 'requestfailed') return event.url === targetUrl
   if (event.kind !== 'console') return false
   if (event.url === targetUrl && event.detail === 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)') return true
@@ -34,6 +35,10 @@ function attachStaffHealth(page: Page) {
   })
   page.on('pageerror', error => staffHealthEvents.push({ kind: 'pageerror', url: page.url(), detail: error.message }))
   page.on('requestfailed', request => staffHealthEvents.push({ kind: 'requestfailed', url: request.url(), detail: request.failure()?.errorText ?? 'unknown' }))
+  page.on('response', response => {
+    const status = response.status()
+    if (status >= 400) staffHealthEvents.push({ kind: 'response', url: response.url(), detail: `HTTP ${status}`, status })
+  })
 }
 
 test.beforeEach(async ({ page }) => {
@@ -274,23 +279,24 @@ test('@staff-keyboard keyboard buttons edit the same workspace and complete', as
 
 test('@staff-storage standalone broad sabre drives the visible 3600-jin wrong action', async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 })
+  let releaseFirstFailure: (() => void) | null = null
+  const firstFailureGate = new Promise<void>((resolve) => { releaseFirstFailure = resolve })
   let releaseSabre: (() => void) | null = null
   const sabreGate = new Promise<void>((resolve) => { releaseSabre = resolve })
   let sabreRequests = 0
+  let expectedSabreFailureUrl: string | null = null
   await page.route('**/assets/dragon-palace/sabre.webp', async (route) => {
     sabreRequests += 1
     if (sabreRequests === 1) {
+      expectedSabreFailureUrl = route.request().url()
+      await firstFailureGate
       await route.fulfill({ status: 503, contentType: 'text/plain', body: 'injected sabre failure' })
       return
     }
     await sabreGate
     await route.continue()
   })
-  allowStaffHealth = (event) => expectedNavigationAbort(event) || (
-    event.kind === 'console'
-    && event.url.includes('/assets/dragon-palace/sabre.webp')
-    && event.detail === 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)'
-  )
+  allowStaffHealth = (event) => expectedNavigationAbort(event) || isExactInjectedChunkFailure(event, expectedSabreFailureUrl)
   const loadedSabre: string[] = []
   page.on('response', (response) => {
     if (response.url().includes('/assets/dragon-palace/sabre.webp') && response.ok()) loadedSabre.push(response.url())
@@ -301,12 +307,28 @@ test('@staff-storage standalone broad sabre drives the visible 3600-jin wrong ac
   await add(page, '缩小定海神针')
   await activate(page, '执行战斗指令')
   const scene = page.locator('.ruyi-staff-scene-frame .game-scene')
+  await expect(page.getByRole('status', { name: '大捍刀画面状态' })).toContainText('正在取来大捍刀画面')
+  await expect(page.getByRole('button', { name: '重播最近一次' })).toBeDisabled()
+  await expect(scene).toHaveAttribute('data-sabre-asset-state', 'loading')
+  await expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'false')
+  await expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
+  const beforeVisualRetry = await readEvidence(page)
+  expect(beforeVisualRetry.totalRuns).toBe(1)
+
+  releaseFirstFailure?.()
   await expect(scene).toHaveAttribute('data-sabre-asset-state', 'error')
   await expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'false')
   await expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
+  const alert = page.getByRole('alert').filter({ hasText: '大捍刀画面没有加载成功' })
+  await expect(alert).toBeVisible()
+  await expect(alert).toBeFocused()
+  await expect(page.getByRole('button', { name: '重试大捍刀画面' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '重播最近一次' })).toBeEnabled()
+  expect(await readEvidence(page)).toEqual(beforeVisualRetry)
 
-  await activate(page, '执行战斗指令')
+  await activate(page, '重试大捍刀画面')
   await expect(scene).toHaveAttribute('data-sabre-asset-state', 'loading')
+  await expect(page.getByRole('status', { name: '大捍刀画面状态' })).toBeVisible()
   await expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'false')
   await expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
   releaseSabre?.()
@@ -318,6 +340,7 @@ test('@staff-storage standalone broad sabre drives the visible 3600-jin wrong ac
   await expect(page.getByRole('alert').filter({ hasText: '3600斤比13500斤轻' })).toBeVisible()
   expect(sabreRequests).toBe(2)
   expect(loadedSabre).toHaveLength(1)
+  expect(await readEvidence(page)).toEqual(beforeVisualRetry)
   if (updateEvidence) await page.screenshot({ path: path.resolve('docs/verification/screenshots/ruyi-staff-sabre-768.png'), fullPage: true, animations: 'disabled' })
 })
 

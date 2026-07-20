@@ -76,6 +76,7 @@ export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onCo
   const interactionLockCallbackRef = useRef(onInteractionLockChange); const interactionLockedRef = useRef(false); const interactionLockReasonRef = useRef<RuyiHintLockReason>('idle')
   const sessionLockStatusRef = useRef<{ requestId: number; status: 'pending' | 'saved' | 'recovery' } | null>(null); const playbackFinishedRequestRef = useRef<number | null>(null)
   const regionRef = useRef<HTMLDivElement>(null); const [diagnostic, setDiagnostic] = useState<Diagnostic | null>(() => session.lastRun?.diagnostic ?? null)
+  const [interactionLocked, setInteractionLockedState] = useState(false)
   const [occurrenceId, setOccurrenceId] = useState(0); const [focusBlockId, setFocusBlockId] = useState<string | null>(null); const [sessionSyncTick, setSessionSyncTick] = useState(0)
   const currentSessionIdentity = sessionIdentity(session); const syncedSessionIdentityRef = useRef(currentSessionIdentity)
   completeRef.current = onComplete; sessionPersistenceRef.current = onSessionPersistenceActiveChange; interactionLockCallbackRef.current = onInteractionLockChange; missionCompletedRef.current = Boolean(progress.missions[MISSION_ID])
@@ -83,6 +84,7 @@ export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onCo
     if (interactionLockedRef.current === active && interactionLockReasonRef.current === reason) return
     interactionLockedRef.current = active
     interactionLockReasonRef.current = reason
+    if (mountedRef.current) setInteractionLockedState(active)
     interactionLockCallbackRef.current(active, reason)
   }
   useEffect(() => {
@@ -202,7 +204,7 @@ export function RuyiStaffExperience({ reducedMotion, muted, locked = false, onCo
   const focusWorkspace = () => regionRef.current?.querySelector<HTMLElement>('[aria-label="Blockly 积木编辑区"]')?.focus()
   const sessionRetryActive = playback.origin === 'run' && playback.sessionSave !== null && completionHandedOffRequestId !== playback.requestId
   return <div className="ruyi-staff-experience" onKeyDown={activateButtonOnEnter}>
-    <div className="ruyi-staff-scene-region"><ToolErrorBoundary label="定海神针场景" reloadPage={reloadPage}><Suspense fallback={<p role="status">龙宫场景加载中，请稍候……</p>}><RuyiStaffScene events={playback.events} replayToken={playback.requestId} reducedMotion={reducedMotion} muted={muted} onPlaybackComplete={() => playbackComplete(playback.requestId)} /></Suspense></ToolErrorBoundary><div className="dragon-palace-scene-controls"><button type="button" className="button button-ghost" disabled={!session.lastRun && !playback.result} onClick={replay}>重播最近一次</button></div></div>
+    <div className="ruyi-staff-scene-region"><ToolErrorBoundary label="定海神针场景" reloadPage={reloadPage}><Suspense fallback={<p role="status">龙宫场景加载中，请稍候……</p>}><RuyiStaffScene events={playback.events} replayToken={playback.requestId} reducedMotion={reducedMotion} muted={muted} onPlaybackComplete={() => playbackComplete(playback.requestId)} /></Suspense></ToolErrorBoundary><div className="dragon-palace-scene-controls"><button type="button" className="button button-ghost" disabled={interactionLocked || (!session.lastRun && !playback.result)} onClick={replay}>重播最近一次</button></div></div>
     <div className="ruyi-staff-program-region" ref={regionRef}><ToolErrorBoundary label="定海神针编程工作台" reloadPage={reloadPage}><Suspense fallback={<p role="status">编程工作台加载中，请稍候……</p>}><RuyiStaffBlocklyWorkspace draft={session.workspace} onDraftChange={saveDraft} onRun={run} focusBlockId={focusBlockId} onFocusHandled={() => setFocusBlockId(null)} saveRecoverySuperseded={sessionRetryActive} locked={locked} /></Suspense></ToolErrorBoundary></div>
     <div className="ruyi-staff-feedback-region"><RuyiStaffFeedback diagnostic={diagnostic} occurrenceId={occurrenceId} onFocusBlock={setFocusBlockId} onFocusWorkspace={focusWorkspace} />
       {sessionRetryActive && saveStatus === 'unsaved' ? <div className="unsaved-session" role="status"><p>本关尚未保存，请重试。</p><button type="button" onClick={retrySessionSave}>重试保存本关</button></div> : null}

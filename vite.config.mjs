@@ -2,11 +2,13 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 
+const e2eStorageFaults = process.env.XIYOU_E2E_STORAGE_FAULTS === '1';
+
 export default defineConfig({
   base: "/xiyou-programming-journey/",
   resolve: {
     alias: [
-      { find: '#storage-fault-adapter', replacement: fileURLToPath(new URL(process.env.XIYOU_E2E_STORAGE_FAULTS === '1' ? './e2e/support/storageFaultAdapter.ts' : './src/progress/storageFaultAdapter.ts', import.meta.url)) },
+      { find: '#storage-fault-adapter', replacement: fileURLToPath(new URL(e2eStorageFaults ? './e2e/support/storageFaultAdapter.ts' : './src/progress/storageFaultAdapter.ts', import.meta.url)) },
       { find: /^phaser$/, replacement: fileURLToPath(new URL("./node_modules/phaser/dist/phaser.esm.min.js", import.meta.url)) },
     ],
   },
@@ -19,6 +21,7 @@ export default defineConfig({
   },
   plugins: [react()],
   build: {
+    outDir: e2eStorageFaults ? 'dist-e2e' : 'dist',
     manifest: true,
     chunkSizeWarningLimit: 1600,
     rollupOptions: {

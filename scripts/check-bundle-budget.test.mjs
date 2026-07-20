@@ -162,6 +162,22 @@ function loadHealthRuntimeFromTypeScriptSource(source) {
   return Function(`${output}\nreturn { attachHealth, readHealthEvents: () => healthEvents, setExpectedChunkFailureUrl: (url) => { expectedChunkFailureUrl = url } }`)();
 }
 
+function loadStaffHealthRuntimeFromTypeScriptSource(source) {
+  const file = ts.createSourceFile('staff-health.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const healthStatements = file.statements.filter((statement) => (
+    (ts.isVariableStatement(statement)
+      && statement.declarationList.declarations.some((declaration) => (
+        ts.isIdentifier(declaration.name) && declaration.name.text === 'staffHealthEvents'
+      )))
+    || (ts.isFunctionDeclaration(statement)
+      && ['attachStaffHealth', 'isExactInjectedChunkFailure'].includes(statement.name?.text))
+  ));
+  const output = ts.transpileModule(healthStatements.map((statement) => statement.getText(file)).join('\n'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  return Function(`${output}\nreturn { attachStaffHealth, isExactInjectedChunkFailure, readHealthEvents: () => staffHealthEvents }`)();
+}
+
 test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
   assert.equal(bundleBudget.DRAGON_PALACE_COLD_LOAD_MAX_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.RUYI_STAFF_COLD_LOAD_MAX_BYTES, 2.5 * 1024 * 1024);
@@ -935,6 +951,43 @@ test('attaches unified browser-health capture to every independently created Ruy
   assert.match(staffE2eSource, /attachStaffHealth\(mapPage\)/);
   assert.match(staffE2eSource, /attachStaffHealth\(externalPage\)/);
   assert.match(staffE2eSource, /attachStaffHealth\(mutedPage\)/);
+});
+
+test('Ruyi health captures every HTTP error and exempts only the exact active 503 target', () => {
+  const staffE2eSource = readFileSync(new URL('../e2e/ruyi-staff-code-battle.spec.ts', import.meta.url), 'utf8');
+  const runtime = loadStaffHealthRuntimeFromTypeScriptSource(staffE2eSource);
+  const listeners = new Map();
+  runtime.attachStaffHealth({ on: (name, listener) => listeners.set(name, listener), url: () => 'http://app.test/' });
+  const response = listeners.get('response');
+  assert.equal(typeof response, 'function');
+  const makeResponse = (url, status) => ({ url: () => url, status: () => status });
+  const target = 'http://app.test/assets/dragon-palace/sabre.webp';
+  response(makeResponse(target, 503));
+  response(makeResponse(target, 500));
+  response(makeResponse(target, 404));
+  response(makeResponse('http://app.test/assets/unknown.js', 503));
+  const unexpected = runtime.readHealthEvents().filter((event) => !runtime.isExactInjectedChunkFailure(event, target));
+  assert.deepEqual(unexpected.map(({ kind, url, status }) => ({ kind, url, status })), [
+    { kind: 'response', url: target, status: 500 },
+    { kind: 'response', url: target, status: 404 },
+    { kind: 'response', url: 'http://app.test/assets/unknown.js', status: 503 },
+  ]);
+});
+
+test('keeps E2E fault builds isolated from the production deployment directory', () => {
+  const viteSource = readFileSync(new URL('../vite.config.mjs', import.meta.url), 'utf8');
+  const playwrightSource = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
+  const packageSource = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
+  const ignoreSource = readFileSync(new URL('../.gitignore', import.meta.url), 'utf8');
+  const deploySource = readFileSync(new URL('../.github/workflows/deploy-pages.yml', import.meta.url), 'utf8');
+  assert.match(viteSource, /outDir:\s*e2eStorageFaults\s*\?\s*['"]dist-e2e['"]\s*:\s*['"]dist['"]/);
+  assert.match(packageSource, /"build:e2e":\s*"XIYOU_E2E_STORAGE_FAULTS=1 vite build"/);
+  assert.match(playwrightSource, /npm run build:e2e/);
+  assert.match(playwrightSource, /vite preview --outDir dist-e2e|npm run preview -- --outDir dist-e2e/);
+  assert.match(ignoreSource, /^dist-e2e\/$/m);
+  assert.match(deploySource, /path:\s*dist\b/);
+  assert.doesNotMatch(deploySource, /dist-e2e/);
+  assert.match(packageSource, /"verify:bundle":\s*"npm run test:bundle-script && npm run build && node scripts\/check-bundle-budget\.mjs"/);
 });
 
 test('forbids evaluate-injected completion in the external Ruyi browser scenario', () => {

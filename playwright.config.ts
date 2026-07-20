@@ -14,7 +14,7 @@ export default defineConfig({
     serviceWorkers: 'block',
   },
   webServer: {
-    command: 'XIYOU_E2E_STORAGE_FAULTS=1 npm run build && npm run preview -- --host 127.0.0.1 --port 4173',
+    command: 'npm run build:e2e && npm run preview -- --outDir dist-e2e --host 127.0.0.1 --port 4173',
     url: 'http://127.0.0.1:4173/xiyou-programming-journey/',
     reuseExistingServer: false,
     timeout: 120_000,

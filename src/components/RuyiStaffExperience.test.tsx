@@ -305,7 +305,12 @@ describe('RuyiStaffExperience', () => {
     fireEvent.click(screen.getByRole('button', { name: '载入测试外部会话' }))
 
     await waitFor(() => expect(screen.getByTestId('ruyi-events').textContent).toContain(expectedEvent))
-    expect(screen.getByRole('button', { name: '重播最近一次' })).toHaveProperty('disabled', !hasReplay)
+    const replay = screen.getByRole('button', { name: '重播最近一次' })
+    expect(replay).toHaveProperty('disabled', true)
+    if (hasReplay) {
+      act(() => callbacks.get(token())?.())
+      await waitFor(() => expect(replay).toHaveProperty('disabled', false))
+    }
     if (expectedFeedback === null) {
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     } else {

@@ -108,12 +108,15 @@ it('shows the selected wrong weapon and blocked effect from real events', () => 
 
 it('keeps the sabre unselected while its real texture is delayed and publishes ready only after a visible textured sprite', async () => {
   completeSabreImmediately = false
-  render(<RuyiStaffScene events={sabre} replayToken={1} reducedMotion muted />)
+  const onComplete = vi.fn()
+  render(<RuyiStaffScene events={sabre} replayToken={1} reducedMotion muted onPlaybackComplete={onComplete} />)
   const scene = screen.getByRole('img')
+  expect(screen.getByRole('status', { name: '大捍刀画面状态' })).toHaveTextContent('正在取来大捍刀画面')
   expect(scene).toHaveAttribute('data-sabre-asset-state', 'loading')
   expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'false')
   expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
   expect(nodes.sabre.setVisible).not.toHaveBeenCalledWith(true)
+  expect(onComplete).not.toHaveBeenCalled()
 
   sabreTextureLoaded = true
   await act(async () => completeHandler?.())
@@ -123,26 +126,41 @@ it('keeps the sabre unselected while its real texture is delayed and publishes r
   expect(scene).toHaveAttribute('data-sabre-asset-state', 'ready')
   expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'true')
   expect(scene).toHaveAttribute('data-selected-weapon', 'sabre')
+  expect(screen.queryByRole('status', { name: '大捍刀画面状态' })).not.toBeInTheDocument()
+  expect(onComplete).toHaveBeenCalledOnce()
 })
 
-it('keeps a failed lazy sabre unpublished and recovers on an explicit replay', async () => {
+it('keeps a failed lazy sabre unpublished and retries only the same visible asset', async () => {
   completeSabreImmediately = false
-  const view = render(<RuyiStaffScene events={sabre} replayToken={1} reducedMotion muted />)
+  const onComplete = vi.fn()
+  render(<RuyiStaffScene events={sabre} replayToken={1} reducedMotion muted onPlaybackComplete={onComplete} />)
   const scene = screen.getByRole('img')
+  expect(onComplete).not.toHaveBeenCalled()
 
   await act(async () => failHandler?.())
   expect(scene).toHaveAttribute('data-sabre-asset-state', 'error')
   expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'false')
   expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
-  expect(screen.queryByText('龙宫场景资源加载失败。')).not.toBeInTheDocument()
+  expect(onComplete).toHaveBeenCalledOnce()
+  const alert = screen.getByRole('alert')
+  expect(alert).toHaveTextContent('大捍刀画面没有加载成功')
+  expect(alert).toHaveTextContent('战斗结果已保留')
+  expect(alert).toHaveFocus()
 
-  view.rerender(<RuyiStaffScene events={sabre} replayToken={2} reducedMotion muted />)
+  fireEvent.click(screen.getByRole('button', { name: '重试大捍刀画面' }))
   expect(scene).toHaveAttribute('data-sabre-asset-state', 'loading')
+  expect(screen.getByRole('status', { name: '大捍刀画面状态' })).toBeVisible()
+  expect(onComplete).toHaveBeenCalledOnce()
+
+  await act(async () => failHandler?.())
+  expect(screen.getByRole('alert')).toHaveFocus()
+  fireEvent.click(screen.getByRole('button', { name: '重试大捍刀画面' }))
   sabreTextureLoaded = true
   await act(async () => completeHandler?.())
   expect(scene).toHaveAttribute('data-sabre-asset-state', 'ready')
   expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'true')
   expect(scene).toHaveAttribute('data-selected-weapon', 'sabre')
+  expect(onComplete).toHaveBeenCalledOnce()
 })
 
 it('ignores a stale sabre completion after a newer replay selected the staff', async () => {
@@ -202,6 +220,7 @@ it('ignores stale tween callbacks when a newer replay owns playback', async () =
   const view = render(<RuyiStaffScene events={correct} replayToken={1} reducedMotion={false} muted onPlaybackComplete={onComplete} />)
   const stale = queue[0]
   view.rerender(<RuyiStaffScene events={sabre} replayToken={2} reducedMotion muted onPlaybackComplete={onComplete} />)
+  await act(async () => undefined)
   expect(onComplete).toHaveBeenCalledOnce()
   await act(async () => stale?.onComplete?.())
   expect(onComplete).toHaveBeenCalledOnce()
