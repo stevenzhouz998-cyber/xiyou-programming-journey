@@ -162,8 +162,8 @@ describe('西游编程记', () => {
     render(<App />);
     await acknowledgePrivacySuccessfully();
     fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
-    fireEvent.click(screen.getByRole('button', { name: '观察提示' }));
-    fireEvent.click(screen.getByRole('button', { name: '观察提示' }));
+    fireEvent.click(await screen.findByRole('button', { name: '观察提示' }));
+    fireEvent.click(await screen.findByRole('button', { name: '观察提示' }));
     fireEvent.click(screen.getByRole('button', { name: '观察提示' }));
     fireEvent.click(screen.getByRole('button', { name: '思路提示' }));
     expect(await screen.findByText(/指令卷轴还是空的/)).toBeVisible();
@@ -716,9 +716,9 @@ describe('西游编程记', () => {
     render(<App />);
     await acknowledgePrivacySuccessfully();
     fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
-    fireEvent.click(screen.getByRole('button', { name: '观察提示' }));
+    fireEvent.click(await screen.findByRole('button', { name: '观察提示' }));
     fireEvent.click(screen.getByRole('button', { name: '思路提示' }));
-    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }));
+    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }, { timeout: 5000 }));
     fireEvent.click(screen.getByRole('button', { name: '加入：请求兵器' }));
     fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }));
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
@@ -744,7 +744,7 @@ describe('西游编程记', () => {
     render(<App />);
     await acknowledgePrivacySuccessfully();
     fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
-    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }));
+    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }, { timeout: 5000 }));
     fireEvent.click(screen.getByRole('button', { name: '加入：请求兵器' }));
     fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }));
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
@@ -761,7 +761,7 @@ describe('西游编程记', () => {
     expect(next).toHaveFocus();
     fireEvent.click(next);
     expect(screen.queryByRole('dialog', { name: '闯关成功' })).not.toBeInTheDocument();
-    expect(screen.getByTestId('mission-background')).not.toHaveAttribute('inert');
+    expect(await screen.findByTestId('mission-background')).not.toHaveAttribute('inert');
     await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveFocus());
   });
 

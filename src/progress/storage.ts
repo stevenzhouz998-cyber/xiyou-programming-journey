@@ -1,5 +1,6 @@
 import { createInitialProgress, parseProgress } from './schema';
 import type { ProgressV3 } from './types';
+import { storageFaultAdapter } from '#storage-fault-adapter';
 
 export const CURRENT_PROGRESS_KEY = 'xiyou-programming-progress-v3';
 export const SNAPSHOT_PROGRESS_KEY = 'xiyou-programming-progress-snapshot-v3';
@@ -221,14 +222,8 @@ function loadResult(
 }
 
 export function loadProgressTransaction(storage: Storage = localStorage, clock: Clock = systemClock): LoadResult {
-  try {
-    if (storage.getItem('xiyou-test-storage-mode') === 'corrupt-regalia-current') {
-      const legal = storage.getItem(CURRENT_PROGRESS_KEY);
-      if (legal !== null) storage.setItem(SNAPSHOT_PROGRESS_KEY, legal);
-      storage.setItem(CURRENT_PROGRESS_KEY, '{broken w1-m3 current');
-      storage.setItem('xiyou-test-storage-mode', 'off');
-    }
-  } catch {
+  try { storageFaultAdapter.beforeProgressLoad(storage); }
+  catch {
     // The normal fail-closed loader below reports unavailable storage.
   }
   let revision: number;

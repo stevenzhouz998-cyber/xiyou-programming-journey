@@ -5,7 +5,7 @@ import type { RuyiStaffInstruction, RuyiStaffOpcode } from '../battle/types'
 
 type Tween = { onComplete?: () => void }
 function node() {
-  const value = { setCrop: vi.fn(), setDisplaySize: vi.fn(), setOrigin: vi.fn(), setScale: vi.fn(), setVisible: vi.fn(), setX: vi.fn(), setY: vi.fn() }
+  const value = { setCrop: vi.fn(), setDisplaySize: vi.fn(), setOrigin: vi.fn(), setScale: vi.fn(), setTexture: vi.fn(), setVisible: vi.fn(), setX: vi.fn(), setY: vi.fn() }
   Object.values(value).forEach((method) => method.mockReturnValue(value))
   return value
 }
@@ -16,8 +16,10 @@ const tweens = { add: vi.fn((config: Tween) => { queue.push(config); return conf
 const sound = { mute: false }
 const destroys: Array<ReturnType<typeof vi.fn>> = []
 let failHandler: (() => void) | null = null
+let initialFailHandler: (() => void) | null = null
 let completeHandler: (() => void) | null = null
 let sabreTextureLoaded = false
+let completeSabreImmediately = true
 
 vi.mock('phaser', () => {
   class Scene {
@@ -25,8 +27,15 @@ vi.mock('phaser', () => {
     textures = { exists: vi.fn((key: string) => key === 'sabre' && sabreTextureLoaded) }
     load = {
       image: vi.fn((key: string, url: string) => { loadImage(key, url) }),
-      once: vi.fn((event: string, handler: () => void) => { if (event === 'loaderror') failHandler = handler; else completeHandler = handler }),
-      start: vi.fn(() => { sabreTextureLoaded = true; completeHandler?.() }),
+      once: vi.fn((event: string, handler: () => void) => {
+        if (event === 'loaderror') { if (initialFailHandler === null) initialFailHandler = handler; failHandler = handler }
+        else completeHandler = handler
+      }),
+      off: vi.fn((event: string, handler: () => void) => {
+        if (event === 'loaderror' && failHandler === handler) failHandler = null
+        if (event === 'complete' && completeHandler === handler) completeHandler = null
+      }),
+      start: vi.fn(() => { if (completeSabreImmediately) { sabreTextureLoaded = true; completeHandler?.() } }),
     }
     add = { image: vi.fn((_x: number, _y: number, key: keyof typeof nodes) => nodes[key]) }
     tweens = tweens
@@ -55,7 +64,7 @@ const sabre = runRuyiStaffBattle([
 ]).events
 
 beforeEach(() => {
-  vi.clearAllMocks(); queue.length = 0; destroys.length = 0; failHandler = null; completeHandler = null; sabreTextureLoaded = false; sound.mute = false
+  vi.clearAllMocks(); queue.length = 0; destroys.length = 0; failHandler = null; initialFailHandler = null; completeHandler = null; sabreTextureLoaded = false; completeSabreImmediately = true; sound.mute = false
   vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('test-browser')
 })
 
@@ -95,6 +104,62 @@ it('shows the selected wrong weapon and blocked effect from real events', () => 
   expect(loadImage).toHaveBeenCalledWith('sabre', '/assets/dragon-palace/sabre.webp')
   expect(nodes.sabre.setDisplaySize).toHaveBeenCalledWith(132, 198)
   expect(nodes.sabre.setVisible).toHaveBeenLastCalledWith(true)
+})
+
+it('keeps the sabre unselected while its real texture is delayed and publishes ready only after a visible textured sprite', async () => {
+  completeSabreImmediately = false
+  render(<RuyiStaffScene events={sabre} replayToken={1} reducedMotion muted />)
+  const scene = screen.getByRole('img')
+  expect(scene).toHaveAttribute('data-sabre-asset-state', 'loading')
+  expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'false')
+  expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
+  expect(nodes.sabre.setVisible).not.toHaveBeenCalledWith(true)
+
+  sabreTextureLoaded = true
+  await act(async () => completeHandler?.())
+
+  expect(nodes.sabre.setTexture).toHaveBeenCalledWith('sabre')
+  expect(nodes.sabre.setVisible).toHaveBeenLastCalledWith(true)
+  expect(scene).toHaveAttribute('data-sabre-asset-state', 'ready')
+  expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'true')
+  expect(scene).toHaveAttribute('data-selected-weapon', 'sabre')
+})
+
+it('keeps a failed lazy sabre unpublished and recovers on an explicit replay', async () => {
+  completeSabreImmediately = false
+  const view = render(<RuyiStaffScene events={sabre} replayToken={1} reducedMotion muted />)
+  const scene = screen.getByRole('img')
+
+  await act(async () => failHandler?.())
+  expect(scene).toHaveAttribute('data-sabre-asset-state', 'error')
+  expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'false')
+  expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
+  expect(screen.queryByText('龙宫场景资源加载失败。')).not.toBeInTheDocument()
+
+  view.rerender(<RuyiStaffScene events={sabre} replayToken={2} reducedMotion muted />)
+  expect(scene).toHaveAttribute('data-sabre-asset-state', 'loading')
+  sabreTextureLoaded = true
+  await act(async () => completeHandler?.())
+  expect(scene).toHaveAttribute('data-sabre-asset-state', 'ready')
+  expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'true')
+  expect(scene).toHaveAttribute('data-selected-weapon', 'sabre')
+})
+
+it('ignores a stale sabre completion after a newer replay selected the staff', async () => {
+  completeSabreImmediately = false
+  const view = render(<RuyiStaffScene events={sabre} replayToken={1} reducedMotion muted />)
+  const staleComplete = completeHandler
+
+  view.rerender(<RuyiStaffScene events={correct} replayToken={2} reducedMotion muted />)
+  const scene = screen.getByRole('img')
+  expect(scene).toHaveAttribute('data-selected-weapon', 'ruyi-staff-shrunk')
+  expect(scene).toHaveAttribute('data-sabre-asset-state', 'idle')
+
+  sabreTextureLoaded = true
+  await act(async () => staleComplete?.())
+  expect(scene).toHaveAttribute('data-selected-weapon', 'ruyi-staff-shrunk')
+  expect(scene).toHaveAttribute('data-sabre-asset-state', 'idle')
+  expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'false')
 })
 
 it('shrinks the selected staff and reaches success in reduced motion', () => {
@@ -145,7 +210,7 @@ it('ignores stale tween callbacks when a newer replay owns playback', async () =
 
 it('retries a local asset failure with the same approved asset set', async () => {
   render(<RuyiStaffScene events={correct} replayToken={1} reducedMotion muted />)
-  await act(async () => failHandler?.())
+  await act(async () => initialFailHandler?.())
   expect(screen.getByRole('alert')).toHaveTextContent('\u9f99\u5bab\u573a\u666f\u8d44\u6e90\u52a0\u8f7d\u5931\u8d25')
   fireEvent.click(screen.getByRole('button', { name: '\u91cd\u65b0\u52a0\u8f7d\u9f99\u5bab\u573a\u666f' }))
   expect(loadImage).toHaveBeenCalledTimes(10)

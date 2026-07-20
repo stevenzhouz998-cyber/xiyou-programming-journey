@@ -8,12 +8,13 @@ const NOW = '2026-07-19T00:00:00.000Z'
 const TEST_PARENT_ACCESS = 'access-v1:cf7667b114bf7a735116fc8439f0d17f3213159c48b22be56376521fbbc5cbb1:678bd461a82e086d3332d9c0f72cfae199f75eab78fba024dd8d28acd1702e27'
 const updateEvidence = process.env.XIYOU_UPDATE_EVIDENCE === '1'
 
-type HealthEvent = { kind: 'console' | 'pageerror' | 'requestfailed'; url: string; detail: string }
+type HealthEvent = { kind: 'console' | 'pageerror' | 'requestfailed' | 'response'; url: string; detail: string; status?: number }
 let healthEvents: HealthEvent[] = []
 let expectedChunkFailureUrl: string | null = null
 
 function expectedLazyChunkFailure(event: HealthEvent) {
   if (expectedChunkFailureUrl === null) return false
+  if (event.kind === 'response') return event.url === expectedChunkFailureUrl && event.status === 503
   if (event.kind === 'requestfailed') return event.url === expectedChunkFailureUrl && /ABORTED|cancelled/i.test(event.detail)
   if (event.kind !== 'console') return false
   if (event.url === expectedChunkFailureUrl && event.detail === 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)') return true
@@ -32,6 +33,12 @@ function attachHealth(page: Page) {
   page.on('requestfailed', (request) => {
     const event: HealthEvent = { kind: 'requestfailed', url: request.url(), detail: request.failure()?.errorText ?? 'unknown' }
     if (!expectedNavigationAbort(event) && !expectedLazyChunkFailure(event)) healthEvents.push(event)
+  })
+  page.on('response', (response) => {
+    const status = response.status()
+    if (status < 400) return
+    const event: HealthEvent = { kind: 'response', url: response.url(), detail: `HTTP ${status}`, status }
+    if (!expectedLazyChunkFailure(event)) healthEvents.push(event)
   })
 }
 
@@ -411,13 +418,7 @@ test('@regalia-cold w1-m1 w1-m2 and w1-m3 cold HTTP bodies stay inside fixed fai
       const responses = await Promise.all(bodies)
       expect(failures, `${mission.id} request failures`).toEqual([])
       expect(responses.filter(({ status }) => status < 200 || status >= 300), `${mission.id} redirects or non-2xx`).toEqual([])
-      const unique = new Map<string, number>()
-      for (const response of responses) {
-        const previous = unique.get(response.url)
-        if (previous !== undefined) expect(response.bytes, `${mission.id} duplicate body ${response.url}`).toBe(previous)
-        else unique.set(response.url, response.bytes)
-      }
-      const total = [...unique.values()].reduce((sum, bytes) => sum + bytes, 0)
+      const total = responses.reduce((sum, response) => sum + response.bytes, 0)
       const headroom = mission.limit - total
       console.log(`[four-seas-cold-bytes] ${testInfo.project.name} ${mission.id}: bytes=${total} limit=${mission.limit} headroom=${headroom}`)
       await testInfo.attach(`four-seas-cold-${mission.id}.json`, { body: Buffer.from(JSON.stringify({ project: testInfo.project.name, mission: mission.id, bytes: total, limit: mission.limit, headroom, responses }, null, 2)), contentType: 'application/json' })

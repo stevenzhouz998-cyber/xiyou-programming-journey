@@ -27,6 +27,14 @@ const MODE_ROOTS = ['src/components/BlocklyWorkspace.tsx', 'src/components/RuyiS
 const SCENE_ROOTS = new Set(['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx', 'src/components/FourSeasRegaliaScene.tsx']);
 const isPhaserSource = (key, chunk) => chunk.name === 'phaser' || /node_modules[\\/]phaser(?:[\\/]|$)/i.test(`${key} ${chunk.src ?? ''}`);
 const isBlocklySource = (key, chunk) => chunk.name === 'blockly-editor' || /node_modules[\\/]blockly(?:[\\/]|$)/i.test(`${key} ${chunk.src ?? ''}`);
+const PRODUCTION_TEST_SENTINELS = [
+  'xiyou-test-storage-mode',
+  'corrupt-regalia-current',
+  'fail-regalia-draft',
+  'fail-regalia-session',
+  'fail-regalia-completion',
+  '四海披挂测试存储故障',
+];
 const assertSafeFile = (file) => {
   const normalized = normalize(file);
   const portable = file.replaceAll('\\', '/');
@@ -36,6 +44,15 @@ const assertSafeFile = (file) => {
 export function assertNoSourceVisualAssets(files) {
   const sourceAsset = files.find((file) => /\.(?:png|avif)$/i.test(file));
   if (sourceAsset) throw new Error(`Bundle budget: non-shipping visual source remains in public: ${sourceAsset}.`);
+}
+
+export function assertNoProductionTestSentinels(files) {
+  for (const [file, bytes] of files) {
+    const text = Buffer.isBuffer(bytes) ? bytes.toString('utf8') : String(bytes);
+    if (PRODUCTION_TEST_SENTINELS.some((sentinel) => text.includes(sentinel))) {
+      throw new Error(`Bundle budget: production storage fault test sentinel found in ${file}.`);
+    }
+  }
 }
 
 async function listFiles(root, relativeRoot = '') {
@@ -138,6 +155,9 @@ export function analyzeManifest(manifest, gzipSizes, rawSizes = {}) {
 async function main() {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   assertNoSourceVisualAssets(await listFiles(join(root, 'public')));
+  const distRoot = join(root, 'dist');
+  const distFiles = await listFiles(distRoot);
+  assertNoProductionTestSentinels(new Map(await Promise.all(distFiles.map(async (file) => [file, await readFile(join(distRoot, file))]))));
   const manifestPath = join(root, 'dist', '.vite', 'manifest.json');
   let manifest;
   try { manifest = JSON.parse(await readFile(manifestPath, 'utf8')); }
@@ -146,9 +166,9 @@ async function main() {
   const gzipSizes = {};
   const rawSizes = {};
   for (const file of files) {
-    const distRoot = resolve(root, 'dist');
-    const path = resolve(distRoot, file);
-    const within = relative(distRoot, path);
+    const resolvedDistRoot = resolve(root, 'dist');
+    const path = resolve(resolvedDistRoot, file);
+    const within = relative(resolvedDistRoot, path);
     if (within.startsWith('..') || isAbsolute(within)) throw new Error(`Bundle budget: unsafe manifest file path ${file}.`);
     const bytes = await readFile(path);
     gzipSizes[file] = gzipSync(bytes).byteLength;

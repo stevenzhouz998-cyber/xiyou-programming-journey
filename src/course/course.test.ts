@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { course, validateCourse } from './course';
 import { courseOutline } from './courseOutline';
 import { commandLabel } from '../engine/commandLabels';
@@ -45,6 +46,28 @@ describe('course manifest', () => {
         id: missionId, week: missionWeek, order, title: missionTitle, knowledge, isBoss,
       })),
     })));
+  });
+
+  it('stores only course extension fields and derives every navigation field from courseOutline', () => {
+    const legacySource = readFileSync('src/course/course.ts', 'utf8');
+    const formalSource = readFileSync('src/course/formalCourse.ts', 'utf8');
+    for (const source of [legacySource, formalSource]) {
+      expect(source).not.toMatch(/(?:mission|formalMission)\(\{\s*week:/);
+    }
+    expect(legacySource).not.toMatch(/\{\s*id:\s*'week-/);
+    expect(legacySource).toMatch(/deriveMissionFromOutline/);
+    expect(formalSource).toMatch(/deriveMissionFromOutline/);
+  });
+
+  it('loads formal and legacy story catalogs independently without a formal-route fallback', () => {
+    const pageSource = readFileSync('src/components/MissionPageContent.tsx', 'utf8');
+    const appSource = readFileSync('src/App.tsx', 'utf8');
+    expect(pageSource).not.toMatch(/import\s+\{\s*getFormalMission\s*\}\s+from/);
+    expect(pageSource).toContain("import('../course/formalCourse')");
+    expect(pageSource).toContain("import('../course/course')");
+    expect(pageSource).toMatch(/isFormalMissionOutline\(outline\)/);
+    expect(pageSource).not.toMatch(/formalMission\s*\?\?\s*legacy/);
+    expect(appSource).not.toMatch(/from ['"]\.\/course\/(?:course|formalCourse)['"]/);
   });
 
   it('gives every selectable command a child-readable Chinese label', () => {

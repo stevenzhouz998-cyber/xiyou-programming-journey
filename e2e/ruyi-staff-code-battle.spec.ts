@@ -274,6 +274,23 @@ test('@staff-keyboard keyboard buttons edit the same workspace and complete', as
 
 test('@staff-storage standalone broad sabre drives the visible 3600-jin wrong action', async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 })
+  let releaseSabre: (() => void) | null = null
+  const sabreGate = new Promise<void>((resolve) => { releaseSabre = resolve })
+  let sabreRequests = 0
+  await page.route('**/assets/dragon-palace/sabre.webp', async (route) => {
+    sabreRequests += 1
+    if (sabreRequests === 1) {
+      await route.fulfill({ status: 503, contentType: 'text/plain', body: 'injected sabre failure' })
+      return
+    }
+    await sabreGate
+    await route.continue()
+  })
+  allowStaffHealth = (event) => expectedNavigationAbort(event) || (
+    event.kind === 'console'
+    && event.url.includes('/assets/dragon-palace/sabre.webp')
+    && event.detail === 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)'
+  )
   const loadedSabre: string[] = []
   page.on('response', (response) => {
     if (response.url().includes('/assets/dragon-palace/sabre.webp') && response.ok()) loadedSabre.push(response.url())
@@ -284,9 +301,22 @@ test('@staff-storage standalone broad sabre drives the visible 3600-jin wrong ac
   await add(page, '缩小定海神针')
   await activate(page, '执行战斗指令')
   const scene = page.locator('.ruyi-staff-scene-frame .game-scene')
+  await expect(scene).toHaveAttribute('data-sabre-asset-state', 'error')
+  await expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'false')
+  await expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
+
+  await activate(page, '执行战斗指令')
+  await expect(scene).toHaveAttribute('data-sabre-asset-state', 'loading')
+  await expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'false')
+  await expect(scene).not.toHaveAttribute('data-selected-weapon', 'sabre')
+  releaseSabre?.()
   await expect(scene).toHaveAttribute('data-selected-weapon', 'sabre')
+  await expect(scene).toHaveAttribute('data-sabre-asset-state', 'ready')
+  await expect(scene).toHaveAttribute('data-sabre-sprite-visible', 'true')
+  await expect(scene.locator('canvas')).toBeVisible()
   await expect(scene).toHaveAttribute('data-effect-cell', 'blocked')
   await expect(page.getByRole('alert').filter({ hasText: '3600斤比13500斤轻' })).toBeVisible()
+  expect(sabreRequests).toBe(2)
   expect(loadedSabre).toHaveLength(1)
   if (updateEvidence) await page.screenshot({ path: path.resolve('docs/verification/screenshots/ruyi-staff-sabre-768.png'), fullPage: true, animations: 'disabled' })
 })
@@ -505,12 +535,19 @@ test('@staff-cold cold w1-m2 response bodies stay within fixed 2.5 MiB with fail
   await page.route('**/*', async (route) => route.continue({ headers: { ...route.request().headers(), 'cache-control': 'no-store', pragma: 'no-cache' } }))
   const failures: string[] = []; page.on('requestfailed', (request) => failures.push(`${request.url()} ${request.failure()?.errorText ?? 'unknown'}`))
   const bodies: Array<Promise<{ url: string; status: number; bytes: number }>> = []
+  const observedUrls = new Set<string>()
   page.on('response', (response) => {
     const url = new URL(response.url()); if (!['http:', 'https:'].includes(url.protocol)) return
+    observedUrls.add(response.url())
     bodies.push((async () => { const status = response.status(); if (status < 200 || status >= 300) return { url: response.url(), status, bytes: 0 }; return { url: response.url(), status, bytes: (await response.body()).byteLength } })())
   })
   await page.goto('./#/mission/w1-m2')
-  await expect(page.locator('.ruyi-staff-scene-frame .game-scene canvas')).toBeVisible({ timeout: 15_000 }); await page.waitForLoadState('networkidle')
+  await expect(page.locator('.ruyi-staff-scene-frame .game-scene canvas')).toBeVisible({ timeout: 15_000 })
+  await expect.poll(() => (
+    [...observedUrls].some((url) => url.includes('/assets/dragon-palace/background.webp'))
+      && [...observedUrls].some((url) => /\/assets\/phaser-.*\.js/.test(url))
+  )).toBe(true)
+  await page.waitForLoadState('networkidle')
   const responses = await Promise.all(bodies); expect(failures).toEqual([]); expect(responses.filter(({ status }) => status < 200 || status >= 300)).toEqual([])
   expect(responses.some(({ url }) => url.includes('/assets/dragon-palace/background.webp'))).toBe(true)
   expect(responses.some(({ url }) => /\/assets\/phaser-.*\.js/.test(url))).toBe(true)

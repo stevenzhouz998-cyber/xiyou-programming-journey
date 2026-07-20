@@ -6,6 +6,7 @@ export default defineConfig({
   base: "/xiyou-programming-journey/",
   resolve: {
     alias: [
+      { find: '#storage-fault-adapter', replacement: fileURLToPath(new URL(process.env.XIYOU_E2E_STORAGE_FAULTS === '1' ? './e2e/support/storageFaultAdapter.ts' : './src/progress/storageFaultAdapter.ts', import.meta.url)) },
       { find: /^phaser$/, replacement: fileURLToPath(new URL("./node_modules/phaser/dist/phaser.esm.min.js", import.meta.url)) },
     ],
   },

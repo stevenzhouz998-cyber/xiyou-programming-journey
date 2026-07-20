@@ -27,11 +27,21 @@ function RouteFocus({ blocked }: { blocked: boolean }) {
   useEffect(() => {
     if (blocked) return undefined;
     if (initialRef.current) { initialRef.current = false; return undefined; }
-    const frame = requestAnimationFrame(() => {
+    let observer: MutationObserver | null = null;
+    const focusRouteHeading = () => {
       const target = document.querySelector<HTMLElement>('main h1, main[tabindex="-1"]');
-      if (target && !target.closest('[inert]')) { target.tabIndex = -1; target.focus(); }
+      if (!target || target.closest('[inert]')) return false;
+      target.tabIndex = -1;
+      target.focus();
+      observer?.disconnect();
+      return true;
+    };
+    const frame = requestAnimationFrame(() => {
+      if (focusRouteHeading()) return;
+      observer = new MutationObserver(() => { focusRouteHeading(); });
+      observer.observe(document.body, { childList: true, subtree: true });
     });
-    return () => cancelAnimationFrame(frame);
+    return () => { cancelAnimationFrame(frame); observer?.disconnect(); };
   }, [blocked, location.pathname]);
   return null;
 }

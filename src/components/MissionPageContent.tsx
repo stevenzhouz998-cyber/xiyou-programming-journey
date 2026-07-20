@@ -3,8 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { LockKey } from '@phosphor-icons/react/dist/icons/LockKey';
 import { Medal } from '@phosphor-icons/react/dist/icons/Medal';
-import { allMissionOutlines } from '../course/courseOutline';
-import { getFormalMission } from '../course/formalCourse';
+import { allMissionOutlines, getMissionOutline, isFormalMissionOutline } from '../course/courseOutline';
 import type { MissionSpec } from '../course/types';
 import { useProgress } from '../context/ProgressContext';
 import { validateSequence } from '../engine/validation';
@@ -199,25 +198,28 @@ function MissionPageForId({ id, mission, reducedMotion, onGlobalModalOpenChange,
 
 export function MissionPageContent(props: MissionPageProps) {
   const { id = '' } = useParams();
-  const formalMission = getFormalMission(id);
-  const [legacyLoad, setLegacyLoad] = useState<{ id: string; status: 'loading' | 'ready' | 'error'; mission?: MissionSpec }>({ id: '', status: 'loading' });
-  const [legacyRetry, setLegacyRetry] = useState(0);
+  const outline = getMissionOutline(id);
+  const formal = isFormalMissionOutline(outline);
+  const [missionLoad, setMissionLoad] = useState<{ id: string; status: 'loading' | 'ready' | 'error'; mission?: MissionSpec }>({ id: '', status: 'loading' });
+  const [missionRetry, setMissionRetry] = useState(0);
   useEffect(() => {
-    if (formalMission) return;
     let active = true;
-    setLegacyLoad({ id, status: 'loading' });
-    import('../course/course').then(({ getMission }) => {
-      if (active) setLegacyLoad({ id, status: 'ready', mission: getMission(id) });
+    setMissionLoad({ id, status: 'loading' });
+    const load = formal
+      ? import('../course/formalCourse').then(({ getFormalMission }) => getFormalMission(id))
+      : import('../course/course').then(({ getMission }) => getMission(id));
+    load.then((mission) => {
+      if (active) setMissionLoad({ id, status: 'ready', mission });
     }).catch(() => {
-      if (active) setLegacyLoad({ id, status: 'error' });
+      if (active) setMissionLoad({ id, status: 'error' });
     });
     return () => { active = false; };
-  }, [formalMission, id, legacyRetry]);
-  if (!formalMission && (legacyLoad.id !== id || legacyLoad.status === 'loading')) {
+  }, [formal, id, missionRetry]);
+  if (missionLoad.id !== id || missionLoad.status === 'loading') {
     return <main className="mission-page"><p className="mission-tools-loading" role="status">关卡故事加载中，请稍候……</p></main>;
   }
-  if (!formalMission && legacyLoad.status === 'error') {
-    return <main className="mission-page"><div className="mission-tools-error" role="alert"><p>关卡故事暂时没有加载成功。</p><button type="button" onClick={() => setLegacyRetry((value) => value + 1)}>重试加载</button></div></main>;
+  if (missionLoad.status === 'error') {
+    return <main className="mission-page"><div className="mission-tools-error" role="alert"><p>关卡故事暂时没有加载成功。</p><button type="button" onClick={() => setMissionRetry((value) => value + 1)}>重试加载</button></div></main>;
   }
-  return <MissionPageForId key={id} id={id} mission={formalMission ?? legacyLoad.mission} {...props} />;
+  return <MissionPageForId key={id} id={id} mission={missionLoad.mission} {...props} />;
 }

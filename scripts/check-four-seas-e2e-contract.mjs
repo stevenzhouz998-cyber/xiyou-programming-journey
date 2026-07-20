@@ -510,7 +510,7 @@ function assertExpectedLazyChunkFailure(file) {
     || !helper.body) {
     throw new Error('Four Seas E2E source contract: expectedLazyChunkFailure must be one exact top-level event predicate.');
   }
-  const expectedBody = "{if(expectedChunkFailureUrl===null)returnfalseif(event.kind==='requestfailed')returnevent.url===expectedChunkFailureUrl&&/ABORTED|cancelled/i.test(event.detail)if(event.kind!=='console')returnfalseif(event.url===expectedChunkFailureUrl&&event.detail==='Failedtoloadresource:theserverrespondedwithastatusof503(ServiceUnavailable)')returntrueconstfailure=`Failedtofetchdynamicallyimportedmodule:${expectedChunkFailureUrl}`returnevent.detail===failure||event.detail===`TypeError:${failure}`}";
+  const expectedBody = "{if(expectedChunkFailureUrl===null)returnfalseif(event.kind==='response')returnevent.url===expectedChunkFailureUrl&&event.status===503if(event.kind==='requestfailed')returnevent.url===expectedChunkFailureUrl&&/ABORTED|cancelled/i.test(event.detail)if(event.kind!=='console')returnfalseif(event.url===expectedChunkFailureUrl&&event.detail==='Failedtoloadresource:theserverrespondedwithastatusof503(ServiceUnavailable)')returntrueconstfailure=`Failedtofetchdynamicallyimportedmodule:${expectedChunkFailureUrl}`returnevent.detail===failure||event.detail===`TypeError:${failure}`}";
   if (compactNodeText(helper.body, file) !== expectedBody) {
     throw new Error('Four Seas E2E source contract: expectedLazyChunkFailure may filter only the active exact lazy chunk URL and approved failure signatures.');
   }
@@ -536,6 +536,13 @@ function assertRequestFailedListener(callback, file) {
   if (compactNodeText(callback.body.statements[1], file)
     !== 'if(!expectedNavigationAbort(event)&&!expectedLazyChunkFailure(event))healthEvents.push(event)') {
     throw new Error('Four Seas E2E source contract: requestfailed listener may skip only approved navigation aborts or the active exact lazy chunk failure.');
+  }
+}
+
+function assertResponseListener(callback, file) {
+  const expected = "{conststatus=response.status()if(status<400)returnconstevent:HealthEvent={kind:'response',url:response.url(),detail:`HTTP${status}`,status}if(!expectedLazyChunkFailure(event))healthEvents.push(event)}";
+  if (compactNodeText(callback.body, file) !== expected) {
+    throw new Error('Four Seas E2E source contract: response listener must capture every HTTP status >=400 and skip only the active exact lazy chunk 503.');
   }
 }
 
@@ -663,8 +670,8 @@ function assertHealthContract(file, attachHealth, afterEachCalls, beforeEachCall
     || unwrapExpression(healthDeclaration.initializer).elements.length !== 0) {
     throw new Error('Four Seas E2E source contract: healthEvents must be one top-level let initialized to an empty event collection.');
   }
-  if (attachHealth.body.statements.length !== 3) {
-    throw new Error('Four Seas E2E source contract: attachHealth must register exactly console, pageerror, and requestfailed.');
+  if (attachHealth.body.statements.length !== 4) {
+    throw new Error('Four Seas E2E source contract: attachHealth must register exactly console, pageerror, requestfailed, and response.');
   }
   const expectedListenerBodies = new Map([
     ['console', "{if(message.type()==='error'){constevent:HealthEvent={kind:'console',url:message.location().url||page.url(),detail:message.text()}if(!expectedLazyChunkFailure(event))healthEvents.push(event)}}"],
@@ -674,6 +681,7 @@ function assertHealthContract(file, attachHealth, afterEachCalls, beforeEachCall
     ['console', 'message'],
     ['pageerror', 'error'],
     ['requestfailed', 'request'],
+    ['response', 'response'],
   ]);
   const seenEvents = new Set();
   for (const statement of attachHealth.body.statements) {
@@ -691,13 +699,14 @@ function assertHealthContract(file, attachHealth, afterEachCalls, beforeEachCall
       throw new Error(`Four Seas E2E source contract: ${eventName} listener must have one exact event parameter.`);
     }
     if (eventName === 'requestfailed') assertRequestFailedListener(callback, file);
+    else if (eventName === 'response') assertResponseListener(callback, file);
     else if (compactNodeText(callback.body, file) !== expectedListenerBodies.get(eventName)) {
       throw new Error(`Four Seas E2E source contract: ${eventName} listener must directly push one complete normalized event.`);
     }
     seenEvents.add(eventName);
   }
-  if ([...seenEvents].sort().join(',') !== 'console,pageerror,requestfailed') {
-    throw new Error('Four Seas E2E source contract: attachHealth must cover console, pageerror, and requestfailed exactly once.');
+  if ([...seenEvents].sort().join(',') !== 'console,pageerror,requestfailed,response') {
+    throw new Error('Four Seas E2E source contract: attachHealth must cover console, pageerror, requestfailed, and response exactly once.');
   }
   const expectedNavigationAbort = assertExpectedNavigationAbort(file);
   const expectedLazyChunkFailure = assertExpectedLazyChunkFailure(file);

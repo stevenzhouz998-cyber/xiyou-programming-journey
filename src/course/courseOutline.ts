@@ -1,3 +1,5 @@
+import type { CourseWeek, MissionSpec } from './types';
+
 export interface CourseOutlineMission {
   id: string;
   week: number;
@@ -48,3 +50,34 @@ export const courseOutline: { weeks: CourseOutlineWeek[] } = {
 };
 
 export const allMissionOutlines = courseOutline.weeks.flatMap((week) => week.missions);
+
+export type MissionExtension = Omit<MissionSpec, keyof CourseOutlineMission | 'hints'>;
+export type CourseWeekExtension = Omit<CourseWeek, keyof CourseOutlineWeek | 'missions'> & { missions: MissionSpec[] };
+
+export function getMissionOutline(id: string): CourseOutlineMission | undefined {
+  return allMissionOutlines.find((missionOutline) => missionOutline.id === id);
+}
+
+export function isFormalMissionOutline(outline: CourseOutlineMission | undefined): boolean {
+  return outline?.week === 1 && outline.order <= 3;
+}
+
+export function deriveMissionFromOutline(id: string, extension: MissionExtension): MissionSpec {
+  const outline = getMissionOutline(id);
+  if (!outline) throw new Error(`Unknown course outline mission: ${id}`);
+  return {
+    ...outline,
+    ...extension,
+    hints: {
+      observe: `先看清“${extension.objective}”里谁先发生、谁后发生。`,
+      think: `把大任务拆成 ${Math.max(2, extension.expectedSequence.length)} 个小步骤，再逐个检查。`,
+      partial: `先从“${extension.storyBeats[0].title}”开始，后面的步骤按原著因果接上。`,
+    },
+  };
+}
+
+export function deriveWeekFromOutline(id: string, extension: CourseWeekExtension): CourseWeek {
+  const outline = courseOutline.weeks.find((weekOutline) => weekOutline.id === id);
+  if (!outline) throw new Error(`Unknown course outline week: ${id}`);
+  return { ...outline, ...extension };
+}

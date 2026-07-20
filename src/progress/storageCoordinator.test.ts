@@ -11,6 +11,7 @@ import {
 import { saveProgressCoordinated } from './storageCoordinator';
 import { repairLoadedProgressCoordinated } from './storageRepair';
 import { clearProgressCoordinated, importProgressCoordinated } from './storageCoordinatorParent';
+import type { ProgressV3 } from './types';
 
 class MemoryStorage implements Storage {
   private values = new Map<string, string>();
@@ -48,6 +49,21 @@ const immediateLockManager = {
 };
 
 describe('cross-tab storage coordinator', () => {
+  it('ignores browser test fault sentinels in the production coordinator', async () => {
+    const storage = new MemoryStorage();
+    storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(createInitialProgress()));
+    storage.setItem(REVISION_PROGRESS_KEY, '0');
+    storage.setItem('xiyou-test-storage-mode', 'fail-regalia-completion');
+    const completed: ProgressV3 = {
+      ...createInitialProgress(),
+      missions: { 'w1-m3': { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: '2026-07-20T00:00:00.000Z' } },
+    };
+
+    const result = await saveProgressCoordinated(completed, 0, { storage, lockManager: immediateLockManager });
+
+    expect(result).toMatchObject({ status: 'saved', revision: 1 });
+    expect(JSON.parse(storage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({ missions: { 'w1-m3': { status: 'completed' } } });
+  });
   it('fails closed without a reliable cross-tab lock instead of reporting a silent save success', async () => {
     const storage = new MemoryStorage();
     const currentRaw = serializeProgress(createInitialProgress());

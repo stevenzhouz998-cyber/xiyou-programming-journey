@@ -11,6 +11,8 @@
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": { "#storage-fault-adapter": ["src/progress/storageFaultAdapter.ts"] },
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,

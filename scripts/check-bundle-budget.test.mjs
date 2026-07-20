@@ -7,7 +7,7 @@ import ts from 'typescript';
 import * as bundleBudget from './check-bundle-budget.mjs';
 import { assertFourSeasE2ESourceContract } from './check-four-seas-e2e-contract.mjs';
 
-const { analyzeManifest, assertNoSourceVisualAssets } = bundleBudget;
+const { analyzeManifest, assertNoProductionTestSentinels, assertNoSourceVisualAssets } = bundleBudget;
 
 const base = {
   'src/main.tsx': { file: 'assets/main.js', isEntry: true, imports: ['vendor.js'] },
@@ -21,6 +21,7 @@ const validHealthCore = `
   let expectedChunkFailureUrl = null
   function expectedLazyChunkFailure(event) {
     if (expectedChunkFailureUrl === null) return false
+    if (event.kind === 'response') return event.url === expectedChunkFailureUrl && event.status === 503
     if (event.kind === 'requestfailed') return event.url === expectedChunkFailureUrl && /ABORTED|cancelled/i.test(event.detail)
     if (event.kind !== 'console') return false
     if (event.url === expectedChunkFailureUrl && event.detail === 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)') return true
@@ -38,6 +39,12 @@ const validHealthCore = `
     page.on('requestfailed', (request) => {
       const event = { kind: 'requestfailed', url: request.url(), detail: request.failure()?.errorText ?? 'unknown' }
       if (!expectedNavigationAbort(event) && !expectedLazyChunkFailure(event)) healthEvents.push(event)
+    })
+    page.on('response', (response) => {
+      const status = response.status()
+      if (status < 400) return
+      const event: HealthEvent = { kind: 'response', url: response.url(), detail: ` + "`HTTP ${status}`" + `, status }
+      if (!expectedLazyChunkFailure(event)) healthEvents.push(event)
     })
   }
   function expectedNavigationAbort(event) {
@@ -896,6 +903,32 @@ test('keeps both formal Phaser scene roots bounded and browser cold gates shared
   assert.doesNotMatch(staffE2eSource, /url\.origin\s*!==/);
 });
 
+test('counts every Four Seas cold HTTP response instance without URL deduplication', () => {
+  const source = readFileSync(new URL('../e2e/four-seas-regalia-code-battle.spec.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /new Map<string, number>\(\)|unique\.values\(\)/);
+  assert.match(source, /responses\.reduce\(\(sum, response\) => sum \+ response\.bytes, 0\)/);
+});
+
+test('captures every HTTP error response and exempts only the exact active lazy chunk 503', () => {
+  const runtime = loadHealthRuntimeFromTypeScriptSource(validHealthCore);
+  const listeners = new Map();
+  const page = { on: (name, listener) => listeners.set(name, listener), url: () => 'http://app.test/' };
+  runtime.attachHealth(page);
+  const response = listeners.get('response');
+  assert.equal(typeof response, 'function');
+  const makeResponse = (url, status) => ({ url: () => url, status: () => status });
+  const target = 'http://app.test/assets/lazy.js';
+  runtime.setExpectedChunkFailureUrl(target);
+  response(makeResponse(target, 503));
+  assert.deepEqual(runtime.readHealthEvents(), []);
+  response(makeResponse(target, 500));
+  response(makeResponse('http://app.test/assets/unknown.js', 503));
+  assert.deepEqual(runtime.readHealthEvents().map(({ kind, url, status }) => ({ kind, url, status })), [
+    { kind: 'response', url: target, status: 500 },
+    { kind: 'response', url: 'http://app.test/assets/unknown.js', status: 503 },
+  ]);
+});
+
 test('attaches unified browser-health capture to every independently created Ruyi page', () => {
   const staffE2eSource = readFileSync(new URL('../e2e/ruyi-staff-code-battle.spec.ts', import.meta.url), 'utf8');
   assert.match(staffE2eSource, /attachStaffHealth\(page\)/);
@@ -1084,4 +1117,26 @@ test('rejects non-shipping visual source formats from the public directory', () 
   assert.throws(() => assertNoSourceVisualAssets(['assets/world-map.jpg', 'assets/world-map.png']), /world-map\.png/);
   assert.throws(() => assertNoSourceVisualAssets(['assets/mentor.avif']), /mentor\.avif/);
   assert.doesNotThrow(() => assertNoSourceVisualAssets(['assets/world-map.jpg', 'assets/audio/welcome.m4a']));
+});
+
+test('rejects every E2E storage fault sentinel from production bundle bytes', () => {
+  assert.equal(typeof assertNoProductionTestSentinels, 'function');
+  const clean = new Map([
+    ['assets/app.js', Buffer.from('normal production bundle')],
+    ['assets/worker.js', Buffer.from('safe worker')],
+  ]);
+  assert.doesNotThrow(() => assertNoProductionTestSentinels(clean));
+  for (const sentinel of [
+    'xiyou-test-storage-mode',
+    'corrupt-regalia-current',
+    'fail-regalia-draft',
+    'fail-regalia-session',
+    'fail-regalia-completion',
+    '四海披挂测试存储故障',
+  ]) {
+    assert.throws(
+      () => assertNoProductionTestSentinels(new Map([['assets/app.js', Buffer.from(`prefix ${sentinel} suffix`)]])),
+      /test sentinel|storage fault/i,
+    );
+  }
 });

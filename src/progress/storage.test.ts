@@ -205,6 +205,18 @@ function progressWithFourSeasSession(name: string): ProgressV3 {
 }
 
 describe('progress storage transactions', () => {
+  it('does not interpret E2E corruption sentinels in the production loader', () => {
+    const storage = new MemoryStorage();
+    const legal = serializeProgress(progress('production child'));
+    storage.setItem(CURRENT_PROGRESS_KEY, legal);
+    storage.setItem('xiyou-test-storage-mode', 'corrupt-regalia-current');
+
+    const loaded = loadProgressTransaction(storage, clock);
+
+    expect(loaded).toMatchObject({ status: 'normal', progress: { learnerName: 'production child' } });
+    expect(storage.getItem(CURRENT_PROGRESS_KEY)).toBe(legal);
+    expect(storage.getItem('xiyou-test-storage-mode')).toBe('corrupt-regalia-current');
+  });
   it('uses exact V3 keys and keeps the aliases pointed at V3', () => {
     expect(CURRENT_PROGRESS_KEY).toBe('xiyou-programming-progress-v3');
     expect(SNAPSHOT_PROGRESS_KEY).toBe('xiyou-programming-progress-snapshot-v3');
