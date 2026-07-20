@@ -9,8 +9,12 @@ import {
   PHASER_RAW_LIMIT,
 } from './budget-limits.mjs';
 export {
+  DRAGON_PALACE_COLD_LOAD_MAX_BYTES,
   DRAGON_PALACE_COLD_BYTES,
+  FOUR_SEAS_COLD_LOAD_MAX_BYTES,
+  FOUR_SEAS_COLD_BYTES,
   RUYI_STAFF_COLD_BYTES,
+  RUYI_STAFF_COLD_LOAD_MAX_BYTES,
   DRAGON_PALACE_MEDIA_BYTES,
   ENTRY_GZIP_LIMIT,
   GAME_SCENE_RAW_LIMIT,
@@ -19,9 +23,10 @@ export {
   SINGLE_RASTER_BYTES,
 } from './budget-limits.mjs';
 
-const MODE_ROOTS = ['src/components/BlocklyWorkspace.tsx', 'src/components/RuyiStaffBlocklyWorkspace.tsx', 'src/components/PythonEditor.tsx', 'src/components/AiLab.tsx', 'src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx'];
-const SCENE_ROOTS = new Set(['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx']);
+const MODE_ROOTS = ['src/components/BlocklyWorkspace.tsx', 'src/components/RuyiStaffBlocklyWorkspace.tsx', 'src/components/FourSeasRegaliaBlocklyWorkspace.tsx', 'src/components/PythonEditor.tsx', 'src/components/AiLab.tsx', 'src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx', 'src/components/FourSeasRegaliaScene.tsx'];
+const SCENE_ROOTS = new Set(['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx', 'src/components/FourSeasRegaliaScene.tsx']);
 const isPhaserSource = (key, chunk) => chunk.name === 'phaser' || /node_modules[\\/]phaser(?:[\\/]|$)/i.test(`${key} ${chunk.src ?? ''}`);
+const isBlocklySource = (key, chunk) => chunk.name === 'blockly-editor' || /node_modules[\\/]blockly(?:[\\/]|$)/i.test(`${key} ${chunk.src ?? ''}`);
 const assertSafeFile = (file) => {
   const normalized = normalize(file);
   const portable = file.replaceAll('\\', '/');
@@ -31,6 +36,50 @@ const assertSafeFile = (file) => {
 export function assertNoSourceVisualAssets(files) {
   const sourceAsset = files.find((file) => /\.(?:png|avif)$/i.test(file));
   if (sourceAsset) throw new Error(`Bundle budget: non-shipping visual source remains in public: ${sourceAsset}.`);
+}
+
+export function assertFourSeasE2ESourceContract(source) {
+  const pageDeclarations = [...source.matchAll(/const\s+([A-Za-z_$][\w$]*)\s*=\s*await\s+(?:page\.context\(\)|context|browser\.newContext\(\))\.newPage\(\)/g)];
+  for (const declaration of pageDeclarations) {
+    const pageName = declaration[1];
+    if (!new RegExp(`attachHealth\\(\\s*${pageName}\\s*\\)`).test(source)) {
+      throw new Error(`Four Seas E2E source contract: independent page ${pageName} is missing health listeners.`);
+    }
+  }
+
+  const evaluateBodies = [];
+  let cursor = 0;
+  while ((cursor = source.indexOf('.evaluate', cursor)) !== -1) {
+    const open = source.indexOf('(', cursor + '.evaluate'.length);
+    if (open === -1) break;
+    let depth = 0;
+    let quote = null;
+    let escaped = false;
+    let end = open;
+    for (; end < source.length; end += 1) {
+      const character = source[end];
+      if (quote !== null) {
+        if (escaped) escaped = false;
+        else if (character === '\\') escaped = true;
+        else if (character === quote) quote = null;
+        continue;
+      }
+      if (character === "'" || character === '"' || character === '`') { quote = character; continue; }
+      if (character === '(') depth += 1;
+      else if (character === ')' && --depth === 0) { end += 1; break; }
+    }
+    evaluateBodies.push(source.slice(cursor, end));
+    cursor = Math.max(end, cursor + 1);
+  }
+  for (const body of evaluateBodies) {
+    if (!/w1-m3/.test(body)) continue;
+    const directAssignment = /(?:missions|sessions)\s*\[\s*['"]w1-m3['"]\s*\]\s*=/.test(body);
+    const writesCurrent = /localStorage\.setItem\s*\(\s*['"]xiyou-programming-progress-v3['"]/.test(body);
+    const containsInjectedEvidence = /workspaceDraft|lastTrace|lastRun|completedAt|status\s*:\s*['"]completed['"]/.test(body);
+    if (directAssignment || (writesCurrent && containsInjectedEvidence)) {
+      throw new Error('Four Seas E2E source contract: evaluate-injected w1-m3 completion/session/draft/run is forbidden.');
+    }
+  }
 }
 
 async function listFiles(root, relativeRoot = '') {
@@ -99,6 +148,8 @@ export function analyzeManifest(manifest, gzipSizes, rawSizes = {}) {
   const staticFiles = [...new Set([...visited].map((key) => manifest[key].file).filter((file) => file?.endsWith('.js')))];
   const staticPhaser = [...visited].find((key) => isPhaserSource(key, manifest[key]));
   if (staticPhaser) throw new Error(`Bundle budget: Phaser entered the static entry closure through ${staticPhaser}.`);
+  const staticBlockly = [...visited].find((key) => isBlocklySource(key, manifest[key]));
+  if (staticBlockly) throw new Error(`Bundle budget: Blockly entered the static entry closure through ${staticBlockly}.`);
   const entryGzipBytes = staticFiles.reduce((sum, file) => {
     if (!Number.isFinite(gzipSizes[file])) throw new Error(`Bundle budget: gzip size missing for ${file}.`);
     return sum + gzipSizes[file];

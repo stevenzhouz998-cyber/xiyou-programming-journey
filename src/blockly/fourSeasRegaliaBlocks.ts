@@ -1,14 +1,14 @@
 import * as Blockly from 'blockly/core'
 import { initializeWorkspaceBlock, renderWorkspaceTopBlocks } from './dragonPalaceBlocks'
+import { FOUR_SEAS_BLOCK_LABELS } from './fourSeasRegaliaCatalogue'
 import {
-  FOUR_SEAS_BLOCK_LABELS,
   FOUR_SEAS_BLOCK_OPCODE,
   isFourSeasChildBlockType,
   type FourSeasBlockType,
-} from './fourSeasRegaliaCatalogue'
+} from './fourSeasRegaliaContract'
 
+export { FOUR_SEAS_BLOCK_LABELS } from './fourSeasRegaliaCatalogue'
 export {
-  FOUR_SEAS_BLOCK_LABELS,
   FOUR_SEAS_BLOCK_OPCODE,
   FOUR_SEAS_CHILD_BLOCK_TYPES,
   FOUR_SEAS_TOP_BLOCK_TYPES,
@@ -16,7 +16,7 @@ export {
   isFourSeasChildBlockType,
   isFourSeasTopBlockType,
   type FourSeasBlockType,
-} from './fourSeasRegaliaCatalogue'
+} from './fourSeasRegaliaContract'
 
 export function registerFourSeasRegaliaBlocks(): void {
   for (const type of Object.keys(FOUR_SEAS_BLOCK_OPCODE) as FourSeasBlockType[]) {

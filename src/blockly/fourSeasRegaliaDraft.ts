@@ -9,14 +9,14 @@ import {
   isFourSeasBlockType,
   isFourSeasChildBlockType,
   type FourSeasBlockType,
-} from './fourSeasRegaliaCatalogue'
+} from './fourSeasRegaliaContract'
 
 export {
   findFourSeasWorkspaceBoundaryViolation,
   FOUR_SEAS_WORKSPACE_LIMITS,
   type FourSeasWorkspaceBoundaryItem,
   type FourSeasWorkspaceBoundaryViolation,
-} from './fourSeasRegaliaCatalogue'
+} from './fourSeasRegaliaContract'
 
 export interface FourSeasWorkspaceDraftV1 {
   version: 1

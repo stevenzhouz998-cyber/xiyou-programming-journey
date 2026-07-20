@@ -7,7 +7,7 @@ import {
   isFourSeasBlockType,
   isFourSeasChildBlockType,
   type FourSeasBlockType,
-} from '../blockly/fourSeasRegaliaCatalogue';
+} from '../blockly/fourSeasRegaliaContract';
 import type { FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft';
 import { runDragonPalaceBattle } from '../battle/dragonPalace';
 import { runRuyiStaffBattle } from '../battle/ruyiStaff';

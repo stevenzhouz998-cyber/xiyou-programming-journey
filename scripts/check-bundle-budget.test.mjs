@@ -1,20 +1,169 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { dirname, extname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import * as bundleBudget from './check-bundle-budget.mjs';
 
-const { analyzeManifest, assertNoSourceVisualAssets } = bundleBudget;
+const { analyzeManifest, assertFourSeasE2ESourceContract, assertNoSourceVisualAssets } = bundleBudget;
 
 const base = {
   'src/main.tsx': { file: 'assets/main.js', isEntry: true, imports: ['vendor.js'] },
   'vendor.js': { file: 'assets/vendor.js', imports: [] },
 };
 
+const sourceRoot = fileURLToPath(new URL('../src/', import.meta.url));
+
+function sourceModuleSpecifiers(path) {
+  const source = readFileSync(path, 'utf8');
+  const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true);
+  return file.statements.flatMap((statement) => {
+    if (!ts.isImportDeclaration(statement) && !ts.isExportDeclaration(statement)) return [];
+    return ts.isStringLiteral(statement.moduleSpecifier) ? [statement.moduleSpecifier.text] : [];
+  });
+}
+
+function runtimeModuleSpecifiers(path) {
+  const source = readFileSync(path, 'utf8');
+  const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true);
+  return file.statements.flatMap((statement) => {
+    if (ts.isImportDeclaration(statement)) {
+      const clause = statement.importClause;
+      const typeOnly = clause?.isTypeOnly
+        || (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)
+          && !clause.name
+          && clause.namedBindings.elements.every((element) => element.isTypeOnly));
+      if (typeOnly) return [];
+    } else if (ts.isExportDeclaration(statement)) {
+      const typeOnly = statement.isTypeOnly
+        || (statement.exportClause && ts.isNamedExports(statement.exportClause)
+          && statement.exportClause.elements.every((element) => element.isTypeOnly));
+      if (typeOnly) return [];
+    } else {
+      return [];
+    }
+    return ts.isStringLiteral(statement.moduleSpecifier) ? [statement.moduleSpecifier.text] : [];
+  });
+}
+
+function resolveTypeScriptModule(importer, specifier) {
+  const unresolved = resolve(dirname(importer), specifier);
+  const candidates = extname(unresolved)
+    ? [unresolved]
+    : [`${unresolved}.ts`, `${unresolved}.tsx`, resolve(unresolved, 'index.ts'), resolve(unresolved, 'index.tsx')];
+  const resolved = candidates.find((candidate) => ts.sys.fileExists(candidate));
+  assert.ok(resolved, `cannot resolve ${specifier} from ${importer}`);
+  return resolved;
+}
+
+function collectRuntimeSourceClosure(entry) {
+  const closure = new Set();
+  const visit = (path) => {
+    if (closure.has(path)) return;
+    closure.add(path);
+    for (const specifier of runtimeModuleSpecifiers(path).filter((candidate) => candidate.startsWith('.'))) {
+      visit(resolveTypeScriptModule(path, specifier));
+    }
+  };
+  visit(entry);
+  return closure;
+}
+
 test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
+  assert.equal(bundleBudget.DRAGON_PALACE_COLD_LOAD_MAX_BYTES, 2.5 * 1024 * 1024);
+  assert.equal(bundleBudget.RUYI_STAFF_COLD_LOAD_MAX_BYTES, 2.5 * 1024 * 1024);
+  assert.equal(bundleBudget.FOUR_SEAS_COLD_LOAD_MAX_BYTES, 2.75 * 1024 * 1024);
   assert.equal(bundleBudget.DRAGON_PALACE_COLD_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.RUYI_STAFF_COLD_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.DRAGON_PALACE_MEDIA_BYTES, 1.25 * 1024 * 1024);
   assert.equal(bundleBudget.SINGLE_RASTER_BYTES, 512 * 1024);
+});
+
+test('keeps all three formal experiences route-lazy and Four Seas scene/workspace independently bounded', () => {
+  const routeSource = readFileSync(new URL('../src/components/MissionPageContent.tsx', import.meta.url), 'utf8');
+  assert.match(routeSource, /lazy\(\(\)\s*=>\s*import\(['"]\.\/DragonPalaceExperience['"]\)/);
+  assert.match(routeSource, /lazy\(\(\)\s*=>\s*import\(['"]\.\/RuyiStaffExperience['"]\)/);
+  assert.match(routeSource, /loadFourSeasRegaliaExperience\s*=\s*\(\)\s*=>\s*import\(['"]\.\/FourSeasRegaliaExperience['"]\)/);
+  assert.match(routeSource, /lazy\(loader\)/);
+
+  const manifest = {
+    ...base,
+    'src/components/FourSeasRegaliaScene.tsx': { file: 'assets/four-seas-scene.js', isDynamicEntry: true, imports: ['phaser-runtime.js'] },
+    'src/components/FourSeasRegaliaBlocklyWorkspace.tsx': { file: 'assets/four-seas-workspace.js', isDynamicEntry: true, imports: ['blockly-runtime.js'] },
+    'phaser-runtime.js': { file: 'assets/phaser.js', name: 'phaser', imports: [] },
+    'blockly-runtime.js': { file: 'assets/blockly.js', src: 'node_modules/blockly/core.js', imports: [] },
+  };
+  const gzip = Object.fromEntries(Object.values(manifest).map((chunk) => [chunk.file, 1]));
+  const raw = { ...gzip, 'assets/phaser.js': 1000, 'assets/blockly.js': 2000 };
+  const result = analyzeManifest(manifest, gzip, raw);
+  assert.equal(result.closures['src/components/FourSeasRegaliaScene.tsx'].rawBytes, 1001);
+  assert.equal(result.closures['src/components/FourSeasRegaliaBlocklyWorkspace.tsx'].rawBytes, 2001);
+});
+
+test('keeps Four Seas persistence on a neutral contract outside the lazy UI catalogue', () => {
+  const schemaPath = resolve(sourceRoot, 'progress/schema.ts');
+  const draftPath = resolve(sourceRoot, 'blockly/fourSeasRegaliaDraft.ts');
+  const contractPath = resolve(sourceRoot, 'blockly/fourSeasRegaliaContract.ts');
+  const cataloguePath = resolve(sourceRoot, 'blockly/fourSeasRegaliaCatalogue.ts');
+
+  for (const consumerPath of [schemaPath, draftPath]) {
+    const directImports = sourceModuleSpecifiers(consumerPath);
+    assert.ok(directImports.some((specifier) => specifier.endsWith('fourSeasRegaliaContract')));
+    assert.ok(!directImports.some((specifier) => specifier.endsWith('fourSeasRegaliaCatalogue')));
+  }
+
+  const schemaClosure = collectRuntimeSourceClosure(schemaPath);
+  assert.ok(schemaClosure.has(contractPath), 'schema static closure must include the neutral contract');
+  assert.ok(!schemaClosure.has(cataloguePath), 'schema static closure must exclude the lazy UI catalogue');
+
+  const contractSource = readFileSync(contractPath, 'utf8');
+  assert.deepEqual(runtimeModuleSpecifiers(contractPath), []);
+  assert.doesNotMatch(contractSource, /[\u3400-\u9fff]/u);
+  assert.doesNotMatch(contractSource, /(?:from\s+|import\s*\()[`'"](?:blockly|phaser|react)(?:[\/'"])/);
+  assert.doesNotMatch(contractSource, /FOUR_SEAS_BLOCK_LABELS/);
+
+  const catalogueSource = readFileSync(cataloguePath, 'utf8');
+  assert.match(catalogueSource, /FOUR_SEAS_BLOCK_LABELS/);
+  assert.doesNotMatch(catalogueSource, /(?:const|let|var)\s+FOUR_SEAS_BLOCK_OPCODE\b/);
+});
+
+test('forbids Blockly as well as Phaser in the entry static closure', () => {
+  const manifest = {
+    ...base,
+    'src/main.tsx': { ...base['src/main.tsx'], imports: ['node_modules/blockly/core.js'] },
+    'node_modules/blockly/core.js': { file: 'assets/blockly.js', src: 'node_modules/blockly/core.js', imports: [] },
+  };
+  assert.throws(
+    () => analyzeManifest(manifest, { 'assets/main.js': 1, 'assets/blockly.js': 1 }, { 'assets/main.js': 1, 'assets/blockly.js': 1 }),
+    /Blockly.*static/i,
+  );
+});
+
+test('rejects hidden w1-m3 writes and missing health listeners on every independent E2E page', () => {
+  const good = `
+    const externalPage = await page.context().newPage()
+    attachHealth(externalPage)
+    await externalPage.evaluate(() => localStorage.setItem('xiyou-test-storage-mode', 'fail'))
+    const mission = await externalPage.evaluate(() => JSON.parse(localStorage.getItem('xiyou-programming-progress-v3')).missions['w1-m3'])
+  `;
+  assert.doesNotThrow(() => assertFourSeasE2ESourceContract(good));
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    const externalPage = await page.context().newPage()
+    await externalPage.goto('./')
+  `), /health/i);
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    await page.evaluate(() => {
+      progress.sessions['w1-m3'] = forgedSession
+      localStorage.setItem('xiyou-programming-progress-v3', JSON.stringify(progress))
+    })
+  `), /inject|w1-m3/i);
+  assert.throws(() => assertFourSeasE2ESourceContract(`
+    await page.evaluate(() => { progress.missions['w1-m3'] = { status: 'completed' } })
+  `), /inject|w1-m3/i);
+
+  const actualSource = readFileSync(new URL('../e2e/four-seas-regalia-code-battle.spec.ts', import.meta.url), 'utf8');
+  assert.doesNotThrow(() => assertFourSeasE2ESourceContract(actualSource));
 });
 
 test('keeps both formal Phaser scene roots bounded and browser cold gates shared', () => {

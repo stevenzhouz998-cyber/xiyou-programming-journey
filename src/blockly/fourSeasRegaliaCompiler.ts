@@ -2,11 +2,11 @@ import type { Block, Connection, Workspace } from 'blockly/core'
 import type { FourSeasInstruction } from '../battle/types'
 import {
   FOUR_SEAS_BLOCK_OPCODE,
+  findFourSeasWorkspaceBoundaryViolation,
   isFourSeasBlockType,
   isFourSeasChildBlockType,
   isFourSeasTopBlockType,
-} from './fourSeasRegaliaBlocks'
-import { findFourSeasWorkspaceBoundaryViolation } from './fourSeasRegaliaDraft'
+} from './fourSeasRegaliaContract'
 
 export type FourSeasCompileDiagnosticCode =
   | 'unknown-block'
