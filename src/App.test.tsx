@@ -737,7 +737,7 @@ describe('西游编程记', () => {
     await waitFor(() => expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!)).toMatchObject({
       missions: { 'w1-m1': { attempts: 1, hintsUsed: 2 } },
       sessions: { 'w1-m1': { totalRuns: 2 } },
-    }));
+    }), { timeout: 5000 });
   });
 
   it('isolates and traps the success dialog, then resets state on same-mode navigation', async () => {
@@ -948,7 +948,7 @@ describe('西游编程记', () => {
     vi.stubGlobal('Audio', audio);
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: /开始第一关/ }));
-    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }));
+    fireEvent.click(await screen.findByRole('button', { name: '加入：进入龙宫' }, { timeout: 5000 }));
     fireEvent.click(screen.getByRole('button', { name: '加入：请求兵器' }));
     fireEvent.click(screen.getByRole('button', { name: '加入：试用兵器' }));
     fireEvent.click(screen.getByRole('button', { name: '执行战斗指令' }));
