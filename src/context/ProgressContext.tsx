@@ -5,6 +5,7 @@ import {
   type DragonPalaceMissionSession,
   type ExecutableMissionId,
   type FourSeasRegaliaMissionSession,
+  type AdvancedWeekOneMissionSession,
   type MissionSession,
   type ProgressV3,
   type RuyiStaffMissionSession,
@@ -23,17 +24,23 @@ import {
 } from '../progress/storage';
 import type { CoordinatedSaveResult } from '../progress/storageCoordinator';
 import type { CoordinatedClearResult, CoordinatedImportResult } from '../progress/storageCoordinatorParent';
+import type { EquipmentItemId, EquipmentSlot } from '../progress/equipment';
 
 export type ProgressSaveStatus = 'idle' | 'pending' | 'saved' | 'unsaved' | 'conflict';
 export interface ProgressWriteOptions { legacyWorkspaceKey?: string }
+export type EquipmentOperation =
+  | { type: 'equip'; slot: EquipmentSlot; itemId: EquipmentItemId }
+  | { type: 'unequip'; slot: EquipmentSlot };
 type MissionSessionUpdateArgs =
   | [missionId: 'w1-m1', update: (session: DragonPalaceMissionSession) => DragonPalaceMissionSession, options?: ProgressWriteOptions]
   | [missionId: 'w1-m2', update: (session: RuyiStaffMissionSession) => RuyiStaffMissionSession, options?: ProgressWriteOptions]
-  | [missionId: 'w1-m3', update: (session: FourSeasRegaliaMissionSession) => FourSeasRegaliaMissionSession, options?: ProgressWriteOptions];
+  | [missionId: 'w1-m3', update: (session: FourSeasRegaliaMissionSession) => FourSeasRegaliaMissionSession, options?: ProgressWriteOptions]
+  | [missionId: 'w1-m4' | 'w1-m5', update: (session: AdvancedWeekOneMissionSession) => AdvancedWeekOneMissionSession, options?: ProgressWriteOptions];
 type MissionSessionUpdateAtArgs =
   | [missionId: 'w1-m1', update: (session: DragonPalaceMissionSession) => DragonPalaceMissionSession, now: string, options?: ProgressWriteOptions]
   | [missionId: 'w1-m2', update: (session: RuyiStaffMissionSession) => RuyiStaffMissionSession, now: string, options?: ProgressWriteOptions]
-  | [missionId: 'w1-m3', update: (session: FourSeasRegaliaMissionSession) => FourSeasRegaliaMissionSession, now: string, options?: ProgressWriteOptions];
+  | [missionId: 'w1-m3', update: (session: FourSeasRegaliaMissionSession) => FourSeasRegaliaMissionSession, now: string, options?: ProgressWriteOptions]
+  | [missionId: 'w1-m4' | 'w1-m5', update: (session: AdvancedWeekOneMissionSession) => AdvancedWeekOneMissionSession, now: string, options?: ProgressWriteOptions];
 interface UpdateMissionSession {
   (
     missionId: 'w1-m1',
@@ -50,12 +57,18 @@ interface UpdateMissionSession {
     update: (session: FourSeasRegaliaMissionSession) => FourSeasRegaliaMissionSession,
     options?: ProgressWriteOptions,
   ): Promise<CoordinatedSaveResult>;
+  (
+    missionId: 'w1-m4' | 'w1-m5',
+    update: (session: AdvancedWeekOneMissionSession) => AdvancedWeekOneMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
 }
 type MissionHintTier = MissionSession['usedHintTiers'][number];
 interface RecordMissionHint {
   (missionId: 'w1-m1', tier: MissionHintTier): Promise<CoordinatedSaveResult>;
   (missionId: 'w1-m2', tier: MissionHintTier): Promise<CoordinatedSaveResult>;
   (missionId: 'w1-m3', tier: MissionHintTier): Promise<CoordinatedSaveResult>;
+  (missionId: 'w1-m4' | 'w1-m5', tier: MissionHintTier): Promise<CoordinatedSaveResult>;
   (missionId: ExecutableMissionId, tier: MissionHintTier): Promise<CoordinatedSaveResult>;
 }
 
@@ -75,6 +88,7 @@ export interface ProgressContextValue {
   recordMissionHint: RecordMissionHint;
   replaceProgress: (progress: ProgressV3) => Promise<CoordinatedSaveResult>;
   updateSettings: (settings: Partial<ProgressV3['settings']>) => Promise<CoordinatedSaveResult>;
+  updateEquipment: (operation: EquipmentOperation) => Promise<CoordinatedSaveResult>;
   commitParentAccess: (parentPin: string) => Promise<CoordinatedSaveResult>;
   acknowledgePrivacy: () => Promise<CoordinatedSaveResult>;
   retrySave: () => Promise<CoordinatedSaveResult>;
@@ -328,16 +342,31 @@ export function ProgressProvider({
         : createMissionSession('w1-m2', now);
       return persistMissionSession(missionId, update(current), now, options);
     }
+    if (missionId === 'w1-m3') {
+      const currentProgress = workingProgress();
+      const current = currentProgress.sessions['w1-m3']
+        ? structuredClone(currentProgress.sessions['w1-m3'])
+        : createMissionSession('w1-m3', now);
+      return persistMissionSession(missionId, update(current), now, options);
+    }
+    if (missionId === 'w1-m4') {
+      const currentProgress = workingProgress();
+      const current = currentProgress.sessions['w1-m4'] ? structuredClone(currentProgress.sessions['w1-m4']) : createMissionSession('w1-m4', now);
+      return persistMissionSession(missionId, update(current), now, options);
+    }
     const currentProgress = workingProgress();
-    const current = currentProgress.sessions['w1-m3']
-      ? structuredClone(currentProgress.sessions['w1-m3'])
-      : createMissionSession('w1-m3', now);
+    const current = currentProgress.sessions['w1-m5'] ? structuredClone(currentProgress.sessions['w1-m5']) : createMissionSession('w1-m5', now);
     return persistMissionSession(missionId, update(current), now, options);
   };
 
   function updateMissionSession(
     missionId: 'w1-m1',
     update: (session: DragonPalaceMissionSession) => DragonPalaceMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
+  function updateMissionSession(
+    missionId: 'w1-m4' | 'w1-m5',
+    update: (session: AdvancedWeekOneMissionSession) => AdvancedWeekOneMissionSession,
     options?: ProgressWriteOptions,
   ): Promise<CoordinatedSaveResult>;
   function updateMissionSession(
@@ -361,6 +390,8 @@ export function ProgressProvider({
     if (args[0] === 'w1-m3') {
       return updateMissionSessionAt(args[0], args[1], now, args[2]);
     }
+    if (args[0] === 'w1-m4') return updateMissionSessionAt(args[0], args[1], now, args[2]);
+    if (args[0] === 'w1-m5') return updateMissionSessionAt(args[0], args[1], now, args[2]);
     throw new Error('任务编号无效');
   }
 
@@ -455,11 +486,8 @@ export function ProgressProvider({
           now,
         );
       }
-      return updateMissionSessionAt(
-        missionId,
-        (session: FourSeasRegaliaMissionSession) => recordHint(session, tier, now),
-        now,
-      );
+      if (missionId === 'w1-m3') return updateMissionSessionAt(missionId, (session: FourSeasRegaliaMissionSession) => recordHint(session, tier, now), now);
+      return updateMissionSessionAt(missionId, (session: AdvancedWeekOneMissionSession) => recordHint(session, tier, now), now);
     },
     replaceProgress: (next) => commit(next),
     updateSettings: (settings) => {
@@ -469,6 +497,15 @@ export function ProgressProvider({
         settings: { ...current.settings, ...settings },
         savedAt: new Date().toISOString(),
       });
+    },
+    updateEquipment: async (operation) => {
+      const { equipItem, unequipItem } = await import('../progress/equipmentOperations');
+      const current = workingProgress();
+      const equipment = operation.type === 'equip'
+        ? equipItem(current.equipment, operation.slot, operation.itemId)
+        : unequipItem(current.equipment, operation.slot);
+      const now = new Date().toISOString();
+      return commit(migrateProgress({ ...current, equipment, savedAt: now }));
     },
     commitParentAccess: (parentPin) => {
       const unpublished = pendingUnpublishedRef.current;

@@ -53,10 +53,10 @@ test.afterEach(() => {
 
 function unlockedFixture() {
   return {
-    version: 3, schemaRevision: 1, learnerName: '小行者',
+    version: 3, schemaRevision: 2, learnerName: '小行者',
     missions: { 'w1-m1': { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: NOW } },
     settings: { muted: false, reducedMotion: false, reducedMotionOverride: false, parentPin: TEST_PARENT_ACCESS },
-    privacy: { localDataNoticeSeen: true }, recovery: { lastRecoveredAt: null, source: null }, sessions: {}, savedAt: NOW,
+    privacy: { localDataNoticeSeen: true }, recovery: { lastRecoveredAt: null, source: null }, sessions: {}, equipment: { version: 1, inventory: {}, equipped: { weapon: null, head: null, body: null, feet: null } }, savedAt: NOW,
   }
 }
 

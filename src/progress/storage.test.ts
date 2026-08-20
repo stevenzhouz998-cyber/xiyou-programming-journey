@@ -95,8 +95,13 @@ function legacy(name = '旧行者') {
 
 function legacyV2(name = 'V2 行者') {
   const current = createInitialProgress();
-  const { sessions: _sessions, ...withoutSessions } = current;
-  return JSON.stringify({ ...withoutSessions, version: 2, learnerName: name }, null, 2);
+  const { sessions: _sessions, equipment: _equipment, ...withoutSessionsAndEquipment } = current;
+  return JSON.stringify({
+    ...withoutSessionsAndEquipment,
+    version: 2,
+    schemaRevision: 1,
+    learnerName: name,
+  }, null, 2);
 }
 
 function progressWithSession(name: string): ProgressV3 {

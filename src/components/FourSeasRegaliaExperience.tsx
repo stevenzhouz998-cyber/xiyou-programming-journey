@@ -1,8 +1,10 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import './FourSeasRegaliaExperience.css'
 import { runFourSeasRegalia } from '../battle/fourSeasRegalia'
 import type { FourSeasBattleDiagnostic, FourSeasBattleEvent, FourSeasBattleRunResult, FourSeasInstruction } from '../battle/types'
 import type { FourSeasCompileResult } from '../blockly/fourSeasRegaliaCompiler'
 import type { FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft'
+import type { FourSeasOpcode } from '../blockly/fourSeasRegaliaContract'
 import { useProgress } from '../context/ProgressContext'
 import type { FourSeasRegaliaMissionSession } from '../progress/types'
 import { createMissionSession, recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/session'
@@ -12,6 +14,18 @@ import { FourSeasRegaliaFeedback } from './FourSeasRegaliaFeedback'
 import { ToolErrorBoundary } from './ToolErrorBoundary'
 
 const MISSION_ID = 'w1-m3' as const
+const EXECUTION_LABELS: Record<FourSeasOpcode, string> = {
+  request_regalia: '向东海龙王请求披挂',
+  collect_gifts: '收齐三海宝物',
+  receive_cloud_boots: '收下北海的藕丝步云履',
+  receive_golden_armor: '收下西海的锁子黄金甲',
+  receive_purple_crown: '收下南海的凤翅紫金冠',
+  equip_regalia: '穿戴整副披挂',
+  wear_crown: '戴上凤翅紫金冠',
+  wear_armor: '穿上锁子黄金甲',
+  wear_boots: '踏上藕丝步云履',
+  verify_regalia: '检查披挂是否齐全',
+}
 
 export interface FourSeasRegaliaExperienceLoaders {
   scene: () => Promise<{ default: ComponentType<any> }>
@@ -444,7 +458,10 @@ export function FourSeasRegaliaExperience({
     </div>
     <div className="four-seas-regalia-feedback-region">
       <FourSeasRegaliaFeedback diagnostic={diagnostic} occurrenceId={occurrenceId} onFocusBlock={setFocusBlockId} onFocusWorkspace={focusWorkspace} />
-      {playback.trace.length > 0 ? <section className="execution-provenance" aria-label="本次执行来源"><details open><summary>本次指令的真实积木来源</summary><ol>{playback.trace.map((instruction) => <li key={instruction.instructionId}><code>{instruction.sourceBlockId}</code> <span>parent={instruction.parentBlockId ?? 'top'}</span></li>)}</ol></details></section> : null}
+      {playback.trace.length > 0 ? <section className="execution-provenance" aria-label="本次执行步骤"><details open><summary>本次程序走过的步骤</summary><ol>{playback.trace.map((instruction) => {
+        const parent = instruction.parentBlockId === null ? null : playback.trace.find((candidate) => candidate.sourceBlockId === instruction.parentBlockId) ?? null
+        return <li key={instruction.instructionId}><strong>{EXECUTION_LABELS[instruction.opcode]}</strong> <span>{parent ? `属于「${EXECUTION_LABELS[parent.opcode]}」任务组` : '主任务'}</span></li>
+      })}</ol></details></section> : null}
       {sessionOperation?.status === 'unsaved' ? <div className="unsaved-session" role="status"><p>{sessionOperation.kind === 'compile' ? '编译失败记录尚未保存，请重试。' : '本关尚未保存，请重试。'}</p><button ref={sessionRetryRef} type="button" onClick={retrySessionSave}>{sessionOperation.kind === 'compile' ? '重试保存编译记录' : '重试保存本关'}</button></div> : null}
       {sessionOperation?.status === 'conflict' ? <div className="unsaved-session" role="alert"><p>{sessionOperation.kind === 'compile' ? '编译失败记录与其他标签页冲突。' : '本关运行记录与其他标签页冲突。'}</p><button type="button" onClick={downloadSessionConflictBackup}>下载本页备份</button><button type="button" onClick={loadExternalSessionProgress}>载入其他标签页版本</button></div> : null}
     </div>

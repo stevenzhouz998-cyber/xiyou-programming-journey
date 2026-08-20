@@ -3,6 +3,8 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import { runDragonPalaceBattle } from '../battle/dragonPalace';
 import { runRuyiStaffBattle } from '../battle/ruyiStaff';
+import { runAdvancedWeekOne } from '../battle/advancedWeekOne';
+import type { AdvancedWeekOneInstruction } from '../blockly/advancedWeekOneContract';
 import type { DragonPalaceInstruction, FourSeasInstruction, RuyiStaffInstruction } from '../battle/types';
 import { registerFourSeasRegaliaBlocks } from '../blockly/fourSeasRegaliaBlocks';
 import { compileFourSeasRegaliaWorkspace } from '../blockly/fourSeasRegaliaCompiler';
@@ -24,6 +26,7 @@ import {
   recordRun,
   updateWorkspaceDraft,
 } from './session';
+import { recordEquipmentEffectUse } from './equipmentEffectSession';
 
 const NOW = '2026-07-15T06:00:00.000Z';
 const LATER = '2026-07-15T06:05:00.000Z';
@@ -82,6 +85,48 @@ function realFourSeasFixture(): { draft: FourSeasWorkspaceDraftV1; trace: FourSe
 }
 
 describe('mission session rules', () => {
+  it('records each manually invoked advanced equipment effect once without changing run evidence', () => {
+    const initial = createMissionSession('w1-m5', NOW)
+    const first = recordEquipmentEffectUse(initial, 'weight-reference', LATER)
+    const duplicate = recordEquipmentEffectUse(first, 'weight-reference', LATER)
+    const second = recordEquipmentEffectUse(duplicate, 'decomposition-view', LATER)
+
+    expect(initial.equipmentEffectsUsed).toEqual([])
+    expect(second).toMatchObject({
+      equipmentEffectsUsed: ['weight-reference', 'decomposition-view'],
+      totalRuns: 0,
+      lastRun: null,
+      savedAt: LATER,
+    })
+    expect(() => recordEquipmentEffectUse(initial, 'not-real' as never, LATER)).toThrow(/装备效果/)
+  })
+  it('creates mission-specific advanced sessions and preserves canonical m4/m5 run evidence', () => {
+    const underworldItems: Array<[string, string | null, AdvancedWeekOneInstruction['opcode']]> = [
+      ['open', null, 'underworld_open_register'], ['find', null, 'underworld_find_monkey_records'], ['read', 'find', 'underworld_read_index'], ['match', 'find', 'underworld_match_monkey_kind'], ['collect', 'find', 'underworld_collect_named_records'], ['handle', null, 'underworld_handle_names'], ['verify', null, 'underworld_verify_register'],
+    ];
+    const underworld: AdvancedWeekOneInstruction[] = underworldItems.map(([sourceBlockId, parentBlockId, opcode]) => ({ instructionId: `instruction:${sourceBlockId}`, sourceBlockId, parentBlockId, opcode }))
+    const m4 = recordRun(createMissionSession('w1-m4', NOW), runAdvancedWeekOne('w1-m4', underworld), underworld, LATER)
+    const m5 = createMissionSession('w1-m5', NOW)
+    expect(m4).toMatchObject({ workspace: { missionId: 'w1-m4' }, totalRuns: 1, lastRun: { completed: true, finalState: 'underworld-verified' } })
+    expect(m5).toMatchObject({ workspace: { missionId: 'w1-m5' }, lastTrace: [], lastRun: null })
+  })
+  it('clears stale advanced run evidence after a visible draft edit while preserving run counters', () => {
+    const trace: AdvancedWeekOneInstruction[] = [
+      { instructionId: 'instruction:open', sourceBlockId: 'open', parentBlockId: null, opcode: 'underworld_open_register' },
+    ]
+    const recorded = recordRun(
+      createMissionSession('w1-m4', NOW),
+      runAdvancedWeekOne('w1-m4', trace),
+      trace,
+      NOW,
+    )
+    const edited = updateWorkspaceDraft(recorded, {
+      version: 1,
+      missionId: 'w1-m4',
+      blocks: [{ id: 'open-edited', type: 'xiyou_underworld_open_register', nextId: null, parentBlockId: null, x: 0, y: 0 }],
+    }, LATER)
+    expect(edited).toMatchObject({ totalRuns: 1, lastTrace: [], lastRun: null, lastRunAt: null })
+  })
   it('creates and updates a strongly typed w1-m3 session from a real compiled workspace', () => {
     const { draft, trace } = realFourSeasFixture();
     const created = createMissionSession('w1-m3', NOW);

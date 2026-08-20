@@ -593,10 +593,9 @@ test('@lazy-boundary DragonPalaceExperience 503 keeps the first mission story an
 test('@lazy-boundary MissionTools 503 keeps the legacy mission story and objective with local recovery', async ({ page, browserName }) => {
   test.setTimeout(90_000);
   const fixture = v3(false);
-  fixture.missions = {
-    'w1-m1': { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: '2026-07-12T00:00:00.000Z' },
-    'w1-m2': { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: '2026-07-13T00:00:00.000Z' },
-  };
+  fixture.missions = Object.fromEntries(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5'].map((id, index) => [id, {
+    status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: `2026-07-${String(12 + index).padStart(2, '0')}T00:00:00.000Z`,
+  }]));
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), { key: currentKey, value: fixture });
   let target503Url: string | null = null;
   healthPhase = 'lazy-target-503';
@@ -607,18 +606,10 @@ test('@lazy-boundary MissionTools 503 keeps the legacy mission story and objecti
     target503Url = route.request().url();
     return route.fulfill({ status: 503, headers: { 'cache-control': 'no-store' }, body: 'unavailable' });
   });
-  await page.goto('./#/mission/w1-m3');
-  for (const name of [
-    '加入主任务：向东海龙王请求披挂', '加入主任务：收齐三海宝物', '加入主任务：穿戴整副披挂', '加入主任务：检查披挂是否齐全',
-    '加入穿戴子任务：戴上凤翅紫金冠', '加入穿戴子任务：穿上锁子黄金甲', '加入穿戴子任务：踏上藕丝步云履',
-    '加入收集子任务：收下北海的藕丝步云履', '加入收集子任务：收下西海的锁子黄金甲', '加入收集子任务：收下南海的凤翅紫金冠',
-  ]) await page.getByRole('button', { name }).click();
-  await page.getByRole('button', { name: '执行披挂指令' }).click();
-  await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 15_000 });
-  await page.getByRole('button', { name: '继续下一关' }).click();
-  await expect(page.getByRole('heading', { name: '幽冥勾名', level: 1 })).toBeVisible();
-  await expect(page.getByText('悟空被勾魂使者带到幽冥界。')).toBeVisible();
-  await expect(page.getByRole('heading', { name: '查找并处理生死簿中的猴属名号', level: 2 })).toBeVisible();
+  await page.goto('./#/mission/w2-m1');
+  await expect(page.getByRole('heading', { name: '弼马温', level: 1 })).toBeVisible();
+  await expect(page.getByText('悟空被招上天庭，受封弼马温。')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '找出重复照料天马的指令', level: 2 })).toBeVisible();
   await expect(page.getByRole('alert')).toContainText('兼容任务工具加载失败');
   await expect(page.getByRole('button', { name: '重新加载页面' })).toBeVisible();
 });

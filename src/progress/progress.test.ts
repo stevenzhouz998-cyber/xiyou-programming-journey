@@ -15,6 +15,8 @@ import { registerFourSeasRegaliaBlocks } from '../blockly/fourSeasRegaliaBlocks'
 import { compileFourSeasRegaliaWorkspace } from '../blockly/fourSeasRegaliaCompiler';
 import { loadFourSeasWorkspaceDraft, type FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft';
 import { createMissionSession, recordRun, updateWorkspaceDraft } from './session';
+import { recordEquipmentEffectUse } from './equipmentEffectSession';
+import { equipItem } from './equipmentOperations';
 
 const NOW = '2026-07-15T06:00:00.000Z';
 const wrongWeaponTrace: RuyiStaffInstruction[] = [
@@ -90,6 +92,27 @@ describe('progress rules', () => {
     expect(replaySaved.missions['w1-m3']).toEqual(reopened.missions['w1-m3']);
   });
 
+  it('publishes mission completion and its equipment rewards in the same progress document exactly once', () => {
+    let progress = createInitialProgress();
+    progress = completeMission(progress, 'w1-m1', { stars: 3, hintsUsed: 0 });
+    progress = completeMission(progress, 'w1-m2', { stars: 3, hintsUsed: 0 });
+    expect(progress.equipment.inventory['ruyi-staff']).toEqual({
+      grantedBy: 'w1-m2',
+      grantedAt: progress.missions['w1-m2'].completedAt,
+    });
+
+    const firstStaffGrant = structuredClone(progress.equipment.inventory['ruyi-staff']);
+    progress = completeMission(progress, 'w1-m2', { stars: 1, hintsUsed: 2 });
+    expect(progress.equipment.inventory['ruyi-staff']).toEqual(firstStaffGrant);
+
+    progress = completeMission(progress, 'w1-m3', { stars: 3, hintsUsed: 0 });
+    expect(Object.keys(progress.equipment.inventory)).toEqual([
+      'ruyi-staff', 'phoenix-crown', 'golden-chain-armor', 'cloud-walking-boots',
+    ]);
+    expect(progress.equipment.inventory['phoenix-crown']?.grantedAt)
+      .toBe(progress.missions['w1-m3'].completedAt);
+  });
+
   it('aggregates all three week-one sessions and maps repeated w1-m3 failures to task decomposition', () => {
     const progress = createInitialProgress();
     progress.sessions['w1-m1'] = {
@@ -115,6 +138,22 @@ describe('progress rules', () => {
       sessionAdjustments: 8,
       needsSupport: ['任务分解'],
     });
+  });
+  it('keeps advanced m4/m5 session evidence through parent export-import and counts their support in week one', () => {
+    let progress = createInitialProgress();
+    for (let order = 1; order <= 5; order += 1) progress = completeMission(progress, `w1-m${order}`, { stars: 3, hintsUsed: 0 });
+    progress.sessions['w1-m4'] = createMissionSession('w1-m4', NOW);
+    progress.sessions['w1-m4'] = recordEquipmentEffectUse(progress.sessions['w1-m4'], 'decomposition-view', NOW);
+    progress.sessions['w1-m5'] = recordEquipmentEffectUse(createMissionSession('w1-m5', NOW), 'weight-reference', NOW);
+    progress.equipment = equipItem(progress.equipment, 'weapon', 'ruyi-staff');
+    progress.equipment = equipItem(progress.equipment, 'head', 'phoenix-crown');
+    const reopened = importProgress(serializeProgress(progress));
+    expect(reopened.sessions['w1-m4']?.workspace.missionId).toBe('w1-m4');
+    expect(reopened.sessions['w1-m5']?.workspace.missionId).toBe('w1-m5');
+    expect(reopened.sessions['w1-m4']?.equipmentEffectsUsed).toEqual(['decomposition-view']);
+    expect(reopened.sessions['w1-m5']?.equipmentEffectsUsed).toEqual(['weight-reference']);
+    expect(reopened.equipment).toEqual(progress.equipment);
+    expect(getWeeklyReport(reopened, 1)).toMatchObject({ completed: 5, total: 5, sessionRuns: 0, sessionAdjustments: 0 });
   });
   it('unlocks missions in order and requires the boss before the next week', () => {
     let progress = createInitialProgress();
@@ -144,7 +183,7 @@ describe('progress rules', () => {
     expect(progress.missions['w1-m1']).toMatchObject({ stars: 3, attempts: 1, hintsUsed: 0, status: 'completed' });
     expect(progress).toMatchObject({
       version: 3,
-      schemaRevision: 1,
+      schemaRevision: 2,
       sessions: {},
       privacy: { localDataNoticeSeen: true },
       recovery: { lastRecoveredAt: '2026-07-12T00:00:00.000Z', source: 'snapshot' },

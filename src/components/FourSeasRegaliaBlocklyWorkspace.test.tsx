@@ -212,6 +212,21 @@ describe('FourSeasRegaliaBlocklyWorkspace', () => {
     expect(onDraftChange.mock.calls[1][0]).toEqual(onDraftChange.mock.calls[0][0])
   })
 
+  it('does not run a newer visible graph until its latest draft save settles', async () => {
+    let settle!: (result: SaveResult) => void
+    const pending = new Promise<SaveResult>((resolve) => { settle = resolve })
+    const { onRun } = setup(EMPTY, vi.fn(() => pending))
+    fireEvent.click(screen.getByRole('button', { name: '加入主任务：向东海龙王请求披挂' }))
+
+    expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }))
+    expect(onRun).not.toHaveBeenCalled()
+    settle({ status: 'saved' })
+    await waitFor(() => expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }))
+    expect(onRun).toHaveBeenCalledOnce()
+  })
+
   it('ignores stale save results and exposes a current conflict', async () => {
     let resolveFirst!: (value: SaveResult) => void
     let resolveSecond!: (value: SaveResult) => void

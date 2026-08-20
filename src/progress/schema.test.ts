@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import { runDragonPalaceBattle } from '../battle/dragonPalace';
 import { runRuyiStaffBattle } from '../battle/ruyiStaff';
+import { runAdvancedWeekOne } from '../battle/advancedWeekOne';
 import type { RuyiStaffInstruction } from '../battle/types';
 import { registerFourSeasRegaliaBlocks } from '../blockly/fourSeasRegaliaBlocks';
 import { compileFourSeasRegaliaWorkspace } from '../blockly/fourSeasRegaliaCompiler';
@@ -13,6 +14,7 @@ import {
   type FourSeasWorkspaceDraftV1,
 } from '../blockly/fourSeasRegaliaDraft';
 import { createInitialProgress } from './progress';
+import { initialEquipment } from './equipment';
 import { migrateProgress, parseProgress, PROGRESS_SCHEMA_LIMITS } from './schema';
 import {
   createMissionSession,
@@ -26,7 +28,9 @@ import type {
   FourSeasRegaliaMissionSession,
   ProgressV3,
   RuyiStaffMissionSession,
+  AdvancedWeekOneMissionSession,
 } from './types';
+import { compileAdvancedWeekOneDraft, type AdvancedWeekOneWorkspaceDraftV1 } from '../blockly/advancedWeekOneDraft';
 
 const fourSeasDraft = (): FourSeasWorkspaceDraftV1 => ({
   version: 1,
@@ -132,8 +136,15 @@ type ValidV3 = Omit<ProgressV3, 'sessions'> & {
 const validV3 = (): ValidV3 => ({
   ...validV2,
   version: 3 as const,
+  schemaRevision: 2 as const,
   sessions: { 'w1-m1': validSession() },
+  equipment: initialEquipment(),
 });
+
+const validV3Revision1 = () => {
+  const { equipment: _equipment, ...legacy } = validV3();
+  return { ...legacy, schemaRevision: 1 as const };
+};
 
 const ruyiTrace: RuyiStaffInstruction[] = [
   { instructionId: 'instruction:inspect', sourceBlockId: 'inspect', opcode: 'inspect_weights' as const },
@@ -160,6 +171,24 @@ const validRuyiSession = (): RuyiStaffMissionSession => ({
   lastRunAt: NOW,
   savedAt: NOW,
 });
+
+function validAdvancedSession(missionId: 'w1-m4' | 'w1-m5'): AdvancedWeekOneMissionSession {
+  const blocks: Array<[string, AdvancedWeekOneWorkspaceDraftV1['blocks'][number]['type'], string | null, string | null]> = missionId === 'w1-m4' ? [
+    ['open', 'xiyou_underworld_open_register', 'find', null], ['find', 'xiyou_underworld_find_monkey_records', 'handle', null],
+    ['read', 'xiyou_underworld_read_index', 'match', 'find'], ['match', 'xiyou_underworld_match_monkey_kind', 'collect', 'find'],
+    ['collect', 'xiyou_underworld_collect_named_records', null, 'find'], ['handle', 'xiyou_underworld_handle_names', 'verify', null], ['verify', 'xiyou_underworld_verify_register', null, null],
+  ] : [
+    ['plan', 'xiyou_boss_plan_third_chapter', 'dragon', null], ['dragon', 'xiyou_boss_dragon_checkpoint', 'regalia', null], ['enter', 'xiyou_boss_enter_palace', 'weights', 'dragon'], ['weights', 'xiyou_boss_compare_weights', 'staff', 'dragon'], ['staff', 'xiyou_boss_select_staff', null, 'dragon'],
+    ['regalia', 'xiyou_boss_regalia_checkpoint', 'register', null], ['gifts', 'xiyou_boss_split_gifts', 'regalia-ok', 'regalia'], ['regalia-ok', 'xiyou_boss_verify_regalia', null, 'regalia'],
+    ['register', 'xiyou_boss_register_checkpoint', 'verify', null], ['open', 'xiyou_boss_open_register', 'find', 'register'], ['find', 'xiyou_boss_find_monkey_records', 'handle', 'register'], ['handle', 'xiyou_boss_handle_names', null, 'register'], ['verify', 'xiyou_boss_verify_causal_chain', null, null],
+  ];
+  const draft: AdvancedWeekOneWorkspaceDraftV1 = { version: 1, missionId, blocks: blocks.map(([id, type, nextId, parentBlockId], index) => ({ id, type, nextId, parentBlockId, x: 0, y: index * 32 })) };
+  const trace = compileAdvancedWeekOneDraft(draft);
+  if (missionId === 'w1-m4') {
+    return recordRun(updateWorkspaceDraft(createMissionSession('w1-m4', NOW), draft, NOW), runAdvancedWeekOne(missionId, trace), trace, NOW);
+  }
+  return recordRun(updateWorkspaceDraft(createMissionSession('w1-m5', NOW), draft, NOW), runAdvancedWeekOne(missionId, trace), trace, NOW);
+}
 
 describe('progress schema', () => {
   it('round-trips a real compiled w1-m3 nested draft, trace, canonical run, ids, parents, and counters', () => {
@@ -357,7 +386,7 @@ describe('progress schema', () => {
       .toThrow(/\u8fdb\u5ea6\u6587\u4ef6\u683c\u5f0f\u65e0\u6548/);
   });
 
-  it('locks w1-m3 to Task 1 workspace and trace boundaries and rejects w1-m4 sessions', () => {
+  it('locks w1-m3 to Task 1 workspace and trace boundaries while parsing real m4/m5 sessions independently', () => {
     expect(PROGRESS_SCHEMA_LIMITS.maxWorkspaceBlocks).toBe(FOUR_SEAS_WORKSPACE_LIMITS.maxWorkspaceBlocks);
     expect(PROGRESS_SCHEMA_LIMITS.maxBlockOrSourceIdLength).toBe(FOUR_SEAS_WORKSPACE_LIMITS.maxBlockOrSourceIdLength);
 
@@ -379,13 +408,55 @@ describe('progress schema', () => {
     const unsafeCoordinate = validFourSeasSession();
     unsafeCoordinate.workspace.blocks[0].x = Number.MAX_SAFE_INTEGER + 1;
     expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m3': unsafeCoordinate } })).toThrow(/\u5b89\u5168\u7684\u6709\u9650\u5750\u6807/);
-    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m4': validFourSeasSession() } }))
-      .toThrow(/w1-m4.*\u5c1a\u4e0d\u652f\u6301\u53ef\u6267\u884c\u4f1a\u8bdd/);
+    expect(parseProgress(JSON.stringify({ ...validV3(), sessions: { 'w1-m4': validAdvancedSession('w1-m4') } })).sessions['w1-m4']?.lastRun)
+      .toMatchObject({ completed: true, finalState: 'underworld-verified' });
+    expect(parseProgress(JSON.stringify({ ...validV3(), sessions: { 'w1-m5': validAdvancedSession('w1-m5') } })).sessions['w1-m5']?.lastRun)
+      .toMatchObject({ completed: true, finalState: 'boss-verified' });
+    const forged = validAdvancedSession('w1-m4');
+    forged.lastTrace[0].opcode = 'underworld_verify_register';
+    expect(() => migrateProgress({ ...validV3(), sessions: { 'w1-m4': forged } })).toThrow(/lastTrace|workspace|进度文件格式无效/);
   });
   it('round-trips a fresh V3 document through JSON parsing', () => {
     const progress = createInitialProgress();
-    expect(progress).toMatchObject({ version: 3, schemaRevision: 1, sessions: {} });
+    expect(progress).toMatchObject({ version: 3, schemaRevision: 2, sessions: {}, equipment: initialEquipment() });
     expect(parseProgress(JSON.stringify(progress))).toEqual(progress);
+  });
+
+  it('migrates V3 revision 1 to revision 2 and backfills earned equipment from durable completion times', () => {
+    const legacy = validV3Revision1();
+    legacy.missions = {
+      'w1-m1': validMission,
+      'w1-m2': { ...validMission, completedAt: '2026-07-13T00:00:00.000Z' },
+      'w1-m3': { ...validMission, completedAt: '2026-07-14T00:00:00.000Z' },
+    };
+    const migrated = migrateProgress(legacy);
+    expect(migrated).toMatchObject({ version: 3, schemaRevision: 2 });
+    expect(migrated.equipment).toEqual({
+      version: 1,
+      inventory: {
+        'ruyi-staff': { grantedBy: 'w1-m2', grantedAt: '2026-07-13T00:00:00.000Z' },
+        'phoenix-crown': { grantedBy: 'w1-m3', grantedAt: '2026-07-14T00:00:00.000Z' },
+        'golden-chain-armor': { grantedBy: 'w1-m3', grantedAt: '2026-07-14T00:00:00.000Z' },
+        'cloud-walking-boots': { grantedBy: 'w1-m3', grantedAt: '2026-07-14T00:00:00.000Z' },
+      },
+      equipped: { weapon: null, head: null, body: null, feet: null },
+    });
+  });
+
+  it('rejects equipped-but-unowned items, wrong slots, and forged reward provenance', () => {
+    const current = migrateProgress(validV3()) as ProgressV3 & { equipment: any };
+    const equippedButUnowned = structuredClone(current);
+    equippedButUnowned.equipment.equipped.weapon = 'ruyi-staff';
+    expect(() => migrateProgress(equippedButUnowned)).toThrow(/equipment|装备|未获得/);
+
+    const wrongSlot = structuredClone(current);
+    wrongSlot.equipment.inventory['ruyi-staff'] = { grantedBy: 'w1-m2', grantedAt: NOW };
+    wrongSlot.equipment.equipped.head = 'ruyi-staff';
+    expect(() => migrateProgress(wrongSlot)).toThrow(/equipment|装备|栏位/);
+
+    const forged = structuredClone(current);
+    forged.equipment.inventory['ruyi-staff'] = { grantedBy: 'w1-m3', grantedAt: NOW };
+    expect(() => migrateProgress(forged)).toThrow(/equipment|奖励|来源/);
   });
 
   it('round-trips a valid w1-m2 draft, trace, and canonical ruyi staff run', () => {
@@ -401,8 +472,8 @@ describe('progress schema', () => {
     const ruyiInDragon = { ...validV3(), sessions: { 'w1-m1': validRuyiSession() } };
     expect(() => migrateProgress(ruyiInDragon)).toThrow(/w1-m1.*(?:workspace|lastTrace)/);
 
-    const configuredButUnimplemented = { ...validV3(), sessions: { 'w1-m4': validRuyiSession() } };
-    expect(() => migrateProgress(configuredButUnimplemented)).toThrow(/w1-m4.*会话/);
+    const wrongMissionSession = { ...validV3(), sessions: { 'w1-m4': validRuyiSession() } };
+    expect(() => migrateProgress(wrongMissionSession)).toThrow(/workspace|积木/);
   });
 
   it('rejects a dragon block inside an otherwise valid w1-m2 draft', () => {
@@ -542,16 +613,23 @@ describe('progress schema', () => {
     expect(migrateProgress(validV1)).toEqual({
       ...validV1,
       version: 3,
-      schemaRevision: 1,
+      schemaRevision: 2,
       settings: { ...validV1.settings, reducedMotionOverride: false },
       privacy: { localDataNoticeSeen: false },
       recovery: { lastRecoveredAt: null, source: null },
       sessions: {},
+      equipment: initialEquipment(),
     });
   });
 
   it('migrates V2 to V3 without losing V2 fields', () => {
-    expect(migrateProgress(validV2)).toEqual({ ...validV2, version: 3, sessions: {} });
+    expect(migrateProgress(validV2)).toEqual({
+      ...validV2,
+      version: 3,
+      schemaRevision: 2,
+      sessions: {},
+      equipment: initialEquipment(),
+    });
   });
 
   it('retires the public legacy default during migration', () => {

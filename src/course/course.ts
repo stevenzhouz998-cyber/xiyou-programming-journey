@@ -34,8 +34,6 @@ export const course: CourseManifest = {
       canon: c3,
       missions: [
         ...formalWeekOneMissions,
-        mission('w1-m4', { subtitle: '在名册里找到猴属', objective: '查找并处理生死簿中的猴属名号', canon: c3, storyBeats: [beat('梦入幽冥', '悟空被勾魂使者带到幽冥界。'), beat('勾去猴属', '悟空查看生死簿，将猴属有名者一概勾去。')], expectedSequence: ['open_register', 'find_monkeys', 'remove_names'] }),
-        mission('w1-m5', { subtitle: '重建龙宫到幽冥的因果链', objective: '完整排列第三回关键事件', canon: c3, storyBeats: [beat('龙宫得宝', '悟空从龙宫取得金箍棒与披挂。'), beat('幽冥勾名', '随后在幽冥勾去猴属名号。')], expectedSequence: ['enter_palace', 'get_staff', 'get_armor', 'enter_underworld', 'remove_names'] }),
       ],
     }),
     deriveWeekFromOutline('week-2', { subtitle: '重复有规律，错误能修正', canon: c4to7,

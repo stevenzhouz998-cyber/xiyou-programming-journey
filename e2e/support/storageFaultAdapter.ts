@@ -5,6 +5,11 @@ const MODE_KEY = 'xiyou-test-storage-mode';
 const CURRENT_KEY = 'xiyou-programming-progress-v3';
 const SNAPSHOT_KEY = 'xiyou-programming-progress-snapshot-v3';
 const FAILURE = 'regalia storage fault';
+let advancedStorageFaultHandler: StorageFaultAdapter['beforeProgressWrite'] = () => null;
+
+export function registerAdvancedStorageFaultHandler(handler: StorageFaultAdapter['beforeProgressWrite']): void {
+  advancedStorageFaultHandler = handler;
+}
 
 function currentProgress(storage: Storage): ProgressV3 | null {
   try {
@@ -67,6 +72,7 @@ function exactCompletionDelta(previous: ProgressV3, next: ProgressV3) {
   if (!completion) return false;
   return exactAfterAllowedDelta(previous, next, (expected) => {
     expected.missions['w1-m3'] = structuredClone(completion);
+    expected.equipment = structuredClone(next.equipment);
   });
 }
 
@@ -78,13 +84,16 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-regalia-draft' && exactDraftDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-regalia-session' && exactSessionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-regalia-completion' && exactCompletionDelta(previous, progress)) return FAILURE;
+    const advancedFailure = advancedStorageFaultHandler({ storage, progress });
+    if (advancedFailure !== null) return advancedFailure;
     return null;
   },
   beforeProgressLoad: (storage) => {
-    if (storage.getItem(MODE_KEY) !== 'corrupt-regalia-current') return;
+    const mode = storage.getItem(MODE_KEY);
+    if (mode !== 'corrupt-regalia-current' && mode !== 'corrupt-advanced-current') return;
     const legal = storage.getItem(CURRENT_KEY);
     if (legal !== null) storage.setItem(SNAPSHOT_KEY, legal);
-    storage.setItem(CURRENT_KEY, '{broken w1-m3 current');
+    storage.setItem(CURRENT_KEY, mode === 'corrupt-regalia-current' ? '{broken w1-m3 current' : '{broken advanced current');
     storage.setItem(MODE_KEY, 'off');
   },
 };

@@ -12,7 +12,11 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "baseUrl": ".",
-    "paths": { "#storage-fault-adapter": ["src/progress/storageFaultAdapter.ts"] },
+    "paths": {
+      "#storage-fault-adapter": ["src/progress/storageFaultAdapter.ts"],
+      "#advanced-storage-fault-adapter": ["src/progress/advancedStorageFaultAdapter.ts"],
+      "#equipment-storage-fault-adapter": ["src/progress/equipmentStorageFaultAdapter.ts"]
+    },
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,

@@ -9,6 +9,10 @@ import type {
 import type { WorkspaceDraftV1 } from '../blockly/draft';
 import type { FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft';
 import type { RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft';
+import type { AdvancedWeekOneWorkspaceDraftV1 } from '../blockly/advancedWeekOneDraft';
+import type { AdvancedWeekOneInstruction } from '../blockly/advancedWeekOneContract';
+import type { AdvancedWeekOneRunResult } from '../battle/advancedWeekOne';
+import type { EquipmentEffect, RewardEquipmentStateV1 } from './equipment';
 
 export interface MissionProgress {
   status: 'completed';
@@ -82,10 +86,18 @@ export type FourSeasRegaliaMissionSession = MissionSessionData<
   FourSeasBattleRunResult
 >;
 
+export type AdvancedWeekOneMissionSession = MissionSessionData<
+  AdvancedWeekOneWorkspaceDraftV1,
+  AdvancedWeekOneInstruction,
+  AdvancedWeekOneRunResult
+> & { equipmentEffectsUsed: EquipmentEffect[] };
+
 export interface MissionSessionById {
   'w1-m1': DragonPalaceMissionSession;
   'w1-m2': RuyiStaffMissionSession;
   'w1-m3': FourSeasRegaliaMissionSession;
+  'w1-m4': AdvancedWeekOneMissionSession;
+  'w1-m5': AdvancedWeekOneMissionSession;
 }
 
 export type ExecutableMissionId = keyof MissionSessionById;
@@ -94,7 +106,7 @@ export type MissionSessions = { [MissionId in ExecutableMissionId]?: MissionSess
 
 export interface ProgressV3 {
   version: 3;
-  schemaRevision: 1;
+  schemaRevision: 2;
   learnerName: string;
   missions: Record<string, MissionProgress>;
   settings: ProgressSettings;
@@ -104,6 +116,7 @@ export interface ProgressV3 {
     source: 'snapshot' | 'initial' | null;
   };
   sessions: MissionSessions;
+  equipment: RewardEquipmentStateV1;
   savedAt: string;
 }
 

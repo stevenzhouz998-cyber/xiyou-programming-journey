@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo, type ComponentType } from 'react';
+import './MissionTools.css';
 import { ToolErrorBoundary } from './ToolErrorBoundary';
 
 type ToolMode = 'blockly' | 'python' | 'ai-lab';

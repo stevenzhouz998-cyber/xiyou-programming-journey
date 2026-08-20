@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import './ParentDataTools.css';
 import { createPortal } from 'react-dom';
 import { DownloadSimple, UploadSimple } from '@phosphor-icons/react';
 import type { ProgressV3 } from '../progress/progress';

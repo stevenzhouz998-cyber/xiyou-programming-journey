@@ -363,7 +363,7 @@ test('@visual visible Blockly programs expose accepted, blocked, and three-weapo
 function recoverySnapshot() {
   return {
     version: 3,
-    schemaRevision: 1,
+    schemaRevision: 2,
     learnerName: '恢复小行者',
     missions: {},
     settings: { muted: true, reducedMotion: true, reducedMotionOverride: true, parentPin: TEST_PARENT_ACCESS },
@@ -383,6 +383,7 @@ function recoverySnapshot() {
         savedAt: '2026-07-15T00:00:00.000Z',
       },
     },
+    equipment: { version: 1, inventory: {}, equipped: { weapon: null, head: null, body: null, feet: null } },
     savedAt: '2026-07-15T00:00:00.000Z',
   }
 }

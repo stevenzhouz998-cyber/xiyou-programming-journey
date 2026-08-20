@@ -7,10 +7,10 @@ const writeLockName = 'xiyou-programming-progress-v3-write';
 const TEST_PARENT_ACCESS = 'access-v1:cf7667b114bf7a735116fc8439f0d17f3213159c48b22be56376521fbbc5cbb1:678bd461a82e086d3332d9c0f72cfae199f75eab78fba024dd8d28acd1702e27';
 
 const initial = {
-  version: 3, schemaRevision: 1, learnerName: '双页孩子', missions: {},
+  version: 3, schemaRevision: 2, learnerName: '双页孩子', missions: {},
   settings: { muted: false, reducedMotion: false, reducedMotionOverride: false, parentPin: TEST_PARENT_ACCESS },
   privacy: { localDataNoticeSeen: true }, recovery: { lastRecoveredAt: null, source: null },
-  sessions: {}, savedAt: '2026-07-15T00:00:00.000Z',
+  sessions: {}, equipment: { version: 1, inventory: {}, equipped: { weapon: null, head: null, body: null, feet: null } }, savedAt: '2026-07-15T00:00:00.000Z',
 };
 
 async function revision(page: Page) {

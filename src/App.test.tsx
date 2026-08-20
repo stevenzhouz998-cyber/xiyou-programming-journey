@@ -5,6 +5,8 @@ import { completeMission, createInitialProgress, serializeProgress } from './pro
 import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, REVISION_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from './progress/storage';
 import type { BattleEvent } from './battle/types';
 import { createMissionSession } from './progress/session';
+import { recordEquipmentEffectUse } from './progress/equipmentEffectSession';
+import { equipItem } from './progress/equipmentOperations';
 import { FourSeasRegaliaRouteBoundary } from './components/MissionPageContent';
 
 vi.mock('./components/GameScene', () => ({
@@ -79,6 +81,7 @@ async function buildCorrectFourSeasProgram() {
     '加入收集子任务：收下西海的锁子黄金甲',
     '加入收集子任务：收下南海的凤翅紫金冠',
   ]) fireEvent.click(await screen.findByRole('button', { name: label }, { timeout: 5000 }));
+  await waitFor(() => expect(screen.getByRole('button', { name: '执行披挂指令' })).toBeEnabled());
 }
 
 describe('西游编程记', () => {
@@ -114,6 +117,26 @@ describe('西游编程记', () => {
     expect(screen.getByRole('heading', { name: '西游编程记' })).toBeInTheDocument();
     expect(screen.getAllByText(/第[一二三四五六]周/)).toHaveLength(6);
     expect(screen.getByRole('button', { name: /开始第一关/ })).toBeEnabled();
+  });
+
+  it('opens the lazy equipment drawer from the growth map and keeps it outside the inert page', async () => {
+    let progress = withParentAccess(createInitialProgress());
+    progress.privacy.localDataNoticeSeen = true;
+    progress = completeMission(progress, 'w1-m1', { stars: 3, hintsUsed: 0 });
+    progress = completeMission(progress, 'w1-m2', { stars: 3, hintsUsed: 0 });
+    progress = completeMission(progress, 'w1-m3', { stars: 3, hintsUsed: 0 });
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: '打开装备行囊' }));
+    const drawer = await screen.findByRole('dialog', { name: '装备行囊' });
+    expect(drawer).toBeVisible();
+    expect(drawer.closest('[inert]')).toBeNull();
+    expect(screen.getByTestId('app-background')).toHaveAttribute('inert');
+    expect(screen.getByRole('button', { name: '装备如意金箍棒' })).toBeEnabled();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '装备行囊' })).not.toBeInTheDocument());
   });
 
   it('shows conflict backup and reload actions when CAS detects a stale tab without a storage event', async () => {
@@ -226,7 +249,7 @@ describe('西游编程记', () => {
     await waitFor(() => expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).sessions['w1-m2'].usedHintTiers).toEqual(['observe']));
   });
 
-  it('routes only w1-m3 to the formal lazy Four Seas experience while later missions remain compatible', async () => {
+  it('routes all week-one Blockly missions through their formal lazy experiences', async () => {
     let progress = withParentAccess(createInitialProgress());
     progress.privacy.localDataNoticeSeen = true;
     progress = completeMission(progress, 'w1-m1', { stars: 3, hintsUsed: 0 });
@@ -245,7 +268,16 @@ describe('西游编程记', () => {
     window.location.hash = '#/mission/w1-m4';
     const secondView = render(<App />);
     expect(await screen.findByRole('heading', { name: '幽冥勾名', level: 1 })).toBeVisible();
-    await waitFor(() => expect(secondView.container.querySelector('.legacy-mission-tools')).toHaveAttribute('data-mission-id', 'w1-m4'));
+    expect(await screen.findByRole('button', { name: '加入主程序：打开名册' })).toBeVisible();
+    expect(secondView.container.querySelector('.legacy-mission-tools')).not.toBeInTheDocument();
+    const afterUnderworld = completeMission(completed, 'w1-m4', { stars: 3, hintsUsed: 0 });
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(afterUnderworld));
+    secondView.unmount();
+    window.location.hash = '#/mission/w1-m5';
+    const thirdView = render(<App />);
+    expect(await screen.findByRole('heading', { name: '第三回总试炼', level: 1 })).toBeVisible();
+    expect(await screen.findByRole('button', { name: '加入主程序：制定第三回计划' })).toBeVisible();
+    expect(thirdView.container.querySelector('.legacy-mission-tools')).not.toBeInTheDocument();
   });
 
   it('keeps w1-m3 final completion unsaved under the completion owner and reveals success only after its retry', async () => {
@@ -840,6 +872,25 @@ describe('西游编程记', () => {
     fireEvent.change(await screen.findByLabelText('家长 PIN'), { target: { value: '4826' } });
     fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
     expect(await screen.findByText('已完成：龙宫求兵、定海神针、四海披挂')).toBeVisible();
+  });
+
+  it('lazy-loads the persistent reward, loadout, and effect-use report only behind parent access', async () => {
+    let progress = withParentAccess(createInitialProgress());
+    progress.privacy.localDataNoticeSeen = true;
+    for (const missionId of ['w1-m1', 'w1-m2', 'w1-m3'] as const) progress = completeMission(progress, missionId, { stars: 3, hintsUsed: 0 });
+    progress.equipment = equipItem(progress.equipment, 'weapon', 'ruyi-staff');
+    progress.sessions['w1-m4'] = recordEquipmentEffectUse(createMissionSession('w1-m4'), 'decomposition-view', '2026-08-19T01:00:00.000Z');
+    localStorage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(progress));
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: '家长周报' }));
+    expect(screen.queryByRole('region', { name: '装备与跨关学习工具' })).not.toBeInTheDocument();
+    fireEvent.change(await screen.findByLabelText('家长 PIN'), { target: { value: '4826' } });
+    fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
+
+    const equipment = await screen.findByRole('region', { name: '装备与跨关学习工具' });
+    expect(equipment).toHaveTextContent('兵器如意金箍棒');
+    expect(equipment).toHaveTextContent('第四关「幽冥勾名」查看过任务拆分图');
   });
 
   it('submits the parent PIN through the form keyboard path', async () => {

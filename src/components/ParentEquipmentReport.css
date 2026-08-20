@@ -1,0 +1,13 @@
+.parent-equipment-report { margin: 18px 0; padding: 22px; border: 1px solid rgba(170,124,53,.36); border-radius: 18px; background: rgba(251,246,233,.82); }
+.parent-equipment-heading h2 { margin: 5px 0 7px; }
+.parent-equipment-heading p { color: var(--ink-muted); }
+.parent-equipment-columns { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+.parent-equipment-columns article { padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.48); }
+.parent-equipment-columns h3 { font-size: 17px; }
+.parent-equipment-columns ul { display: grid; gap: 8px; margin: 0; padding-left: 20px; }
+.parent-equipment-columns p { margin: 0; color: var(--ink-muted); }
+.parent-equipment-columns dl { display: grid; gap: 7px; margin: 0; }
+.parent-equipment-columns dl div { display: flex; justify-content: space-between; gap: 12px; min-height: 36px; align-items: center; }
+.parent-equipment-columns dt { color: var(--ink-muted); }
+.parent-equipment-columns dd { margin: 0; color: var(--jade-deep); font-weight: 800; }
+@media (max-width: 800px) { .parent-equipment-columns { grid-template-columns: 1fr; } }

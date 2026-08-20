@@ -59,7 +59,7 @@ function expectedNavigationAbort(event: HealthEvent) {
 function fourSeasPrerequisiteFixture() {
   return {
     version: 3,
-    schemaRevision: 1,
+    schemaRevision: 2,
     learnerName: '小行者',
     missions: {
       'w1-m1': { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: NOW },
@@ -69,6 +69,7 @@ function fourSeasPrerequisiteFixture() {
     privacy: { localDataNoticeSeen: true },
     recovery: { lastRecoveredAt: null, source: null },
     sessions: {},
+    equipment: { version: 1, inventory: { 'ruyi-staff': { grantedBy: 'w1-m2', grantedAt: NOW } }, equipped: { weapon: null, head: null, body: null, feet: null } },
     savedAt: NOW,
   }
 }
@@ -98,6 +99,7 @@ test.afterEach(() => {
 
 async function add(page: Page, name: string, keyboard = false) {
   const button = page.getByRole('button', { name })
+  await expect(button).toBeEnabled({ timeout: 15_000 })
   if (keyboard) await button.press('Enter')
   else await button.click()
 }
@@ -110,23 +112,6 @@ async function buildMainAndEquip(page: Page, keyboard = false) {
   await add(page, '加入穿戴子任务：戴上凤翅紫金冠', keyboard)
   await add(page, '加入穿戴子任务：穿上锁子黄金甲', keyboard)
   await add(page, '加入穿戴子任务：踏上藕丝步云履', keyboard)
-}
-
-async function visibleTracePairs(page: Page) {
-  const items = page.getByRole('region', { name: '本次执行来源' }).locator('li')
-  const pairs: Array<{ sourceBlockId: string; parentBlockId: string | null }> = []
-  for (let index = 0; index < await items.count(); index += 1) {
-    const item = items.nth(index)
-    const sourceBlockId = await item.locator('code').textContent()
-    const parentText = await item.locator('span').textContent()
-    if (sourceBlockId !== null && parentText !== null) {
-      pairs.push({
-        sourceBlockId,
-        parentBlockId: parentText === 'parent=top' ? null : parentText.replace(/^parent=/, ''),
-      })
-    }
-  }
-  return pairs
 }
 
 async function readOnlyW1M3CompletionIdentity(page: Page) {
@@ -254,8 +239,13 @@ test('@regalia-full @visual visible wrong nested order is corrected, persisted, 
   await add(page, '加入收集子任务：收下南海的凤翅紫金冠')
   await add(page, '上移收集子任务：收下北海的藕丝步云履')
   await add(page, '执行披挂指令')
-  await expect(page.getByRole('region', { name: '本次执行来源' })).toContainText('parent=')
-  const traceBefore = await visibleTracePairs(page)
+  await expect(page.locator('.four-seas-regalia-scene-frame .game-scene')).toHaveAttribute('data-scene-state', 'regalia-verified', { timeout: 15_000 })
+  await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 15_000 })
+  const childSteps = page.locator('.execution-provenance')
+  await expect(childSteps).toContainText('收下北海的藕丝步云履')
+  await expect(childSteps).toContainText('属于「收齐三海宝物」任务组')
+  await expect(childSteps).not.toContainText(/parent=|instruction:/)
+  const traceBefore = (await readOnlyW1M3Session(page)).lastTrace.map(({ sourceBlockId, parentBlockId }: { sourceBlockId: string; parentBlockId: string | null }) => ({ sourceBlockId, parentBlockId }))
   expect(traceBefore).toHaveLength(10)
   expect(new Set(traceBefore.map(({ sourceBlockId }) => sourceBlockId)).size).toBe(10)
   expect(traceBefore.map(({ parentBlockId }) => parentBlockId)).toEqual([
@@ -270,14 +260,11 @@ test('@regalia-full @visual visible wrong nested order is corrected, persisted, 
     traceBefore[5].sourceBlockId,
     null,
   ])
-  await expect(page.locator('.four-seas-regalia-scene-frame .game-scene')).toHaveAttribute('data-scene-state', 'regalia-verified', { timeout: 15_000 })
-  await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 15_000 })
-
   await page.reload()
   await expect(page.getByRole('heading', { name: '四海披挂', level: 1 })).toBeVisible()
   await expect(page.getByRole('button', { name: '重播最近一次' })).toBeDisabled()
-  expect(await visibleTracePairs(page)).toEqual(traceBefore)
-  await expect(page.getByRole('region', { name: '本次执行来源' })).toContainText('parent=')
+  expect((await readOnlyW1M3Session(page)).lastTrace.map(({ sourceBlockId, parentBlockId }: { sourceBlockId: string; parentBlockId: string | null }) => ({ sourceBlockId, parentBlockId }))).toEqual(traceBefore)
+  await expect(page.locator('.execution-provenance')).not.toContainText(/parent=|instruction:/)
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toHaveCount(0)
 
   const scene = page.locator('.four-seas-regalia-scene-frame .game-scene')
@@ -293,7 +280,7 @@ test('@regalia-full @visual visible wrong nested order is corrected, persisted, 
   await expect(scene).toHaveAttribute('data-scene-state', 'regalia-verified', { timeout: 15_000 })
   await expect(observeHint).toBeEnabled({ timeout: 15_000 })
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toHaveCount(0)
-  expect(await visibleTracePairs(page)).toEqual(traceBefore)
+  expect((await readOnlyW1M3Session(page)).lastTrace.map(({ sourceBlockId, parentBlockId }: { sourceBlockId: string; parentBlockId: string | null }) => ({ sourceBlockId, parentBlockId }))).toEqual(traceBefore)
   expect(await readOnlyW1M3CompletionIdentity(page)).toEqual(completionBeforeReplay)
 
   await expectResponsiveWorkspace(page)

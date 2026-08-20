@@ -1,0 +1,29 @@
+.data-tools { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding: 20px; border: 1px dashed rgba(47,115,91,.45); border-radius: 14px; }
+.data-tools > div { margin-right: auto; }
+.data-tools h2 { margin-bottom: 4px; }
+.data-tools p { margin: 0; color: var(--ink-muted); }
+.data-tools input { display: none; }
+.data-status { display: flex; gap: 18px; flex-wrap: wrap; margin: 14px 0; }
+.data-status div { display: grid; gap: 3px; }
+.data-status dt { color: var(--ink-soft); font-size: 0.82rem; }
+.data-status dd { margin: 0; font-weight: 700; }
+.button-danger { color: #8b1e1e; border: 1px solid #b94a48; background: #fff8f5; }
+.clear-progress-overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 20px; background: rgba(24, 18, 14, 0.68); }
+.clear-progress-card { width: min(480px, 100%); padding: 28px; border-radius: 18px; background: #fffdf8; box-shadow: 0 24px 70px rgba(0,0,0,.25); }
+.clear-progress-card label { display: grid; gap: 8px; margin: 18px 0; }
+.clear-progress-card input { display: block; padding: 11px; border: 1px solid #887565; border-radius: 8px; }
+.clear-progress-card > div { display: flex; gap: 10px; flex-wrap: wrap; }
+
+@media (max-width: 900px) {
+  .data-tools { flex-wrap: wrap; }
+}
+
+@media (max-width: 600px) {
+  .data-tools, .clear-progress-card > div { align-items: stretch; flex-direction: column; }
+  .clear-progress-overlay { padding: 14px; }
+  .clear-progress-card { width: min(100%, 520px); padding: 24px 18px; }
+}
+
+@media (hover: none), (pointer: coarse), (max-width: 900px) {
+  .clear-progress-card button, .data-tools button, .data-tools label { min-width: 44px; min-height: 44px; }
+}

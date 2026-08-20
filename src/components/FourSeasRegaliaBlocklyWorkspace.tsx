@@ -471,7 +471,9 @@ export function FourSeasRegaliaBlocklyWorkspace({
       if (status === 'saved') pendingDraftRef.current = null
     }
     try {
-      void Promise.resolve(onDraftRef.current(next)).then((value) => settle(value.status), () => settle('unsaved'))
+      const result = onDraftRef.current(next)
+      if (result instanceof Promise) void result.then((value) => settle(value.status), () => settle('unsaved'))
+      else settle(result.status)
     } catch {
       settle('unsaved')
     }
@@ -751,7 +753,7 @@ export function FourSeasRegaliaBlocklyWorkspace({
   }
 
   const run = () => {
-    if (interactionLocked) return
+    if (interactionLocked || draftSaveStatus === 'pending') return
     const workspace = workspaceRef.current
     if (workspace === null) return
     const compiled = compileFourSeasRegaliaWorkspace(workspace)
@@ -878,7 +880,7 @@ export function FourSeasRegaliaBlocklyWorkspace({
         <button type="button" className="button button-ghost" disabled={interactionLocked} onClick={() => mutate((workspace) => workspace.clear())}>
           <ArrowsCounterClockwise size={20} />清空并重新开始
         </button>
-        <button type="button" className="button button-primary" disabled={interactionLocked} onClick={run}>
+        <button type="button" className="button button-primary" disabled={interactionLocked || draftSaveStatus === 'pending'} onClick={run}>
           <Play size={20} weight="fill" />执行披挂指令
         </button>
       </div>

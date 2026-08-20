@@ -3,12 +3,24 @@ import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 
 const e2eStorageFaults = process.env.XIYOU_E2E_STORAGE_FAULTS === '1';
+const advancedWeekOneBlocklyCore = {
+  name: 'advanced-week-one-blockly-core',
+  enforce: 'pre',
+  async resolveId(source, importer) {
+    if (source === 'blockly' && importer && /\/src\/(?:components\/AdvancedWeekOneBlocklyWorkspace|blockly\/advancedWeekOneBlocks)\.tsx?$/.test(importer.replaceAll('\\', '/'))) {
+      return this.resolve('blockly/core', importer, { skipSelf: true });
+    }
+    return null;
+  },
+};
 
 export default defineConfig({
   base: "/xiyou-programming-journey/",
   resolve: {
     alias: [
       { find: '#storage-fault-adapter', replacement: fileURLToPath(new URL(e2eStorageFaults ? './e2e/support/storageFaultAdapter.ts' : './src/progress/storageFaultAdapter.ts', import.meta.url)) },
+      { find: '#advanced-storage-fault-adapter', replacement: fileURLToPath(new URL(e2eStorageFaults ? './e2e/support/advancedStorageFaultAdapter.ts' : './src/progress/advancedStorageFaultAdapter.ts', import.meta.url)) },
+      { find: '#equipment-storage-fault-adapter', replacement: fileURLToPath(new URL(e2eStorageFaults ? './e2e/support/equipmentStorageFaultAdapter.ts' : './src/progress/equipmentStorageFaultAdapter.ts', import.meta.url)) },
       { find: /^phaser$/, replacement: fileURLToPath(new URL("./node_modules/phaser/dist/phaser.esm.min.js", import.meta.url)) },
     ],
   },
@@ -19,8 +31,9 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: ["terminal.local"],
   },
-  plugins: [react()],
+  plugins: [advancedWeekOneBlocklyCore, react()],
   build: {
+    target: 'esnext',
     outDir: e2eStorageFaults ? 'dist-e2e' : 'dist',
     manifest: true,
     chunkSizeWarningLimit: 1600,
@@ -39,10 +52,12 @@ export default defineConfig({
           if (source.endsWith('/src/engine/validation.ts')) return 'validation-shared';
           if (source.endsWith('/src/course/formalCourse.ts')) return 'formal-course';
           if (source.endsWith('/src/course/course.ts')) return 'course-content';
+          if (source.endsWith('/src/blockly/advancedWeekOneContract.ts')) return 'advanced-session-contract';
           if (source.endsWith('/src/components/LazySectionBoundary.tsx')
             || source.endsWith('/src/utils/download.ts')) return 'route-shared';
+          if (source.endsWith('/src/progress/storageFaultAdapter.ts') || source.endsWith('/src/progress/parentAccess.ts') || source.endsWith('/src/progress/advancedSessionSchema.ts')) return 'progress-core';
           if (source.includes('/src/battle/')
-            || /\/src\/progress\/(?:progress|schema|session|storage|types)\.ts$/.test(source)
+            || /\/src\/progress\/(?:equipment|progress|schema|session|storage|types)\.ts$/.test(source)
           ) return 'progress-core';
           if (source.endsWith('/src/context/ProgressContext.tsx')
             || source.endsWith('/src/utils/assets.ts')

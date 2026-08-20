@@ -121,6 +121,7 @@ function Probe() {
       muted: state.progress.settings.muted,
       missions: state.progress.missions,
       sessions: state.progress.sessions,
+      equipment: state.progress.equipment,
       progressSavedAt: state.progress.savedAt,
     })}</output>
     <button onClick={() => state.replaceProgress({ ...state.progress, learnerName: '会话新名字' })}>保存</button>
@@ -478,7 +479,28 @@ describe('ProgressContext persistence status', () => {
     stored = JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!);
     expect(stored.missions['w1-m2']).toMatchObject({ attempts: 1, stars: 3 });
     expect(stored.sessions['w1-m2']).toMatchObject({ totalRuns: 1 });
+    expect(stored.equipment.inventory['ruyi-staff']).toMatchObject({ grantedBy: 'w1-m2' });
     expect(localStorage.getItem(REVISION_PROGRESS_KEY)).toBe('2');
+  });
+
+  it('coordinates equip and unequip through the existing save queue', async () => {
+    let earned = completeMission(createInitialProgress(), 'w1-m1', { stars: 3, hintsUsed: 0 });
+    earned = completeMission(earned, 'w1-m2', { stars: 3, hintsUsed: 0 });
+    installStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(earned), [REVISION_PROGRESS_KEY]: '0' });
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    let equipped!: CoordinatedSaveResult;
+    await act(async () => {
+      equipped = await latestContext!.updateEquipment({ type: 'equip', slot: 'weapon', itemId: 'ruyi-staff' });
+    });
+    expect(equipped).toMatchObject({ status: 'saved' });
+    expect(latestContext!.progress.equipment.equipped.weapon).toBe('ruyi-staff');
+
+    await act(async () => {
+      await latestContext!.updateEquipment({ type: 'unequip', slot: 'weapon' });
+    });
+    expect(latestContext!.progress.equipment.equipped.weapon).toBeNull();
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).equipment.equipped.weapon).toBeNull();
   });
 
   it('coordinates typed w1-m3 draft, canonical run, and hint through the existing V3 coordinator', async () => {
@@ -499,6 +521,21 @@ describe('ProgressContext persistence status', () => {
     expect(stored.sessions['w1-m3'].workspace.blocks.find((block: { id: string }) => block.id === 'boots-gift'))
       .toMatchObject({ parentBlockId: 'collect' });
     expect(stored.missions['w1-m3']).toBeUndefined();
+  });
+
+  it('coordinates a typed m4 session through the same V3 coordinator without treating it as legacy state', async () => {
+    installStorage({});
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    let result!: CoordinatedSaveResult;
+    await act(async () => {
+      result = await latestContext!.updateMissionSession('w1-m4', (session) => (
+        recordCompileFailure(session, 'program-structure', SESSION_NOW)
+      ));
+    });
+    expect(result).toMatchObject({ status: 'saved' });
+    expect(latestContext!.progress.sessions['w1-m4']).toMatchObject({ workspace: { missionId: 'w1-m4' }, compileFailures: 1, totalRuns: 0 });
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).sessions['w1-m4'])
+      .toMatchObject({ workspace: { missionId: 'w1-m4' }, conceptFailures: { programStructure: 1 } });
   });
 
   it('keeps an unsaved w1-m3 edit in memory and retries the exact session after storage recovers', async () => {
@@ -666,6 +703,7 @@ describe('ProgressContext persistence status', () => {
         'w1-m1': { status: 'completed', stars: 2 },
         'w1-m2': { status: 'completed', stars: 3 },
       },
+      equipment: { inventory: { 'ruyi-staff': { grantedBy: 'w1-m2' } } },
     });
 
     await act(async () => { await latestContext!.retrySave(); });

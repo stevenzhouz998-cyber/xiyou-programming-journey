@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import './RuyiStaffExperience.css'
 import { runRuyiStaffBattle } from '../battle/ruyiStaff'
 import type { RuyiStaffBattleDiagnostic, RuyiStaffBattleEvent, RuyiStaffBattleRunResult, RuyiStaffInstruction } from '../battle/types'
 import type { RuyiCompileResult } from '../blockly/ruyiStaffCompiler'

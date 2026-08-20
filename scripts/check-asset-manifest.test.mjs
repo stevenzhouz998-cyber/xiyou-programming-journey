@@ -9,12 +9,14 @@ import {
   decodeWebpDimensions,
   parseAssetManifest,
   readWebpDimensions,
+  verifyRequiredAdvancedWeekOneInventory,
   verifyRequiredDragonPalaceInventory,
   verifyAssetManifest,
 } from './check-asset-manifest.mjs';
 
 const sha = 'a'.repeat(64);
 const artDirection = 'commercial children’s learning game, refined Chinese ink-and-color illustration, Journey to the West Dragon Palace, warm jade/cinnabar/gold palette, readable silhouettes, no text, no logo, no emoji, no UI frame.';
+const advancedArtDirection = "polished 3D children's storybook game";
 
 function row(overrides = {}) {
   return {
@@ -200,8 +202,9 @@ test('fully decodes all eight shipping WebP files including the Four Seas regali
 test('traces every approved Dragon Palace raster to a real formal scene slot', async () => {
   const manifestPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'assets', 'asset-manifest.md');
   const parsed = parseAssetManifest(await readFile(manifestPath, 'utf8'));
-  assert.equal(parsed.manifestRows.length, 8);
-  for (const manifestRow of parsed.manifestRows) {
+  const dragonPalaceRows = parsed.manifestRows.filter((row) => row.assetId.startsWith('assets/dragon-palace/'));
+  assert.equal(dragonPalaceRows.length, 8);
+  for (const manifestRow of dragonPalaceRows) {
     assert.match(manifestRow.screenSlots, /\bw1-m[123]\b/, manifestRow.assetId);
     assert.equal(manifestRow.qaStatus, 'visual-qa-passed');
   }
@@ -593,6 +596,110 @@ test('rejects absolute paths and traversal in rows and files', () => {
   for (const assetId of ['/tmp/background.webp', '../background.webp', 'assets/dragon-palace/../../escape.webp', 'C:\\tmp\\background.webp']) {
     assert.throws(() => verifyAssetManifest(scenario({ manifestRows: [row({ assetId })], publicFiles: [file({ path: assetId })] })), /unsafe asset path/i);
   }
+});
+
+test('allows one manifest table to validate a bounded Week One advanced asset group', () => {
+  const data = scenario({
+    manifestRows: [row({
+      assetId: 'assets/week-one-advanced/underworld-background.webp',
+      promptOrSourceReference: '[Prompt AW1-001](#prompt-aw1-001-underworld-background)',
+      dimensions: '1600x900',
+      screenSlots: 'w1-m4 AdvancedWeekOneScene underworld background',
+    })],
+    publicFiles: [file({
+      path: 'assets/week-one-advanced/underworld-background.webp',
+      width: 1600,
+      height: 900,
+    })],
+    promptRecords: [promptRecord({
+      heading: 'Prompt AW1-001 underworld-background',
+      anchor: '#prompt-aw1-001-underworld-background',
+      prompt: `Use case: stylized-concept\nStyle/medium: ${advancedArtDirection}`,
+    })],
+  });
+  assert.doesNotThrow(() => verifyAssetManifest(data));
+});
+
+test('requires the actual advanced Week One art direction without weakening Dragon Palace prompts', () => {
+  const advanced = scenario({
+    manifestRows: [row({
+      assetId: 'assets/week-one-advanced/underworld-background.webp',
+      promptOrSourceReference: '[Prompt AW1-001](#prompt-aw1-001-underworld-background)',
+      dimensions: '1600x900',
+    })],
+    publicFiles: [file({ path: 'assets/week-one-advanced/underworld-background.webp', width: 1600, height: 900 })],
+    promptRecords: [promptRecord({
+      heading: 'Prompt AW1-001 underworld-background',
+      anchor: '#prompt-aw1-001-underworld-background',
+    })],
+  });
+  assert.throws(() => verifyAssetManifest(advanced), /shared art direction.*week-one-advanced/i);
+  advanced.promptRecords[0].prompt = `Use case: stylized-concept\nStyle/medium: ${advancedArtDirection}`;
+  assert.doesNotThrow(() => verifyAssetManifest(advanced));
+  assert.throws(() => verifyAssetManifest(scenario({
+    promptRecords: [promptRecord({ prompt: `Use case: stylized-concept\nStyle/medium: ${advancedArtDirection}` })],
+  })), /shared art direction/i);
+});
+
+test('requires all four advanced Week One WebPs and the two live mission-bound image slots', async () => {
+  const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const publicFiles = await collectAssetFiles(
+    join(sourceRoot, 'public', 'assets', 'week-one-advanced'),
+    'assets/week-one-advanced',
+  );
+  const expected = [
+    ['underworld-background.webp', '1600x900', 'w1-m4'],
+    ['register-states.webp', '2048x1152', 'w1-m4'],
+    ['boss-journey-background.webp', '1600x900', 'w1-m5'],
+    ['boss-checkpoints.webp', '3072x1152', 'w1-m5'],
+  ];
+  assert.deepEqual(publicFiles.map((file) => file.path).sort(), expected.map(([name]) => `assets/week-one-advanced/${name}`).sort());
+  const manifestRows = expected.map(([name, dimensions, missionId], index) => {
+    const promptId = `AW1-${String(index + 1).padStart(3, '0')}`;
+    const assetId = `assets/week-one-advanced/${name}`;
+    return row({
+      assetId,
+      sha256: publicFiles.find((file) => file.path === assetId).sha256,
+      dimensions,
+      purpose: `Formal ${missionId} illustration ${name}`,
+      promptOrSourceReference: `[Prompt ${promptId}](#prompt-${promptId.toLowerCase()}-${name.replace('.webp', '')})`,
+      screenSlots: `${missionId} AdvancedWeekOneScene ${name}`,
+      qaStatus: 'visual-qa-passed',
+    });
+  });
+  const promptRecords = expected.map(([name], index) => {
+    const promptId = `AW1-${String(index + 1).padStart(3, '0')}`;
+    return promptRecord({
+      heading: `Prompt ${promptId} ${name.replace('.webp', '')}`,
+      anchor: `#prompt-${promptId.toLowerCase()}-${name.replace('.webp', '')}`,
+      prompt: `Use case: stylized-concept\nStyle/medium: ${advancedArtDirection}`,
+    });
+  });
+  const sourcePath = 'src/components/AdvancedWeekOneScene.tsx';
+  const source = await readFile(join(sourceRoot, sourcePath), 'utf8');
+  const data = { manifestRows, publicFiles, promptRecords, sourcePath, source };
+  assert.doesNotThrow(() => verifyRequiredAdvancedWeekOneInventory(data));
+
+  const invalidSources = new Map([
+    ['commented binding', source.replace(/  const background = .*\n/, '// background only in a comment\n')],
+    ['raw background bypasses base-path resolver', source.replace('src={assetUrl(background)}', 'src={background}')],
+    ['unused background value', source.replace('src={assetUrl(background)}', "src={'/assets/week-one-advanced/underworld-background.webp'}")],
+    ['dead duplicate literal', source.replace('  const name =', "  if (false) { const hidden = '/assets/week-one-advanced/underworld-background.webp' }\n  const name =")],
+    ['dynamic image source', source.replace('src={assetUrl(states)}', 'src={resolveSprite(missionId)}')],
+    ['extra image element', source.replace('    <img key={`background-${retry}`}', '    <img src={assetUrl(background)} alt="" />\n    <img key={`background-${retry}`}')],
+  ]);
+  for (const [name, mutatedSource] of invalidSources) {
+    assert.notEqual(mutatedSource, source, `${name} mutation must match shipping source`);
+    assert.throws(() => verifyRequiredAdvancedWeekOneInventory({ ...data, source: mutatedSource }), /AdvancedWeekOneScene|image|background|sprite|literal|src/i, name);
+  }
+  assert.throws(() => verifyRequiredAdvancedWeekOneInventory({
+    ...data,
+    manifestRows: manifestRows.map((manifestRow, index) => index === 0
+      ? { ...manifestRow, screenSlots: 'w1-m5 unrelated component' }
+      : manifestRow),
+  }), /screen slot|w1-m4|AdvancedWeekOneScene/i);
+  assert.throws(() => verifyRequiredAdvancedWeekOneInventory({ ...data, manifestRows: manifestRows.slice(1) }), /four|required|missing/i);
+  assert.throws(() => verifyRequiredAdvancedWeekOneInventory({ ...data, publicFiles: [...publicFiles, { ...publicFiles[0], path: 'assets/week-one-advanced/extra.webp' }] }), /four|unexpected|missing manifest/i);
 });
 
 test('rejects missing, malformed, and mismatched SHA-256 hashes', () => {

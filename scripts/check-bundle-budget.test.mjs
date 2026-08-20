@@ -182,6 +182,8 @@ test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
   assert.equal(bundleBudget.DRAGON_PALACE_COLD_LOAD_MAX_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.RUYI_STAFF_COLD_LOAD_MAX_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.FOUR_SEAS_COLD_LOAD_MAX_BYTES, 2.75 * 1024 * 1024);
+  assert.equal(bundleBudget.UNDERWORLD_REGISTER_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.THIRD_CHAPTER_BOSS_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
   assert.equal(bundleBudget.DRAGON_PALACE_COLD_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.RUYI_STAFF_COLD_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.DRAGON_PALACE_MEDIA_BYTES, 1.25 * 1024 * 1024);
@@ -191,6 +193,34 @@ test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
 test('keeps the Four Seas E2E AST contract isolated from bundle analysis', () => {
   const source = readFileSync(new URL('./check-bundle-budget.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /check-four-seas-e2e-contract|typescript|ts\.createSourceFile/);
+});
+
+test('keeps the progress-core manual chunk stable in the E2E fault build', () => {
+  const viteSource = readFileSync(new URL('../vite.config.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(viteSource, /!e2eStorageFaults\s*&&\s*\(source\.includes\('\/src\/battle\/\/'\)/);
+  assert.match(viteSource, /if \(source\.includes\('\/src\/battle\/'\)[\s\S]{0,180}return 'progress-core';/);
+});
+
+test('locks the supported browser build to the modern ESNext target after ES2022 misses the fixed budget', () => {
+  const viteSource = readFileSync(new URL('../vite.config.mjs', import.meta.url), 'utf8');
+  assert.match(viteSource, /build:\s*\{[\s\S]{0,120}target:\s*'esnext'/);
+});
+
+test('keeps Advanced Week One on the established Blockly core entry instead of widening old mission bundles', () => {
+  const viteSource = readFileSync(new URL('../vite.config.mjs', import.meta.url), 'utf8');
+  assert.match(viteSource, /source === 'blockly'[\s\S]{0,260}AdvancedWeekOne[\s\S]{0,260}'blockly\/core'/);
+});
+
+test('derives advanced parser and runtime behavior from one zero-UI neutral contract', () => {
+  const schemaPath = resolve(sourceRoot, 'progress/advancedSessionSchema.ts');
+  const contractPath = resolve(sourceRoot, 'blockly/advancedWeekOneContract.ts');
+  const schemaImports = sourceModuleSpecifiers(schemaPath);
+  assert.ok(schemaImports.some((specifier) => specifier.endsWith('advancedWeekOneContract')));
+  assert.ok(!schemaImports.some((specifier) => specifier.endsWith('advancedWeekOneDraft') || specifier.endsWith('advancedWeekOne')));
+  const contractSource = readFileSync(contractPath, 'utf8');
+  assert.deepEqual(runtimeModuleSpecifiers(contractPath), []);
+  assert.match(contractSource, /export function compileAdvancedWeekOneDraft/);
+  assert.match(contractSource, /export function runAdvancedWeekOne/);
 });
 
 test('derives compatible cold-load aliases from canonical budget constants', () => {
@@ -227,6 +257,27 @@ test('keeps all three formal experiences route-lazy and Four Seas scene/workspac
   const result = analyzeManifest(manifest, gzip, raw);
   assert.equal(result.closures['src/components/FourSeasRegaliaScene.tsx'].rawBytes, 1001);
   assert.equal(result.closures['src/components/FourSeasRegaliaBlocklyWorkspace.tsx'].rawBytes, 2001);
+});
+
+test('keeps mission, parent, Ruyi, and Four Seas CSS out of the homepage entry closure', () => {
+  const appSource = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  const globalCss = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  const parentGateSource = readFileSync(new URL('../src/components/ParentAccessGate.tsx', import.meta.url), 'utf8');
+  const parentToolsSource = readFileSync(new URL('../src/components/ParentDataTools.tsx', import.meta.url), 'utf8');
+  const missionToolsSource = readFileSync(new URL('../src/components/MissionTools.tsx', import.meta.url), 'utf8');
+  const missionPageSource = readFileSync(new URL('../src/components/MissionPageContent.tsx', import.meta.url), 'utf8');
+  const ruyiSource = readFileSync(new URL('../src/components/RuyiStaffExperience.tsx', import.meta.url), 'utf8');
+  const fourSeasSource = readFileSync(new URL('../src/components/FourSeasRegaliaExperience.tsx', import.meta.url), 'utf8');
+
+  assert.match(appSource, /lazy\(\(\)\s*=>\s*import\(['"]\.\/components\/ParentAccessGate['"]\)/);
+  assert.match(appSource, /lazy\(\(\)\s*=>\s*import\(['"]\.\/components\/ParentDataTools['"]\)/);
+  assert.match(parentGateSource, /import ['"]\.\/ParentAccessGate\.css['"]/);
+  assert.match(parentToolsSource, /import ['"]\.\/ParentDataTools\.css['"]/);
+  assert.match(missionToolsSource, /import ['"]\.\/MissionTools\.css['"]/);
+  assert.match(missionPageSource, /import ['"]\.\/MissionPageContent\.css['"]/);
+  assert.match(ruyiSource, /import ['"]\.\/RuyiStaffExperience\.css['"]/);
+  assert.match(fourSeasSource, /import ['"]\.\/FourSeasRegaliaExperience\.css['"]/);
+  assert.doesNotMatch(globalCss, /\.mission-page\s*\{|\.parent-page\s*\{|\.ruyi-staff-experience\s*\{|\.four-seas-regalia-experience\s*\{|\.python-workspace\s*\{/);
 });
 
 test('keeps Four Seas persistence on a neutral contract outside the lazy UI catalogue', () => {

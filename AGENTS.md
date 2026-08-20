@@ -69,3 +69,12 @@ Run the local server yourself and open the preview in the browser available to t
 Before making substantial visual changes, use the Product Design plugin's `get-context` skill when the visual source is unclear or no longer matches the current goal. When the user gives durable prototype-specific design feedback, preferences, or decisions, record them in `AGENTS.md`.
 
 When implementing from a selected generated mock, treat that image as the source of truth for layout, component anatomy, density, spacing, color, typography, visible content, and hierarchy.
+
+## Approved First-Week System Direction
+
+- Keep the formal w1-m4 then formal Boss w1-m5 sequence. Do not route either mission through legacy tools.
+- After those mission loops, build real persistent rewards and equipment before claiming the first week is a system loop: Ruyi Staff, crown, armor, and boots must be obtained once, equipped and unequipped in real slots, survive recovery/export-import, and change later optional player actions.
+- Approved equipment effects are learning-tool effects only: weight reference, task-decomposition view, accepted-prefix playback, and repeated problem-block navigation. They must never edit Blockly, run code, reveal an ordered answer, or complete a mission.
+- Do not add currency until it has a real consumable sink; decorative balances are forbidden.
+- Remove raw block IDs, instruction IDs, and parent IDs from the default child experience. Engineering provenance may remain in persisted evidence and automated tests, not the ordinary child UI.
+- The first week remains `not complete` at `System loop complete` and `Full-content verified` until this reward/equipment loop and the unified five-mission browser matrix pass.

@@ -9,6 +9,7 @@ export type {
   ExecutableMissionId,
   DragonPalaceMissionSession,
   FourSeasRegaliaMissionSession,
+  AdvancedWeekOneMissionSession,
   RuyiStaffMissionSession,
   ProgressDocument,
   ProgressSettings,
@@ -21,6 +22,7 @@ export { createInitialProgress } from './schema';
 
 import { allMissionOutlines } from '../course/courseOutline';
 import { getSessionSupport } from './session';
+import { grantMissionRewards } from './equipment';
 
 export interface CompletionInput {
   stars: number;
@@ -76,6 +78,7 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
   }
   const attempts = safeCount(0, 1);
   const hintsUsed = safeCount(0, normalizedHints);
+  const completedAt = new Date().toISOString();
   return {
     ...progress,
     missions: {
@@ -85,9 +88,10 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
         stars,
         attempts,
         hintsUsed,
-        completedAt: new Date().toISOString(),
+        completedAt,
       },
     },
+    equipment: grantMissionRewards(progress.equipment, missionId, completedAt),
     savedAt: new Date().toISOString(),
   };
 }
@@ -108,12 +112,16 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
   const dragonSession = week === 1 ? progress.sessions['w1-m1'] : undefined;
   const ruyiSession = week === 1 ? progress.sessions['w1-m2'] : undefined;
   const fourSeasSession = week === 1 ? progress.sessions['w1-m3'] : undefined;
+  const underworldSession = week === 1 ? progress.sessions['w1-m4'] : undefined;
+  const bossSession = week === 1 ? progress.sessions['w1-m5'] : undefined;
   const sessionSupport = [
     ...(dragonSession ? getSessionSupport(dragonSession, 'w1-m1') : []),
     ...(ruyiSession ? getSessionSupport(ruyiSession, 'w1-m2') : []),
     ...(fourSeasSession ? getSessionSupport(fourSeasSession, 'w1-m3') : []),
+    ...(underworldSession ? getSessionSupport(underworldSession, 'w1-m4') : []),
+    ...(bossSession ? getSessionSupport(bossSession, 'w1-m5') : []),
   ];
-  const sessionRecords = [dragonSession, ruyiSession, fourSeasSession].filter(
+  const sessionRecords = [dragonSession, ruyiSession, fourSeasSession, underworldSession, bossSession].filter(
     (session): session is NonNullable<typeof session> => session !== undefined,
   );
   const sessionRuns = sessionRecords.reduce(

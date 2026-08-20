@@ -62,6 +62,12 @@ async function add(label: string) {
   fireEvent.click(await screen.findByRole('button', { name: label }, { timeout: 5000 }))
 }
 
+async function executeRun() {
+  const run = screen.getByRole('button', { name: '执行披挂指令' })
+  await waitFor(() => expect(run).toBeEnabled())
+  fireEvent.click(run)
+}
+
 async function buildMainAndEquip() {
   await add('加入主任务：向东海龙王请求披挂')
   await add('加入主任务：收齐三海宝物')
@@ -228,7 +234,7 @@ describe('FourSeasRegaliaExperience', () => {
     await add('加入收集子任务：收下南海的凤翅紫金冠')
     await add('加入收集子任务：收下西海的锁子黄金甲')
     await add('加入收集子任务：收下北海的藕丝步云履')
-    fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }))
+    await executeRun()
     expect(screen.getByRole('button', { name: '重播最近一次' })).toBeDisabled()
 
     expect(await screen.findByRole('alert')).toHaveTextContent('北海龙王还没有送来云履')
@@ -236,6 +242,11 @@ describe('FourSeasRegaliaExperience', () => {
     const wrong = stored().sessions['w1-m3']
     expect(wrong.lastRun.diagnostic.sourceBlockId).toBe(wrong.lastTrace[2].sourceBlockId)
     expect(screen.getByTestId('regalia-events')).toHaveTextContent(wrong.lastRun.diagnostic.sourceBlockId)
+    const steps = screen.getByRole('region', { name: '本次执行步骤' })
+    expect(steps).toHaveTextContent('向东海龙王请求披挂')
+    expect(steps).toHaveTextContent(/收下南海的凤翅紫金冠\s+属于「收齐三海宝物」任务组/)
+    expect(steps).not.toHaveTextContent(wrong.lastTrace[2].sourceBlockId)
+    expect(steps).not.toHaveTextContent(/parent=|instruction:/)
     act(() => callbacks.get(token())?.())
     expect(onComplete).not.toHaveBeenCalled()
   })
@@ -247,7 +258,7 @@ describe('FourSeasRegaliaExperience', () => {
       : { status: 'saved', revision: 1, progress })
     const { onComplete } = renderExperience({ save })
     await buildCorrect()
-    fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }))
+    await executeRun()
     const request = token()
     const replay = screen.getByRole('button', { name: '重播最近一次' })
     expect(replay).toBeDisabled()
@@ -271,7 +282,7 @@ describe('FourSeasRegaliaExperience', () => {
     fireEvent.click(screen.getByRole('button', { name: '思路提示' }))
     await waitFor(() => expect(stored().sessions['w1-m3']?.usedHintTiers).toEqual(['observe', 'think']))
     await buildCorrect()
-    fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }))
+    await executeRun()
     const request = token()
     act(() => callbacks.get(request)?.())
     await waitFor(() => expect(onComplete).toHaveBeenCalledWith({ stars: 1, hintsUsed: 2 }))
@@ -288,7 +299,7 @@ describe('FourSeasRegaliaExperience', () => {
     })
     const { onComplete } = renderExperience({ save })
     await buildCorrect()
-    fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }))
+    await executeRun()
     const request = token()
     act(() => callbacks.get(request)?.())
     expect(await screen.findByText('本关尚未保存，请重试。')).toBeVisible()
@@ -317,7 +328,7 @@ describe('FourSeasRegaliaExperience', () => {
       <FourSeasRegaliaExperience reducedMotion muted onComplete={onComplete} /><LearnerName />
     </ProgressProvider>)
     await buildCorrect()
-    fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }))
+    await executeRun()
     act(() => callbacks.get(token())?.())
     await waitFor(() => expect(save).toHaveBeenCalledOnce())
     expect(onComplete).not.toHaveBeenCalled()
@@ -345,8 +356,7 @@ describe('FourSeasRegaliaExperience', () => {
       : { status: 'saved', revision: 1, progress })
     const { onComplete, unmount } = renderExperience({ save })
     await buildCorrect()
-    const run = screen.getByRole('button', { name: '执行披挂指令' })
-    fireEvent.click(run)
+    await executeRun()
     const current = token()
     await waitFor(() => expect(save.mock.calls.some(([progress]) => progress.sessions['w1-m3']?.lastRun?.completed === true)).toBe(true))
     const exact = save.mock.calls.find(([progress]) => progress.sessions['w1-m3']?.lastRun?.completed === true)?.[0]
@@ -360,7 +370,7 @@ describe('FourSeasRegaliaExperience', () => {
   it.each([false, true])('restores and replays a persisted run without reopening success (reduced=%s)', async (reducedMotion) => {
     const { onComplete, unmount } = renderExperience({ reducedMotion })
     await buildCorrect()
-    fireEvent.click(screen.getByRole('button', { name: '执行披挂指令' }))
+    await executeRun()
     const request = token()
     act(() => callbacks.get(request)?.())
     await waitFor(() => expect(onComplete).toHaveBeenCalledOnce())

@@ -5,16 +5,18 @@ import { MissionTools, type MissionToolLoaders } from './components/MissionTools
 import { RuyiStaffExperience } from './components/RuyiStaffExperience';
 import { ProgressProvider } from './context/ProgressContext';
 import './styles.css';
+import './components/MissionPageContent.css';
+
+const readCss = (path: string) => readFileSync(path, 'utf8');
 
 function coarsePointerRules(css: string): CSSStyleRule[] {
   const style = document.createElement('style');
   style.textContent = css;
   document.head.append(style);
   const sheet = style.sheet as CSSStyleSheet;
-  const media = [...sheet.cssRules].find((rule): rule is CSSMediaRule => (
-    'media' in rule && (rule as CSSMediaRule).media.mediaText.includes('pointer: coarse')
-  ));
-  const rules = media ? [...media.cssRules].filter((rule): rule is CSSStyleRule => 'selectorText' in rule) : [];
+  const rules = [...sheet.cssRules]
+    .filter((rule): rule is CSSMediaRule => 'media' in rule && (rule as CSSMediaRule).media.mediaText.includes('pointer: coarse'))
+    .flatMap((media) => [...media.cssRules].filter((rule): rule is CSSStyleRule => 'selectorText' in rule));
   style.remove();
   return rules;
 }
@@ -23,7 +25,13 @@ describe('commercial responsive shell', () => {
   it('keeps heavy mission tools out of the app entry and declares responsive foundations', () => {
     const app = readFileSync('src/App.tsx', 'utf8');
     const missionPage = readFileSync('src/components/MissionPageContent.tsx', 'utf8');
-    const css = readFileSync('src/styles.css', 'utf8');
+    const globalCss = readCss('src/styles.css');
+    const missionPageCss = readCss('src/components/MissionPageContent.css');
+    const ruyiCss = readCss('src/components/RuyiStaffExperience.css');
+    const fourSeasCss = readCss('src/components/FourSeasRegaliaExperience.css');
+    const parentCss = readCss('src/components/ParentAccessGate.css');
+    const parentToolsCss = readCss('src/components/ParentDataTools.css');
+    const css = [globalCss, missionPageCss, ruyiCss, fourSeasCss, parentCss, parentToolsCss].join('\n');
     const html = readFileSync('index.html', 'utf8');
     expect(html).toContain('<html lang="zh-CN">');
     expect(app).not.toMatch(/from ['"].*BlocklyWorkspace/);
@@ -36,6 +44,15 @@ describe('commercial responsive shell', () => {
     expect(missionPage).toMatch(/lazy\(\(\) => import\(['"]\.\/DragonPalaceExperience['"]\)/);
     expect(missionPage).toMatch(/lazy\(\(\) => import\(['"]\.\/MissionTools['"]\)/);
     expect(missionPage).toMatch(/lazy\(\(\) => import\(['"]\.\/RuyiStaffExperience['"]\)/);
+    expect(readFileSync('src/components/RuyiStaffExperience.tsx', 'utf8')).toMatch(/import ['"]\.\/RuyiStaffExperience\.css['"]/);
+    expect(missionPage).toMatch(/import ['"]\.\/MissionPageContent\.css['"]/);
+    expect(readFileSync('src/components/FourSeasRegaliaExperience.tsx', 'utf8')).toMatch(/import ['"]\.\/FourSeasRegaliaExperience\.css['"]/);
+    expect(readFileSync('src/components/ParentAccessGate.tsx', 'utf8')).toMatch(/import ['"]\.\/ParentAccessGate\.css['"]/);
+    expect(readFileSync('src/components/ParentDataTools.tsx', 'utf8')).toMatch(/import ['"]\.\/ParentDataTools\.css['"]/);
+    expect(globalCss).not.toMatch(/\.ruyi-staff-experience\s*\{/);
+    expect(globalCss).not.toMatch(/\.four-seas-regalia-experience\s*\{/);
+    expect(globalCss).not.toMatch(/\.parent-page\s*\{/);
+    expect(globalCss).not.toMatch(/\.mission-page\s*\{/);
     expect(css).not.toMatch(/(?:html|body)\s*\{[^}]*min-width:\s*1180px/s);
     expect(css).toMatch(/@media\s*\([^)]*max-width:\s*900px/);
     expect(css).toMatch(/@media\s*\([^)]*max-width:\s*600px/);
@@ -85,7 +102,7 @@ describe('commercial responsive shell', () => {
   });
 
   it('gives Blockly actions, feedback and unsaved recovery exact 44px coarse-pointer targets', () => {
-    const rules = coarsePointerRules(readFileSync('src/styles.css', 'utf8'));
+    const rules = coarsePointerRules([readCss('src/styles.css'), readCss('src/components/FourSeasRegaliaExperience.css')].join('\n'));
     const targetSelectors = [
       '.block-program-actions button',
       '.battle-feedback button',

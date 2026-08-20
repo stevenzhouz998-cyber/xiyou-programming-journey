@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import './ParentAccessGate.css';
 import {
   createParentAccessRecord,
   generateRecoveryCode,

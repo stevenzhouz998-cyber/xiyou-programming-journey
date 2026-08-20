@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialProgress, serializeProgress } from './progress';
+import { completeMission, createInitialProgress, serializeProgress } from './progress';
 import {
   CORRUPT_PROGRESS_KEY,
   CURRENT_PROGRESS_KEY,
@@ -54,10 +54,10 @@ describe('cross-tab storage coordinator', () => {
     storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(createInitialProgress()));
     storage.setItem(REVISION_PROGRESS_KEY, '0');
     storage.setItem('xiyou-test-storage-mode', 'fail-regalia-completion');
-    const completed: ProgressV3 = {
-      ...createInitialProgress(),
-      missions: { 'w1-m3': { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: '2026-07-20T00:00:00.000Z' } },
-    };
+    let completed: ProgressV3 = createInitialProgress();
+    completed = completeMission(completed, 'w1-m1', { stars: 3, hintsUsed: 0 });
+    completed = completeMission(completed, 'w1-m2', { stars: 3, hintsUsed: 0 });
+    completed = completeMission(completed, 'w1-m3', { stars: 3, hintsUsed: 0 });
 
     const result = await saveProgressCoordinated(completed, 0, { storage, lockManager: immediateLockManager });
 

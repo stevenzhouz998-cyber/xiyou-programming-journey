@@ -12,6 +12,7 @@ export const MAX_MISSION_MEDIA_BYTES = DRAGON_PALACE_MEDIA_BYTES;
 export const REQUIRED_TOOL = 'OpenAI built-in image_gen';
 export const REQUIRED_PROVENANCE = 'generated in-project with built-in image_gen; provenance verified';
 export const REQUIRED_ART_DIRECTION = 'commercial children’s learning game, refined Chinese ink-and-color illustration, Journey to the West Dragon Palace, warm jade/cinnabar/gold palette, readable silhouettes, no text, no logo, no emoji, no UI frame.';
+export const REQUIRED_ADVANCED_ART_DIRECTION = "polished 3D children's storybook game";
 
 const EXPECTED_COLUMNS = [
   'Asset ID',
@@ -48,6 +49,7 @@ const REQUIRED_METADATA = [
 ];
 
 const QA_STATUSES = new Set(['planned', 'generated', 'provenance-verified', 'visual-qa-passed', 'rejected']);
+const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/'];
 
 const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
   ['assets/dragon-palace/background.webp', [
@@ -84,6 +86,15 @@ const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
     { sourcePath: 'src/components/FourSeasRegaliaScene.tsx', loaderKey: 'wukongRegalia' },
   ]],
 ]);
+
+const REQUIRED_ADVANCED_WEEK_ONE_ASSETS = new Map([
+  ['assets/week-one-advanced/underworld-background.webp', { missionId: 'w1-m4', binding: 'background', branch: 'true' }],
+  ['assets/week-one-advanced/register-states.webp', { missionId: 'w1-m4', binding: 'states', branch: 'true' }],
+  ['assets/week-one-advanced/boss-journey-background.webp', { missionId: 'w1-m5', binding: 'background', branch: 'false' }],
+  ['assets/week-one-advanced/boss-checkpoints.webp', { missionId: 'w1-m5', binding: 'states', branch: 'false' }],
+]);
+
+const ADVANCED_WEEK_ONE_SOURCE_PATH = 'src/components/AdvancedWeekOneScene.tsx';
 
 function isPhaserSceneClass(node, sourceFile) {
   return ts.isClassDeclaration(node) && node.heritageClauses?.some(
@@ -498,7 +509,7 @@ export function parseAssetManifest(markdown) {
 
   const promptRecords = [];
   for (let index = 0; index < lines.length; index += 1) {
-    const headingMatch = /^### (Prompt DP-\d{3} .+)$/.exec(lines[index].trim());
+    const headingMatch = /^### (Prompt [A-Z][A-Z0-9]*-\d{3} .+)$/.exec(lines[index].trim());
     if (!headingMatch) continue;
     const heading = headingMatch[1];
     let fenceIndex = index + 1;
@@ -526,7 +537,8 @@ function assertSafeAssetPath(path) {
     throw new Error(`Asset manifest: unsafe asset path ${path || '<empty>'}.`);
   }
   const normalized = posix.normalize(path);
-  if (normalized !== path || normalized === '..' || normalized.startsWith('../') || path.split('/').includes('..') || !path.startsWith('assets/dragon-palace/')) {
+  if (normalized !== path || normalized === '..' || normalized.startsWith('../') || path.split('/').includes('..')
+    || !APPROVED_ASSET_DIRECTORIES.some((directory) => path.startsWith(directory))) {
     throw new Error(`Asset manifest: unsafe asset path ${path}.`);
   }
 }
@@ -552,40 +564,45 @@ function verifyPromptRecords(promptRecords, manifestRows) {
   if (!Array.isArray(promptRecords)) throw new Error('Asset manifest: structured prompt records are required by the pure verifier.');
   const headings = new Set();
   const anchors = new Set();
-  const recordDpIds = new Set();
+  const recordPromptIds = new Set();
   const recordsByAnchor = new Map();
 
   for (const record of promptRecords) {
     if (!record || typeof record.heading !== 'string') throw new Error('Asset manifest: prompt heading is required.');
-    const headingMatch = /^Prompt (DP-\d{3}) (.+)$/.exec(record.heading);
+    const headingMatch = /^Prompt ([A-Z][A-Z0-9]*-\d{3}) (.+)$/.exec(record.heading);
     if (!headingMatch) throw new Error(`Asset manifest: invalid prompt heading ${record.heading}.`);
-    const [, dpId] = headingMatch;
+    const [, promptId] = headingMatch;
     if (headings.has(record.heading)) throw new Error(`Asset manifest: duplicate prompt heading ${record.heading}.`);
     headings.add(record.heading);
     if (anchors.has(record.anchor)) throw new Error(`Asset manifest: duplicate prompt anchor ${record.anchor}.`);
     anchors.add(record.anchor);
-    if (recordDpIds.has(dpId)) throw new Error(`Asset manifest: duplicate prompt DP number ${dpId}.`);
-    recordDpIds.add(dpId);
+    if (recordPromptIds.has(promptId)) throw new Error(`Asset manifest: duplicate prompt ${promptId.startsWith('DP-') ? 'DP ' : ''}identifier ${promptId}.`);
+    recordPromptIds.add(promptId);
     const expectedAnchor = `#${markdownHeadingAnchor(record.heading)}`;
     if (record.anchor !== expectedAnchor) throw new Error(`Asset manifest: prompt anchor ${record.anchor} does not match heading ${record.heading}.`);
     if (typeof record.prompt !== 'string' || record.prompt.trim() === '') throw new Error(`Asset manifest: prompt text for ${record.heading} must be non-empty.`);
-    if (!record.prompt.includes(REQUIRED_ART_DIRECTION)) throw new Error(`Asset manifest: ${record.heading} is missing the exact shared art direction.`);
-    recordsByAnchor.set(record.anchor, { ...record, dpId });
+    recordsByAnchor.set(record.anchor, { ...record, promptId });
   }
 
   const referencedAnchors = new Set();
-  const referencedDpIds = new Set();
+  const referencedPromptIds = new Set();
   for (const row of manifestRows) {
-    const linkMatch = /^\[Prompt (DP-\d{3})\]\((#prompt-dp-\d{3}-[a-z0-9]+(?:-[a-z0-9]+)*)\)$/.exec(row.promptOrSourceReference);
+    const linkMatch = /^\[Prompt ([A-Z][A-Z0-9]*-\d{3})\]\((#prompt-[a-z0-9]+-\d{3}-[a-z0-9]+(?:-[a-z0-9]+)*)\)$/.exec(row.promptOrSourceReference);
     if (!linkMatch) throw new Error(`Asset manifest: ${row.assetId} must use an exact prompt markdown link such as [Prompt DP-001](#prompt-dp-001-background).`);
-    const [, linkDpId, anchor] = linkMatch;
+    const [, linkedPromptId, anchor] = linkMatch;
     if (referencedAnchors.has(anchor)) throw new Error(`Asset manifest: duplicate prompt reference ${anchor}.`);
     referencedAnchors.add(anchor);
-    if (referencedDpIds.has(linkDpId)) throw new Error(`Asset manifest: duplicate prompt DP number ${linkDpId} in shipping rows.`);
-    referencedDpIds.add(linkDpId);
+    if (referencedPromptIds.has(linkedPromptId)) throw new Error(`Asset manifest: duplicate prompt ${linkedPromptId.startsWith('DP-') ? 'DP ' : ''}identifier ${linkedPromptId} in shipping rows.`);
+    referencedPromptIds.add(linkedPromptId);
     const record = recordsByAnchor.get(anchor);
     if (!record) throw new Error(`Asset manifest: prompt anchor ${anchor} is missing for ${row.assetId}.`);
-    if (record.dpId !== linkDpId) throw new Error(`Asset manifest: prompt DP label ${linkDpId} does not match heading ${record.heading}.`);
+    if (record.promptId !== linkedPromptId) throw new Error(`Asset manifest: prompt ${linkedPromptId.startsWith('DP-') ? 'DP label' : 'identifier'} ${linkedPromptId} does not match heading ${record.heading}.`);
+    const requiredArtDirection = row.assetId.startsWith('assets/week-one-advanced/')
+      ? REQUIRED_ADVANCED_ART_DIRECTION
+      : REQUIRED_ART_DIRECTION;
+    if (!record.prompt.includes(requiredArtDirection)) {
+      throw new Error(`Asset manifest: ${record.heading} is missing the exact shared art direction required for ${row.assetId}.`);
+    }
   }
   for (const anchor of recordsByAnchor.keys()) if (!referencedAnchors.has(anchor)) throw new Error(`Asset manifest: unreferenced prompt record ${anchor}.`);
 }
@@ -629,6 +646,214 @@ export function verifyAssetManifest({ manifestRows, publicFiles, promptRecords, 
   return { assetCount: manifestRows.length, totalBytes, mode };
 }
 
+function promptRecordsForRows(promptRecords, manifestRows) {
+  const anchors = new Set(manifestRows.map((row) => {
+    const match = /^\[Prompt [A-Z][A-Z0-9]*-\d{3}\]\((#[^)]+)\)$/.exec(row.promptOrSourceReference);
+    return match?.[1];
+  }).filter(Boolean));
+  return promptRecords.filter((record) => anchors.has(record.anchor));
+}
+
+function familyRows(manifestRows, directory) {
+  return manifestRows.filter((row) => row.assetId.startsWith(directory));
+}
+
+function familyFiles(publicFiles, directory) {
+  return publicFiles.filter((file) => file.path.startsWith(directory));
+}
+
+function requireExactInventory({ manifestRows, publicFiles, expectedPaths, label }) {
+  const actualPaths = manifestRows.map((row) => row.assetId);
+  if (actualPaths.length !== expectedPaths.length) {
+    throw new Error(`Asset manifest: exactly ${expectedPaths.length} required ${label} assets are required; found ${actualPaths.length}.`);
+  }
+  for (const assetId of expectedPaths) {
+    if (!actualPaths.includes(assetId)) throw new Error(`Asset manifest: required ${label} asset ${assetId} is missing.`);
+  }
+  for (const assetId of actualPaths) {
+    if (!expectedPaths.includes(assetId)) throw new Error(`Asset manifest: unexpected ${label} asset ${assetId}.`);
+  }
+  for (const assetId of publicFiles.map((file) => file.path)) {
+    if (!expectedPaths.includes(assetId)) throw new Error(`Asset manifest: unexpected ${label} public file ${assetId}.`);
+  }
+}
+
+function findBindingSymbol(checker, name) {
+  return checker.getSymbolAtLocation(name) ?? null;
+}
+
+function isMissionIdEqualsUnderworld(node, missionIdSymbol, checker) {
+  return ts.isBinaryExpression(node)
+    && node.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+    && ts.isIdentifier(node.left)
+    && findBindingSymbol(checker, node.left) === missionIdSymbol
+    && ts.isStringLiteral(node.right)
+    && node.right.text === 'w1-m4';
+}
+
+function expressionLiteralPath(node) {
+  return ts.isStringLiteral(node) ? node.text : null;
+}
+
+function directJsxSrcBinding(openingElement, checker, assetUrlSymbol) {
+  const srcAttributes = openingElement.attributes.properties.filter((property) => (
+    ts.isJsxAttribute(property) && property.name.text === 'src'
+  ));
+  if (srcAttributes.length !== 1) return null;
+  const initializer = srcAttributes[0].initializer;
+  if (!initializer || !ts.isJsxExpression(initializer) || !initializer.expression
+    || !ts.isCallExpression(initializer.expression) || initializer.expression.questionDotToken
+    || !ts.isIdentifier(initializer.expression.expression)
+    || findBindingSymbol(checker, initializer.expression.expression) !== assetUrlSymbol
+    || initializer.expression.arguments.length !== 1
+    || !ts.isIdentifier(initializer.expression.arguments[0])) return null;
+  const identifier = initializer.expression.arguments[0];
+  return { identifier, symbol: findBindingSymbol(checker, identifier) };
+}
+
+function verifyAdvancedWeekOneSceneSource(sourcePath, source) {
+  const { sourceFile, checker } = createBoundSource(sourcePath, source);
+  if (sourceFile.parseDiagnostics.length > 0) throw new Error(`Asset manifest: ${sourcePath} cannot be parsed as TypeScript for AdvancedWeekOneScene verification.`);
+  const components = sourceFile.statements.filter((statement) => (
+    ts.isFunctionDeclaration(statement)
+    && statement.name?.text === 'AdvancedWeekOneScene'
+    && statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+  ));
+  if (components.length !== 1 || !components[0].body) {
+    throw new Error(`Asset manifest: ${sourcePath} must export exactly one live AdvancedWeekOneScene function.`);
+  }
+  const [component] = components;
+  const missionParameters = component.parameters.flatMap((parameter) => bindingIdentifiers(parameter.name))
+    .filter((identifier) => identifier.text === 'missionId');
+  if (missionParameters.length !== 1) throw new Error(`Asset manifest: ${sourcePath} AdvancedWeekOneScene must bind missionId exactly once.`);
+  const missionIdSymbol = findBindingSymbol(checker, missionParameters[0]);
+  if (!missionIdSymbol) throw new Error(`Asset manifest: ${sourcePath} missionId must have one TypeScript binding.`);
+
+  const assetUrlImports = sourceFile.statements.filter((statement) => (
+    ts.isImportDeclaration(statement)
+    && ts.isStringLiteral(statement.moduleSpecifier)
+    && statement.moduleSpecifier.text === '../utils/assets'
+  ));
+  const assetUrlSpecifiers = assetUrlImports.flatMap((statement) => {
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) return [];
+    return bindings.elements.filter((specifier) => (
+      !specifier.isTypeOnly && !specifier.propertyName && specifier.name.text === 'assetUrl'
+    ));
+  });
+  if (assetUrlImports.length !== 1 || assetUrlSpecifiers.length !== 1) {
+    throw new Error(`Asset manifest: ${sourcePath} must import assetUrl exactly once and unaliased from ../utils/assets.`);
+  }
+  const assetUrlSymbol = findBindingSymbol(checker, assetUrlSpecifiers[0].name);
+  if (!assetUrlSymbol) throw new Error(`Asset manifest: ${sourcePath} assetUrl must have one TypeScript binding.`);
+
+  const declarations = new Map();
+  for (const statement of component.body.statements) {
+    if (!ts.isVariableStatement(statement) || !(statement.declarationList.flags & ts.NodeFlags.Const)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && ['background', 'states'].includes(declaration.name.text)) {
+        if (declarations.has(declaration.name.text)) throw new Error(`Asset manifest: ${sourcePath} has duplicate ${declaration.name.text} image binding.`);
+        declarations.set(declaration.name.text, declaration);
+      }
+    }
+  }
+  if (declarations.size !== 2) throw new Error(`Asset manifest: ${sourcePath} must declare exactly the background and states image bindings at live component scope.`);
+
+  const expectedBindings = new Map([
+    ['background', {
+      truePath: '/assets/week-one-advanced/underworld-background.webp',
+      falsePath: '/assets/week-one-advanced/boss-journey-background.webp',
+    }],
+    ['states', {
+      truePath: '/assets/week-one-advanced/register-states.webp',
+      falsePath: '/assets/week-one-advanced/boss-checkpoints.webp',
+    }],
+  ]);
+  const bindingSymbols = new Map();
+  for (const [name, expected] of expectedBindings) {
+    const declaration = declarations.get(name);
+    if (!declaration || !declaration.initializer || !ts.isConditionalExpression(declaration.initializer)
+      || !isMissionIdEqualsUnderworld(declaration.initializer.condition, missionIdSymbol, checker)
+      || expressionLiteralPath(declaration.initializer.whenTrue) !== expected.truePath
+      || expressionLiteralPath(declaration.initializer.whenFalse) !== expected.falsePath) {
+      throw new Error(`Asset manifest: ${sourcePath} ${name} must be a direct missionId === 'w1-m4' branch to its two approved literal image paths.`);
+    }
+    const symbol = findBindingSymbol(checker, declaration.name);
+    if (!symbol) throw new Error(`Asset manifest: ${sourcePath} ${name} must have one TypeScript binding.`);
+    bindingSymbols.set(name, symbol);
+  }
+
+  const pathLiterals = [];
+  const imageOpenings = [];
+  const imageLoaderViolations = [];
+  const inspect = (node) => {
+    if (ts.isStringLiteral(node) && node.text.startsWith('/assets/week-one-advanced/')) pathLiterals.push(node.text);
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      if (node.tagName.getText(sourceFile) === 'img') imageOpenings.push(node);
+    }
+    if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'Image') imageLoaderViolations.push('new Image');
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+      && node.expression.expression.getText(sourceFile) === 'document' && node.expression.name.text === 'createElement'
+      && node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0]) && node.arguments[0].text === 'img') imageLoaderViolations.push('document.createElement(img)');
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      && ts.isPropertyAccessExpression(node.left) && node.left.name.text === 'src') imageLoaderViolations.push('assigned .src');
+    ts.forEachChild(node, inspect);
+  };
+  inspect(component.body);
+  const expectedPaths = [...REQUIRED_ADVANCED_WEEK_ONE_ASSETS.keys()].map((path) => `/${path}`);
+  if (pathLiterals.length !== expectedPaths.length || new Set(pathLiterals).size !== expectedPaths.length
+    || expectedPaths.some((path) => !pathLiterals.includes(path))) {
+    throw new Error(`Asset manifest: ${sourcePath} must contain exactly the four approved advanced Week One literal image paths; hidden, dead, or extra paths are forbidden.`);
+  }
+  if (imageLoaderViolations.length > 0) throw new Error(`Asset manifest: ${sourcePath} has forbidden dynamic image loading via ${imageLoaderViolations[0]}.`);
+  if (imageOpenings.length !== 2) throw new Error(`Asset manifest: ${sourcePath} must render exactly two live img elements; found ${imageOpenings.length}.`);
+  const expectedImageSymbols = new Set(bindingSymbols.values());
+  const usedSymbols = new Map();
+  for (const opening of imageOpenings) {
+    const srcBinding = directJsxSrcBinding(opening, checker, assetUrlSymbol);
+    if (!srcBinding || !expectedImageSymbols.has(srcBinding.symbol)) {
+      throw new Error(`Asset manifest: ${sourcePath} every scene img src must directly use assetUrl with the approved background or states binding.`);
+    }
+    usedSymbols.set(srcBinding.symbol, (usedSymbols.get(srcBinding.symbol) ?? 0) + 1);
+  }
+  for (const [name, symbol] of bindingSymbols) {
+    if (usedSymbols.get(symbol) !== 1) throw new Error(`Asset manifest: ${sourcePath} ${name} must be used exactly once as a live img src.`);
+  }
+}
+
+export function verifyRequiredAdvancedWeekOneInventory({
+  manifestRows,
+  publicFiles,
+  promptRecords,
+  sourcePath = ADVANCED_WEEK_ONE_SOURCE_PATH,
+  source,
+  mode = 'verify',
+}) {
+  const directory = 'assets/week-one-advanced/';
+  const advancedRows = familyRows(manifestRows, directory);
+  const advancedFiles = familyFiles(publicFiles, directory);
+  requireExactInventory({
+    manifestRows: advancedRows,
+    publicFiles: advancedFiles,
+    expectedPaths: [...REQUIRED_ADVANCED_WEEK_ONE_ASSETS.keys()],
+    label: 'advanced Week One',
+  });
+  for (const row of advancedRows) {
+    const expected = REQUIRED_ADVANCED_WEEK_ONE_ASSETS.get(row.assetId);
+    if (!expected || !row.screenSlots.includes(expected.missionId) || !row.screenSlots.includes('AdvancedWeekOneScene')) {
+      throw new Error(`Asset manifest: ${row.assetId} screen slots must identify ${expected?.missionId ?? 'its mission'} and AdvancedWeekOneScene.`);
+    }
+  }
+  if (typeof source !== 'string') throw new Error(`Asset manifest: ${sourcePath} source text is required for AdvancedWeekOneScene slot verification.`);
+  verifyAdvancedWeekOneSceneSource(sourcePath, source);
+  return verifyAssetManifest({
+    manifestRows: advancedRows,
+    publicFiles: advancedFiles,
+    promptRecords: promptRecordsForRows(promptRecords, advancedRows),
+    mode,
+  });
+}
+
 export function verifyRequiredDragonPalaceInventory({
   manifestRows,
   publicFiles,
@@ -636,17 +861,11 @@ export function verifyRequiredDragonPalaceInventory({
   sourceFiles,
   mode = 'verify',
 }) {
+  const directory = 'assets/dragon-palace/';
+  const dragonRows = familyRows(manifestRows, directory);
+  const dragonFiles = familyFiles(publicFiles, directory);
   const expectedPaths = [...REQUIRED_DRAGON_PALACE_SLOTS.keys()];
-  const actualPaths = manifestRows.map((row) => row.assetId);
-  if (actualPaths.length !== expectedPaths.length) {
-    throw new Error(`Asset manifest: exactly eight required Dragon Palace assets are required; found ${actualPaths.length}.`);
-  }
-  for (const assetId of expectedPaths) {
-    if (!actualPaths.includes(assetId)) throw new Error(`Asset manifest: required Dragon Palace asset ${assetId} is missing.`);
-  }
-  for (const assetId of actualPaths) {
-    if (!REQUIRED_DRAGON_PALACE_SLOTS.has(assetId)) throw new Error(`Asset manifest: unexpected Dragon Palace asset ${assetId}.`);
-  }
+  requireExactInventory({ manifestRows: dragonRows, publicFiles: dragonFiles, expectedPaths, label: 'Dragon Palace' });
   if (!(sourceFiles instanceof Map)) throw new Error('Asset manifest: formal scene source files are required for slot verification.');
   const expectedAssetsBySource = new Map();
   for (const [assetId, slots] of REQUIRED_DRAGON_PALACE_SLOTS) {
@@ -698,7 +917,12 @@ export function verifyRequiredDragonPalaceInventory({
       }
     }
   }
-  return verifyAssetManifest({ manifestRows, publicFiles, promptRecords, mode });
+  return verifyAssetManifest({
+    manifestRows: dragonRows,
+    publicFiles: dragonFiles,
+    promptRecords: promptRecordsForRows(promptRecords, dragonRows),
+    mode,
+  });
 }
 
 export function readWebpDimensions(buffer) {
@@ -784,7 +1008,7 @@ async function listFiles(root, relativeRoot = '') {
   return files;
 }
 
-export async function collectAssetFiles(assetRoot) {
+export async function collectAssetFiles(assetRoot, assetDirectory = 'assets/dragon-palace') {
   const rootInfo = await lstat(assetRoot);
   if (rootInfo.isSymbolicLink() || !rootInfo.isDirectory()) throw new Error('Asset manifest: asset root must be a real directory, not a symbolic link.');
   const resolvedRoot = await realpath(assetRoot);
@@ -815,7 +1039,7 @@ export async function collectAssetFiles(assetRoot) {
         throw new Error(`Asset manifest: ${relativePath} must fully decode as WebP: ${detail}`, { cause: error });
       }
       publicFiles.push({
-        path: posix.join('assets/dragon-palace', relativePath),
+        path: posix.join(assetDirectory, relativePath),
         sha256: createHash('sha256').update(bytes).digest('hex'),
         bytes: bytes.length,
         ...decodedDimensions,
@@ -830,17 +1054,29 @@ export async function collectAssetFiles(assetRoot) {
 async function main() {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const manifestPath = join(root, 'docs', 'assets', 'asset-manifest.md');
-  const assetRoot = join(root, 'public', 'assets', 'dragon-palace');
+  const dragonPalaceRoot = join(root, 'public', 'assets', 'dragon-palace');
+  const advancedWeekOneRoot = join(root, 'public', 'assets', 'week-one-advanced');
   const { manifestRows, promptRecords } = parseAssetManifest(await readFile(manifestPath, 'utf8'));
-  const publicFiles = await collectAssetFiles(assetRoot);
+  const publicFiles = [
+    ...await collectAssetFiles(dragonPalaceRoot),
+    ...await collectAssetFiles(advancedWeekOneRoot, 'assets/week-one-advanced'),
+  ];
   const sourceFiles = new Map(await Promise.all([
     'src/components/GameScene.tsx',
     'src/components/RuyiStaffScene.tsx',
     'src/components/FourSeasRegaliaScene.tsx',
   ].map(async (sourcePath) => [sourcePath, await readFile(join(root, sourcePath), 'utf8')])));
   const mode = process.argv.includes('--require-visual-qa') ? 'verify' : 'check';
-  const result = verifyRequiredDragonPalaceInventory({ manifestRows, publicFiles, promptRecords, sourceFiles, mode });
-  console.log(`Dragon Palace assets: ${result.assetCount} files, ${result.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
+  const dragonResult = verifyRequiredDragonPalaceInventory({ manifestRows, publicFiles, promptRecords, sourceFiles, mode });
+  const advancedResult = verifyRequiredAdvancedWeekOneInventory({
+    manifestRows,
+    publicFiles,
+    promptRecords,
+    source: await readFile(join(root, ADVANCED_WEEK_ONE_SOURCE_PATH), 'utf8'),
+    mode,
+  });
+  console.log(`Dragon Palace assets: ${dragonResult.assetCount} files, ${dragonResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
+  console.log(`Advanced Week One assets: ${advancedResult.assetCount} files, ${advancedResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -61,7 +61,7 @@ export function getMissionOutline(id: string): CourseOutlineMission | undefined 
 }
 
 export function isFormalMissionOutline(outline: CourseOutlineMission | undefined): boolean {
-  return outline?.week === 1 && outline.order <= 3;
+  return outline?.week === 1 && outline.order <= 5;
 }
 
 function deriveHints(extension: MissionPresentationExtension, stepCount: number): HintSet {

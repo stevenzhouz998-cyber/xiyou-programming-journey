@@ -14,6 +14,7 @@ import type { FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft';
 import { runDragonPalaceBattle } from '../battle/dragonPalace';
 import { runRuyiStaffBattle } from '../battle/ruyiStaff';
 import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
+import { parseAdvancedWeekOneSession } from './advancedSessionSchema';
 import type {
   BattleDiagnostic,
   BattleEvent,
@@ -38,6 +39,14 @@ import type {
 import type { WorkspaceDraftV1 } from '../blockly/draft';
 import type { RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft';
 import { isValidParentAccessRecord } from './parentAccess';
+import {
+  EQUIPMENT_CATALOGUE,
+  grantMissionRewards,
+  initialEquipment,
+  type EquipmentItemId,
+  type EquipmentSlot,
+  type RewardEquipmentStateV1,
+} from './equipment';
 import type {
   MissionProgress,
   MissionSession,
@@ -45,6 +54,7 @@ import type {
   DragonPalaceMissionSession,
   FourSeasRegaliaMissionSession,
   RuyiStaffMissionSession,
+  AdvancedWeekOneMissionSession,
   ProgressSettings,
   ProgressV1,
   ProgressV2,
@@ -68,13 +78,14 @@ const utf8Encoder = new TextEncoder();
 
 export const createInitialProgress = (): ProgressV3 => ({
   version: 3,
-  schemaRevision: 1,
+  schemaRevision: 2,
   learnerName: '小行者',
   missions: {},
   settings: { muted: false, reducedMotion: false, reducedMotionOverride: false, parentPin: 'unset' },
   privacy: { localDataNoticeSeen: false },
   recovery: { lastRecoveredAt: null, source: null },
   sessions: {},
+  equipment: initialEquipment(),
   savedAt: new Date(0).toISOString(),
 });
 
@@ -1572,6 +1583,8 @@ function sessions(value: unknown): MissionSessions {
       result['w1-m2'] = ruyiSession(rawSession, `sessions.${missionId}`);
     } else if (missionId === 'w1-m3') {
       result['w1-m3'] = fourSeasSession(rawSession, `sessions.${missionId}`);
+    } else if (missionId === 'w1-m4' || missionId === 'w1-m5') {
+      result[missionId] = parseAdvancedWeekOneSession(rawSession, missionId);
     } else {
       invalid(`任务 ${missionId} 尚不支持可执行会话`);
     }
@@ -1579,17 +1592,85 @@ function sessions(value: unknown): MissionSessions {
   return result;
 }
 
+const equipmentSlots: EquipmentSlot[] = ['weapon', 'head', 'body', 'feet'];
+
+function equipmentFromMissions(parsedMissions: Record<string, MissionProgress>): RewardEquipmentStateV1 {
+  let result = initialEquipment();
+  for (const missionId of ['w1-m2', 'w1-m3'] as const) {
+    const completion = parsedMissions[missionId];
+    if (completion) result = grantMissionRewards(result, missionId, completion.completedAt);
+  }
+  return result;
+}
+
+function equipment(value: unknown): RewardEquipmentStateV1 {
+  const source = object(value, 'equipment');
+  exactKeys(source, 'equipment', ['version', 'inventory', 'equipped']);
+  if (source.version !== 1) invalid('equipment.version必须是1');
+  const rawInventory = object(source.inventory, 'equipment.inventory');
+  const inventory: RewardEquipmentStateV1['inventory'] = {};
+  for (const [rawItemId, rawGrant] of Object.entries(rawInventory)) {
+    if (!Object.prototype.hasOwnProperty.call(EQUIPMENT_CATALOGUE, rawItemId)) {
+      invalid(`equipment.inventory包含未知装备 ${rawItemId}`);
+    }
+    const itemId = rawItemId as EquipmentItemId;
+    const grant = object(rawGrant, `equipment.inventory.${itemId}`);
+    exactKeys(grant, `equipment.inventory.${itemId}`, ['grantedBy', 'grantedAt']);
+    const expectedMission = EQUIPMENT_CATALOGUE[itemId].grantedBy;
+    if (grant.grantedBy !== expectedMission) invalid(`equipment.inventory.${itemId}奖励来源无效`);
+    inventory[itemId] = { grantedBy: expectedMission, grantedAt: date(grant.grantedAt, `equipment.inventory.${itemId}.grantedAt`) };
+  }
+  const rawEquipped = object(source.equipped, 'equipment.equipped');
+  exactKeys(rawEquipped, 'equipment.equipped', equipmentSlots);
+  const equipped = initialEquipment().equipped;
+  for (const slot of equipmentSlots) {
+    const rawItemId = rawEquipped[slot];
+    if (rawItemId === null) { equipped[slot] = null; continue; }
+    if (typeof rawItemId !== 'string' || !Object.prototype.hasOwnProperty.call(EQUIPMENT_CATALOGUE, rawItemId)) {
+      invalid(`equipment.equipped.${slot}装备无效`);
+    }
+    const itemId = rawItemId as EquipmentItemId;
+    if (EQUIPMENT_CATALOGUE[itemId].slot !== slot) invalid(`equipment.equipped.${slot}栏位不匹配`);
+    if (!inventory[itemId]) invalid(`equipment.equipped.${slot}引用未获得装备`);
+    equipped[slot] = itemId;
+  }
+  return { version: 1, inventory, equipped };
+}
+
+function validateEquipmentRewards(
+  state: RewardEquipmentStateV1,
+  parsedMissions: Record<string, MissionProgress>,
+): RewardEquipmentStateV1 {
+  for (const itemId of Object.keys(EQUIPMENT_CATALOGUE) as EquipmentItemId[]) {
+    const definition = EQUIPMENT_CATALOGUE[itemId];
+    const completion = parsedMissions[definition.grantedBy];
+    const grant = state.inventory[itemId];
+    if (!completion && grant) invalid(`equipment.inventory.${itemId}奖励任务尚未完成`);
+    if (completion && !grant) invalid(`equipment.inventory.${itemId}缺少已获得奖励`);
+    if (completion && grant?.grantedAt !== completion.completedAt) {
+      invalid(`equipment.inventory.${itemId}奖励时间必须对应首次完成`);
+    }
+  }
+  return state;
+}
+
 function parseV3(source: Record<string, unknown>): ProgressV3 {
+  const legacyRevision = source.schemaRevision === 1;
   exactKeys(source, '顶层', [
-    'version', 'schemaRevision', 'learnerName', 'missions', 'settings', 'privacy', 'recovery', 'sessions', 'savedAt',
+    'version', 'schemaRevision', 'learnerName', 'missions', 'settings', 'privacy', 'recovery', 'sessions',
+    ...(legacyRevision ? [] : ['equipment']), 'savedAt',
   ]);
-  if (source.schemaRevision !== 1) invalid('schemaRevision必须是1');
+  if (source.schemaRevision !== 1 && source.schemaRevision !== 2) invalid('schemaRevision必须是1或2');
+  const parsedCommon = common(source, true);
   return {
     version: 3,
-    schemaRevision: 1,
-    ...common(source, true),
+    schemaRevision: 2,
+    ...parsedCommon,
     ...privacyAndRecovery(source),
     sessions: sessions(source.sessions),
+    equipment: legacyRevision
+      ? equipmentFromMissions(parsedCommon.missions)
+      : validateEquipmentRewards(equipment(source.equipment), parsedCommon.missions),
   };
 }
 
@@ -1600,16 +1681,23 @@ export function migrateProgress(value: unknown): ProgressV3 {
   }
   if (value.version === 3) return parseV3(value);
   const legacy = value.version === 2 ? parseV2(value) : parseV1(value);
-  if (legacy.version === 2) return { ...legacy, version: 3, sessions: {} };
+  if (legacy.version === 2) return {
+    ...legacy,
+    version: 3,
+    schemaRevision: 2,
+    sessions: {},
+    equipment: equipmentFromMissions(legacy.missions),
+  };
   return {
     version: 3,
-    schemaRevision: 1,
+    schemaRevision: 2,
     learnerName: legacy.learnerName,
     missions: legacy.missions,
     settings: { ...legacy.settings, reducedMotionOverride: false },
     privacy: { localDataNoticeSeen: false },
     recovery: { lastRecoveredAt: null, source: null },
     sessions: {},
+    equipment: equipmentFromMissions(legacy.missions),
     savedAt: legacy.savedAt,
   };
 }
