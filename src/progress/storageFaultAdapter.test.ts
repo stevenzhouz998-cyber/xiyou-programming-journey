@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import type { FourSeasInstruction } from '../battle/types';
 import { storageFaultAdapter as e2eStorageFaultAdapter } from '../../e2e/support/storageFaultAdapter';
-import { createInitialProgress, serializeProgress } from './progress';
-import { createMissionSession, recordHint, recordRun, updateWorkspaceDraft } from './session';
+import { completeMission, createInitialProgress, serializeProgress } from './progress';
+import { createMissionSession, recordConditionObservationUse, recordHint, recordRun, updateWorkspaceDraft } from './session';
+import { compileManorHelpDraft, createDefaultManorHelpDraft, runManorHelp } from '../blockly/weekThreeManorHelpContract';
+import { compileHeavenlySignalBossDraft, createDefaultHeavenlySignalBossDraft, runHeavenlySignalBoss } from '../blockly/weekTwoHeavenlySignalBossContract';
 import { storageFaultAdapter as productionStorageFaultAdapter } from './storageFaultAdapter';
 import type { ProgressV3 } from './types';
 
@@ -46,7 +49,44 @@ function storeCurrent(storage: MemoryStorage, progress: ProgressV3, mode: string
   storage.setItem(MODE_KEY, mode);
 }
 
+function withManorDraft(base = createInitialProgress()) {
+  const session = createMissionSession('w3-m1', NOW);
+  return {
+    ...base,
+    sessions: { ...base.sessions, 'w3-m1': updateWorkspaceDraft(session, session.workspace, NOW) },
+    savedAt: NOW,
+  };
+}
+
+function withFailedManorRun(base = withManorDraft()) {
+  const session = base.sessions['w3-m1']!;
+  const trace = compileManorHelpDraft(session.workspace);
+  return {
+    ...base,
+    sessions: { ...base.sessions, 'w3-m1': recordRun(session, runManorHelp(trace), trace, '2026-08-26T00:01:00.000Z') },
+    savedAt: '2026-08-26T00:01:00.000Z',
+  };
+}
+
+function withSuccessfulManorRun(base = withManorDraft()) {
+  const draft = createDefaultManorHelpDraft();
+  draft.blocks.find((block) => block.id === 'manor-condition')!.type = 'w3_manor_condition_explicit_demon_help';
+  const trace = compileManorHelpDraft(draft);
+  const session = updateWorkspaceDraft(base.sessions['w3-m1']!, draft, '2026-08-26T00:01:00.000Z');
+  return {
+    ...base,
+    sessions: { ...base.sessions, 'w3-m1': recordRun(session, runManorHelp(trace), trace, '2026-08-26T00:02:00.000Z') },
+    savedAt: '2026-08-26T00:02:00.000Z',
+  };
+}
+
 describe('storage fault adapters', () => {
+  it('keeps the E2E fault adapter free of W3 runtime imports', () => {
+    const source = readFileSync('e2e/support/storageFaultAdapter.ts', 'utf8');
+    expect(source).not.toContain('../../src/blockly/weekThreeManorHelpContract');
+    expect(source).not.toContain('../../src/progress/session');
+  });
+
   it('keeps the production adapter a typed no-op without any storage reads', () => {
     const storage = new MemoryStorage();
     expect(productionStorageFaultAdapter.beforeProgressWrite({ storage, progress: createInitialProgress() })).toBeNull();
@@ -92,6 +132,127 @@ describe('storage fault adapters', () => {
     e2eStorageFaultAdapter.beforeProgressLoad(storage);
     expect(storage.getItem(SNAPSHOT_KEY)).toBe(current);
     expect(storage.getItem(CURRENT_KEY)).not.toBe(current);
+    expect(storage.getItem(MODE_KEY)).toBe('off');
+  });
+
+  it('injects only exact W3 draft, failed-run, and observation deltas', () => {
+    const storage = new MemoryStorage();
+    const base = createInitialProgress();
+    const draft = withManorDraft(base);
+    storeCurrent(storage, base, 'fail-manor-draft');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: draft })).toMatch(/fault/i);
+    storeCurrent(storage, draft, 'fail-manor-draft');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: structuredClone(draft) })).toBeNull();
+    const reSavedDraft = {
+      ...draft,
+      sessions: { ...draft.sessions, 'w3-m1': updateWorkspaceDraft(draft.sessions['w3-m1']!, draft.sessions['w3-m1']!.workspace, '2026-08-26T00:00:00.000Z') },
+      savedAt: '2026-08-26T00:00:00.000Z',
+    };
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: reSavedDraft })).toMatch(/fault/i);
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: { ...draft, learnerName: 'unrelated' } })).toBeNull();
+
+    const failed = withFailedManorRun(draft);
+    storeCurrent(storage, draft, 'fail-manor-session');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: failed })).toMatch(/fault/i);
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: { ...failed, settings: { ...failed.settings, muted: true } } })).toBeNull();
+
+    const observation = {
+      ...failed,
+      sessions: {
+        ...failed.sessions,
+        'w3-m1': recordConditionObservationUse(failed.sessions['w3-m1']!, failed.sessions['w3-m1']!.failureSnapshot!.snapshotId, '2026-08-26T00:02:00.000Z'),
+      },
+      savedAt: '2026-08-26T00:02:00.000Z',
+    };
+    storeCurrent(storage, failed, 'fail-manor-observation');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: observation })).toMatch(/fault/i);
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: { ...observation, missions: { 'w1-m1': { status: 'completed', stars: 2, attempts: 1, hintsUsed: 0, completedAt: NOW } } } })).toBeNull();
+    const duplicateObservation = structuredClone(observation);
+    const duplicateUse = duplicateObservation.sessions['w3-m1']!.conditionObservationUses[0]!;
+    duplicateObservation.sessions['w3-m1']!.conditionObservationUses.push({ ...duplicateUse, usedAt: '2026-08-26T00:03:00.000Z' });
+    duplicateObservation.sessions['w3-m1']!.savedAt = '2026-08-26T00:03:00.000Z';
+    duplicateObservation.savedAt = '2026-08-26T00:03:00.000Z';
+    storeCurrent(storage, observation, 'fail-manor-observation');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: duplicateObservation })).toBeNull();
+  });
+
+  it('injects only a formal W3 completion after a persisted successful run', () => {
+    const storage = new MemoryStorage();
+    const successful = withSuccessfulManorRun();
+    const completed = completeMission(successful, 'w3-m1', { stars: 3, hintsUsed: 0 });
+    storeCurrent(storage, successful, 'fail-manor-completion');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: completed })).toMatch(/fault/i);
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: { ...completed, learnerName: 'unrelated' } })).toBeNull();
+    const staleCompletionTime = structuredClone(completed);
+    staleCompletionTime.missions['w3-m1'].completedAt = NOW;
+    staleCompletionTime.missionCompletionEvidence['w3-m1'] = {
+      ...staleCompletionTime.missionCompletionEvidence['w3-m1']!,
+      completedAt: NOW,
+    };
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: staleCompletionTime })).toBeNull();
+  });
+
+  it('rejects W3 completion when the persisted success run has a diagnostic or penalty', () => {
+    const storage = new MemoryStorage();
+    const successful = withSuccessfulManorRun();
+    const completed = completeMission(successful, 'w3-m1', { stars: 3, hintsUsed: 0 });
+    const diagnosticBase = structuredClone(successful);
+    const diagnosticCompleted = structuredClone(completed);
+    diagnosticBase.sessions['w3-m1']!.lastRun = {
+      ...diagnosticBase.sessions['w3-m1']!.lastRun!,
+      diagnostic: { concept: 'condition-selection', sourceBlockId: 'forged', messageCode: 'forged' },
+    } as any;
+    diagnosticCompleted.sessions['w3-m1'] = structuredClone(diagnosticBase.sessions['w3-m1']);
+    diagnosticCompleted.missionCompletionEvidence['w3-m1'] = {
+      ...diagnosticCompleted.missionCompletionEvidence['w3-m1']!,
+      run: structuredClone(diagnosticBase.sessions['w3-m1']!.lastRun),
+    } as any;
+    storeCurrent(storage, diagnosticBase, 'fail-manor-completion');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: diagnosticCompleted })).toBeNull();
+
+    const penaltyBase = structuredClone(successful);
+    const penaltyCompleted = structuredClone(completed);
+    penaltyBase.sessions['w3-m1']!.lastRun = {
+      ...penaltyBase.sessions['w3-m1']!.lastRun!,
+      penalty: { livesLost: 1, resourcesLost: 0, starsLost: 0 },
+    } as any;
+    penaltyCompleted.sessions['w3-m1'] = structuredClone(penaltyBase.sessions['w3-m1']);
+    penaltyCompleted.missionCompletionEvidence['w3-m1'] = {
+      ...penaltyCompleted.missionCompletionEvidence['w3-m1']!,
+      run: structuredClone(penaltyBase.sessions['w3-m1']!.lastRun),
+    } as any;
+    storeCurrent(storage, penaltyBase, 'fail-manor-completion');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: penaltyCompleted })).toBeNull();
+  });
+
+  it('injects only the W2 Boss completion that stabilizes the already acquired ability', () => {
+    const storage = new MemoryStorage();
+    const draft = createDefaultHeavenlySignalBossDraft();
+    const trace = compileHeavenlySignalBossDraft(draft);
+    let base = completeMission(createInitialProgress(), 'w2-m4', { stars: 3, hintsUsed: 0 });
+    base = {
+      ...base,
+      sessions: { ...base.sessions, 'w2-m5': recordRun(createMissionSession('w2-m5', NOW), runHeavenlySignalBoss(trace), trace, NOW) },
+      savedAt: NOW,
+    };
+    const completed = completeMission(base, 'w2-m5', { stars: 3, hintsUsed: 0 });
+    storeCurrent(storage, base, 'fail-boss-completion');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: completed })).toMatch(/fault/i);
+
+    const wrongAbility = structuredClone(completed);
+    wrongAbility.abilities.conditionObservation.stableUnlockedAt = null;
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: wrongAbility })).toBeNull();
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: { ...completed, learnerName: 'other change' } })).toBeNull();
+  });
+
+  it('corrupts only W3 current data and preserves an exact legal snapshot', () => {
+    const storage = new MemoryStorage();
+    const current = serializeProgress(withManorDraft());
+    storage.setItem(CURRENT_KEY, current);
+    storage.setItem(MODE_KEY, 'corrupt-manor-current');
+    e2eStorageFaultAdapter.beforeProgressLoad(storage);
+    expect(storage.getItem(SNAPSHOT_KEY)).toBe(current);
+    expect(storage.getItem(CURRENT_KEY)).toBe('{broken w3-m1 current');
     expect(storage.getItem(MODE_KEY)).toBe('off');
   });
 });

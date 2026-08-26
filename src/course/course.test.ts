@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { course, validateCourse } from './course';
-import { courseOutline } from './courseOutline';
+import { course, getMission, validateCourse } from './course';
+import { courseOutline, getMissionOutline, isFormalMissionOutline } from './courseOutline';
 import { commandLabel } from '../engine/commandLabels';
-import { formalWeekOneMissions } from './formalCourse';
+import { formalWeekOneMissions, formalWeekThreeMissions, formalWeekTwoMissions } from './formalCourse';
+import { isExecutableMissionId } from '../progress/executableMissionIds';
 
 describe('course manifest', () => {
   it('contains six weeks with four main missions and one boss each', () => {
@@ -71,14 +72,22 @@ describe('course manifest', () => {
     expect(appSource).not.toMatch(/from ['"]\.\/course\/(?:course|formalCourse)['"]/);
   });
 
-  it('keeps formal Blockly missions free of legacy flat expectedSequence execution data', () => {
+  it('promotes week two and only W3-M1 without legacy fallback', () => {
     expect(formalWeekOneMissions).toHaveLength(5);
+    expect(formalWeekTwoMissions).toHaveLength(5);
+    expect(formalWeekThreeMissions).toHaveLength(1);
     for (const mission of formalWeekOneMissions) expect(mission).not.toHaveProperty('expectedSequence');
-    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5']);
+    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5', 'w2-m1', 'w2-m2', 'w2-m3', 'w2-m4', 'w2-m5', 'w3-m1']);
     for (const mission of course.weeks.flatMap((week) => week.missions)) {
       if (formalIds.has(mission.id)) expect(mission).not.toHaveProperty('expectedSequence');
       else expect(mission).toHaveProperty('expectedSequence', expect.any(Array));
     }
+    expect(isFormalMissionOutline(getMissionOutline('w2-m1'))).toBe(true);
+    expect(isFormalMissionOutline(getMissionOutline('w2-m2'))).toBe(true);
+    expect(isFormalMissionOutline(getMissionOutline('w2-m3'))).toBe(true);
+    expect(isFormalMissionOutline(getMissionOutline('w2-m4'))).toBe(true);
+    expect(isFormalMissionOutline(getMissionOutline('w2-m5'))).toBe(true);
+    expect(isFormalMissionOutline(getMissionOutline('w3-m1'))).toBe(true);
     const formalSource = readFileSync('src/course/formalCourse.ts', 'utf8');
     const courseSource = readFileSync('src/course/course.ts', 'utf8');
     expect(formalSource).not.toMatch(/request_armor|receive_crown|receive_armor|receive_boots/);
@@ -87,7 +96,27 @@ describe('course manifest', () => {
     expect(pageSource).toMatch(/mission\.id === 'w1-m3'[\s\S]*FourSeasRegaliaRouteBoundary/);
     expect(pageSource).toMatch(/mission\.id === 'w1-m4'[\s\S]*AdvancedWeekOneRouteBoundary/);
     expect(pageSource).toMatch(/mission\.id === 'w1-m5'[\s\S]*AdvancedWeekOneRouteBoundary/);
+    expect(pageSource).toMatch(/mission\.id === 'w2-m1'[\s\S]*WeekTwoHorseRouteBoundary/);
+    expect(pageSource).toMatch(/mission\.id === 'w2-m2'[\s\S]*WeekTwoMonkeyKingRouteBoundary/);
+    expect(pageSource).toMatch(/mission\.id === 'w2-m3'[\s\S]*WeekTwoPeachElixirRouteBoundary/);
+    expect(pageSource).toMatch(/mission\.id === 'w2-m4'[\s\S]*WeekTwoFurnaceConditionRouteBoundary/);
+    expect(pageSource).toMatch(/mission\.id === 'w3-m1'[\s\S]*WeekThreeManorHelpRouteBoundary/);
+    expect(pageSource).toMatch(/import\(["']\.\/WeekThreeManorHelpExperience["']\)/);
+    expect(pageSource).toMatch(/export function WeekThreeManorHelpRouteBoundary/);
+    expect(courseSource).not.toMatch(/mission\('w2-m5'[\s\S]*expectedSequence/);
     expect(pageSource).not.toMatch(/legacySequence\s*\?\?\s*\[\]/);
+  });
+
+  it('registers only w3-m1 as a formal executable mission without a legacy sequence', () => {
+    const mission = getMission('w3-m1');
+    expect(mission).toBeDefined();
+    expect(isFormalMissionOutline(getMissionOutline('w3-m1'))).toBe(true);
+    expect(isExecutableMissionId('w3-m1')).toBe(true);
+    expect('expectedSequence' in mission!).toBe(false);
+    for (const id of ['w3-m2', 'w3-m3', 'w3-m4', 'w3-m5']) {
+      expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
+      expect(isExecutableMissionId(id)).toBe(false);
+    }
   });
 
   it('gives every selectable command a child-readable Chinese label', () => {

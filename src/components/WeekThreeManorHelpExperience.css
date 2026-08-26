@@ -1,0 +1,66 @@
+.week-three-manor-help-experience > .lazy-section-boundary,
+.week-three-manor-help-experience > .lazy-section-error { min-width: 0; }
+.week-three-manor-help-experience > .lazy-section-boundary:first-child,
+.week-three-manor-help-experience > .lazy-section-error:first-child { grid-column: 1; }
+.week-three-manor-help-experience > .lazy-section-boundary:nth-child(2),
+.week-three-manor-help-experience > .lazy-section-error:nth-child(2) { grid-column: 2; }
+.week-three-manor-help-experience > .week-three-manor-help-scene { grid-column: 1; min-width: 0; }
+.week-three-manor-help-workspace { min-width: 0; padding: 14px 18px; overflow: hidden; }
+.week-three-manor-help-workspace .advanced-blockly-host { position: relative; height: 380px; }
+.week-three-manor-help-workspace .injectionDiv { position: absolute; inset: 0; width: 100%; height: 100%; }
+.week-three-manor-help-workspace .blocklySvg { width: 100% !important; height: 100% !important; }
+.week-three-manor-help-scene { position: relative; min-height: 380px; overflow: hidden; border-radius: 24px; background: #dff3df; isolation: isolate; }
+.week-three-manor-help-scene-visual { position: absolute; inset: 0; overflow: hidden; }
+.week-three-manor-help-background { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.week-three-manor-help-sprite-viewport { position: absolute; z-index: 1; left: 8%; bottom: 5%; width: auto; height: min(86%, 360px); aspect-ratio: 418 / 941; overflow: hidden; }
+.week-three-manor-help-state-sheet { display: block; width: 400%; height: 100%; max-width: none; object-fit: fill; transform: translateX(calc(var(--manor-state-cell) * -25%)); transition: transform 260ms ease; }
+.week-three-manor-help-scene > p,
+.week-three-manor-help-scene > div[role="alert"] { position: absolute; z-index: 2; right: 16px; bottom: 16px; max-width: 46%; margin: 0; padding: 12px 16px; border-radius: 14px; background: rgb(255 255 255 / 93%); color: #2f241d; box-shadow: 0 8px 24px rgb(54 38 22 / 18%); }
+[data-motion-mode="reduced"] .week-three-manor-help-state-sheet { transition: none; }
+.week-three-manor-help-no-penalty,
+.week-three-manor-help-observation-action,
+.week-three-manor-help-observation { grid-column: 1 / -1; margin: 12px 22px 0; }
+.week-three-manor-help-messages { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 22px 0; }
+.week-three-manor-help-messages article { padding: 14px 16px; border: 1px solid rgba(170, 124, 53, .38); border-radius: 12px; background: rgba(251, 246, 233, .86); }
+.week-three-manor-help-messages h3 { margin: 0 0 7px; color: var(--jade-deep); font-size: 17px; }
+.week-three-manor-help-messages p { margin: 0; color: var(--ink-muted); }
+.week-three-manor-help-no-penalty { color: var(--ink-muted); }
+.week-three-manor-help-observation { padding: 12px 14px; border: 1px solid rgba(170, 124, 53, .42); border-radius: 12px; background: rgba(251, 246, 233, .9); }
+.week-three-manor-help-observation p { margin: 4px 0; }
+.week-three-manor-help-observation-action button:focus-visible,
+.week-three-manor-help-workspace button:focus-visible { outline: 3px solid var(--cinnabar); outline-offset: 3px; }
+
+@media (max-width: 900px) {
+  .advanced-week-one-experience.week-three-manor-help-experience { grid-template-columns: minmax(0, 1fr); }
+  .week-three-manor-help-experience > .lazy-section-boundary,
+  .week-three-manor-help-experience > .lazy-section-error,
+  .week-three-manor-help-experience > .week-three-manor-help-scene,
+  .week-three-manor-help-experience > .week-three-manor-help-workspace,
+  .week-three-manor-help-experience > .battle-feedback,
+  .week-three-manor-help-experience > .unsaved-session,
+  .week-three-manor-help-experience > .workspace-actions,
+  .week-three-manor-help-messages { grid-column: 1; }
+  .advanced-week-one-experience.week-three-manor-help-experience > .advanced-week-one-workspace.week-three-manor-help-workspace { grid-column: 1; }
+  .week-three-manor-help-experience > .battle-feedback,
+  .week-three-manor-help-experience > .unsaved-session,
+  .week-three-manor-help-experience > .workspace-actions,
+  .week-three-manor-help-messages,
+  .week-three-manor-help-no-penalty,
+  .week-three-manor-help-observation-action,
+  .week-three-manor-help-observation { margin-right: 18px; margin-left: 18px; }
+  .week-three-manor-help-scene > p,
+  .week-three-manor-help-scene > div[role="alert"] { right: 16px; left: 16px; max-width: none; }
+  .week-three-manor-help-scene { min-height: 310px; }
+}
+
+@media (max-width: 520px) {
+  .week-three-manor-help-workspace { padding: 10px; }
+  .week-three-manor-help-workspace .advanced-week-one-palette { display: grid; grid-template-columns: 1fr; }
+  .week-three-manor-help-workspace .advanced-week-one-palette button { width: 100%; }
+  .week-three-manor-help-workspace .advanced-program-tree li { align-items: stretch; flex-direction: column; }
+  .week-three-manor-help-messages { grid-template-columns: 1fr; }
+  .week-three-manor-help-scene { min-height: 290px; }
+  .week-three-manor-help-sprite-viewport { left: 4%; bottom: 5%; width: auto; height: min(80%, 232px); }
+  .week-three-manor-help-scene > p,
+  .week-three-manor-help-scene > div[role="alert"] { right: 10px; bottom: 10px; left: 10px; max-width: none; }
+}

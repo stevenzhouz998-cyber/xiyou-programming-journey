@@ -19,6 +19,7 @@ import { migrateProgress, parseProgress, PROGRESS_SCHEMA_LIMITS } from './schema
 import {
   createMissionSession,
   recordCompileFailure,
+  recordConditionObservationUse,
   recordHint,
   recordRun,
   updateWorkspaceDraft,
@@ -31,6 +32,11 @@ import type {
   AdvancedWeekOneMissionSession,
 } from './types';
 import { compileAdvancedWeekOneDraft, type AdvancedWeekOneWorkspaceDraftV1 } from '../blockly/advancedWeekOneDraft';
+import {
+  compileManorHelpDraft,
+  createDefaultManorHelpDraft,
+  runManorHelp,
+} from '../blockly/weekThreeManorHelpContract';
 
 const fourSeasDraft = (): FourSeasWorkspaceDraftV1 => ({
   version: 1,
@@ -136,15 +142,37 @@ type ValidV3 = Omit<ProgressV3, 'sessions'> & {
 const validV3 = (): ValidV3 => ({
   ...validV2,
   version: 3 as const,
-  schemaRevision: 2 as const,
+  schemaRevision: 3 as const,
+  missions: structuredClone(validV2.missions),
   sessions: { 'w1-m1': validSession() },
   equipment: initialEquipment(),
+  abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
+  missionCompletionEvidence: {},
 });
 
 const validV3Revision1 = () => {
-  const { equipment: _equipment, ...legacy } = validV3();
+  const { equipment: _equipment, abilities: _abilities, missionCompletionEvidence: _evidence, ...legacy } = validV3();
   return { ...legacy, schemaRevision: 1 as const };
 };
+
+const validV3Revision2 = () => {
+  const { abilities: _abilities, missionCompletionEvidence: _evidence, ...legacy } = validV3();
+  return { ...legacy, schemaRevision: 2 as const };
+};
+
+function formalManorHelpEvidence(completedAt = NOW) {
+  const workspace = createDefaultManorHelpDraft();
+  workspace.blocks.find((block) => block.id === 'manor-condition')!.type = 'w3_manor_condition_explicit_demon_help';
+  const trace = compileManorHelpDraft(workspace);
+  return {
+    kind: 'formal-v3' as const,
+    completedAt,
+    verifiedAt: NOW,
+    workspace,
+    trace,
+    run: runManorHelp(trace),
+  };
+}
 
 const ruyiTrace: RuyiStaffInstruction[] = [
   { instructionId: 'instruction:inspect', sourceBlockId: 'inspect', opcode: 'inspect_weights' as const },
@@ -191,6 +219,80 @@ function validAdvancedSession(missionId: 'w1-m4' | 'w1-m5'): AdvancedWeekOneMiss
 }
 
 describe('progress schema', () => {
+  it('admits replayable observation lineage only when the derived fire-eye ability is acquired and stable', () => {
+    const draft = createDefaultManorHelpDraft();
+    const run = runManorHelp(compileManorHelpDraft(draft));
+    const session = recordConditionObservationUse(
+      recordRun(createMissionSession('w3-m1', NOW), run, compileManorHelpDraft(draft), NOW),
+      run.failureSnapshot!.snapshotId,
+      NOW,
+    );
+    const value = validV3() as unknown as ProgressV3;
+    value.sessions = { 'w3-m1': session };
+    value.missions = {
+      'w2-m4': { ...validMission, completedAt: NOW },
+      'w2-m5': { ...validMission, completedAt: NOW },
+    };
+    value.abilities = { conditionObservation: { acquiredAt: NOW, stableUnlockedAt: NOW } };
+    expect(parseProgress(JSON.stringify(value))).toEqual(value);
+
+    for (const [missions, abilities] of [
+      [{}, { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } }],
+      [{ 'w2-m4': { ...validMission, completedAt: NOW } }, { conditionObservation: { acquiredAt: NOW, stableUnlockedAt: null } }],
+    ] as const) {
+      const forged = structuredClone(value);
+      forged.missions = missions;
+      forged.abilities = abilities;
+      expect(() => parseProgress(JSON.stringify(forged))).toThrow(/abilities|火眼金睛/);
+    }
+  });
+
+  it('requires exact current-revision W3-M1 completion evidence and replays its frozen formal proof', () => {
+    const value = validV3() as any;
+    value.missions['w3-m1'] = { ...validMission, completedAt: NOW };
+    value.missionCompletionEvidence = { 'w3-m1': formalManorHelpEvidence() };
+    expect(parseProgress(JSON.stringify(value))).toEqual(value);
+
+    const mutations: Array<(candidate: any) => void> = [
+      (candidate) => { candidate.missionCompletionEvidence['w3-m1'].workspace.blocks[0].id = 'forged'; },
+      (candidate) => { candidate.missionCompletionEvidence['w3-m1'].trace[0].sourceBlockId = 'forged'; },
+      (candidate) => { candidate.missionCompletionEvidence['w3-m1'].run.scenarioResults[1].passed = false; },
+      (candidate) => { candidate.missionCompletionEvidence['w3-m1'].run.failureSnapshot = {}; },
+      (candidate) => { candidate.missionCompletionEvidence['w3-m1'].run.completed = false; },
+      (candidate) => { candidate.missionCompletionEvidence['w3-m1'].completedAt = '2026-08-26T00:00:01.000Z'; },
+      (candidate) => { candidate.missionCompletionEvidence['w3-m1'].verifiedAt = 'not-an-iso-date'; },
+    ];
+    for (const mutate of mutations) {
+      const forged = structuredClone(value);
+      mutate(forged);
+      expect(() => parseProgress(JSON.stringify(forged))).toThrow(/进度文件格式无效/);
+    }
+
+    const missingEvidence = structuredClone(value); delete missingEvidence.missionCompletionEvidence;
+    expect(() => parseProgress(JSON.stringify(missingEvidence))).toThrow(/missionCompletionEvidence/);
+    const evidenceWithoutMission = validV3() as any;
+    evidenceWithoutMission.missionCompletionEvidence = { 'w3-m1': formalManorHelpEvidence() };
+    expect(() => parseProgress(JSON.stringify(evidenceWithoutMission))).toThrow(/missionCompletionEvidence/);
+    const unknownKey = structuredClone(value); unknownKey.missionCompletionEvidence.extra = {};
+    expect(() => parseProgress(JSON.stringify(unknownKey))).toThrow(/未知字段/);
+  });
+
+  it('migrates all pre-formal W3-M1 completions to labelled legacy evidence without inventing formal proof', () => {
+    const expected = (sourceVersion: 1 | 2 | 3, sourceSchemaRevision: null | 1 | 2) => ({
+      kind: 'legacy-preformal', completedAt: NOW, sourceVersion, sourceSchemaRevision,
+    });
+    const v1 = { ...validV1, missions: { 'w3-m1': validMission } };
+    const v2 = { ...validV2, missions: { 'w3-m1': validMission } };
+    const v3r1 = validV3Revision1(); v3r1.missions = { 'w3-m1': validMission };
+    const v3r2 = validV3Revision2(); v3r2.missions = { 'w3-m1': validMission };
+    for (const [raw, marker] of [
+      [v1, expected(1, null)], [v2, expected(2, 1)], [v3r1, expected(3, 1)], [v3r2, expected(3, 2)],
+    ] as const) {
+      const migrated = migrateProgress(raw);
+      expect(migrated.missionCompletionEvidence['w3-m1']).toEqual(marker);
+      expect(migrateProgress(JSON.parse(JSON.stringify(migrated))).missionCompletionEvidence['w3-m1']).toEqual(marker);
+    }
+  });
   it('round-trips a real compiled w1-m3 nested draft, trace, canonical run, ids, parents, and counters', () => {
     const session = validFourSeasSession();
     const value = { ...validV3(), sessions: { 'w1-m3': session } };
@@ -418,11 +520,18 @@ describe('progress schema', () => {
   });
   it('round-trips a fresh V3 document through JSON parsing', () => {
     const progress = createInitialProgress();
-    expect(progress).toMatchObject({ version: 3, schemaRevision: 2, sessions: {}, equipment: initialEquipment() });
+    expect(progress).toMatchObject({
+      version: 3,
+      schemaRevision: 3,
+      sessions: {},
+      equipment: initialEquipment(),
+      abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
+      missionCompletionEvidence: {},
+    });
     expect(parseProgress(JSON.stringify(progress))).toEqual(progress);
   });
 
-  it('migrates V3 revision 1 to revision 2 and backfills earned equipment from durable completion times', () => {
+  it('migrates V3 revision 1 to revision 3 and backfills earned equipment from durable completion times', () => {
     const legacy = validV3Revision1();
     legacy.missions = {
       'w1-m1': validMission,
@@ -430,7 +539,11 @@ describe('progress schema', () => {
       'w1-m3': { ...validMission, completedAt: '2026-07-14T00:00:00.000Z' },
     };
     const migrated = migrateProgress(legacy);
-    expect(migrated).toMatchObject({ version: 3, schemaRevision: 2 });
+    expect(migrated).toMatchObject({
+      version: 3,
+      schemaRevision: 3,
+      abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
+    });
     expect(migrated.equipment).toEqual({
       version: 1,
       inventory: {
@@ -613,12 +726,14 @@ describe('progress schema', () => {
     expect(migrateProgress(validV1)).toEqual({
       ...validV1,
       version: 3,
-      schemaRevision: 2,
+      schemaRevision: 3,
       settings: { ...validV1.settings, reducedMotionOverride: false },
       privacy: { localDataNoticeSeen: false },
       recovery: { lastRecoveredAt: null, source: null },
       sessions: {},
       equipment: initialEquipment(),
+      abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
+      missionCompletionEvidence: {},
     });
   });
 
@@ -626,10 +741,67 @@ describe('progress schema', () => {
     expect(migrateProgress(validV2)).toEqual({
       ...validV2,
       version: 3,
-      schemaRevision: 2,
+      schemaRevision: 3,
       sessions: {},
       equipment: initialEquipment(),
+      abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
+      missionCompletionEvidence: {},
     });
+  });
+
+  it('migrates revision-2 w2 completion without a historical session and preserves other progress data', () => {
+    const legacy = validV3Revision2();
+    const missions = {
+      'w2-m4': { ...validMission, completedAt: '2026-08-24T00:00:00.000Z' },
+      'w2-m5': { ...validMission, completedAt: '2026-08-25T00:00:00.000Z' },
+    };
+    const migrated = migrateProgress({
+      ...legacy,
+      missions,
+      sessions: {},
+      savedAt: '2026-08-26T00:00:00.000Z',
+    });
+
+    expect(migrated).toMatchObject({
+      version: 3,
+      schemaRevision: 3,
+      missions,
+      settings: legacy.settings,
+      privacy: legacy.privacy,
+      recovery: legacy.recovery,
+      sessions: {},
+      equipment: initialEquipment(),
+      savedAt: '2026-08-26T00:00:00.000Z',
+      abilities: {
+        conditionObservation: {
+          acquiredAt: '2026-08-24T00:00:00.000Z',
+          stableUnlockedAt: '2026-08-25T00:00:00.000Z',
+        },
+      },
+    });
+  });
+
+  it('rejects forged, missing, extra, or inconsistent revision-3 ability fields', () => {
+    const forged = validV3();
+    forged.abilities.conditionObservation.acquiredAt = NOW;
+    expect(() => migrateProgress(forged)).toThrow(/abilities/);
+
+    const missing = validV3() as { abilities?: unknown };
+    delete missing.abilities;
+    expect(() => migrateProgress(missing)).toThrow(/缺少字段 abilities/);
+
+    const extra = validV3() as { abilities: { conditionObservation: Record<string, unknown> } };
+    extra.abilities.conditionObservation.unlockedBy = 'w2-m5';
+    expect(() => migrateProgress(extra)).toThrow(/未知字段/);
+
+    const invalidTimestamp = validV3() as { abilities: { conditionObservation: { acquiredAt: unknown; stableUnlockedAt: unknown } } };
+    invalidTimestamp.abilities.conditionObservation.acquiredAt = 123;
+    expect(() => migrateProgress(invalidTimestamp)).toThrow(/abilities\.conditionObservation\.acquiredAt/);
+
+    const m5Only = validV3();
+    m5Only.missions = { 'w2-m5': { ...validMission, completedAt: NOW } };
+    m5Only.abilities.conditionObservation = { acquiredAt: null, stableUnlockedAt: NOW };
+    expect(() => migrateProgress(m5Only)).toThrow(/abilities/);
   });
 
   it('retires the public legacy default during migration', () => {

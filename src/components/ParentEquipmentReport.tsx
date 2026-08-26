@@ -23,7 +23,23 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   const uses = (['w1-m4', 'w1-m5'] as const).flatMap((missionId) => (
     (progress.sessions[missionId]?.equipmentEffectsUsed ?? []).map((effect) => ({ missionId, effect }))
   ))
-  return <section className="parent-equipment-report" role="region" aria-label="装备与跨关学习工具">
+  const conditionObservation = progress.abilities.conditionObservation
+  const manorSession = progress.sessions['w3-m1']
+  const observationUses = new Map((manorSession?.conditionObservationUses ?? []).map((use) => [use.snapshotId, use])).size
+  const latestObservationUse = [...(manorSession?.conditionObservationUses ?? [])]
+    .sort((left, right) => right.usedAt.localeCompare(left.usedAt))[0]
+  const latestObservationTime = latestObservationUse
+    ? new Intl.DateTimeFormat('zh-CN', {
+      year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(new Date(latestObservationUse.usedAt))
+    : null
+  const abilityStatus = conditionObservation.acquiredAt === null
+    ? '未获得'
+    : conditionObservation.stableUnlockedAt === null
+      ? '已获得待稳定'
+      : '已稳定'
+  const completionEvidence = progress.missionCompletionEvidence['w3-m1']
+  return <><section className="parent-equipment-report" role="region" aria-label="装备与跨关学习工具">
     <div className="parent-equipment-heading"><span className="eyebrow">真实通关奖励</span><h2>装备与跨关学习工具</h2><p>这里只记录已安全保存的获得、装备和主动使用证据。</p></div>
     <div className="parent-equipment-columns">
       <article><h3>已获得奖励</h3>{owned.length ? <ul>{owned.map((itemId) => {
@@ -37,6 +53,14 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
       <article><h3>后续关卡主动使用</h3>{uses.length ? <ul>{uses.map(({ missionId, effect }) => <li key={`${missionId}-${effect}`}>{`${missionLabels[missionId]}${effectLabels[effect]}`}</li>)}</ul> : <p>第四、五关尚未使用装备学习工具</p>}</article>
     </div>
   </section>
+  <section className="parent-equipment-report" role="region" aria-label="火眼金睛学习能力">
+    <div className="parent-equipment-heading"><span className="eyebrow">条件学习能力</span><h2>火眼金睛学习能力</h2></div>
+    <p>{abilityStatus}</p>
+    <p>{`主动观察 ${observationUses} 次`}</p>
+    {latestObservationTime ? <p>{`最近使用：${latestObservationTime}`}</p> : null}
+    {completionEvidence?.kind === 'formal-v3' ? <p>庄上求助正式 Blockly 证明已保存</p> : null}
+    {completionEvidence?.kind === 'legacy-preformal' ? <p>历史兼容完成记录，尚非正式 Blockly 证明</p> : null}
+  </section></>
 }
 
 export default ParentEquipmentReport

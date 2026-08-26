@@ -14,9 +14,14 @@ import type { RuyiStaffInstruction } from '../battle/types';
 import { registerFourSeasRegaliaBlocks } from '../blockly/fourSeasRegaliaBlocks';
 import { compileFourSeasRegaliaWorkspace } from '../blockly/fourSeasRegaliaCompiler';
 import { loadFourSeasWorkspaceDraft, type FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft';
-import { createMissionSession, recordRun, updateWorkspaceDraft } from './session';
+import { createMissionSession, recordConditionObservationUse, recordRun, updateWorkspaceDraft } from './session';
 import { recordEquipmentEffectUse } from './equipmentEffectSession';
 import { equipItem } from './equipmentOperations';
+import {
+  compileManorHelpDraft,
+  createDefaultManorHelpDraft,
+  runManorHelp,
+} from '../blockly/weekThreeManorHelpContract';
 
 const NOW = '2026-07-15T06:00:00.000Z';
 const wrongWeaponTrace: RuyiStaffInstruction[] = [
@@ -53,7 +58,111 @@ function recordedFourSeasSession() {
   }
 }
 
+function successfulManorHelpSession() {
+  const draft = createDefaultManorHelpDraft();
+  draft.blocks.find((block) => block.id === 'manor-condition')!.type = 'w3_manor_condition_explicit_demon_help';
+  const trace = compileManorHelpDraft(draft);
+  return recordRun(
+    updateWorkspaceDraft(createMissionSession('w3-m1', NOW), draft, NOW),
+    runManorHelp(trace),
+    trace,
+    NOW,
+  );
+}
+
 describe('progress rules', () => {
+  it('rejects W3-M1 completion until the current saved workspace has a canonical two-scenario success', () => {
+    expect(() => completeMission(createInitialProgress(), 'w3-m1', { stars: 3, hintsUsed: 0 }))
+      .toThrow(/W3-M1.*运行证据/);
+
+    const failed = createInitialProgress();
+    failed.sessions['w3-m1'] = recordRun(
+      createMissionSession('w3-m1', NOW),
+      runManorHelp(compileManorHelpDraft(createDefaultManorHelpDraft())),
+      compileManorHelpDraft(createDefaultManorHelpDraft()),
+      NOW,
+    );
+    expect(() => completeMission(failed, 'w3-m1', { stars: 3, hintsUsed: 0 }))
+      .toThrow(/W3-M1.*运行证据/);
+  });
+
+  it('publishes W3-M1 completion and its formal workspace replay proof atomically', () => {
+    const progress = createInitialProgress();
+    progress.sessions['w3-m1'] = successfulManorHelpSession();
+
+    const completed = completeMission(progress, 'w3-m1', { stars: 3, hintsUsed: 0 });
+    const evidence = (completed as any).missionCompletionEvidence['w3-m1'];
+    expect(evidence).toMatchObject({
+      kind: 'formal-v3',
+      completedAt: completed.missions['w3-m1'].completedAt,
+      workspace: progress.sessions['w3-m1'].workspace,
+      trace: progress.sessions['w3-m1'].lastTrace,
+      run: { completed: true, diagnostic: null, failureSnapshot: null, penalty: { livesLost: 0, resourcesLost: 0, starsLost: 0 } },
+    });
+    expect(importProgress(serializeProgress(completed))).toEqual(completed);
+  });
+
+  it('preserves formal W3-M1 proof through a later failed workspace edit and idempotent repeat', () => {
+    const progress = createInitialProgress();
+    progress.sessions['w3-m1'] = successfulManorHelpSession();
+    const completed = completeMission(progress, 'w3-m1', { stars: 2, hintsUsed: 0 });
+    const formal = structuredClone((completed as any).missionCompletionEvidence['w3-m1']);
+    const edited = {
+      ...completed,
+      sessions: {
+        ...completed.sessions,
+        'w3-m1': recordRun(
+          updateWorkspaceDraft(completed.sessions['w3-m1']!, createDefaultManorHelpDraft(), '2026-08-26T00:01:00.000Z'),
+          runManorHelp(compileManorHelpDraft(createDefaultManorHelpDraft())),
+          compileManorHelpDraft(createDefaultManorHelpDraft()),
+          '2026-08-26T00:01:00.000Z',
+        ),
+      },
+    };
+
+    expect(importProgress(serializeProgress(edited)).missionCompletionEvidence['w3-m1']).toEqual(formal);
+    expect((completeMission(edited, 'w3-m1', { stars: 1, hintsUsed: 3 }) as any).missionCompletionEvidence['w3-m1'])
+      .toEqual(formal);
+  });
+
+  it('upgrades legacy W3-M1 history only when a current formal replay exists', () => {
+    const progress = createInitialProgress();
+    progress.missions['w3-m1'] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: NOW };
+    (progress as any).missionCompletionEvidence = {
+      'w3-m1': { kind: 'legacy-preformal', completedAt: NOW, sourceVersion: 3, sourceSchemaRevision: 2 },
+    };
+    expect((completeMission(progress, 'w3-m1', { stars: 1, hintsUsed: 0 }) as any).missionCompletionEvidence['w3-m1'])
+      .toMatchObject({ kind: 'legacy-preformal' });
+
+    progress.sessions['w3-m1'] = successfulManorHelpSession();
+    const upgraded = completeMission(progress, 'w3-m1', { stars: 1, hintsUsed: 0 });
+    expect((upgraded as any).missionCompletionEvidence['w3-m1']).toMatchObject({
+      kind: 'formal-v3', completedAt: NOW,
+    });
+  });
+
+  it('reports W3 runs and support without treating condition observation as a hint or adjustment', () => {
+    const draft = createDefaultManorHelpDraft();
+    const trace = compileManorHelpDraft(draft);
+    let session = recordRun(
+      updateWorkspaceDraft(createMissionSession('w3-m1', NOW), draft, NOW),
+      runManorHelp(trace),
+      trace,
+      NOW,
+    );
+    session = recordConditionObservationUse(session, session.failureSnapshot!.snapshotId, '2026-08-26T00:01:00.000Z');
+    session = recordRun(session, runManorHelp(trace), trace, '2026-08-26T00:02:00.000Z');
+    const progress = createInitialProgress();
+    progress.sessions['w3-m1'] = session;
+
+    expect(getWeeklyReport(progress, 3)).toMatchObject({
+      completed: 0,
+      sessionRuns: 2,
+      sessionAdjustments: 2,
+      hintsUsed: 0,
+      needsSupport: ['真假条件与分支'],
+    });
+  });
   it('fails closed when weekly stars or hints overflow the safe integer range', () => {
     const progress = createInitialProgress();
     progress.missions['w1-m1'] = {
@@ -183,11 +292,32 @@ describe('progress rules', () => {
     expect(progress.missions['w1-m1']).toMatchObject({ stars: 3, attempts: 1, hintsUsed: 0, status: 'completed' });
     expect(progress).toMatchObject({
       version: 3,
-      schemaRevision: 2,
+      schemaRevision: 3,
       sessions: {},
       privacy: { localDataNoticeSeen: true },
       recovery: { lastRecoveredAt: '2026-07-12T00:00:00.000Z', source: 'snapshot' },
     });
+  });
+
+  it('publishes the derived condition-observation ability with w2 completion and keeps it idempotent', () => {
+    let progress = createInitialProgress();
+    expect(progress).toMatchObject({
+      schemaRevision: 3,
+      abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
+    });
+
+    progress = completeMission(progress, 'w2-m4', { stars: 3, hintsUsed: 0 });
+    const acquiredAt = progress.missions['w2-m4'].completedAt;
+    expect(progress.abilities.conditionObservation).toEqual({ acquiredAt, stableUnlockedAt: null });
+
+    progress = completeMission(progress, 'w2-m5', { stars: 3, hintsUsed: 0 });
+    const stableUnlockedAt = progress.missions['w2-m5'].completedAt;
+    expect(progress.abilities.conditionObservation).toEqual({ acquiredAt, stableUnlockedAt });
+
+    const repeated = completeMission(progress, 'w2-m5', { stars: 1, hintsUsed: 2 });
+    expect(repeated.abilities.conditionObservation).toEqual({ acquiredAt, stableUnlockedAt });
+    expect(importProgress(serializeProgress(repeated)).abilities.conditionObservation)
+      .toEqual({ acquiredAt, stableUnlockedAt });
   });
 
   it('preserves the first completion counters and timestamp across a repeated success', () => {

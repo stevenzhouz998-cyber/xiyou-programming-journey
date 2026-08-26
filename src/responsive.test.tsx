@@ -41,9 +41,9 @@ describe('commercial responsive shell', () => {
     expect(app).not.toMatch(/from ['"].*RuyiStaffExperience/);
     expect(app).not.toMatch(/from ['"].*MissionPageContent/);
     expect(app).toMatch(/lazy\(\(\) => import\(['"]\.\/components\/MissionPageContent['"]\)/);
-    expect(missionPage).toMatch(/lazy\(\(\) => import\(['"]\.\/DragonPalaceExperience['"]\)/);
-    expect(missionPage).toMatch(/lazy\(\(\) => import\(['"]\.\/MissionTools['"]\)/);
-    expect(missionPage).toMatch(/lazy\(\(\) => import\(['"]\.\/RuyiStaffExperience['"]\)/);
+    expect(missionPage).toMatch(/lazy\(\(\)\s*=>\s*import\(['"]\.\/DragonPalaceExperience['"]\)/);
+    expect(missionPage).toMatch(/lazy\(\(\)\s*=>\s*import\(['"]\.\/MissionTools['"]\)/);
+    expect(missionPage).toMatch(/lazy\(\(\)\s*=>\s*import\(['"]\.\/RuyiStaffExperience['"]\)/);
     expect(readFileSync('src/components/RuyiStaffExperience.tsx', 'utf8')).toMatch(/import ['"]\.\/RuyiStaffExperience\.css['"]/);
     expect(missionPage).toMatch(/import ['"]\.\/MissionPageContent\.css['"]/);
     expect(readFileSync('src/components/FourSeasRegaliaExperience.tsx', 'utf8')).toMatch(/import ['"]\.\/FourSeasRegaliaExperience\.css['"]/);

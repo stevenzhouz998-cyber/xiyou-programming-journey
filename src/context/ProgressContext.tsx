@@ -9,6 +9,12 @@ import {
   type MissionSession,
   type ProgressV3,
   type RuyiStaffMissionSession,
+  type HorseCareMissionSession,
+  type MonkeyKingMissionSession,
+  type PeachElixirMissionSession,
+  type FurnaceConditionMissionSession,
+  type HeavenlySignalBossMissionSession,
+  type ManorHelpMissionSession,
 } from '../progress/progress';
 import { migrateProgress } from '../progress/schema';
 import { createMissionSession, recordHint } from '../progress/session';
@@ -35,12 +41,24 @@ type MissionSessionUpdateArgs =
   | [missionId: 'w1-m1', update: (session: DragonPalaceMissionSession) => DragonPalaceMissionSession, options?: ProgressWriteOptions]
   | [missionId: 'w1-m2', update: (session: RuyiStaffMissionSession) => RuyiStaffMissionSession, options?: ProgressWriteOptions]
   | [missionId: 'w1-m3', update: (session: FourSeasRegaliaMissionSession) => FourSeasRegaliaMissionSession, options?: ProgressWriteOptions]
-  | [missionId: 'w1-m4' | 'w1-m5', update: (session: AdvancedWeekOneMissionSession) => AdvancedWeekOneMissionSession, options?: ProgressWriteOptions];
+  | [missionId: 'w1-m4' | 'w1-m5', update: (session: AdvancedWeekOneMissionSession) => AdvancedWeekOneMissionSession, options?: ProgressWriteOptions]
+  | [missionId: 'w2-m1', update: (session: HorseCareMissionSession) => HorseCareMissionSession, options?: ProgressWriteOptions]
+  | [missionId: 'w2-m2', update: (session: MonkeyKingMissionSession) => MonkeyKingMissionSession, options?: ProgressWriteOptions]
+  | [missionId: 'w2-m3', update: (session: PeachElixirMissionSession) => PeachElixirMissionSession, options?: ProgressWriteOptions]
+  | [missionId: 'w2-m4', update: (session: FurnaceConditionMissionSession) => FurnaceConditionMissionSession, options?: ProgressWriteOptions]
+  | [missionId: 'w2-m5', update: (session: HeavenlySignalBossMissionSession) => HeavenlySignalBossMissionSession, options?: ProgressWriteOptions]
+  | [missionId: 'w3-m1', update: (session: ManorHelpMissionSession) => ManorHelpMissionSession, options?: ProgressWriteOptions];
 type MissionSessionUpdateAtArgs =
   | [missionId: 'w1-m1', update: (session: DragonPalaceMissionSession) => DragonPalaceMissionSession, now: string, options?: ProgressWriteOptions]
   | [missionId: 'w1-m2', update: (session: RuyiStaffMissionSession) => RuyiStaffMissionSession, now: string, options?: ProgressWriteOptions]
   | [missionId: 'w1-m3', update: (session: FourSeasRegaliaMissionSession) => FourSeasRegaliaMissionSession, now: string, options?: ProgressWriteOptions]
-  | [missionId: 'w1-m4' | 'w1-m5', update: (session: AdvancedWeekOneMissionSession) => AdvancedWeekOneMissionSession, now: string, options?: ProgressWriteOptions];
+  | [missionId: 'w1-m4' | 'w1-m5', update: (session: AdvancedWeekOneMissionSession) => AdvancedWeekOneMissionSession, now: string, options?: ProgressWriteOptions]
+  | [missionId: 'w2-m1', update: (session: HorseCareMissionSession) => HorseCareMissionSession, now: string, options?: ProgressWriteOptions]
+  | [missionId: 'w2-m2', update: (session: MonkeyKingMissionSession) => MonkeyKingMissionSession, now: string, options?: ProgressWriteOptions]
+  | [missionId: 'w2-m3', update: (session: PeachElixirMissionSession) => PeachElixirMissionSession, now: string, options?: ProgressWriteOptions]
+  | [missionId: 'w2-m4', update: (session: FurnaceConditionMissionSession) => FurnaceConditionMissionSession, now: string, options?: ProgressWriteOptions]
+  | [missionId: 'w2-m5', update: (session: HeavenlySignalBossMissionSession) => HeavenlySignalBossMissionSession, now: string, options?: ProgressWriteOptions]
+  | [missionId: 'w3-m1', update: (session: ManorHelpMissionSession) => ManorHelpMissionSession, now: string, options?: ProgressWriteOptions];
 interface UpdateMissionSession {
   (
     missionId: 'w1-m1',
@@ -62,6 +80,36 @@ interface UpdateMissionSession {
     update: (session: AdvancedWeekOneMissionSession) => AdvancedWeekOneMissionSession,
     options?: ProgressWriteOptions,
   ): Promise<CoordinatedSaveResult>;
+  (
+    missionId: 'w2-m1',
+    update: (session: HorseCareMissionSession) => HorseCareMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
+  (
+    missionId: 'w2-m2',
+    update: (session: MonkeyKingMissionSession) => MonkeyKingMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
+  (
+    missionId: 'w2-m3',
+    update: (session: PeachElixirMissionSession) => PeachElixirMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
+  (
+    missionId: 'w2-m4',
+    update: (session: FurnaceConditionMissionSession) => FurnaceConditionMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
+  (
+    missionId: 'w2-m5',
+    update: (session: HeavenlySignalBossMissionSession) => HeavenlySignalBossMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
+  (
+    missionId: 'w3-m1',
+    update: (session: ManorHelpMissionSession) => ManorHelpMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
 }
 type MissionHintTier = MissionSession['usedHintTiers'][number];
 interface RecordMissionHint {
@@ -69,6 +117,9 @@ interface RecordMissionHint {
   (missionId: 'w1-m2', tier: MissionHintTier): Promise<CoordinatedSaveResult>;
   (missionId: 'w1-m3', tier: MissionHintTier): Promise<CoordinatedSaveResult>;
   (missionId: 'w1-m4' | 'w1-m5', tier: MissionHintTier): Promise<CoordinatedSaveResult>;
+  (missionId: 'w2-m1', tier: MissionHintTier): Promise<CoordinatedSaveResult>;
+  (missionId: 'w2-m2', tier: MissionHintTier): Promise<CoordinatedSaveResult>;
+  (missionId: 'w2-m3', tier: MissionHintTier): Promise<CoordinatedSaveResult>;
   (missionId: ExecutableMissionId, tier: MissionHintTier): Promise<CoordinatedSaveResult>;
 }
 
@@ -354,6 +405,36 @@ export function ProgressProvider({
       const current = currentProgress.sessions['w1-m4'] ? structuredClone(currentProgress.sessions['w1-m4']) : createMissionSession('w1-m4', now);
       return persistMissionSession(missionId, update(current), now, options);
     }
+    if (missionId === 'w2-m1') {
+      const currentProgress = workingProgress();
+      const current = currentProgress.sessions['w2-m1'] ? structuredClone(currentProgress.sessions['w2-m1']) : createMissionSession('w2-m1', now);
+      return persistMissionSession(missionId, update(current), now, options);
+    }
+    if (missionId === 'w2-m2') {
+      const currentProgress = workingProgress();
+      const current = currentProgress.sessions['w2-m2'] ? structuredClone(currentProgress.sessions['w2-m2']) : createMissionSession('w2-m2', now);
+      return persistMissionSession(missionId, update(current), now, options);
+    }
+    if (missionId === 'w2-m3') {
+      const currentProgress = workingProgress();
+      const current = currentProgress.sessions['w2-m3'] ? structuredClone(currentProgress.sessions['w2-m3']) : createMissionSession('w2-m3', now);
+      return persistMissionSession(missionId, update(current), now, options);
+    }
+    if (missionId === 'w2-m4') {
+      const currentProgress = workingProgress();
+      const current = currentProgress.sessions['w2-m4'] ? structuredClone(currentProgress.sessions['w2-m4']) : createMissionSession('w2-m4', now);
+      return persistMissionSession(missionId, update(current), now, options);
+    }
+    if (missionId === 'w2-m5') {
+      const currentProgress = workingProgress();
+      const current = currentProgress.sessions['w2-m5'] ? structuredClone(currentProgress.sessions['w2-m5']) : createMissionSession('w2-m5', now);
+      return persistMissionSession(missionId, update(current), now, options);
+    }
+    if (missionId === 'w3-m1') {
+      const currentProgress = workingProgress();
+      const current = currentProgress.sessions['w3-m1'] ? structuredClone(currentProgress.sessions['w3-m1']) : createMissionSession('w3-m1', now);
+      return persistMissionSession(missionId, update(current), now, options);
+    }
     const currentProgress = workingProgress();
     const current = currentProgress.sessions['w1-m5'] ? structuredClone(currentProgress.sessions['w1-m5']) : createMissionSession('w1-m5', now);
     return persistMissionSession(missionId, update(current), now, options);
@@ -362,6 +443,11 @@ export function ProgressProvider({
   function updateMissionSession(
     missionId: 'w1-m1',
     update: (session: DragonPalaceMissionSession) => DragonPalaceMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
+  function updateMissionSession(
+    missionId: 'w3-m1',
+    update: (session: ManorHelpMissionSession) => ManorHelpMissionSession,
     options?: ProgressWriteOptions,
   ): Promise<CoordinatedSaveResult>;
   function updateMissionSession(
@@ -379,6 +465,31 @@ export function ProgressProvider({
     update: (session: FourSeasRegaliaMissionSession) => FourSeasRegaliaMissionSession,
     options?: ProgressWriteOptions,
   ): Promise<CoordinatedSaveResult>;
+  function updateMissionSession(
+    missionId: 'w2-m1',
+    update: (session: HorseCareMissionSession) => HorseCareMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
+  function updateMissionSession(
+    missionId: 'w2-m2',
+    update: (session: MonkeyKingMissionSession) => MonkeyKingMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
+  function updateMissionSession(
+    missionId: 'w2-m3',
+    update: (session: PeachElixirMissionSession) => PeachElixirMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
+  function updateMissionSession(
+    missionId: 'w2-m4',
+    update: (session: FurnaceConditionMissionSession) => FurnaceConditionMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
+  function updateMissionSession(
+    missionId: 'w2-m5',
+    update: (session: HeavenlySignalBossMissionSession) => HeavenlySignalBossMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
   function updateMissionSession(...args: MissionSessionUpdateArgs) {
     const now = new Date().toISOString();
     if (args[0] === 'w1-m1') {
@@ -392,6 +503,12 @@ export function ProgressProvider({
     }
     if (args[0] === 'w1-m4') return updateMissionSessionAt(args[0], args[1], now, args[2]);
     if (args[0] === 'w1-m5') return updateMissionSessionAt(args[0], args[1], now, args[2]);
+    if (args[0] === 'w2-m1') return updateMissionSessionAt(args[0], args[1], now, args[2]);
+    if (args[0] === 'w2-m2') return updateMissionSessionAt(args[0], args[1], now, args[2]);
+    if (args[0] === 'w2-m3') return updateMissionSessionAt(args[0], args[1], now, args[2]);
+    if (args[0] === 'w2-m4') return updateMissionSessionAt(args[0], args[1], now, args[2]);
+    if (args[0] === 'w2-m5') return updateMissionSessionAt(args[0], args[1], now, args[2]);
+    if (args[0] === 'w3-m1') return updateMissionSessionAt(args[0], args[1], now, args[2]);
     throw new Error('任务编号无效');
   }
 
@@ -487,6 +604,12 @@ export function ProgressProvider({
         );
       }
       if (missionId === 'w1-m3') return updateMissionSessionAt(missionId, (session: FourSeasRegaliaMissionSession) => recordHint(session, tier, now), now);
+      if (missionId === 'w2-m1') return updateMissionSessionAt(missionId, (session: HorseCareMissionSession) => recordHint(session, tier, now), now);
+      if (missionId === 'w2-m2') return updateMissionSessionAt(missionId, (session: MonkeyKingMissionSession) => recordHint(session, tier, now), now);
+      if (missionId === 'w2-m3') return updateMissionSessionAt(missionId, (session: PeachElixirMissionSession) => recordHint(session, tier, now), now);
+      if (missionId === 'w2-m4') return updateMissionSessionAt(missionId, (session: FurnaceConditionMissionSession) => recordHint(session, tier, now), now);
+      if (missionId === 'w2-m5') return updateMissionSessionAt(missionId, (session: HeavenlySignalBossMissionSession) => recordHint(session, tier, now), now);
+      if (missionId === 'w3-m1') return updateMissionSessionAt(missionId, (session: ManorHelpMissionSession) => recordHint(session, tier, now), now);
       return updateMissionSessionAt(missionId, (session: AdvancedWeekOneMissionSession) => recordHint(session, tier, now), now);
     },
     replaceProgress: (next) => commit(next),

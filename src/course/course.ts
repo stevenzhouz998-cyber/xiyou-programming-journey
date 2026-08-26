@@ -1,6 +1,13 @@
 import { deriveMissionFromOutline, deriveWeekFromOutline, type MissionExtension } from './courseOutline';
 import type { CanonRef, CourseManifest, CourseMissionSpec, MissionMode, MissionSpec, StoryBeat } from './types';
-import { formalWeekOneCanon, formalWeekOneMissions } from './formalCourse';
+import {
+  formalWeekOneCanon,
+  formalWeekOneMissions,
+  formalWeekTwoCanon,
+  formalWeekTwoMissions,
+  formalWeekThreeCanon,
+  formalWeekThreeMissions,
+} from './formalCourse';
 
 const SOURCE_ROOT = 'https://zh.wikisource.org/zh-hans/西游记';
 
@@ -18,8 +25,12 @@ const mission = (id: string, extension: LegacyMissionExtension): MissionSpec => 
 );
 
 const c3 = formalWeekOneCanon;
-const c4to7 = canon([4, 5, 6, 7], '第四至七回　官封弼马温至五行山定心猿');
-const c18to19 = canon([18, 19], '第十八至十九回　高老庄大圣降魔　云栈洞悟空收八戒');
+const c4to7 = formalWeekTwoCanon;
+const c18to19 = {
+  ...formalWeekThreeCanon,
+  chapters: [18, 19],
+  title: '第十八至十九回　高老庄大圣降魔　云栈洞悟空收八戒',
+};
 const c27 = canon([27], '第二十七回　尸魔三戏唐三藏　圣僧恨逐美猴王');
 const c44to46 = canon([44, 45, 46], '第四十四至四十六回　车迟国斗法');
 const c59to61 = canon([59, 60, 61], '第五十九至六十一回　三调芭蕉扇');
@@ -38,16 +49,12 @@ export const course: CourseManifest = {
     }),
     deriveWeekFromOutline('week-2', { subtitle: '重复有规律，错误能修正', canon: c4to7,
       missions: [
-        mission('w2-m1', { subtitle: '从受封到反下天宫', objective: '找出重复照料天马的指令', canon: c4to7, storyBeats: [beat('天宫受封', '悟空被招上天庭，受封弼马温。'), beat('反下天宫', '得知官职品级后，悟空打出御马监返回花果山。')], expectedSequence: ['accept_post', 'care_horses_repeat', 'learn_rank', 'leave_heaven'] }),
-        mission('w2-m2', { subtitle: '事件触发新的身份', objective: '用事件触发连接受封与建府', canon: c4to7, storyBeats: [beat('自称齐天', '悟空在花果山竖起齐天大圣旗号。'), beat('天庭建府', '天庭依太白金星之议，授齐天大圣虚衔并建府。')], expectedSequence: ['raise_banner', 'receive_title', 'build_residence'] }),
-        mission('w2-m3', { subtitle: '修好错乱的事件链', objective: '调试蟠桃会前后的事件顺序', canon: c4to7, storyBeats: [beat('看守桃园', '悟空奉命管理蟠桃园。'), beat('赴兜率宫', '得知蟠桃会后，悟空又到兜率宫吃了金丹。')], expectedSequence: ['guard_garden', 'learn_feast', 'visit_palace', 'eat_elixir'] }),
-        mission('w2-m4', { subtitle: '检查循环结束条件', objective: '让炼炉计时在正确条件下停止', canon: c4to7, storyBeats: [beat('二郎显圣', '二郎神与悟空斗法，太上老君以金刚琢相助。'), beat('炉中逃出', '悟空经八卦炉锻炼后踢倒炉门逃出。')], expectedSequence: ['duel_erlang', 'capture', 'enter_furnace', 'wait_until_complete', 'escape_furnace'] }),
-        mission('w2-m5', { subtitle: '修复第四至七回的错误', objective: '调试大闹天宫完整事件链', canon: c4to7, storyBeats: [beat('由弼马温到齐天', '悟空从弼马温反下天宫，后受齐天大圣之号。'), beat('由蟠桃到五行山', '蟠桃金丹之事后，悟空最终被压在五行山下。')], expectedSequence: ['become_stable_keeper', 'become_great_sage', 'peach_events', 'escape_furnace', 'under_mountain'] }),
+        ...formalWeekTwoMissions,
       ],
     }),
     deriveWeekFromOutline('week-3', { subtitle: '看条件，再选择正确分支', canon: c18to19,
       missions: [
-        mission('w3-m1', { subtitle: '根据线索决定下一步', objective: '用条件判断是否前往高老庄', canon: c18to19, storyBeats: [beat('高才报信', '高才向取经人讲述庄中妖怪之事。'), beat('悟空应承', '悟空听明原委，答应前去降魔。')], expectedSequence: ['hear_report', 'if_need_help', 'go_manor'] }),
+        ...formalWeekThreeMissions,
         mission('w3-m2', { subtitle: '身份与外形分开判断', objective: '用条件区分变化后的外形与真实身份', canon: c18to19, storyBeats: [beat('悟空变化', '悟空变作高翠兰模样等待妖怪。'), beat('妖怪现身', '妖怪不知是悟空变化，来到庄中。')], expectedSequence: ['transform', 'wait', 'if_demon_arrives', 'reveal_identity'] }),
         mission('w3-m3', { subtitle: '让分支跟着条件走', objective: '按原著线索选择追赶与交锋分支', canon: c18to19, storyBeats: [beat('追至云栈洞', '妖怪败走，悟空追到云栈洞。'), beat('说出来历', '妖怪听说是取经人，交代自己受菩萨点化的来历。')], expectedSequence: ['chase', 'reach_cave', 'fight', 'if_pilgrim_named', 'tell_origin'] }),
         mission('w3-m4', { subtitle: '满足条件才加入取经队伍', objective: '组合八戒归队的必要条件', canon: c18to19, storyBeats: [beat('拜见唐僧', '妖怪随悟空前来拜见唐僧。'), beat('得名八戒', '唐僧为他摩顶受戒，取别名八戒。')], expectedSequence: ['meet_tang', 'tell_guanyin_order', 'receive_precepts', 'join_team'] }),

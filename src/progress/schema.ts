@@ -15,6 +15,21 @@ import { runDragonPalaceBattle } from '../battle/dragonPalace';
 import { runRuyiStaffBattle } from '../battle/ruyiStaff';
 import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import { parseAdvancedWeekOneSession } from './advancedSessionSchema';
+import { parseHorseCareSession } from './horseCareSessionSchema';
+import { parseMonkeyKingSession } from './monkeyKingSessionSchema';
+import { parsePeachElixirSession } from './peachElixirSessionSchema';
+import { parseFurnaceConditionSession } from './furnaceConditionSessionSchema';
+import { parseHeavenlySignalBossSession } from './heavenlySignalBossSessionSchema';
+import { parseManorHelpSession } from './manorHelpSessionSchema';
+import { deriveConditionObservation } from './conditionObservation';
+import {
+  compileManorHelpDraft,
+  runManorHelp,
+  validateManorHelpDraft,
+  type ManorHelpInstruction,
+  type ManorHelpRunResult,
+  type ManorHelpWorkspaceDraftV1,
+} from '../blockly/weekThreeManorHelpContract';
 import type {
   BattleDiagnostic,
   BattleEvent,
@@ -59,6 +74,9 @@ import type {
   ProgressV1,
   ProgressV2,
   ProgressV3,
+  LearningAbilitiesV1,
+  ManorHelpCompletionEvidence,
+  MissionCompletionEvidenceV1,
 } from './types';
 
 const INSTRUCTION_ID_PREFIX = 'instruction:';
@@ -78,7 +96,7 @@ const utf8Encoder = new TextEncoder();
 
 export const createInitialProgress = (): ProgressV3 => ({
   version: 3,
-  schemaRevision: 2,
+  schemaRevision: 3,
   learnerName: '小行者',
   missions: {},
   settings: { muted: false, reducedMotion: false, reducedMotionOverride: false, parentPin: 'unset' },
@@ -86,6 +104,8 @@ export const createInitialProgress = (): ProgressV3 => ({
   recovery: { lastRecoveredAt: null, source: null },
   sessions: {},
   equipment: initialEquipment(),
+  abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
+  missionCompletionEvidence: {},
   savedAt: new Date(0).toISOString(),
 });
 
@@ -1585,6 +1605,18 @@ function sessions(value: unknown): MissionSessions {
       result['w1-m3'] = fourSeasSession(rawSession, `sessions.${missionId}`);
     } else if (missionId === 'w1-m4' || missionId === 'w1-m5') {
       result[missionId] = parseAdvancedWeekOneSession(rawSession, missionId);
+    } else if (missionId === 'w2-m1') {
+      result['w2-m1'] = parseHorseCareSession(rawSession);
+    } else if (missionId === 'w2-m2') {
+      result['w2-m2'] = parseMonkeyKingSession(rawSession);
+    } else if (missionId === 'w2-m3') {
+      result['w2-m3'] = parsePeachElixirSession(rawSession);
+    } else if (missionId === 'w2-m4') {
+      result['w2-m4'] = parseFurnaceConditionSession(rawSession);
+    } else if (missionId === 'w2-m5') {
+      result['w2-m5'] = parseHeavenlySignalBossSession(rawSession);
+    } else if (missionId === 'w3-m1') {
+      result['w3-m1'] = parseManorHelpSession(rawSession);
     } else {
       invalid(`任务 ${missionId} 尚不支持可执行会话`);
     }
@@ -1654,23 +1686,194 @@ function validateEquipmentRewards(
   return state;
 }
 
+function learningAbilities(
+  value: unknown,
+  parsedMissions: Record<string, MissionProgress>,
+): LearningAbilitiesV1 {
+  const source = object(value, 'abilities');
+  exactKeys(source, 'abilities', ['conditionObservation']);
+  const conditionObservation = object(source.conditionObservation, 'abilities.conditionObservation');
+  exactKeys(conditionObservation, 'abilities.conditionObservation', ['acquiredAt', 'stableUnlockedAt']);
+  const parsed: LearningAbilitiesV1 = {
+    conditionObservation: {
+      acquiredAt: nullableDate(conditionObservation.acquiredAt, 'abilities.conditionObservation.acquiredAt'),
+      stableUnlockedAt: nullableDate(
+        conditionObservation.stableUnlockedAt,
+        'abilities.conditionObservation.stableUnlockedAt',
+      ),
+    },
+  };
+  const expected: LearningAbilitiesV1 = {
+    conditionObservation: deriveConditionObservation(parsedMissions),
+  };
+  if (!deeplyEqual(parsed, expected)) invalid('abilities必须由已完成任务确定性派生');
+  return parsed;
+}
+
+function manorHelpCompletionWorkspace(value: unknown, field: string): ManorHelpWorkspaceDraftV1 {
+  const source = object(value, field);
+  exactKeys(source, field, ['version', 'missionId', 'blocks']);
+  if (source.version !== 1 || source.missionId !== 'w3-m1') invalid(`${field}无效`);
+  const blocks = boundedArray(source.blocks, `${field}.blocks`, PROGRESS_SCHEMA_LIMITS.maxWorkspaceBlocks)
+    .map((rawBlock, index) => {
+      const blockField = `${field}.blocks[${index}]`;
+      const block = object(rawBlock, blockField);
+      exactKeys(block, blockField, [
+        'id', 'type', 'previousId', 'nextId', 'parentBlockId', 'conditionBlockId', 'branch', 'x', 'y',
+      ]);
+      const nullableBlockId = (candidate: unknown, candidateField: string): string | null => candidate === null
+        ? null
+        : nonEmptyBoundedString(candidate, candidateField, PROGRESS_SCHEMA_LIMITS.maxBlockOrSourceIdLength);
+      if (typeof block.type !== 'string'
+        || (block.branch !== null && block.branch !== 'then' && block.branch !== 'else')) {
+        invalid(`${blockField}积木字段无效`);
+      }
+      return {
+        id: nonEmptyBoundedString(block.id, `${blockField}.id`, PROGRESS_SCHEMA_LIMITS.maxBlockOrSourceIdLength),
+        type: block.type,
+        previousId: nullableBlockId(block.previousId, `${blockField}.previousId`),
+        nextId: nullableBlockId(block.nextId, `${blockField}.nextId`),
+        parentBlockId: nullableBlockId(block.parentBlockId, `${blockField}.parentBlockId`),
+        conditionBlockId: nullableBlockId(block.conditionBlockId, `${blockField}.conditionBlockId`),
+        branch: block.branch,
+        x: coordinate(block.x, `${blockField}.x`),
+        y: coordinate(block.y, `${blockField}.y`),
+      };
+    });
+  const parsed = { version: 1 as const, missionId: 'w3-m1' as const, blocks } as ManorHelpWorkspaceDraftV1;
+  try {
+    validateManorHelpDraft(parsed);
+  } catch {
+    invalid(`${field}必须是合法庄上求助workspace`);
+  }
+  return parsed;
+}
+
+function formalManorHelpCompletionEvidence(
+  source: Record<string, unknown>,
+  field: string,
+  missionCompletedAt: string,
+): Extract<ManorHelpCompletionEvidence, { kind: 'formal-v3' }> {
+  exactKeys(source, field, ['kind', 'completedAt', 'verifiedAt', 'workspace', 'trace', 'run']);
+  if (source.kind !== 'formal-v3') invalid(`${field}.kind无效`);
+  const completedAt = date(source.completedAt, `${field}.completedAt`);
+  if (completedAt !== missionCompletedAt) invalid(`${field}.completedAt必须对应任务首次完成`);
+  const verifiedAt = date(source.verifiedAt, `${field}.verifiedAt`);
+  const workspace = manorHelpCompletionWorkspace(source.workspace, `${field}.workspace`);
+  const trace = boundedArray(source.trace, `${field}.trace`, PROGRESS_SCHEMA_LIMITS.maxTraceInstructions);
+  let canonicalTrace: ManorHelpInstruction[];
+  let replay: ManorHelpRunResult;
+  try {
+    canonicalTrace = compileManorHelpDraft(workspace);
+    replay = runManorHelp(canonicalTrace);
+  } catch {
+    invalid(`${field}无法重编译重放`);
+  }
+  if (!deeplyEqual(trace, canonicalTrace)) invalid(`${field}.trace必须由workspace重新编译`);
+  if (!deeplyEqual(source.run, replay)) invalid(`${field}.run必须由trace确定性重放`);
+  if (!replay.completed || replay.diagnostic !== null || replay.failureSnapshot !== null
+    || replay.scenarioResults.length !== 2 || !replay.scenarioResults.every((scenario) => scenario.passed)
+    || replay.penalty.livesLost !== 0 || replay.penalty.resourcesLost !== 0 || replay.penalty.starsLost !== 0) {
+    invalid(`${field}必须是无惩罚的双情境成功证明`);
+  }
+  return { kind: 'formal-v3', completedAt, verifiedAt, workspace, trace: canonicalTrace, run: replay };
+}
+
+function legacyManorHelpCompletionEvidence(
+  source: Record<string, unknown>,
+  field: string,
+  missionCompletedAt: string,
+): Extract<ManorHelpCompletionEvidence, { kind: 'legacy-preformal' }> {
+  exactKeys(source, field, ['kind', 'completedAt', 'sourceVersion', 'sourceSchemaRevision']);
+  if (source.kind !== 'legacy-preformal') invalid(`${field}.kind无效`);
+  const completedAt = date(source.completedAt, `${field}.completedAt`);
+  if (completedAt !== missionCompletedAt) invalid(`${field}.completedAt必须对应任务首次完成`);
+  const sourceVersion = source.sourceVersion;
+  const sourceSchemaRevision = source.sourceSchemaRevision;
+  const validSource = (sourceVersion === 1 && sourceSchemaRevision === null)
+    || (sourceVersion === 2 && sourceSchemaRevision === 1)
+    || (sourceVersion === 3 && (sourceSchemaRevision === 1 || sourceSchemaRevision === 2));
+  if (!validSource) invalid(`${field}来源版本组合无效`);
+  return {
+    kind: 'legacy-preformal',
+    completedAt,
+    sourceVersion,
+    sourceSchemaRevision,
+  } as Extract<ManorHelpCompletionEvidence, { kind: 'legacy-preformal' }>;
+}
+
+function missionCompletionEvidence(
+  value: unknown,
+  parsedMissions: Record<string, MissionProgress>,
+): MissionCompletionEvidenceV1 {
+  const source = object(value, 'missionCompletionEvidence');
+  const unexpected = Object.keys(source).find((key) => key !== 'w3-m1');
+  if (unexpected) invalid(`missionCompletionEvidence包含未知字段 ${unexpected}`);
+  const mission = parsedMissions['w3-m1'];
+  const rawEvidence = source['w3-m1'];
+  if (!mission && rawEvidence !== undefined) invalid('missionCompletionEvidence.w3-m1没有对应完成任务');
+  if (mission && rawEvidence === undefined) invalid('missionCompletionEvidence.w3-m1缺少完成证明');
+  if (!mission) return {};
+  const evidence = object(rawEvidence, 'missionCompletionEvidence.w3-m1');
+  if (evidence.kind === 'formal-v3') {
+    return { 'w3-m1': formalManorHelpCompletionEvidence(evidence, 'missionCompletionEvidence.w3-m1', mission.completedAt) };
+  }
+  if (evidence.kind === 'legacy-preformal') {
+    return { 'w3-m1': legacyManorHelpCompletionEvidence(evidence, 'missionCompletionEvidence.w3-m1', mission.completedAt) };
+  }
+  invalid('missionCompletionEvidence.w3-m1.kind无效');
+}
+
+function migratedLegacyMissionCompletionEvidence(
+  parsedMissions: Record<string, MissionProgress>,
+  sourceVersion: 1 | 2 | 3,
+  sourceSchemaRevision: null | 1 | 2,
+): MissionCompletionEvidenceV1 {
+  const completion = parsedMissions['w3-m1'];
+  return completion === undefined ? {} : {
+    'w3-m1': {
+      kind: 'legacy-preformal',
+      completedAt: completion.completedAt,
+      sourceVersion,
+      sourceSchemaRevision,
+    },
+  };
+}
+
 function parseV3(source: Record<string, unknown>): ProgressV3 {
   const legacyRevision = source.schemaRevision === 1;
+  const currentRevision = source.schemaRevision === 3;
   exactKeys(source, '顶层', [
     'version', 'schemaRevision', 'learnerName', 'missions', 'settings', 'privacy', 'recovery', 'sessions',
-    ...(legacyRevision ? [] : ['equipment']), 'savedAt',
+    ...(legacyRevision ? [] : ['equipment']), ...(currentRevision ? ['abilities', 'missionCompletionEvidence'] : []), 'savedAt',
   ]);
-  if (source.schemaRevision !== 1 && source.schemaRevision !== 2) invalid('schemaRevision必须是1或2');
+  if (source.schemaRevision !== 1 && source.schemaRevision !== 2 && source.schemaRevision !== 3) {
+    invalid('schemaRevision必须是1、2或3');
+  }
   const parsedCommon = common(source, true);
+  const parsedSessions = sessions(source.sessions);
+  const parsedAbilities = currentRevision
+    ? learningAbilities(source.abilities, parsedCommon.missions)
+    : { conditionObservation: deriveConditionObservation(parsedCommon.missions) };
+  const observationUses = parsedSessions['w3-m1']?.conditionObservationUses ?? [];
+  if (observationUses.length > 0
+    && (parsedAbilities.conditionObservation.acquiredAt === null
+      || parsedAbilities.conditionObservation.stableUnlockedAt === null)) {
+    invalid('conditionObservationUses需要已获得且已稳定的火眼金睛能力');
+  }
   return {
     version: 3,
-    schemaRevision: 2,
+    schemaRevision: 3,
     ...parsedCommon,
     ...privacyAndRecovery(source),
-    sessions: sessions(source.sessions),
+    sessions: parsedSessions,
     equipment: legacyRevision
       ? equipmentFromMissions(parsedCommon.missions)
       : validateEquipmentRewards(equipment(source.equipment), parsedCommon.missions),
+    abilities: parsedAbilities,
+    missionCompletionEvidence: currentRevision
+      ? missionCompletionEvidence(source.missionCompletionEvidence, parsedCommon.missions)
+      : migratedLegacyMissionCompletionEvidence(parsedCommon.missions, 3, source.schemaRevision as 1 | 2),
   };
 }
 
@@ -1684,13 +1887,15 @@ export function migrateProgress(value: unknown): ProgressV3 {
   if (legacy.version === 2) return {
     ...legacy,
     version: 3,
-    schemaRevision: 2,
+    schemaRevision: 3,
     sessions: {},
     equipment: equipmentFromMissions(legacy.missions),
+    abilities: { conditionObservation: deriveConditionObservation(legacy.missions) },
+    missionCompletionEvidence: migratedLegacyMissionCompletionEvidence(legacy.missions, 2, 1),
   };
   return {
     version: 3,
-    schemaRevision: 2,
+    schemaRevision: 3,
     learnerName: legacy.learnerName,
     missions: legacy.missions,
     settings: { ...legacy.settings, reducedMotionOverride: false },
@@ -1698,6 +1903,8 @@ export function migrateProgress(value: unknown): ProgressV3 {
     recovery: { lastRecoveredAt: null, source: null },
     sessions: {},
     equipment: equipmentFromMissions(legacy.missions),
+    abilities: { conditionObservation: deriveConditionObservation(legacy.missions) },
+    missionCompletionEvidence: migratedLegacyMissionCompletionEvidence(legacy.missions, 1, null),
     savedAt: legacy.savedAt,
   };
 }

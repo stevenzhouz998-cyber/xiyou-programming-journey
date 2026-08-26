@@ -184,10 +184,49 @@ test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
   assert.equal(bundleBudget.FOUR_SEAS_COLD_LOAD_MAX_BYTES, 2.75 * 1024 * 1024);
   assert.equal(bundleBudget.UNDERWORLD_REGISTER_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
   assert.equal(bundleBudget.THIRD_CHAPTER_BOSS_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.WEEK_TWO_HORSE_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.WEEK_TWO_MONKEY_KING_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.WEEK_TWO_PEACH_ELIXIR_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.WEEK_TWO_FURNACE_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.WEEK_TWO_HEAVENLY_BOSS_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.ENTRY_GZIP_LIMIT, 180 * 1024);
+  assert.equal(bundleBudget.HOME_TOTAL_LIMIT, 650 * 1024);
+  assert.equal(bundleBudget.PHASER_RAW_LIMIT, 1600 * 1024);
+  assert.equal(bundleBudget.GAME_SCENE_RAW_LIMIT, 1900 * 1024);
   assert.equal(bundleBudget.DRAGON_PALACE_COLD_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.RUYI_STAFF_COLD_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.DRAGON_PALACE_MEDIA_BYTES, 1.25 * 1024 * 1024);
   assert.equal(bundleBudget.SINGLE_RASTER_BYTES, 512 * 1024);
+});
+
+test('enforces the exact W3-M1 cold-load budget on its dedicated lazy route closure', () => {
+  const root = 'src/components/WeekThreeManorHelpExperience.tsx';
+  assert.equal(bundleBudget.COLD_LOAD_ROUTE_CLOSURE_BUDGETS[root], bundleBudget.WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES);
+  const manifest = {
+    ...base,
+    [root]: { file: 'assets/week-three-manor-help.js', isDynamicEntry: true, imports: [] },
+  };
+  const sizes = { 'assets/main.js': 1, 'assets/vendor.js': 1, 'assets/week-three-manor-help.js': bundleBudget.WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES };
+  assert.equal(analyzeManifest(manifest, sizes, sizes).closures[root].rawBytes, bundleBudget.WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES);
+  assert.throws(
+    () => analyzeManifest(manifest, sizes, { ...sizes, 'assets/week-three-manor-help.js': bundleBudget.WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES + 1 }),
+    /WeekThreeManorHelpExperience closure exceeds its 3 MiB cold-load budget/,
+  );
+  assert.throws(
+    () => analyzeManifest({ ...manifest, [root]: { ...manifest[root], isDynamicEntry: false } }, sizes, sizes),
+    /WeekThreeManorHelpExperience must remain a lazy route entry/,
+  );
+  assert.throws(
+    () => analyzeManifest({ ...manifest, 'src/main.tsx': { ...base['src/main.tsx'], imports: ['vendor.js', root] } }, { ...sizes, 'assets/week-three-manor-help.js': 1 }, sizes),
+    /WeekThreeManorHelpExperience must stay outside the application entry static closure/,
+  );
+});
+
+test('requires the W3-M1 dedicated lazy route closure', () => {
+  const routeSource = readFileSync(new URL('../src/components/MissionPageContent.tsx', import.meta.url), 'utf8');
+  assert.match(routeSource, /import\(\s*['"]\.\/WeekThreeManorHelpExperience['"]\s*\)/);
+  assert.match(routeSource, /mission\.id\s*===\s*['"]w3-m1['"][\s\S]{0,900}<WeekThreeManorHelpRouteBoundary\b/);
 });
 
 test('keeps the Four Seas E2E AST contract isolated from bundle analysis', () => {

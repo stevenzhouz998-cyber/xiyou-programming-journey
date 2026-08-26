@@ -78,3 +78,22 @@ When implementing from a selected generated mock, treat that image as the source
 - Do not add currency until it has a real consumable sink; decorative balances are forbidden.
 - Remove raw block IDs, instruction IDs, and parent IDs from the default child experience. Engineering provenance may remain in persisted evidence and automated tests, not the ordinary child UI.
 - The first week remains `not complete` at `System loop complete` and `Full-content verified` until this reward/equipment loop and the unified five-mission browser matrix pass.
+
+## Approved W2-M4 Gameplay Direction
+
+- Build `w2-m4 八卦炉脱身` as a real Blockly `repeat until` condition-debugging mission, not a legacy sequence reskin.
+- The default visible program uses the intentionally wrong condition `眼睛被烟熏红`. The child must replace it with the single story-sensor condition `听见炉头声响并看见光明`; `烟雾完全散去` is the never-true distractor.
+- The visible story program is: enter the furnace, shelter in the Xun position, repeat seven-day waits and furnace-door observations until the selected condition becomes true, then leap out and kick over the furnace.
+- The correct condition completes seven iterations and forty-nine story days. An early-true condition must fail visibly at the real condition block; a never-true condition must stop at a deterministic safety bound with zero loss of lives, resources, or stars.
+- Do not introduce child-built Boolean composition in this mission; multi-condition construction remains later-course scope. Preserve the existing bright 3D children's storybook visual direction.
+- The maximum completion claim for this task is `One-level playable`. W2-M5, the week-two system loop, full-content verification, and public deployment remain `not complete`.
+
+## Approved W2-M5 Boss Gameplay Direction
+
+- Build `w2-m5 天宫总试炼` as one real Blockly heavenly-signal dispatcher, not a legacy sequence reskin or four separate miniature missions.
+- The visible workspace has five event hats for stable duty, returning to Flower-Fruit Mountain, the formal heavenly title, the Peach Banquet message, and furnace refining. A fixed canonical signal queue dispatches those events, but every handler action, loop count, action order, and repeat-until condition comes only from the child's connected graph.
+- The default graph contains four real bugs: horse care repeats twice instead of three times; the flag and formal title actions are routed to the wrong event hats; the golden elixir runs before stumbling into Tusita Palace; and the furnace exits on red eyes instead of the furnace-opening signal.
+- Runtime feedback reveals only the first blocking bug and focuses its real Blockly source. Assistance may explain the concept but must not edit, reorder, run, or finish the graph.
+- A correct graph produces three horse-care iterations, correct event routing, the five-step Peach/Tusita order, and seven furnace rounds totaling forty-nine days. All failures cost zero lives, resources, and stars.
+- The Buddha palm wager and Five Elements Mountain are a fixed, clearly labelled canon epilogue after the child-authored trace reaches furnace escape. They are not child-authored punishment commands, are not part of the canonical instruction trace, and cannot turn an incomplete graph into success.
+- The maximum completion claim for this task is `One-level playable`. Completing this Boss may unlock W3-M1 and feed the parent report, but does not by itself prove the week-two system loop, full-content verification, or public deployment.

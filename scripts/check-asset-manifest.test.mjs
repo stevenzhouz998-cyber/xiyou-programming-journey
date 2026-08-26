@@ -7,10 +7,15 @@ import { fileURLToPath } from 'node:url';
 import {
   collectAssetFiles,
   decodeWebpDimensions,
+  measureAlphaEdgeMismatch,
   parseAssetManifest,
   readWebpDimensions,
   verifyRequiredAdvancedWeekOneInventory,
   verifyRequiredDragonPalaceInventory,
+  verifyRequiredWeekTwoHorseInventory,
+  verifyRequiredWeekTwoFurnaceInventory,
+  verifyRequiredWeekTwoHeavenlyBossInventory,
+  verifyRequiredWeekThreeManorHelpInventory,
   verifyAssetManifest,
 } from './check-asset-manifest.mjs';
 
@@ -197,6 +202,18 @@ test('fully decodes all eight shipping WebP files including the Four Seas regali
     const bytes = await readFile(join(assetRoot, name));
     assert.deepEqual(await decodeWebpDimensions(bytes), expected, name);
   }
+});
+
+test('requires the exact two approved W2-M5 heavenly signal Boss assets', async () => {
+  const source = "const BACKGROUND = '/assets/week-two-heavenly-boss/signal-dispatch-background.webp'; const STATES = '/assets/week-two-heavenly-boss/heavenly-boss-states.webp';";
+  assert.doesNotThrow(() => verifyRequiredWeekTwoHeavenlyBossInventory({
+    manifestRows: [
+      { assetId: 'assets/week-two-heavenly-boss/signal-dispatch-background.webp', screenSlots: 'w2-m5 WeekTwoHeavenlySignalBossScene', qaStatus: 'visual-qa-passed' },
+      { assetId: 'assets/week-two-heavenly-boss/heavenly-boss-states.webp', screenSlots: 'w2-m5 WeekTwoHeavenlySignalBossScene', qaStatus: 'visual-qa-passed' },
+    ], publicFiles: [
+      { path: 'assets/week-two-heavenly-boss/signal-dispatch-background.webp' }, { path: 'assets/week-two-heavenly-boss/heavenly-boss-states.webp' },
+    ], promptRecords: [], source,
+  }));
 });
 
 test('traces every approved Dragon Palace raster to a real formal scene slot', async () => {
@@ -700,6 +717,129 @@ test('requires all four advanced Week One WebPs and the two live mission-bound i
   }), /screen slot|w1-m4|AdvancedWeekOneScene/i);
   assert.throws(() => verifyRequiredAdvancedWeekOneInventory({ ...data, manifestRows: manifestRows.slice(1) }), /four|required|missing/i);
   assert.throws(() => verifyRequiredAdvancedWeekOneInventory({ ...data, publicFiles: [...publicFiles, { ...publicFiles[0], path: 'assets/week-one-advanced/extra.webp' }] }), /four|unexpected|missing manifest/i);
+});
+
+test('requires both formal w2-m1 rasters, prompt provenance, dimensions, hashes and live scene slots', async () => {
+  const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const parsed = parseAssetManifest(await readFile(join(sourceRoot, 'docs', 'assets', 'asset-manifest.md'), 'utf8'));
+  const manifestRows = parsed.manifestRows.filter((row) => row.assetId.startsWith('assets/week-two-heaven/'));
+  const promptRecords = parsed.promptRecords.filter((record) => record.heading.startsWith('Prompt W2H-'));
+  const publicFiles = await collectAssetFiles(
+    join(sourceRoot, 'public', 'assets', 'week-two-heaven'),
+    'assets/week-two-heaven',
+  );
+  const source = await readFile(join(sourceRoot, 'src', 'components', 'WeekTwoHorseScene.tsx'), 'utf8');
+
+  assert.deepEqual(manifestRows.map((row) => row.assetId).sort(), [
+    'assets/week-two-heaven/horse-care-states.webp',
+    'assets/week-two-heaven/stable-background.webp',
+  ]);
+  assert.equal(manifestRows.every((row) => row.screenSlots.includes('w2-m1 WeekTwoHorseScene')), true);
+  assert.match(source, /\/assets\/week-two-heaven\/stable-background\.webp/);
+  assert.match(source, /\/assets\/week-two-heaven\/horse-care-states\.webp/);
+  assert.doesNotThrow(() => verifyRequiredWeekTwoHorseInventory({ manifestRows, publicFiles, promptRecords, source, mode: 'check' }));
+});
+
+test('requires both formal w2-m2 rasters, prompt provenance, dimensions, hashes and live scene slots', async () => {
+  const verifierModule = await import('./check-asset-manifest.mjs');
+  assert.equal(typeof verifierModule.verifyRequiredWeekTwoMonkeyKingInventory, 'function');
+  const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const parsed = parseAssetManifest(await readFile(join(sourceRoot, 'docs', 'assets', 'asset-manifest.md'), 'utf8'));
+  const manifestRows = parsed.manifestRows.filter((row) => row.assetId.startsWith('assets/week-two-great-sage/'));
+  const promptRecords = parsed.promptRecords.filter((record) => record.heading.startsWith('Prompt W2M2-'));
+  const publicFiles = await collectAssetFiles(join(sourceRoot, 'public', 'assets', 'week-two-great-sage'), 'assets/week-two-great-sage');
+  const source = await readFile(join(sourceRoot, 'src', 'components', 'WeekTwoMonkeyKingScene.tsx'), 'utf8');
+
+  assert.deepEqual(manifestRows.map((row) => row.assetId).sort(), [
+    'assets/week-two-great-sage/flower-fruit-background.webp',
+    'assets/week-two-great-sage/great-sage-event-states.webp',
+  ]);
+  assert.equal(manifestRows.every((row) => row.screenSlots.includes('w2-m2 WeekTwoMonkeyKingScene')), true);
+  assert.doesNotThrow(() => verifierModule.verifyRequiredWeekTwoMonkeyKingInventory({ manifestRows, publicFiles, promptRecords, source, mode: 'check' }));
+});
+
+test('requires both formal w2-m3 rasters, prompt provenance, dimensions, hashes and live scene slots', async () => {
+  const verifierModule = await import('./check-asset-manifest.mjs');
+  assert.equal(typeof verifierModule.verifyRequiredWeekTwoPeachElixirInventory, 'function');
+  const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const parsed = parseAssetManifest(await readFile(join(sourceRoot, 'docs', 'assets', 'asset-manifest.md'), 'utf8'));
+  const manifestRows = parsed.manifestRows.filter((row) => row.assetId.startsWith('assets/week-two-peach-elixir/'));
+  const promptRecords = parsed.promptRecords.filter((record) => record.heading.startsWith('Prompt W2M3-'));
+  const publicFiles = await collectAssetFiles(join(sourceRoot, 'public', 'assets', 'week-two-peach-elixir'), 'assets/week-two-peach-elixir');
+  const source = await readFile(join(sourceRoot, 'src', 'components', 'WeekTwoPeachElixirScene.tsx'), 'utf8');
+
+  assert.deepEqual(manifestRows.map((row) => row.assetId).sort(), [
+    'assets/week-two-peach-elixir/heavenly-route-background.webp',
+    'assets/week-two-peach-elixir/peach-elixir-states.webp',
+  ]);
+  assert.equal(manifestRows.every((row) => row.screenSlots.includes('w2-m3 WeekTwoPeachElixirScene')), true);
+  assert.doesNotThrow(() => verifierModule.verifyRequiredWeekTwoPeachElixirInventory({ manifestRows, publicFiles, promptRecords, source, mode: 'check' }));
+});
+
+test('requires both formal w2-m4 furnace rasters, prompt provenance, and exactly two live scene slots', async () => {
+  const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const parsed = parseAssetManifest(await readFile(join(sourceRoot, 'docs', 'assets', 'asset-manifest.md'), 'utf8'));
+  const manifestRows = parsed.manifestRows.filter((row) => row.assetId.startsWith('assets/week-two-furnace/'));
+  const promptRecords = parsed.promptRecords.filter((record) => record.heading.startsWith('Prompt W2M4-'));
+  const publicFiles = await collectAssetFiles(join(sourceRoot, 'public', 'assets', 'week-two-furnace'), 'assets/week-two-furnace');
+  const source = await readFile(join(sourceRoot, 'src', 'components', 'WeekTwoFurnaceConditionScene.tsx'), 'utf8');
+  assert.deepEqual(manifestRows.map((row) => row.assetId).sort(), ['assets/week-two-furnace/furnace-condition-states.webp', 'assets/week-two-furnace/furnace-interior-background.webp']);
+  assert.doesNotThrow(() => verifyRequiredWeekTwoFurnaceInventory({ manifestRows, publicFiles, promptRecords, source, mode: 'check' }));
+});
+
+test('requires both formal w3-m1 manor-help rasters, prompt provenance, and exactly two live scene slots', async () => {
+  const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const parsed = parseAssetManifest(await readFile(join(sourceRoot, 'docs', 'assets', 'asset-manifest.md'), 'utf8'));
+  const manifestRows = parsed.manifestRows.filter((item) => item.assetId.startsWith('assets/week-three-manor-help/'));
+  const promptRecords = parsed.promptRecords.filter((record) => record.heading.startsWith('Prompt W3M1-'));
+  const publicFiles = await collectAssetFiles(join(sourceRoot, 'public', 'assets', 'week-three-manor-help'), 'assets/week-three-manor-help');
+  const source = await readFile(join(sourceRoot, 'src', 'components', 'WeekThreeManorHelpScene.tsx'), 'utf8');
+  assert.deepEqual(manifestRows.map((item) => item.assetId).sort(), [
+    'assets/week-three-manor-help/manor-help-background.webp',
+    'assets/week-three-manor-help/manor-message-states.webp',
+  ]);
+  assert.equal(manifestRows.every((item) => item.screenSlots === 'w3-m1 WeekThreeManorHelpScene'), true);
+  assert.doesNotThrow(() => verifyRequiredWeekThreeManorHelpInventory({ manifestRows, publicFiles, promptRecords, source, mode: 'check' }));
+});
+
+test('rejects missing, extra, wrong-slot, and hidden-literal W3-M1 assets', () => {
+  const paths = [
+    'assets/week-three-manor-help/manor-help-background.webp',
+    'assets/week-three-manor-help/manor-message-states.webp',
+  ];
+  const rows = paths.map((assetId, index) => row({
+    assetId,
+    promptOrSourceReference: `[Prompt W3M1-00${index + 1}](#prompt-w3m1-00${index + 1}-${index === 0 ? 'manor-help-background' : 'manor-message-states'})`,
+    dimensions: '1672x941',
+    screenSlots: 'w3-m1 WeekThreeManorHelpScene',
+  }));
+  const records = paths.map((assetId, index) => promptRecord({
+    heading: `Prompt W3M1-00${index + 1} ${index === 0 ? 'manor help background' : 'manor message states'}`,
+    anchor: `#prompt-w3m1-00${index + 1}-${index === 0 ? 'manor-help-background' : 'manor-message-states'}`,
+    prompt: `Style/medium: ${advancedArtDirection}`,
+  }));
+  const files = paths.map((path) => file({ path, width: 1672, height: 941, hasAlpha: path.endsWith('states.webp'), ...(path.endsWith('states.webp') ? { alphaEdgeMismatch: { inspectedPixels: 1, mismatchedPixels: 0, mismatchRatio: 0 } } : {}) }));
+  const source = `import { assetUrl } from '../utils/assets';\nconst BACKGROUND = '/assets/week-three-manor-help/manor-help-background.webp';\nconst STATES = '/assets/week-three-manor-help/manor-message-states.webp';\nconst source = (path) => assetUrl(path);\nexport function WeekThreeManorHelpScene() { return <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></>; }`;
+  assert.doesNotThrow(() => verifyRequiredWeekThreeManorHelpInventory({ manifestRows: rows, publicFiles: files, promptRecords: records, source }));
+  assert.throws(() => verifyRequiredWeekThreeManorHelpInventory({ manifestRows: rows.slice(0, 1), publicFiles: files.slice(0, 1), promptRecords: records.slice(0, 1), source }), /required|exactly/i);
+  assert.throws(() => verifyRequiredWeekThreeManorHelpInventory({ manifestRows: [...rows, row({ assetId: 'assets/week-three-manor-help/extra.webp' })], publicFiles: [...files, file({ path: 'assets/week-three-manor-help/extra.webp' })], promptRecords: records, source }), /exactly|unexpected/i);
+  assert.throws(() => verifyRequiredWeekThreeManorHelpInventory({ manifestRows: [rows[0], { ...rows[1], screenSlots: 'wrong' }], publicFiles: files, promptRecords: records, source }), /screen slots/i);
+  const contaminatedFiles = files.map((item) => item.path.endsWith('states.webp') ? { ...item, alphaEdgeMismatch: { inspectedPixels: 100, mismatchedPixels: 5, mismatchRatio: 0.05 } } : item);
+  assert.throws(() => verifyRequiredWeekThreeManorHelpInventory({ manifestRows: rows, publicFiles: contaminatedFiles, promptRecords: records, source }), /alpha-edge contamination/i);
+  assert.throws(() => verifyRequiredWeekThreeManorHelpInventory({ manifestRows: rows, publicFiles: files, promptRecords: records, source: `${source}\nconst extra = '/assets/week-three-manor-help/extra.webp';` }), /exactly.*two/i);
+  assert.throws(() => verifyRequiredWeekThreeManorHelpInventory({ manifestRows: rows, publicFiles: files, promptRecords: records, source: source.replace('source(STATES)', 'assetUrl(STATES)') }), /src bindings|assetUrl/i);
+});
+
+test('measures transparent-edge contamination without mutating alpha', () => {
+  const clean = new Uint8Array([
+    210, 90, 40, 255,
+    210, 90, 40, 128,
+    0, 0, 0, 0,
+  ]);
+  const contaminated = new Uint8Array(clean);
+  contaminated.set([40, 190, 230, 128], 4);
+  assert.deepEqual(measureAlphaEdgeMismatch(clean, 3, 1), { inspectedPixels: 1, mismatchedPixels: 0, mismatchRatio: 0 });
+  assert.deepEqual(measureAlphaEdgeMismatch(contaminated, 3, 1), { inspectedPixels: 1, mismatchedPixels: 1, mismatchRatio: 1 });
 });
 
 test('rejects missing, malformed, and mismatched SHA-256 hashes', () => {

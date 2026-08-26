@@ -1,6 +1,6 @@
 # Asset manifest
 
-This manifest gates the formal Dragon Palace media in `public/assets/dragon-palace` and the formal w1-m4/w1-m5 media in `public/assets/week-one-advanced`. The asset gate verifies generation provenance, real file hashes, dimensions, exact formal scene references, and media budgets. Real-browser screenshots at 320, 390, 768, and 1440 pixels were inspected before promoting the first six approved rows to `visual-qa-passed`; DP-007 and DP-008 have now also passed the integrated w1-m3 original-resolution viewport QA at 320, 390, 768, and 1440 pixels plus the 768-pixel wrong-order state, with the complete connected Blockly graph visible beside the formal scene. AW1-001 through AW1-004 were inspected at original resolution before integration; their final in-browser viewport evidence is recorded separately in the w1-m4/w1-m5 verification report. The sixth row corrects the `w1-m2` broad-sabre semantic requirement without altering the original three-weapon sheet.
+This manifest gates the formal Dragon Palace media in `public/assets/dragon-palace` and the formal w1-m4/w1-m5 media in `public/assets/week-one-advanced`. The asset gate verifies generation provenance, real file hashes, dimensions, exact formal scene references, and media budgets. Real-browser screenshots at 320, 390, 768, and 1440 pixels were inspected before promoting the first six approved rows to `visual-qa-passed`; DP-007 and DP-008 have now also passed the integrated w1-m3 original-resolution viewport QA at 320, 390, 768, and 1440 pixels plus the 768-pixel wrong-order state, with the complete connected Blockly graph visible beside the formal scene. AW1-001 through AW1-004 were inspected at original resolution before integration; their final in-browser viewport evidence is recorded separately in the w1-m4/w1-m5 verification report. W2M3-001 and W2M3-002 passed original-file inspection plus five-project 320/390/768/1440 browser QA with the real coloured Blockly pixels, wrong-order and completion states visible and no fake transparency, overflow, pseudo-text, or clipping. The sixth row corrects the `w1-m2` broad-sabre semantic requirement without altering the original three-weapon sheet.
 
 | Asset ID | SHA-256 | Purpose | Tool or source | Prompt or source reference | Dimensions | License/provenance | Screen slots | QA status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -16,10 +16,62 @@ This manifest gates the formal Dragon Palace media in `public/assets/dragon-pala
 | assets/week-one-advanced/register-states.webp | a37822649b566098b2cf8813be65b359dc788ce5fd699947ee2925d1ddca8bbd | Four-stage closed, indexed, matched, and handled register state sheet | OpenAI built-in image_gen | [Prompt AW1-002](#prompt-aw1-002-register-states) | 2048x1152 | generated in-project with built-in image_gen; provenance verified | w1-m4 AdvancedWeekOneScene states sprite branch | visual-qa-passed |
 | assets/week-one-advanced/boss-journey-background.webp | 5137b32c772c0b959717a718a40838cf516b762db6a085130291e309f6a356e7 | Cohesive first-week planning hall with comparison, decomposition, and lookup stations | OpenAI built-in image_gen | [Prompt AW1-003](#prompt-aw1-003-boss-journey-background) | 1600x900 | generated in-project with built-in image_gen; provenance verified | w1-m5 AdvancedWeekOneScene background branch | visual-qa-passed |
 | assets/week-one-advanced/boss-checkpoints.webp | 77978522df022c4c04039d831d8c0f9c989bb323058cb0b9e12152cdb4b7c6b0 | Six-stage Boss planning, Dragon Palace, comparison, regalia, register, and verification sheet | OpenAI built-in image_gen | [Prompt AW1-004](#prompt-aw1-004-boss-checkpoints) | 3072x1152 | generated in-project with built-in image_gen; provenance verified | w1-m5 AdvancedWeekOneScene states sprite branch | visual-qa-passed |
+| assets/week-two-heaven/stable-background.webp | b0aeaf621ab91e9548c31cc9b45dc3cccba0e6d73bd26975fe389884302ec990 | Bright child-friendly Heavenly Stable courtyard with three readable care stalls | OpenAI built-in image_gen | [Prompt W2H-001](#prompt-w2h-001-stable-background) | 1600x900 | generated in-project with built-in image_gen; provenance verified | w2-m1 WeekTwoHorseScene background branch | visual-qa-passed |
+| assets/week-two-heaven/horse-care-states.webp | 7135a009014763e83fd57760ff84cac26cbe582b7a2dd1ff5666bbb85a82e9a1 | Four-stage zero, one, two, and three completed horse-care loop state sheet | OpenAI built-in image_gen | [Prompt W2H-002](#prompt-w2h-002-horse-care-states) | 1600x900 | generated in-project with built-in image_gen; provenance verified | w2-m1 WeekTwoHorseScene states sprite branch | visual-qa-passed |
+| assets/week-two-great-sage/flower-fruit-background.webp | 26ef39f2241bcb90a1379b4569e696a0624646c5d05f703f4bfae4e8fc8d43c5 | Bright Flower Fruit Mountain ceremonial clearing with open event-playback stage | OpenAI built-in image_gen | [Prompt W2M2-001](#prompt-w2m2-001-flower-fruit-background) | 1600x900 | generated in-project with built-in image_gen; provenance verified | w2-m2 WeekTwoMonkeyKingScene background branch | visual-qa-passed |
+| assets/week-two-great-sage/great-sage-event-states.webp | fd8dae0bead9fc99a44547c62ed71ad4b41a7f956f8533398d727913c09a1c7b | Four-stage bare event stage, raised flag, accepted title seal, and completed residence sprite sheet | OpenAI built-in image_gen | [Prompt W2M2-002](#prompt-w2m2-002-great-sage-event-states) | 1600x900 | generated in-project with built-in image_gen; provenance verified | w2-m2 WeekTwoMonkeyKingScene states sprite branch | visual-qa-passed |
+| assets/week-two-peach-elixir/heavenly-route-background.webp | 96d46eba51c9679e72361184a651f1c231a9e7cc46d0a5b6651f6f9e6ecd136c | Left-to-right celestial route linking the Peach Garden, Jade Pool banquet terrace, and Tusita Palace | OpenAI built-in image_gen | [Prompt W2M3-001](#prompt-w2m3-001-heavenly-route-background) | 1600x900 | generated in-project with built-in image_gen; provenance verified | w2-m3 WeekTwoPeachElixirScene background branch | visual-qa-passed |
+| assets/week-two-peach-elixir/peach-elixir-states.webp | 246eb60639a6ba2be2617bda1abdf2851a0f9f3f2f7db021792d20f471ef1e26 | Six-stage waiting, garden, banquet news, Jade Pool, Tusita, and elixir sprite sheet | OpenAI built-in image_gen | [Prompt W2M3-002](#prompt-w2m3-002-peach-elixir-states) | 1536x1024 | generated in-project with built-in image_gen; provenance verified | w2-m3 WeekTwoPeachElixirScene states sprite branch | visual-qa-passed |
+| assets/week-two-furnace/furnace-interior-background.webp | b81e7ba0bda15864414fede26c569fe936e371a18b6fa83d2f87b6aa99f24302 | Bright octagonal Eight-Trigram Furnace interior with Xun shelter, fire, smoke, and opening furnace door | OpenAI built-in image_gen | [Prompt W2M4-001](#prompt-w2m4-001-furnace-interior-background) | 1672x941 | generated in-project with built-in image_gen; provenance verified | w2-m4 WeekTwoFurnaceConditionScene background branch | visual-qa-passed |
+| assets/week-two-furnace/furnace-condition-states.webp | 6425fc81710c82100cff9fff77d6a4a3d9a202ddb1b4ed2ed00ee16759325bc6 | Seven-stage furnace waiting and safe escape state sheet | OpenAI built-in image_gen | [Prompt W2M4-002](#prompt-w2m4-002-furnace-condition-states) | 1672x941 | generated in-project with built-in image_gen; provenance verified | w2-m4 WeekTwoFurnaceConditionScene state branch | visual-qa-passed |
+| assets/week-two-heavenly-boss/signal-dispatch-background.webp | 7de0fd49cf2bf49af546e8a8e6302179ee4fc2fe798b64d379015ee820bac21d | Connected Heavenly Signal Dispatch landscape spanning stable, flag terrace, peach route, furnace and calm epilogue zone | OpenAI built-in image_gen | [Prompt W2M5-001](#prompt-w2m5-001-heavenly-dispatch-background) | 1672x941 | generated in-project with built-in image_gen; provenance verified | w2-m5 WeekTwoHeavenlySignalBossScene background branch | visual-qa-passed |
+| assets/week-two-heavenly-boss/heavenly-boss-states.webp | 646fbeb3f965ff5a6b868bf0d6f613329c485bd658489e8b4556db8099168bc8 | Multi-stage signal, horse-care, furnace and calm canonical-epilogue state sheet | OpenAI built-in image_gen | [Prompt W2M5-002](#prompt-w2m5-002-heavenly-boss-states) | 1672x941 | generated in-project with built-in image_gen; provenance verified | w2-m5 WeekTwoHeavenlySignalBossScene states branch | visual-qa-passed |
+| assets/week-three-manor-help/manor-help-background.webp | 0464a6c9038f79cfe7ddf61a4d3e4272d41d74eef920921686922227620aa4d2 | Bright Gao Family Manor roadside environment with an open message-playback foreground | OpenAI built-in image_gen | [Prompt W3M1-001](#prompt-w3m1-001-manor-help-background) | 1672x941 | generated in-project with built-in image_gen; provenance verified | w3-m1 WeekThreeManorHelpScene | visual-qa-passed |
+| assets/week-three-manor-help/manor-message-states.webp | 6a27fb45bb269146b4bf08182d872a09b4dc3488f267ee04032b030c2b2cab41 | Transparent Gao Cai request-and-return plus ordinary villager directions-and-continue state sheet | OpenAI built-in image_gen | [Prompt W3M1-002](#prompt-w3m1-002-manor-message-states) | 1672x941 | generated in-project with built-in image_gen; provenance verified | w3-m1 WeekThreeManorHelpScene | visual-qa-passed |
 
 ## Prompt records
 
-All eight accepted source illustrations were generated through separate calls to the environment's built-in `image_gen` tool. Generation sources remain outside `public` and outside this repository. The keyed sources were processed with the official imagegen Skill helper `remove_chroma_key.py` using border auto-key sampling, soft matte, thresholds 12/220, and despill. Pillow/Sharp then performed only technical crop-to-content, resize, transparent-canvas placement, and WebP encoding. Existing compositions retain their prior encoding; DP-006 is a 256x384 transparent WebP encoded by Sharp 0.35.3 (`quality: 30`, `alphaQuality: 75`, `effort: 6`, `smartSubsample: true`) to preserve the fixed cold-load budget. DP-007 and DP-008 were encoded at 1024x512 and 640x640 with Sharp (`quality: 76`, `alphaQuality: 90`, `effort: 6`, `smartSubsample: true`). A first magenta-key DP-008 attempt was rejected during alpha QA because its purple clothing conflicted with the key; it was not shipped and is not an accepted prompt record. No artwork was redrawn in code.
+Accepted source illustrations were generated through separate calls to the environment's built-in `image_gen` tool. Generation sources remain outside `public` and outside this repository. The keyed sources were processed with local alpha removal, and Pillow/Sharp then performed only technical crop-to-content, resize, transparent-canvas placement, and WebP encoding. Existing compositions retain their prior encoding; DP-006 is a 256x384 transparent WebP encoded by Sharp 0.35.3 (`quality: 30`, `alphaQuality: 75`, `effort: 6`, `smartSubsample: true`) to preserve the fixed cold-load budget. DP-007 and DP-008 were encoded at 1024x512 and 640x640 with Sharp (`quality: 76`, `alphaQuality: 90`, `effort: 6`, `smartSubsample: true`). A first magenta-key DP-008 attempt was rejected during alpha QA because its purple clothing conflicted with the key; it was not shipped and is not an accepted prompt record. No artwork was redrawn in code.
+
+### Prompt W2M4-001 furnace interior background
+
+```text
+Use case: illustration-story
+Asset type: production W2-M4 background
+Primary request: bright 3D Chinese children's storybook interior of an Eight-Trigram Furnace with a Xun-position shelter, gentle fire, smoke, and an openable furnace door; no text or UI.
+Style/medium: polished 3D children's storybook game
+```
+
+### Prompt W2M4-002 furnace condition states
+
+```text
+Use case: illustration-story
+Asset type: production W2-M4 state sheet
+Primary request: seven child-friendly Eight-Trigram Furnace waiting stages progressing to a safe Monkey King escape; no text, numbers, UI, or borders.
+Style/medium: polished 3D children's storybook game
+```
+
+### Prompt W2M5-001 heavenly dispatch background
+
+```text
+Use case: illustration-story
+Asset type: production W2-M5 Heavenly Signal Dispatch background
+Primary request: one bright 3D Chinese children's storybook celestial journey landscape connecting a heavenly stable, blank flag terrace, peach garden, Jade Pool, Tusita palace, open Eight-Trigram Furnace and a quiet Five Elements Mountain epilogue area.
+Style/medium: polished 3D children's storybook game, warm cloud light, jade, peach, vermilion and gold.
+Constraints: no text, letters, numbers, logos, UI, watermark, pseudo-writing, checkerboard, transparency, battle, fear or punishment imagery.
+Processing: accepted built-in image_gen PNG was visually reviewed at original resolution then technically WebP encoded by Sharp 0.35.3 at quality 82 without crop, redraw, compositing or content edits.
+```
+
+### Prompt W2M5-002 heavenly Boss states
+
+```text
+Use case: illustration-story
+Asset type: production W2-M5 Heavenly Signal Boss state sheet
+Primary request: a bright 3D Chinese children's storybook state sheet showing three cared heavenly horses, a blank golden flag, heavenly residence, peach and banquet journey, seven furnace waiting stages, safe escape and a calm canonical epilogue.
+Style/medium: polished 3D children's storybook game, jade, peach pink, warm gold and vermilion, gentle cloud light.
+Constraints: no text, letters, numbers, logos, UI, watermark, pseudo-writing, checkerboard, transparency, battle, fear or punishment imagery.
+Processing: accepted built-in image_gen PNG was visually reviewed at original resolution then technically WebP encoded by Sharp 0.35.3 at quality 82 without crop, redraw, compositing or content edits.
+```
 
 ### Prompt DP-001 background
 
@@ -201,6 +253,141 @@ Style/medium: polished 3D children's storybook game asset, rounded friendly form
 Composition/framing: strict 3x2 grid with equal padding; no gutters or borders that alter cell size
 Constraints: actual transparent background; no characters; no readable writing; no letters; no numbers; no watermark; no enemies, skulls, ghosts, fear, punishment, blood, fire or combat; the staff is a small learning-selection icon, not shown attacking
 Processing: each of the six generated cells was extracted on its exact source-grid boundary and placed without stretching into a 1024x576 transparent cell, producing a 3072x1152 3x2 sheet; WebP encoding used Sharp 0.35.3 quality 26, alphaQuality 72 and effort 6 to remain under the fixed 512 KiB single-raster and 3.0 MiB cold-load budgets. No artwork was redrawn in code.
+```
+
+### Prompt W2H-001 stable background
+
+```text
+Use case: illustration-story
+Asset type: w2-m1 formal game scene background, target 1600x900 16:9
+Primary request: create a warm, child-friendly Heavenly Stable courtyard from Journey to the West for a coding learning game about repeat loops
+Scene/backdrop: spacious traditional celestial horse stable courtyard above soft clouds, jade-green tiled roofs, cinnabar timber, gold fittings, three orderly open horse stalls visible across the middle distance, a calm path leading toward a distant heavenly gate, gentle cloud banks and blue sky
+Style/medium: polished 3D children's storybook game illustration matching a commercial Chinese mythology learning game, rounded friendly forms, rich material detail, jade teal cinnabar and gold palette
+Composition/framing: exact 16:9 wide environment, open foreground stage, three stalls clearly readable but no close-up object cropping, usable center and lower space for state overlays
+Lighting/mood: bright morning, welcoming, curious, safe, calm
+Constraints: environment only; no characters; no animals; no text; no letters; no numbers; no symbols; no watermark; no weapons; no combat; no fear; no punishment; no fire; one coherent scene, not a collage
+Avoid: dark dungeon mood, realistic violence, modern objects, UI frames, fake text
+Processing: the accepted built-in image_gen output was crop-to-fit resized without stretching to 1600x900 and WebP encoded by Sharp 0.35.3 at quality 76 and effort 6.
+```
+
+### Prompt W2H-002 horse care states
+
+```text
+Use case: illustration-story
+Asset type: w2-m1 horse-care state sprite sheet for a formal game scene
+Primary request: create one exact 2 columns x 2 rows sprite sheet, four equal 16:9 cells showing the same three child-friendly celestial horses and care markers progressing from zero active, to one jade active, to two jade active, to three gold active
+Style/medium: polished 3D children's storybook game asset, rounded friendly forms, jade teal cinnabar and gold, consistent camera, lighting, horse identities, positions and scale in every cell
+Composition/framing: strict 2x2 grid; four equal 16:9 cells; generous equal padding; horses fully visible; no gutters, borders or labels; each cell aligns for sprite cropping
+Constraints: exactly three horses per cell; no people; no readable text; no letters; no numbers; no watermark; no weapons; no combat; no fear; no punishment; no fire
+Accepted edits: remove the rejected fake-checkerboard transparency, replace only the background with one uniform #ff00ff chroma key, preserve all horses, markers, glows and stage positions, then remove only the chroma background locally into genuine alpha.
+Processing: the four exact source-grid cells were placed into 800x450 slots without redrawing, producing a 1600x900 2x2 transparent sheet; WebP encoding used Sharp 0.35.3 quality 28, alphaQuality 100 and effort 6. No artwork was redrawn in code.
+```
+
+### Prompt W2M2-001 flower fruit background
+
+```text
+Use case: illustration-story
+Asset type: w2-m2 formal game scene background, target 1600x900 16:9
+Input image 1: w2-m1 stable background as style reference only; match its polished 3D children's storybook rendering, rounded forms, material quality, bright safe lighting, and jade-teal/cinnabar/gold palette. Do not copy its stable architecture or composition.
+Shared art direction: polished 3D children's storybook game.
+Primary request: create a child-friendly Flower Fruit Mountain ceremonial clearing from Journey to the West for a coding learning game about event handlers
+Scene/backdrop: a broad sunlit mountain terrace above waterfalls and peach-blossom valleys, weathered pale stone platform, lush green cliffs, distant Water Curtain Cave falls, open blue sky and soft clouds
+Composition/framing: exact wide 16:9 environment; keep the center and lower-left foreground open as a clean stage for a separate event-state overlay
+Constraints: environment only; no people; no monkeys; no animals; no readable text; no letters; no numbers; no symbols; no watermark; no weapons; no combat; no fear; no punishment; no fire
+Accepted edit: remove both generated hanging banners and their poles because their gold patterns resembled pseudo-writing; keep the mountain, waterfalls, terrace, light, camera and every other object unchanged.
+Processing: the accepted built-in image_gen edit was crop-to-fit resized without stretching to 1600x900 and WebP encoded by Sharp 0.35.3 at quality 76 and effort 6.
+```
+
+### Prompt W2M2-002 great sage event states
+
+```text
+Use case: illustration-story
+Asset type: w2-m2 four-stage event-state sprite sheet for a formal game scene
+Input image 1: w2-m1 horse-care sheet as style and grid reference only; do not copy horses or pedestals.
+Shared art direction: polished 3D children's storybook game.
+Primary request: create one strict 2 columns x 2 rows sheet with four equal 16:9 cells showing the same Flower Fruit Mountain ceremonial objects progressing through four states: bare jade-and-gold dais and flagpole; the same dais with one blank red sunburst flag; the same flag plus one unwritten gold-and-jade heavenly appointment seal; the same flag and seal plus one red-pillared jade-roofed residence pavilion.
+Composition/framing: same camera, scale, object positions and lighting in every cell; all objects fully visible; no gutters, borders, labels, captions or dividers.
+Constraints: genuinely transparent background; no people; no monkeys; no animals; no readable text; no Chinese characters; no letters; no numbers; no pseudo-writing; no runes; no watermark; no weapons; no combat; no fear; no punishment; no fire.
+Accepted edit: replace only the rejected fake checkerboard background with uniform #ff00ff while preserving all objects and alignment.
+Processing: Sharp 0.35.3 crop-to-fit resized the accepted edit without stretching to 1600x900, removed only chroma pixels meeting r>180, b>180, g<120 and min(r,b)-g>90 into genuine alpha, then WebP encoded at quality 60, alphaQuality 100 and effort 6. No artwork was redrawn in code.
+```
+
+### Prompt W2M3-001 heavenly route background
+
+```text
+Use case: illustration-story
+Asset type: shipping 16:9 game-scene background for a Chinese children's Blockly learning website
+Shared art direction: polished 3D children's storybook game.
+Primary request: Create a polished wide cinematic 3D children's storybook illustration of the heavenly route in Journey to the West chapter five, visually connecting the Peach Garden, the Jade Pool banquet courtyard, and the distant Tusita Palace as three clearly distinct locations in one coherent scene.
+Scene/backdrop: luminous celestial terraces above soft clouds; left foreground is a lush peach orchard with ripe peaches and carved stone paths; center is an elegant but unoccupied banquet terrace with vessels and warm lantern light; right distance is a tall alchemy palace with a glowing bronze furnace silhouette, connected by a winding cloud path.
+Subject: environment only, no character closeups; the route itself must be easy to read from left to right.
+Style/medium: high-quality bright 3D animated children's film / premium storybook render, consistent with an upbeat Chinese mythology learning game, rounded forms, rich but controlled detail.
+Composition/framing: 16:9 landscape, safe center and right areas for an overlaid progress sprite, clear foreground/midground/depth, no UI frame.
+Lighting/mood: warm sunrise-gold and peach-pink light, magical, welcoming, non-threatening.
+Color palette: peach coral, jade green, celestial blue, warm gold, ivory cloud.
+Constraints: no text, no letters, no numerals, no signs, no banners, no logos, no watermark, no interface elements, no fake transparency, no checkerboard, no legacy world-map look, no modern objects, no weapons, no violence.
+Processing: the accepted 1672x941 built-in image_gen output was crop-to-fit resized without stretching to 1600x900 and WebP encoded by Sharp 0.35.3 at quality 82 and effort 6. No artwork was redrawn in code.
+```
+
+### Prompt W2M3-002 peach elixir states
+
+```text
+Use case: illustration-story
+Asset type: shipping six-frame state sprite sheet for a Chinese children's Blockly learning game
+Shared art direction: polished 3D children's storybook game.
+Primary request: Create one clean 3-by-2 sprite sheet with exactly six equal rectangular cells, each cell showing the same friendly stylized Monkey King character and a single readable story-state vignette from Journey to the West chapter five.
+Frame order, left to right on top row then left to right on bottom row: 1) waiting thoughtfully beside a cloud path; 2) caring for a peach garden; 3) listening with curiosity to seven distant celestial maidens represented unobtrusively; 4) arriving at an empty Jade Pool banquet terrace with a small wine vessel; 5) surprised after wandering into the Tusita alchemy palace beside a bronze furnace; 6) final resolved pose beside a golden elixir gourd, with a gentle golden glow.
+Style/medium: polished bright 3D animated children's film / premium storybook render, rounded expressive forms, same character model, costume, proportions, lighting and camera angle in every cell, matching a warm Chinese mythology learning website.
+Composition/framing: exact 3 columns by 2 rows, consistent centered full-body figure scale, generous internal padding, no overlap across cell boundaries, no outer decorative frame.
+Lighting/mood: warm, magical, friendly, non-threatening.
+Color palette: peach coral, jade green, celestial blue, warm gold, ivory.
+Background: genuinely transparent alpha background across the whole sheet; subtle grounded shadows may remain but no painted backdrop.
+Constraints: no text, no letters, no numerals, no labels, no signs, no banners, no logos, no watermark, no UI icons, no checkerboard pattern, no fake transparency, no weapons, no violence, exactly six cells and no extra characters except the small distant maidens in frame 3.
+Processing: the accepted built-in output supplied genuine RGBA alpha (corner and center negative-space samples alpha 0; output metadata hasAlpha true). The separate background-removal edit was rejected because it produced a fake opaque checkerboard and is not shipped. The accepted source was WebP encoded by Sharp 0.35.3 at quality 76, alphaQuality 100 and effort 6, preserving the 1536x1024 3x2 grid. No artwork was redrawn in code.
+```
+
+### Prompt W3M1-001 manor help background
+
+```text
+Use case: illustration-story
+Asset type: W3-M1 formal game scene background, wide 16:9 landscape
+Primary request: Polished bright 3D Chinese children's storybook game environment inspired by Journey to the West chapter 18, a spring roadside immediately outside Gao Family Manor.
+Scene/backdrop: Traditional Chinese manor gate in the middle distance, tiled roofs, warm wooden architecture, flowering spring trees, soft hills and a clear road leading toward the gate.
+Subject: Environment only, with a broad clean foreground stage reserved for showing two message scenarios later in the game UI; no principal characters and no story actions baked into the background.
+Style/medium: High-quality friendly 3D children's storybook illustration consistent with a commercial educational game.
+Composition/framing: Wide landscape, readable at phone width, manor gate centered slightly right, open foreground and left-side breathing room, no UI framing.
+Lighting/mood: Bright gentle morning light, welcoming and adventurous, never ominous.
+Color palette: Warm jade green, cinnabar red, cream stone, soft gold and spring foliage.
+Constraints: Child-safe; culturally respectful traditional Chinese architecture; crisp silhouettes; no combat; no text; no letters; no pseudo-writing; no signs with glyphs; no logo; no watermark; no UI; no emoji; no border; no placeholder boxes.
+
+W3 family art-direction verifier anchor: polished 3D children's storybook game.
+
+Accepted edit prompt:
+Edit the provided image only. Remove every gold marking, plaque-like symbol, pseudo-character, glyph-like ornament, or writing-like motif from the manor gate beams, columns, roof ornaments, and walls. Replace those marks with simple non-symbolic carved wood panels and subtle repeating geometric cloud curves that cannot be mistaken for letters or Chinese characters. Preserve the exact composition, camera, architecture, open foreground, spring landscape, colors, lighting, 3D children's storybook style, and all other details. No text, no letters, no pseudo-writing, no logo, no watermark, no UI.
+
+Processing: the accepted edited built-in image_gen PNG (`exec-77ccc7c2-4559-4dd3-853e-786295a17718.png`, 1672x941 RGB) was original-resolution visually inspected before this task. Sharp 0.35.3 only technically encoded it without crop, redraw, compositing, or content edit as 1672x941 WebP (`quality: 78`, `effort: 6`, `smartSubsample: true`). The output fully decodes and hasAlpha is false as expected for a background.
+```
+
+### Prompt W3M1-002 manor message states
+
+```text
+Use case: illustration-story
+Asset type: W3-M1 two-scenario character state sheet for a commercial children's coding game
+Primary request: Create one polished 3D Chinese children's storybook character state sheet with two clearly separated groups for later cropping.
+Scene/backdrop: Genuine transparent background with clean alpha, no floor, no scenery, no shadow rectangle, no checkerboard pattern.
+Left group: Gao Cai, a friendly young manor servant in historically inspired simple Ming-era clothing, respectfully and urgently explaining that his master is seeking a capable helper to resolve a demon problem; a second pose of the same Gao Cai turning and hurrying back toward the manor to report the offer of help.
+Right group: A distinct ordinary adult villager in different colors and silhouette, calm and relaxed, using an open-hand gesture to give road directions only, with no distress and no request for help; a second neutral walking-forward pose.
+Style/medium: High-quality bright 3D children's storybook game characters, rounded friendly proportions, readable emotion and body language, culturally respectful, child-safe.
+Composition/framing: 16:9 wide state sheet; four full-body poses with generous transparent separation; left pair and right pair visually distinct; no overlaps; consistent scale; all hands, feet, hats, and clothing fully inside canvas.
+Lighting/mood: Soft warm daylight, clear friendly faces.
+Color palette: Jade green, cinnabar, cream, muted blue and soft gold accents; left and right groups use clearly different dominant colors.
+Constraints: Preserve one consistent identity across Gao Cai's two poses; ordinary villager must not resemble Gao Cai; no weapons; no combat; no monster; no text; no letters; no pseudo-writing; no signage; no logo; no watermark; no UI; no emoji; actual transparent alpha background.
+
+W3 family art-direction verifier anchor: polished 3D children's storybook game.
+
+Rejected state edits note: two later edge-cleanup imagegen edits were rejected because they baked checkerboard backgrounds and metadata showed channels=3, hasAlpha=false. Shipping source remains `exec-3500c758-71d7-46cc-b1a1-df04bcd2aadf.png` (1672x941 RGBA).
+
+Processing: Sharp 0.35.3 only technically processed the accepted source: every alpha value was preserved; alpha-zero RGB was set to zero; each partial-alpha pixel connected to an alpha>=250 seed received that nearest seed RGB to decontaminate colored edge fringes. Opaque RGB, alpha values, composition, layout, and artwork were untouched; 949 partial-alpha pixels without an opaque seed were left unchanged. It was then encoded as 1672x941 WebP (`quality: 68`, `alphaQuality: 100`, `effort: 6`, `smartSubsample: true`). The output fully decodes, preserves hasAlpha true, and passes the W3 alpha-edge gate (0 mismatches in 44,463 measured partial-edge pixels).
 ```
 
 ## Existing global asset residual risks

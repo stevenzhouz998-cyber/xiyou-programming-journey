@@ -1,9 +1,10 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { completeMission, createInitialProgress } from '../progress/progress'
-import { createMissionSession } from '../progress/session'
+import { createMissionSession, recordConditionObservationUse, recordRun, updateWorkspaceDraft } from '../progress/session'
 import { recordEquipmentEffectUse } from '../progress/equipmentEffectSession'
 import { equipItem } from '../progress/equipmentOperations'
+import { compileManorHelpDraft, createDefaultManorHelpDraft, runManorHelp } from '../blockly/weekThreeManorHelpContract'
 import { ParentEquipmentReport } from './ParentEquipmentReport'
 
 describe('ParentEquipmentReport', () => {
@@ -33,5 +34,57 @@ describe('ParentEquipmentReport', () => {
     expect(screen.getByText('尚未获得第一周装备奖励')).toBeVisible()
     expect(screen.getAllByText('未装备')).toHaveLength(4)
     expect(screen.getByText('第四、五关尚未使用装备学习工具')).toBeVisible()
+  })
+
+  it('summarizes the fire-eye ability without exposing W3 internal evidence', () => {
+    const now = '2026-08-26T00:00:00.000Z'
+    const failedDraft = createDefaultManorHelpDraft()
+    const failedTrace = compileManorHelpDraft(failedDraft)
+    const failedSession = recordRun(
+      updateWorkspaceDraft(createMissionSession('w3-m1', now), failedDraft, now),
+      runManorHelp(failedTrace),
+      failedTrace,
+      now,
+    )
+    const observed = recordConditionObservationUse(failedSession, failedSession.failureSnapshot!.snapshotId, '2026-08-26T00:01:00.000Z')
+
+    let progress = createInitialProgress()
+    progress.sessions['w3-m1'] = observed
+    render(<ParentEquipmentReport progress={progress} />)
+    const ability = screen.getByRole('region', { name: '火眼金睛学习能力' })
+    expect(ability).toHaveTextContent('未获得')
+    expect(ability).toHaveTextContent('主动观察 1 次')
+    expect(ability).toHaveTextContent(/最近使用：.*\d.*\d.*\d.*\d.*\d{1,2}:\d{2}/)
+    expect(ability).not.toHaveTextContent(/failureSnapshot|口信|evidence|trace|block|source|conditionKind|canon-gaocai-help/)
+
+    progress = completeMission(progress, 'w2-m4', { stars: 3, hintsUsed: 0 })
+    render(<ParentEquipmentReport progress={progress} />)
+    expect(screen.getAllByRole('region', { name: '火眼金睛学习能力' }).at(-1)).toHaveTextContent('已获得待稳定')
+
+    progress = completeMission(progress, 'w2-m5', { stars: 3, hintsUsed: 0 })
+    render(<ParentEquipmentReport progress={progress} />)
+    expect(screen.getAllByRole('region', { name: '火眼金睛学习能力' }).at(-1)).toHaveTextContent('已稳定')
+  })
+
+  it('labels formal and legacy W3 completion evidence honestly', () => {
+    const now = '2026-08-26T00:00:00.000Z'
+    const draft = createDefaultManorHelpDraft()
+    draft.blocks.find((block) => block.id === 'manor-condition')!.type = 'w3_manor_condition_explicit_demon_help'
+    const trace = compileManorHelpDraft(draft)
+    let formal = createInitialProgress()
+    formal.sessions['w3-m1'] = recordRun(updateWorkspaceDraft(createMissionSession('w3-m1', now), draft, now), runManorHelp(trace), trace, now)
+    formal = completeMission(formal, 'w3-m1', { stars: 3, hintsUsed: 0 })
+
+    render(<ParentEquipmentReport progress={formal} />)
+    expect(screen.getByRole('region', { name: '火眼金睛学习能力' })).toHaveTextContent('庄上求助正式 Blockly 证明已保存')
+
+    const legacy = structuredClone(formal)
+    legacy.missionCompletionEvidence['w3-m1'] = {
+      kind: 'legacy-preformal', completedAt: now, sourceVersion: 3, sourceSchemaRevision: 2,
+    }
+    render(<ParentEquipmentReport progress={legacy} />)
+    const ability = screen.getAllByRole('region', { name: '火眼金睛学习能力' }).at(-1)
+    expect(ability).toHaveTextContent('历史兼容完成记录，尚非正式 Blockly 证明')
+    expect(ability).not.toHaveTextContent('庄上求助正式 Blockly 证明已保存')
   })
 })

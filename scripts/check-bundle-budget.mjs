@@ -7,7 +7,9 @@ import {
   GAME_SCENE_RAW_LIMIT,
   HOME_TOTAL_LIMIT,
   PHASER_RAW_LIMIT,
+  WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES,
 } from './budget-limits.mjs';
+export { WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES };
 export {
   DRAGON_PALACE_COLD_LOAD_MAX_BYTES,
   DRAGON_PALACE_COLD_BYTES,
@@ -15,6 +17,11 @@ export {
   FOUR_SEAS_COLD_BYTES,
   UNDERWORLD_REGISTER_COLD_LOAD_MAX_BYTES,
   THIRD_CHAPTER_BOSS_COLD_LOAD_MAX_BYTES,
+  WEEK_TWO_HORSE_COLD_LOAD_MAX_BYTES,
+  WEEK_TWO_MONKEY_KING_COLD_LOAD_MAX_BYTES,
+  WEEK_TWO_PEACH_ELIXIR_COLD_LOAD_MAX_BYTES,
+  WEEK_TWO_FURNACE_COLD_LOAD_MAX_BYTES,
+  WEEK_TWO_HEAVENLY_BOSS_COLD_LOAD_MAX_BYTES,
   W1_M4_COLD_LOAD_MAX_BYTES,
   W1_M5_COLD_LOAD_MAX_BYTES,
   RUYI_STAFF_COLD_BYTES,
@@ -29,6 +36,9 @@ export {
 
 const MODE_ROOTS = ['src/components/BlocklyWorkspace.tsx', 'src/components/RuyiStaffBlocklyWorkspace.tsx', 'src/components/FourSeasRegaliaBlocklyWorkspace.tsx', 'src/components/PythonEditor.tsx', 'src/components/AiLab.tsx', 'src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx', 'src/components/FourSeasRegaliaScene.tsx'];
 const SCENE_ROOTS = new Set(['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx', 'src/components/FourSeasRegaliaScene.tsx']);
+export const COLD_LOAD_ROUTE_CLOSURE_BUDGETS = Object.freeze({
+  'src/components/WeekThreeManorHelpExperience.tsx': WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES,
+});
 const isPhaserSource = (key, chunk) => chunk.name === 'phaser' || /node_modules[\\/]phaser(?:[\\/]|$)/i.test(`${key} ${chunk.src ?? ''}`);
 const isBlocklySource = (key, chunk) => chunk.name === 'blockly-editor' || /node_modules[\\/]blockly(?:[\\/]|$)/i.test(`${key} ${chunk.src ?? ''}`);
 const PRODUCTION_TEST_SENTINELS = [
@@ -146,6 +156,16 @@ export function analyzeManifest(manifest, gzipSizes, rawSizes = {}) {
       if (oversizedPhaser) throw new Error(`Bundle budget: approved dynamic Phaser chunk exceeds 1600 KiB raw (${manifest[oversizedPhaser].file}).`);
       if (closures[root].rawBytes > GAME_SCENE_RAW_LIMIT) throw new Error(`Bundle budget: ${root.split('/').at(-1).replace('.tsx', '')} closure exceeds 1900 KiB raw.`);
     }
+  }
+  for (const [root, maxBytes] of Object.entries(COLD_LOAD_ROUTE_CLOSURE_BUDGETS)) {
+    if (!manifest[root]) continue;
+    if (!manifest[root].isDynamicEntry) throw new Error(`Bundle budget: ${root.split('/').at(-1).replace('.tsx', '')} must remain a lazy route entry.`);
+    if (visited.has(root)) throw new Error(`Bundle budget: ${root.split('/').at(-1).replace('.tsx', '')} must stay outside the application entry static closure.`);
+    const keys = collectRuntimeClosure(manifest, root);
+    const files = [...new Set([...keys].map((key) => manifest[key].file).filter((file) => file?.endsWith('.js')))];
+    const closure = { files, rawBytes: files.reduce((sum, file) => sum + (rawSizes[file] ?? 0), 0), gzipBytes: files.reduce((sum, file) => sum + (gzipSizes[file] ?? 0), 0) };
+    closures[root] = closure;
+    if (closure.rawBytes > maxBytes) throw new Error(`Bundle budget: ${root.split('/').at(-1).replace('.tsx', '')} closure exceeds its ${(maxBytes / 1024 / 1024).toFixed(0)} MiB cold-load budget.`);
   }
   const dynamic = Object.entries(manifest).filter(([key, chunk]) => !visited.has(key) && chunk.file?.endsWith('.js'));
   for (const [key, chunk] of dynamic) {

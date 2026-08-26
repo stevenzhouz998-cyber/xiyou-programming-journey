@@ -49,7 +49,7 @@ const REQUIRED_METADATA = [
 ];
 
 const QA_STATUSES = new Set(['planned', 'generated', 'provenance-verified', 'visual-qa-passed', 'rejected']);
-const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/'];
+const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/'];
 
 const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
   ['assets/dragon-palace/background.webp', [
@@ -95,6 +95,36 @@ const REQUIRED_ADVANCED_WEEK_ONE_ASSETS = new Map([
 ]);
 
 const ADVANCED_WEEK_ONE_SOURCE_PATH = 'src/components/AdvancedWeekOneScene.tsx';
+const WEEK_TWO_HORSE_SOURCE_PATH = 'src/components/WeekTwoHorseScene.tsx';
+const REQUIRED_WEEK_TWO_HORSE_ASSETS = [
+  'assets/week-two-heaven/stable-background.webp',
+  'assets/week-two-heaven/horse-care-states.webp',
+];
+const WEEK_TWO_MONKEY_KING_SOURCE_PATH = 'src/components/WeekTwoMonkeyKingScene.tsx';
+const REQUIRED_WEEK_TWO_MONKEY_KING_ASSETS = [
+  'assets/week-two-great-sage/flower-fruit-background.webp',
+  'assets/week-two-great-sage/great-sage-event-states.webp',
+];
+const WEEK_TWO_PEACH_ELIXIR_SOURCE_PATH = 'src/components/WeekTwoPeachElixirScene.tsx';
+const REQUIRED_WEEK_TWO_PEACH_ELIXIR_ASSETS = [
+  'assets/week-two-peach-elixir/heavenly-route-background.webp',
+  'assets/week-two-peach-elixir/peach-elixir-states.webp',
+];
+const WEEK_TWO_FURNACE_SOURCE_PATH = 'src/components/WeekTwoFurnaceConditionScene.tsx';
+const REQUIRED_WEEK_TWO_FURNACE_ASSETS = [
+  'assets/week-two-furnace/furnace-interior-background.webp',
+  'assets/week-two-furnace/furnace-condition-states.webp',
+];
+const WEEK_TWO_HEAVENLY_BOSS_SOURCE_PATH = 'src/components/WeekTwoHeavenlySignalBossScene.tsx';
+const REQUIRED_WEEK_TWO_HEAVENLY_BOSS_ASSETS = [
+  'assets/week-two-heavenly-boss/signal-dispatch-background.webp',
+  'assets/week-two-heavenly-boss/heavenly-boss-states.webp',
+];
+const WEEK_THREE_MANOR_HELP_SOURCE_PATH = 'src/components/WeekThreeManorHelpScene.tsx';
+const REQUIRED_WEEK_THREE_MANOR_HELP_ASSETS = [
+  'assets/week-three-manor-help/manor-help-background.webp',
+  'assets/week-three-manor-help/manor-message-states.webp',
+];
 
 function isPhaserSceneClass(node, sourceFile) {
   return ts.isClassDeclaration(node) && node.heritageClauses?.some(
@@ -597,7 +627,7 @@ function verifyPromptRecords(promptRecords, manifestRows) {
     const record = recordsByAnchor.get(anchor);
     if (!record) throw new Error(`Asset manifest: prompt anchor ${anchor} is missing for ${row.assetId}.`);
     if (record.promptId !== linkedPromptId) throw new Error(`Asset manifest: prompt ${linkedPromptId.startsWith('DP-') ? 'DP label' : 'identifier'} ${linkedPromptId} does not match heading ${record.heading}.`);
-    const requiredArtDirection = row.assetId.startsWith('assets/week-one-advanced/')
+    const requiredArtDirection = row.assetId.startsWith('assets/week-one-advanced/') || row.assetId.startsWith('assets/week-two-heaven/') || row.assetId.startsWith('assets/week-two-great-sage/') || row.assetId.startsWith('assets/week-two-peach-elixir/') || row.assetId.startsWith('assets/week-two-furnace/') || row.assetId.startsWith('assets/week-two-heavenly-boss/') || row.assetId.startsWith('assets/week-three-manor-help/')
       ? REQUIRED_ADVANCED_ART_DIRECTION
       : REQUIRED_ART_DIRECTION;
     if (!record.prompt.includes(requiredArtDirection)) {
@@ -854,6 +884,220 @@ export function verifyRequiredAdvancedWeekOneInventory({
   });
 }
 
+export function verifyRequiredWeekTwoHorseInventory({
+  manifestRows,
+  publicFiles,
+  promptRecords,
+  sourcePath = WEEK_TWO_HORSE_SOURCE_PATH,
+  source,
+  mode = 'check',
+}) {
+  const directory = 'assets/week-two-heaven/';
+  const rows = familyRows(manifestRows, directory);
+  const files = familyFiles(publicFiles, directory);
+  requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: REQUIRED_WEEK_TWO_HORSE_ASSETS, label: 'Week Two horse-care' });
+  for (const row of rows) {
+    if (!row.screenSlots.includes('w2-m1') || !row.screenSlots.includes('WeekTwoHorseScene')) {
+      throw new Error(`Asset manifest: ${row.assetId} screen slots must identify w2-m1 and WeekTwoHorseScene.`);
+    }
+  }
+  if (typeof source !== 'string') throw new Error(`Asset manifest: ${sourcePath} source text is required for WeekTwoHorseScene slot verification.`);
+  const literals = source.match(/\/assets\/week-two-heaven\/[a-z0-9-]+\.webp/g) ?? [];
+  const expectedLiterals = REQUIRED_WEEK_TWO_HORSE_ASSETS.map((assetId) => `/${assetId}`);
+  if (literals.length !== expectedLiterals.length || new Set(literals).size !== expectedLiterals.length
+    || expectedLiterals.some((assetId) => !literals.includes(assetId))) {
+    throw new Error(`Asset manifest: ${sourcePath} must contain exactly the two approved Week Two horse-care image paths.`);
+  }
+  if ((source.match(/<img\b/g) ?? []).length !== 2 || !source.includes("import { assetUrl } from '../utils/assets'")) {
+    throw new Error(`Asset manifest: ${sourcePath} must render exactly two live img slots through assetUrl.`);
+  }
+  return verifyAssetManifest({
+    manifestRows: rows,
+    publicFiles: files,
+    promptRecords: promptRecordsForRows(promptRecords, rows),
+    mode,
+  });
+}
+
+export function verifyRequiredWeekTwoMonkeyKingInventory({
+  manifestRows,
+  publicFiles,
+  promptRecords,
+  sourcePath = WEEK_TWO_MONKEY_KING_SOURCE_PATH,
+  source,
+  mode = 'check',
+}) {
+  const directory = 'assets/week-two-great-sage/';
+  const rows = familyRows(manifestRows, directory);
+  const files = familyFiles(publicFiles, directory);
+  requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: REQUIRED_WEEK_TWO_MONKEY_KING_ASSETS, label: 'Week Two monkey-king events' });
+  for (const row of rows) {
+    if (!row.screenSlots.includes('w2-m2') || !row.screenSlots.includes('WeekTwoMonkeyKingScene')) {
+      throw new Error(`Asset manifest: ${row.assetId} screen slots must identify w2-m2 and WeekTwoMonkeyKingScene.`);
+    }
+  }
+  if (typeof source !== 'string') throw new Error(`Asset manifest: ${sourcePath} source text is required for WeekTwoMonkeyKingScene slot verification.`);
+  const literals = source.match(/\/assets\/week-two-great-sage\/[a-z0-9-]+\.webp/g) ?? [];
+  const expectedLiterals = REQUIRED_WEEK_TWO_MONKEY_KING_ASSETS.map((assetId) => `/${assetId}`);
+  if (literals.length !== expectedLiterals.length || new Set(literals).size !== expectedLiterals.length
+    || expectedLiterals.some((assetId) => !literals.includes(assetId))) {
+    throw new Error(`Asset manifest: ${sourcePath} must contain exactly the two approved Week Two monkey-king image paths.`);
+  }
+  if ((source.match(/<img\b/g) ?? []).length !== 2 || !source.includes("import { assetUrl } from '../utils/assets'")) {
+    throw new Error(`Asset manifest: ${sourcePath} must render exactly two live img slots through assetUrl.`);
+  }
+  return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
+}
+
+export function verifyRequiredWeekTwoPeachElixirInventory({
+  manifestRows,
+  publicFiles,
+  promptRecords,
+  sourcePath = WEEK_TWO_PEACH_ELIXIR_SOURCE_PATH,
+  source,
+  mode = 'check',
+}) {
+  const directory = 'assets/week-two-peach-elixir/';
+  const rows = familyRows(manifestRows, directory);
+  const files = familyFiles(publicFiles, directory);
+  requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: REQUIRED_WEEK_TWO_PEACH_ELIXIR_ASSETS, label: 'Week Two peach-elixir debugging' });
+  for (const row of rows) {
+    if (!row.screenSlots.includes('w2-m3') || !row.screenSlots.includes('WeekTwoPeachElixirScene')) {
+      throw new Error(`Asset manifest: ${row.assetId} screen slots must identify w2-m3 and WeekTwoPeachElixirScene.`);
+    }
+  }
+  if (typeof source !== 'string') throw new Error(`Asset manifest: ${sourcePath} source text is required for WeekTwoPeachElixirScene slot verification.`);
+  const literals = source.match(/\/assets\/week-two-peach-elixir\/[a-z0-9-]+\.webp/g) ?? [];
+  const expectedLiterals = REQUIRED_WEEK_TWO_PEACH_ELIXIR_ASSETS.map((assetId) => `/${assetId}`);
+  if (literals.length !== expectedLiterals.length || new Set(literals).size !== expectedLiterals.length
+    || expectedLiterals.some((assetId) => !literals.includes(assetId))) {
+    throw new Error(`Asset manifest: ${sourcePath} must contain exactly the two approved Week Two peach-elixir image paths.`);
+  }
+  if ((source.match(/<img\b/g) ?? []).length !== 2 || !source.includes("import { assetUrl } from '../utils/assets'")) {
+    throw new Error(`Asset manifest: ${sourcePath} must render exactly two live img slots through assetUrl.`);
+  }
+  return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
+}
+
+export function verifyRequiredWeekTwoFurnaceInventory({ manifestRows, publicFiles, promptRecords, sourcePath = WEEK_TWO_FURNACE_SOURCE_PATH, source, mode = 'check' }) {
+  const directory = 'assets/week-two-furnace/';
+  const rows = familyRows(manifestRows, directory);
+  const files = familyFiles(publicFiles, directory);
+  requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: REQUIRED_WEEK_TWO_FURNACE_ASSETS, label: 'Week Two furnace condition' });
+  for (const row of rows) if (!row.screenSlots.includes('w2-m4') || !row.screenSlots.includes('WeekTwoFurnaceConditionScene')) throw new Error(`Asset manifest: ${row.assetId} screen slots must identify w2-m4 and WeekTwoFurnaceConditionScene.`);
+  if (typeof source !== 'string') throw new Error(`Asset manifest: ${sourcePath} source text is required for WeekTwoFurnaceConditionScene slot verification.`);
+  const literals = source.match(/\/assets\/week-two-furnace\/[a-z0-9-]+\.webp/g) ?? [];
+  const expectedLiterals = REQUIRED_WEEK_TWO_FURNACE_ASSETS.map((assetId) => `/${assetId}`);
+  if (literals.length !== expectedLiterals.length || new Set(literals).size !== expectedLiterals.length || expectedLiterals.some((assetId) => !literals.includes(assetId))) throw new Error(`Asset manifest: ${sourcePath} must contain exactly the two approved Week Two furnace image paths.`);
+  if ((source.match(/<img\b/g) ?? []).length !== 2 || !source.includes("import { assetUrl } from '../utils/assets'")) throw new Error(`Asset manifest: ${sourcePath} must render exactly two live img slots through assetUrl.`);
+  return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
+}
+
+export function verifyRequiredWeekTwoHeavenlyBossInventory({ manifestRows, publicFiles, promptRecords = [], sourcePath = WEEK_TWO_HEAVENLY_BOSS_SOURCE_PATH, source, mode = 'check' }) {
+  const directory = 'assets/week-two-heavenly-boss/';
+  const rows = familyRows(manifestRows, directory);
+  const files = familyFiles(publicFiles, directory);
+  requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: REQUIRED_WEEK_TWO_HEAVENLY_BOSS_ASSETS, label: 'Week Two heavenly signal Boss' });
+  for (const row of rows) if (!row.screenSlots.includes('w2-m5') || !row.screenSlots.includes('WeekTwoHeavenlySignalBossScene')) throw new Error(`Asset manifest: ${row.assetId} screen slots must identify w2-m5 and WeekTwoHeavenlySignalBossScene.`);
+  if (typeof source !== 'string') throw new Error(`Asset manifest: ${sourcePath} source text is required for Week Two heavenly Boss slot verification.`);
+  const literals = source.match(/\/assets\/week-two-heavenly-boss\/[a-z0-9-]+\.webp/g) ?? [];
+  const expectedLiterals = REQUIRED_WEEK_TWO_HEAVENLY_BOSS_ASSETS.map((assetId) => `/${assetId}`);
+  if (literals.length !== expectedLiterals.length || new Set(literals).size !== expectedLiterals.length || expectedLiterals.some((assetId) => !literals.includes(assetId))) throw new Error(`Asset manifest: ${sourcePath} must contain exactly the two approved Week Two heavenly Boss image paths.`);
+  if (promptRecords.length === 0) return { assetCount: rows.length, totalBytes: 0 };
+  return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
+}
+
+const ALPHA_EDGE_OPAQUE_ALPHA = 250;
+const ALPHA_EDGE_COLOR_DISTANCE = 96;
+const MAX_WEEK_THREE_ALPHA_EDGE_MISMATCH_RATIO = 0.04;
+
+export function measureAlphaEdgeMismatch(rgba, width, height) {
+  if (!(rgba instanceof Uint8Array) || !Number.isInteger(width) || !Number.isInteger(height)
+    || width <= 0 || height <= 0 || rgba.length !== width * height * 4) {
+    throw new Error('Asset manifest: alpha-edge metric requires complete RGBA pixels.');
+  }
+  let inspectedPixels = 0;
+  let mismatchedPixels = 0;
+  const at = (x, y) => (y * width + x) * 4;
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+    const offset = at(x, y);
+    const alpha = rgba[offset + 3];
+    if (alpha === 0 || alpha >= ALPHA_EDGE_OPAQUE_ALPHA) continue;
+    let nearest = null;
+    for (let radius = 1; radius <= 2 && nearest === null; radius += 1) {
+      for (let neighborY = Math.max(0, y - radius); neighborY <= Math.min(height - 1, y + radius) && nearest === null; neighborY += 1) {
+        for (let neighborX = Math.max(0, x - radius); neighborX <= Math.min(width - 1, x + radius); neighborX += 1) {
+          const neighbor = at(neighborX, neighborY);
+          if (rgba[neighbor + 3] >= ALPHA_EDGE_OPAQUE_ALPHA) { nearest = neighbor; break; }
+        }
+      }
+    }
+    if (nearest === null) continue;
+    inspectedPixels += 1;
+    const distance = Math.hypot(rgba[offset] - rgba[nearest], rgba[offset + 1] - rgba[nearest + 1], rgba[offset + 2] - rgba[nearest + 2]);
+    if (distance > ALPHA_EDGE_COLOR_DISTANCE) mismatchedPixels += 1;
+  }
+  return { inspectedPixels, mismatchedPixels, mismatchRatio: inspectedPixels === 0 ? 0 : mismatchedPixels / inspectedPixels };
+}
+
+function verifyWeekThreeManorHelpSceneSource(sourcePath, source) {
+  const { sourceFile } = createBoundSource(sourcePath, source);
+  if (sourceFile.parseDiagnostics.length > 0) throw new Error(`Asset manifest: ${sourcePath} cannot be parsed as TypeScript for WeekThreeManorHelpScene slot verification.`);
+  const constants = new Map();
+  let hasAssetUrlImport = false;
+  for (const statement of sourceFile.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier) && statement.moduleSpecifier.text === '../utils/assets') {
+      const bindings = statement.importClause?.namedBindings;
+      hasAssetUrlImport = Boolean(bindings && ts.isNamedImports(bindings) && bindings.elements.some((item) => !item.isTypeOnly && !item.propertyName && item.name.text === 'assetUrl'));
+    }
+    if (ts.isVariableStatement(statement)) for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && (declaration.name.text === 'BACKGROUND' || declaration.name.text === 'STATES')) constants.set(declaration.name.text, declaration.initializer);
+    }
+  }
+  if (!hasAssetUrlImport || constants.get('BACKGROUND')?.getText(sourceFile) !== "'/assets/week-three-manor-help/manor-help-background.webp'" || constants.get('STATES')?.getText(sourceFile) !== "'/assets/week-three-manor-help/manor-message-states.webp'") {
+    throw new Error(`Asset manifest: ${sourcePath} must bind the two approved image constants and assetUrl.`);
+  }
+  let sourceUsesAssetUrl = false;
+  const imageBindings = [];
+  const visit = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'source' && node.initializer) {
+      const inspectSource = (candidate) => {
+        if (ts.isCallExpression(candidate) && ts.isIdentifier(candidate.expression) && candidate.expression.text === 'assetUrl') sourceUsesAssetUrl = true;
+        ts.forEachChild(candidate, inspectSource);
+      };
+      inspectSource(node.initializer);
+    }
+    if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && node.tagName.getText(sourceFile) === 'img') {
+      const src = node.attributes.properties.filter((attribute) => ts.isJsxAttribute(attribute) && attribute.name.text === 'src');
+      const expression = src.length === 1 && src[0].initializer && ts.isJsxExpression(src[0].initializer) ? src[0].initializer.expression : null;
+      if (!expression || !ts.isCallExpression(expression) || !ts.isIdentifier(expression.expression) || expression.expression.text !== 'source' || expression.arguments.length !== 1 || !ts.isIdentifier(expression.arguments[0])) imageBindings.push(null);
+      else imageBindings.push(expression.arguments[0].text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  if (!sourceUsesAssetUrl || imageBindings.length !== 2 || imageBindings.sort().join(',') !== 'BACKGROUND,STATES') {
+    throw new Error(`Asset manifest: ${sourcePath} must render exactly two img src bindings through source(BACKGROUND) and source(STATES), with source calling assetUrl.`);
+  }
+}
+
+export function verifyRequiredWeekThreeManorHelpInventory({ manifestRows, publicFiles, promptRecords, sourcePath = WEEK_THREE_MANOR_HELP_SOURCE_PATH, source, mode = 'check' }) {
+  const directory = 'assets/week-three-manor-help/';
+  const rows = familyRows(manifestRows, directory);
+  const files = familyFiles(publicFiles, directory);
+  requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: REQUIRED_WEEK_THREE_MANOR_HELP_ASSETS, label: 'Week Three manor help' });
+  for (const row of rows) if (row.screenSlots !== 'w3-m1 WeekThreeManorHelpScene') throw new Error(`Asset manifest: ${row.assetId} screen slots must be exactly w3-m1 WeekThreeManorHelpScene.`);
+  const stateFile = files.find((file) => file.path === 'assets/week-three-manor-help/manor-message-states.webp');
+  if (stateFile?.hasAlpha !== true) throw new Error('Asset manifest: Week Three manor message states must preserve a true alpha channel.');
+  if (!stateFile.alphaEdgeMismatch || stateFile.alphaEdgeMismatch.inspectedPixels === 0 || stateFile.alphaEdgeMismatch.mismatchRatio > MAX_WEEK_THREE_ALPHA_EDGE_MISMATCH_RATIO) throw new Error('Asset manifest: Week Three manor message states fail the alpha-edge contamination gate.');
+  if (typeof source !== 'string') throw new Error(`Asset manifest: ${sourcePath} source text is required for WeekThreeManorHelpScene slot verification.`);
+  const literals = source.match(/\/assets\/week-three-manor-help\/[a-z0-9-]+\.webp/g) ?? [];
+  const expectedLiterals = REQUIRED_WEEK_THREE_MANOR_HELP_ASSETS.map((assetId) => `/${assetId}`);
+  if (literals.length !== expectedLiterals.length || new Set(literals).size !== expectedLiterals.length || expectedLiterals.some((assetId) => !literals.includes(assetId))) throw new Error(`Asset manifest: ${sourcePath} must contain exactly the two approved Week Three manor-help image paths.`);
+  verifyWeekThreeManorHelpSceneSource(sourcePath, source);
+  return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
+}
+
 export function verifyRequiredDragonPalaceInventory({
   manifestRows,
   publicFiles,
@@ -1038,10 +1282,18 @@ export async function collectAssetFiles(assetRoot, assetDirectory = 'assets/drag
         const detail = error instanceof Error ? error.message : String(error);
         throw new Error(`Asset manifest: ${relativePath} must fully decode as WebP: ${detail}`, { cause: error });
       }
+      const metadata = await sharp(bytes, { failOn: 'error', limitInputPixels: 20_000_000 }).metadata();
+      let alphaEdgeMismatch;
+      if (assetDirectory === 'assets/week-three-manor-help' && relativePath === 'manor-message-states.webp') {
+        const { data, info } = await sharp(bytes, { failOn: 'error', limitInputPixels: 20_000_000 }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+        alphaEdgeMismatch = measureAlphaEdgeMismatch(data, info.width, info.height);
+      }
       publicFiles.push({
         path: posix.join(assetDirectory, relativePath),
         sha256: createHash('sha256').update(bytes).digest('hex'),
         bytes: bytes.length,
+        hasAlpha: metadata.hasAlpha === true,
+        ...(alphaEdgeMismatch ? { alphaEdgeMismatch } : {}),
         ...decodedDimensions,
       });
     } finally {
@@ -1056,10 +1308,22 @@ async function main() {
   const manifestPath = join(root, 'docs', 'assets', 'asset-manifest.md');
   const dragonPalaceRoot = join(root, 'public', 'assets', 'dragon-palace');
   const advancedWeekOneRoot = join(root, 'public', 'assets', 'week-one-advanced');
+  const weekTwoHorseRoot = join(root, 'public', 'assets', 'week-two-heaven');
+  const weekTwoMonkeyKingRoot = join(root, 'public', 'assets', 'week-two-great-sage');
+  const weekTwoPeachElixirRoot = join(root, 'public', 'assets', 'week-two-peach-elixir');
+  const weekTwoFurnaceRoot = join(root, 'public', 'assets', 'week-two-furnace');
+  const weekTwoHeavenlyBossRoot = join(root, 'public', 'assets', 'week-two-heavenly-boss');
+  const weekThreeManorHelpRoot = join(root, 'public', 'assets', 'week-three-manor-help');
   const { manifestRows, promptRecords } = parseAssetManifest(await readFile(manifestPath, 'utf8'));
   const publicFiles = [
     ...await collectAssetFiles(dragonPalaceRoot),
     ...await collectAssetFiles(advancedWeekOneRoot, 'assets/week-one-advanced'),
+    ...await collectAssetFiles(weekTwoHorseRoot, 'assets/week-two-heaven'),
+    ...await collectAssetFiles(weekTwoMonkeyKingRoot, 'assets/week-two-great-sage'),
+    ...await collectAssetFiles(weekTwoPeachElixirRoot, 'assets/week-two-peach-elixir'),
+    ...await collectAssetFiles(weekTwoFurnaceRoot, 'assets/week-two-furnace'),
+    ...await collectAssetFiles(weekTwoHeavenlyBossRoot, 'assets/week-two-heavenly-boss'),
+    ...await collectAssetFiles(weekThreeManorHelpRoot, 'assets/week-three-manor-help'),
   ];
   const sourceFiles = new Map(await Promise.all([
     'src/components/GameScene.tsx',
@@ -1075,8 +1339,38 @@ async function main() {
     source: await readFile(join(root, ADVANCED_WEEK_ONE_SOURCE_PATH), 'utf8'),
     mode,
   });
+  const weekTwoHorseResult = verifyRequiredWeekTwoHorseInventory({
+    manifestRows,
+    publicFiles,
+    promptRecords,
+    source: await readFile(join(root, WEEK_TWO_HORSE_SOURCE_PATH), 'utf8'),
+    mode,
+  });
+  const weekTwoMonkeyKingResult = verifyRequiredWeekTwoMonkeyKingInventory({
+    manifestRows,
+    publicFiles,
+    promptRecords,
+    source: await readFile(join(root, WEEK_TWO_MONKEY_KING_SOURCE_PATH), 'utf8'),
+    mode,
+  });
+  const weekTwoPeachElixirResult = verifyRequiredWeekTwoPeachElixirInventory({
+    manifestRows,
+    publicFiles,
+    promptRecords,
+    source: await readFile(join(root, WEEK_TWO_PEACH_ELIXIR_SOURCE_PATH), 'utf8'),
+    mode,
+  });
+  const weekTwoFurnaceResult = verifyRequiredWeekTwoFurnaceInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_TWO_FURNACE_SOURCE_PATH), 'utf8'), mode });
+  const weekTwoHeavenlyBossResult = verifyRequiredWeekTwoHeavenlyBossInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_TWO_HEAVENLY_BOSS_SOURCE_PATH), 'utf8'), mode });
+  const weekThreeManorHelpResult = verifyRequiredWeekThreeManorHelpInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_MANOR_HELP_SOURCE_PATH), 'utf8'), mode });
   console.log(`Dragon Palace assets: ${dragonResult.assetCount} files, ${dragonResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Advanced Week One assets: ${advancedResult.assetCount} files, ${advancedResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
+  console.log(`Week Two horse-care assets: ${weekTwoHorseResult.assetCount} files, ${weekTwoHorseResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
+  console.log(`Week Two monkey-king assets: ${weekTwoMonkeyKingResult.assetCount} files, ${weekTwoMonkeyKingResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
+  console.log(`Week Two peach-elixir assets: ${weekTwoPeachElixirResult.assetCount} files, ${weekTwoPeachElixirResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
+  console.log(`Week Two furnace assets: ${weekTwoFurnaceResult.assetCount} files, ${weekTwoFurnaceResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
+  console.log(`Week Two heavenly Boss assets: ${weekTwoHeavenlyBossResult.assetCount} files, ${weekTwoHeavenlyBossResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
+  console.log(`Week Three manor-help assets: ${weekThreeManorHelpResult.assetCount} files, ${weekThreeManorHelpResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

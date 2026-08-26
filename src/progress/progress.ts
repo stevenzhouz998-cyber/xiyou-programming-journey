@@ -1,5 +1,9 @@
 import { createInitialProgress, parseProgress } from './schema';
-import type { ProgressV3 } from './types';
+import type {
+  ManorHelpCompletionEvidence,
+  ManorHelpMissionSession,
+  ProgressV3,
+} from './types';
 
 export type {
   MissionProgress,
@@ -11,8 +15,17 @@ export type {
   FourSeasRegaliaMissionSession,
   AdvancedWeekOneMissionSession,
   RuyiStaffMissionSession,
+  HorseCareMissionSession,
+  MonkeyKingMissionSession,
+  PeachElixirMissionSession,
+  FurnaceConditionMissionSession,
+  HeavenlySignalBossMissionSession,
+  ManorHelpMissionSession,
   ProgressDocument,
   ProgressSettings,
+  LearningAbilitiesV1,
+  ManorHelpCompletionEvidence,
+  MissionCompletionEvidenceV1,
   ProgressV1,
   ProgressV2,
   ProgressV3,
@@ -23,6 +36,8 @@ export { createInitialProgress } from './schema';
 import { allMissionOutlines } from '../course/courseOutline';
 import { getSessionSupport } from './session';
 import { grantMissionRewards } from './equipment';
+import { deriveConditionObservation } from './conditionObservation';
+import { compileManorHelpDraft, runManorHelp } from '../blockly/weekThreeManorHelpContract';
 
 export interface CompletionInput {
   stars: number;
@@ -58,41 +73,116 @@ function safeCount(base: number, increment: number): number {
   return result;
 }
 
+function deeplyEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left)
+      && Array.isArray(right)
+      && left.length === right.length
+      && left.every((item, index) => deeplyEqual(item, right[index]));
+  }
+  if (typeof left !== 'object' || left === null || typeof right !== 'object' || right === null) return false;
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord);
+  const rightKeys = Object.keys(rightRecord);
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key) => Object.prototype.hasOwnProperty.call(rightRecord, key)
+      && deeplyEqual(leftRecord[key], rightRecord[key]));
+}
+
+function currentFormalManorHelpRun(
+  session: ManorHelpMissionSession | undefined,
+): { workspace: ManorHelpMissionSession['workspace']; trace: ManorHelpMissionSession['lastTrace']; run: NonNullable<ManorHelpMissionSession['lastRun']> } | null {
+  if (!session || session.lastRun === null) return null;
+  let trace: ManorHelpMissionSession['lastTrace'];
+  let run: NonNullable<ManorHelpMissionSession['lastRun']>;
+  try {
+    trace = compileManorHelpDraft(session.workspace);
+    run = runManorHelp(trace);
+  } catch {
+    return null;
+  }
+  if (!deeplyEqual(session.lastTrace, trace) || !deeplyEqual(session.lastRun, run)) return null;
+  if (!run.completed || run.diagnostic !== null || run.failureSnapshot !== null
+    || run.scenarioResults.length !== 2 || !run.scenarioResults.every((scenario) => scenario.passed)
+    || run.penalty.livesLost !== 0 || run.penalty.resourcesLost !== 0 || run.penalty.starsLost !== 0) return null;
+  return { workspace: session.workspace, trace, run };
+}
+
+function formalManorHelpCompletionEvidence(
+  session: ManorHelpMissionSession | undefined,
+  completedAt: string,
+  verifiedAt: string,
+): Extract<ManorHelpCompletionEvidence, { kind: 'formal-v3' }> | null {
+  const formalRun = currentFormalManorHelpRun(session);
+  if (!formalRun) return null;
+  return {
+    kind: 'formal-v3',
+    completedAt,
+    verifiedAt,
+    workspace: structuredClone(formalRun.workspace),
+    trace: structuredClone(formalRun.trace),
+    run: structuredClone(formalRun.run),
+  };
+}
+
 export function completeMission(progress: ProgressV3, missionId: string, input: CompletionInput): ProgressV3 {
   if (!allMissionOutlines.some((mission) => mission.id === missionId)) throw new Error('任务编号无效');
   const previous = progress.missions[missionId];
   const stars = normalizeStars(input.stars);
   const normalizedHints = normalizeHints(input.hintsUsed);
+  const now = new Date().toISOString();
+  const formalEvidence = missionId === 'w3-m1'
+    ? formalManorHelpCompletionEvidence(progress.sessions['w3-m1'], previous?.completedAt ?? now, now)
+    : null;
   if (previous) {
     safeCount(previous.attempts, 1);
     safeCount(previous.hintsUsed, normalizedHints);
-    if (previous.stars >= stars) return progress;
+    const existingEvidence = progress.missionCompletionEvidence['w3-m1'];
+    const upgradeLegacyW3 = missionId === 'w3-m1'
+      && existingEvidence?.kind === 'legacy-preformal'
+      && formalEvidence !== null;
+    if (previous.stars >= stars && !upgradeLegacyW3) return progress;
+    const missions = {
+      ...progress.missions,
+      [missionId]: previous.stars >= stars ? previous : { ...previous, stars },
+    };
     return {
       ...progress,
-      missions: {
-        ...progress.missions,
-        [missionId]: { ...previous, stars },
-      },
-      savedAt: new Date().toISOString(),
+      missions,
+      abilities: { conditionObservation: deriveConditionObservation(missions) },
+      missionCompletionEvidence: upgradeLegacyW3
+        ? { ...progress.missionCompletionEvidence, 'w3-m1': formalEvidence }
+        : progress.missionCompletionEvidence,
+      savedAt: now,
     };
+  }
+  if (missionId === 'w3-m1' && formalEvidence === null) {
+    throw new Error('W3-M1完成需要当前保存workspace的双情境成功运行证据');
   }
   const attempts = safeCount(0, 1);
   const hintsUsed = safeCount(0, normalizedHints);
-  const completedAt = new Date().toISOString();
+  const completedAt = now;
+  const missions = {
+    ...progress.missions,
+    [missionId]: {
+      status: 'completed' as const,
+      stars,
+      attempts,
+      hintsUsed,
+      completedAt,
+    },
+  };
   return {
     ...progress,
-    missions: {
-      ...progress.missions,
-      [missionId]: {
-        status: 'completed',
-        stars,
-        attempts,
-        hintsUsed,
-        completedAt,
-      },
-    },
+    missions,
     equipment: grantMissionRewards(progress.equipment, missionId, completedAt),
-    savedAt: new Date().toISOString(),
+    abilities: { conditionObservation: deriveConditionObservation(missions) },
+    missionCompletionEvidence: missionId === 'w3-m1'
+      ? { ...progress.missionCompletionEvidence, 'w3-m1': formalEvidence! }
+      : progress.missionCompletionEvidence,
+    savedAt: now,
   };
 }
 
@@ -114,14 +204,26 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
   const fourSeasSession = week === 1 ? progress.sessions['w1-m3'] : undefined;
   const underworldSession = week === 1 ? progress.sessions['w1-m4'] : undefined;
   const bossSession = week === 1 ? progress.sessions['w1-m5'] : undefined;
+  const horseCareSession = week === 2 ? progress.sessions['w2-m1'] : undefined;
+  const monkeyKingSession = week === 2 ? progress.sessions['w2-m2'] : undefined;
+  const peachElixirSession = week === 2 ? progress.sessions['w2-m3'] : undefined;
+  const furnaceConditionSession = week === 2 ? progress.sessions['w2-m4'] : undefined;
+  const heavenlyBossSession = week === 2 ? progress.sessions['w2-m5'] : undefined;
+  const manorHelpSession = week === 3 ? progress.sessions['w3-m1'] : undefined;
   const sessionSupport = [
     ...(dragonSession ? getSessionSupport(dragonSession, 'w1-m1') : []),
     ...(ruyiSession ? getSessionSupport(ruyiSession, 'w1-m2') : []),
     ...(fourSeasSession ? getSessionSupport(fourSeasSession, 'w1-m3') : []),
     ...(underworldSession ? getSessionSupport(underworldSession, 'w1-m4') : []),
     ...(bossSession ? getSessionSupport(bossSession, 'w1-m5') : []),
+    ...(horseCareSession ? getSessionSupport(horseCareSession, 'w2-m1') : []),
+    ...(monkeyKingSession ? getSessionSupport(monkeyKingSession, 'w2-m2') : []),
+    ...(peachElixirSession ? getSessionSupport(peachElixirSession, 'w2-m3') : []),
+    ...(furnaceConditionSession ? getSessionSupport(furnaceConditionSession, 'w2-m4') : []),
+    ...(heavenlyBossSession ? getSessionSupport(heavenlyBossSession, 'w2-m5') : []),
+    ...(manorHelpSession ? getSessionSupport(manorHelpSession, 'w3-m1') : []),
   ];
-  const sessionRecords = [dragonSession, ruyiSession, fourSeasSession, underworldSession, bossSession].filter(
+  const sessionRecords = [dragonSession, ruyiSession, fourSeasSession, underworldSession, bossSession, horseCareSession, monkeyKingSession, peachElixirSession, furnaceConditionSession, heavenlyBossSession, manorHelpSession].filter(
     (session): session is NonNullable<typeof session> => session !== undefined,
   );
   const sessionRuns = sessionRecords.reduce(
