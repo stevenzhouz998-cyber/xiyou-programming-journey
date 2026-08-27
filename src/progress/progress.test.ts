@@ -23,6 +23,7 @@ import {
   runManorHelp,
 } from '../blockly/weekThreeManorHelpContract';
 import { compileCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract';
+import { compileYunzhanDialogueDraft, runYunzhanDialogueForDraft } from '../blockly/weekThreeYunzhanDialogueContract';
 
 const NOW = '2026-07-15T06:00:00.000Z';
 const wrongWeaponTrace: RuyiStaffInstruction[] = [
@@ -314,7 +315,7 @@ describe('progress rules', () => {
     expect(progress.missions['w1-m1']).toMatchObject({ stars: 3, attempts: 1, hintsUsed: 0, status: 'completed' });
     expect(progress).toMatchObject({
       version: 3,
-      schemaRevision: 4,
+      schemaRevision: 5,
       sessions: {},
       privacy: { localDataNoticeSeen: true },
       recovery: { lastRecoveredAt: '2026-07-12T00:00:00.000Z', source: 'snapshot' },
@@ -324,7 +325,7 @@ describe('progress rules', () => {
   it('publishes the derived condition-observation ability with w2 completion and keeps it idempotent', () => {
     let progress = createInitialProgress();
     expect(progress).toMatchObject({
-      schemaRevision: 4,
+      schemaRevision: 5,
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
     });
 
@@ -481,6 +482,21 @@ describe('progress rules', () => {
     expect(importProgress(serializeProgress(progress))).toEqual(progress);
     expect(() => importProgress('{broken')).toThrow('进度文件无法读取');
     expect(() => importProgress('{"version":999}')).toThrow('进度版本不受支持');
+  });
+
+  it('includes W3-M3 failed dialogue runs in week-three support without treating observation as a hint or adjustment', () => {
+    let session = createMissionSession('w3-m3', NOW);
+    const trace = compileYunzhanDialogueDraft(session.workspace);
+    const run = runYunzhanDialogueForDraft(session.workspace, trace);
+    session = recordRun(session, run, trace, NOW);
+    session = recordRun(session, run, trace, NOW);
+    const progress = createInitialProgress();
+    progress.sessions['w3-m3'] = session;
+    expect(getWeeklyReport(progress, 3)).toMatchObject({ sessionRuns: 2, sessionAdjustments: 2, needsSupport: ['双轮条件分支'] });
+    progress.sessions['w3-m3'] = recordConditionObservationUse(session, session.failureSnapshot!.snapshotId, '2026-08-27T00:00:01.000Z');
+    const afterObservation = getWeeklyReport(progress, 3);
+    expect(afterObservation.sessionAdjustments).toBe(2);
+    expect(progress.sessions['w3-m3'].usedHintTiers).toEqual([]);
   });
 
 });

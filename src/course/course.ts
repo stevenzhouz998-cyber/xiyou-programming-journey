@@ -31,6 +31,7 @@ const c18to19 = {
   chapters: [18, 19],
   title: '第十八至十九回　高老庄大圣降魔　云栈洞悟空收八戒',
 };
+const c19 = { ...formalWeekThreeCanon, chapters: [19], title: '第十九回　云栈洞悟空收八戒' };
 const c27 = canon([27], '第二十七回　尸魔三戏唐三藏　圣僧恨逐美猴王');
 const c44to46 = canon([44, 45, 46], '第四十四至四十六回　车迟国斗法');
 const c59to61 = canon([59, 60, 61], '第五十九至六十一回　三调芭蕉扇');
@@ -55,8 +56,7 @@ export const course: CourseManifest = {
     deriveWeekFromOutline('week-3', { subtitle: '看条件，再选择正确分支', canon: c18to19,
       missions: [
         ...formalWeekThreeMissions,
-        mission('w3-m3', { subtitle: '让分支跟着条件走', objective: '按原著线索选择追赶与交锋分支', canon: c18to19, storyBeats: [beat('追至云栈洞', '妖怪败走，悟空追到云栈洞。'), beat('说出来历', '妖怪听说是取经人，交代自己受菩萨点化的来历。')], expectedSequence: ['chase', 'reach_cave', 'fight', 'if_pilgrim_named', 'tell_origin'] }),
-        mission('w3-m4', { subtitle: '满足条件才加入取经队伍', objective: '组合八戒归队的必要条件', canon: c18to19, storyBeats: [beat('拜见唐僧', '妖怪随悟空前来拜见唐僧。'), beat('得名八戒', '唐僧为他摩顶受戒，取别名八戒。')], expectedSequence: ['meet_tang', 'tell_guanyin_order', 'receive_precepts', 'join_team'] }),
+        mission('w3-m4', { subtitle: '满足条件才加入取经队伍', objective: '组合八戒归队的必要条件', canon: c19, storyBeats: [beat('拜见唐僧', '妖怪随悟空前来拜见唐僧。'), beat('得名八戒', '唐僧为他摩顶受戒，取别名八戒。')], expectedSequence: ['meet_tang', 'tell_guanyin_order', 'receive_precepts', 'join_team'] }),
         mission('w3-m5', { subtitle: '用条件复原收徒经过', objective: '完整复现第十八至十九回的条件链', canon: c18to19, storyBeats: [beat('由求助到降魔', '悟空依据高才所述前往庄中。'), beat('由交锋到收徒', '云栈洞交锋后，八戒随唐僧取经。')], expectedSequence: ['hear_report', 'transform', 'chase', 'learn_origin', 'join_team'] }),
       ],
     }),
@@ -104,9 +104,9 @@ export function validateCourse(manifest: CourseManifest): string[] {
       missionIds.add(missionItem.id);
       if (!missionItem.canon.sourceUrl.includes('wikisource.org')) errors.push(`${missionItem.id}缺少原著来源`);
       if (missionItem.storyBeats.some((item) => item.canon !== true)) errors.push(`${missionItem.id}含非原著故事节点`);
-      const firstChapter = missionItem.canon.chapters[0] ?? 0;
-      if (firstChapter < previousChapter) errors.push(`${missionItem.id}回目顺序倒退`);
-      previousChapter = firstChapter;
+      const chapterForOrder = missionItem.isBoss ? Math.max(...missionItem.canon.chapters) : missionItem.canon.chapters[0] ?? 0;
+      if (chapterForOrder < previousChapter) errors.push(`${missionItem.id}回目顺序倒退`);
+      previousChapter = chapterForOrder;
     }
   }
   if (missionIds.size !== 30) errors.push('课程必须包含30个唯一关卡');

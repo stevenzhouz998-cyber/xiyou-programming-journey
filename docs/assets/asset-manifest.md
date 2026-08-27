@@ -30,10 +30,42 @@ This manifest gates the formal Dragon Palace media in `public/assets/dragon-pala
 | assets/week-three-manor-help/manor-message-states.webp | 6a27fb45bb269146b4bf08182d872a09b4dc3488f267ee04032b030c2b2cab41 | Transparent Gao Cai request-and-return plus ordinary villager directions-and-continue state sheet | OpenAI built-in image_gen | [Prompt W3M1-002](#prompt-w3m1-002-manor-message-states) | 1672x941 | generated in-project with built-in image_gen; provenance verified | w3-m1 WeekThreeManorHelpScene | visual-qa-passed |
 | assets/week-three-cuilan/cuilan-disguise-background.webp | 8955dd2133ff59d8db5ba7d48220cb02207324c339cb1094d0c6b929a2141fad | Child-safe lantern-lit Gao Family Manor rear courtyard for the disguise-and-observation Boolean scene | OpenAI built-in image_gen | [Prompt W3M2-001](#prompt-w3m2-001-cuilan-disguise-background) | 1672x941 | generated in-project with built-in image_gen; provenance verified | w3-m2 WeekThreeCuilanBooleanScene | visual-qa-passed |
 | assets/week-three-cuilan/cuilan-boolean-states.webp | 07a6f2aef138c9a5cc0252c61b77197193f3ff86eca879355055f3548d183501 | Transparent five-state Wukong disguise, clue, reveal, and gentle escape sheet | OpenAI built-in image_gen | [Prompt W3M2-002](#prompt-w3m2-002-cuilan-boolean-states) | 2500x700 | generated in-project with built-in image_gen; provenance verified | w3-m2 WeekThreeCuilanBooleanScene | visual-qa-passed |
+| assets/week-three-yunzhan-dialogue/yunzhan-dialogue-background.webp | 3e7e5974898301531369a7904cb84b0177937155b152e753a87b2af1811658dc | Bright child-safe Cloud Stack Cave entrance with an open two-round dialogue stage | OpenAI built-in image_gen | [Prompt W3M3-001](#prompt-w3m3-001-yunzhan-dialogue-background) | 1672x941 | generated in-project with built-in image_gen; provenance verified | w3-m3 WeekThreeYunzhanDialogueScene | visual-qa-passed |
+| assets/week-three-yunzhan-dialogue/yunzhan-dialogue-states.webp | 898d041b589871267719aa3746ebd6b36aabae4cb71d818a7e30214de254db39 | Transparent four-state guard, listen, pilgrimage explanation, and de-escalated origin dialogue sheet | OpenAI built-in image_gen | [Prompt W3M3-002](#prompt-w3m3-002-yunzhan-dialogue-states) | 2048x768 | generated in-project with built-in image_gen; provenance verified | w3-m3 WeekThreeYunzhanDialogueScene | visual-qa-passed |
 
 ## Prompt records
 
 Accepted source illustrations were generated through separate calls to the environment's built-in `image_gen` tool. Generation sources remain outside `public` and outside this repository. The keyed sources were processed with local alpha removal, and Pillow/Sharp then performed only technical crop-to-content, resize, transparent-canvas placement, and WebP encoding. Existing compositions retain their prior encoding; DP-006 is a 256x384 transparent WebP encoded by Sharp 0.35.3 (`quality: 30`, `alphaQuality: 75`, `effort: 6`, `smartSubsample: true`) to preserve the fixed cold-load budget. DP-007 and DP-008 were encoded at 1024x512 and 640x640 with Sharp (`quality: 76`, `alphaQuality: 90`, `effort: 6`, `smartSubsample: true`). A first magenta-key DP-008 attempt was rejected during alpha QA because its purple clothing conflicted with the key; it was not shipped and is not an accepted prompt record. No artwork was redrawn in code.
+
+### Prompt W3M3-001 yunzhan dialogue background
+
+```text
+Use case: illustration-story
+Asset type: W3-M3 云栈洞交锋儿童编程关卡的16:9宽幅场景背景
+Primary request: 明亮精致的3D中国儿童绘本风格，西游记第十九回云栈洞洞口，作为双轮对话条件分支关卡的固定背景。
+Scene/backdrop: 山腰石洞入口，洞名不出现；天然岩壁、少量柔和云纹、草木和远山，洞前有宽阔平坦的对话空间，气氛从警惕逐渐转为可沟通，儿童安全。
+Subject: 不出现人物和武器，留出前景与左右两侧供角色状态图叠加。
+Style/medium: polished bright 3D children's storybook game environment, warm jade green, cinnabar accents, soft gold sunlight, rounded readable forms.
+Composition/framing: 16:9 landscape, readable at phone width, cave entrance slightly right of center, generous clear foreground, no UI frame.
+Lighting/mood: clear late-afternoon light, adventurous but not threatening.
+Constraints: no text, no letters, no Chinese characters, no pseudo-writing, no plaque, no logo, no watermark, no UI, no combat, no fire, no prison, no dark horror, no people, no weapons.
+Processing: the accepted built-in PNG (`exec-263550c0-5f79-468e-bfb4-2794a5e30244.png`, 1672x941 RGB) was inspected at original resolution. Bundled Pillow only encoded it to 1672x941 WebP (`quality: 88`, `method: 6`) without crop, redraw, compositing, or content edits. Five-project 320/390/768/1440 browser integration QA passed for default, failure, and success states.
+```
+
+### Prompt W3M3-002 yunzhan dialogue states
+
+```text
+Use case: illustration-story
+Asset type: W3-M3 云栈洞双轮对话状态角色横向 sprite sheet，项目会裁切为四个等宽状态格
+Primary request: 透明背景上四个彼此完全分离、同尺度、全身、儿童安全的3D中国儿童绘本角色状态，从左到右精确排列。
+Subject: 1) 猪刚鬣在云栈洞外双手持九齿钉耙但保持防备、不挥击；2) 同一猪刚鬣继续守洞，钉耙竖直落地、警惕倾听；3) 孙悟空友善说明保护唐三藏西行取经，手势清楚但不攻击；4) 猪刚鬣已把钉耙平放在地面，空手诚恳说明自己受观音点化的来历，准备去见取经人但尚未拜师、尚未获名八戒。
+Style/medium: polished bright 3D Chinese children's storybook game characters, consistent proportions and camera, warm jade green, cinnabar red and soft gold palette.
+Composition/framing: very wide horizontal sheet, exactly four equal visual cells, each subject centered inside its own cell, large transparent gutters between cells, no overlap, no cropping.
+Lighting/mood: friendly adventure, clear facial expressions, de-escalation rather than fighting.
+Constraints: genuine transparent background with alpha; no scenery; no text, letters, Chinese characters, pseudo-writing, logo, watermark, UI; no attack swing, no impact, no injury, no violence, no kneeling worship, no Tang Sanzang present, no initiation ceremony, no head shaving, no naming scene, no extra characters or duplicate limbs.
+Accepted chroma edit: replace only the background with uniform #FF00FF while preserving the four foreground states, weapons, order, scale, spacing and composition; no gradient, scenery, checkerboard, floor or shadow panel.
+Processing: the direct transparency edit was rejected because it baked a checkerboard into opaque RGB pixels. A flat-green edit was also rejected because its key conflicted with Zhu Ganglie's jade clothing and produced visible edge contamination. The accepted flat-magenta built-in PNG (`exec-7ecafbcc-82b4-4ff7-b92c-15e41acfe82c.png`, 2048x768 RGB) was processed only with the installed imagegen `remove_chroma_key.py` helper using sampled border key `#f107ec`, soft matte thresholds 18/88, despill, and one-pixel alpha contraction. Alpha-zero RGB was cleared; partial-alpha RGB was propagated from connected alpha>=250 foreground seeds without changing any alpha or opaque foreground pixel. Bundled Pillow encoded the final WebP at quality 95, alpha quality 100 and method 6. The final 2048x768 file has genuine RGBA alpha, all four corner pixels are transparent, and automated alpha-edge QA is 324 mismatches / 18,321 inspected = 1.77%, below the unchanged 4% project limit. No artwork was redrawn. Five-project 320/390/768/1440 browser integration QA passed for the four-cell states and final Zhu Ganglie de-escalation frame.
+```
 
 ### Prompt W3M2-001 cuilan disguise background
 

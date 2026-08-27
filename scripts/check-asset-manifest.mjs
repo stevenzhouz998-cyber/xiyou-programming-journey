@@ -50,7 +50,7 @@ const REQUIRED_METADATA = [
 ];
 
 const QA_STATUSES = new Set(['planned', 'generated', 'provenance-verified', 'visual-qa-passed', 'rejected']);
-const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/'];
+const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/', 'assets/week-three-yunzhan-dialogue/'];
 
 const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
   ['assets/dragon-palace/background.webp', [
@@ -131,6 +131,8 @@ const REQUIRED_WEEK_THREE_CUILAN_ASSETS = [
   'assets/week-three-cuilan/cuilan-disguise-background.webp',
   'assets/week-three-cuilan/cuilan-boolean-states.webp',
 ];
+const WEEK_THREE_YUNZHAN_SOURCE_PATH = 'src/components/WeekThreeYunzhanDialogueScene.tsx';
+const REQUIRED_WEEK_THREE_YUNZHAN_ASSETS = ['assets/week-three-yunzhan-dialogue/yunzhan-dialogue-background.webp', 'assets/week-three-yunzhan-dialogue/yunzhan-dialogue-states.webp'];
 
 function isPhaserSceneClass(node, sourceFile) {
   return ts.isClassDeclaration(node) && node.heritageClauses?.some(
@@ -633,9 +635,11 @@ function verifyPromptRecords(promptRecords, manifestRows) {
     const record = recordsByAnchor.get(anchor);
     if (!record) throw new Error(`Asset manifest: prompt anchor ${anchor} is missing for ${row.assetId}.`);
     if (record.promptId !== linkedPromptId) throw new Error(`Asset manifest: prompt ${linkedPromptId.startsWith('DP-') ? 'DP label' : 'identifier'} ${linkedPromptId} does not match heading ${record.heading}.`);
-    const requiredArtDirection = row.assetId.startsWith('assets/week-three-cuilan/')
+    const requiredArtDirection = row.assetId.startsWith('assets/week-three-yunzhan-dialogue/')
+      ? 'polished bright 3D'
+      : row.assetId.startsWith('assets/week-three-cuilan/')
       ? REQUIRED_CUILAN_ART_DIRECTION
-      : row.assetId.startsWith('assets/week-one-advanced/') || row.assetId.startsWith('assets/week-two-heaven/') || row.assetId.startsWith('assets/week-two-great-sage/') || row.assetId.startsWith('assets/week-two-peach-elixir/') || row.assetId.startsWith('assets/week-two-furnace/') || row.assetId.startsWith('assets/week-two-heavenly-boss/') || row.assetId.startsWith('assets/week-three-manor-help/')
+      : row.assetId.startsWith('assets/week-one-advanced/') || row.assetId.startsWith('assets/week-two-heaven/') || row.assetId.startsWith('assets/week-two-great-sage/') || row.assetId.startsWith('assets/week-two-peach-elixir/') || row.assetId.startsWith('assets/week-two-furnace/') || row.assetId.startsWith('assets/week-two-heavenly-boss/') || row.assetId.startsWith('assets/week-three-manor-help/') || row.assetId.startsWith('assets/week-three-yunzhan-dialogue/')
       ? REQUIRED_ADVANCED_ART_DIRECTION
       : REQUIRED_ART_DIRECTION;
     if (!record.prompt.includes(requiredArtDirection)) {
@@ -1124,6 +1128,16 @@ export function verifyRequiredWeekThreeCuilanBooleanInventory({ manifestRows, pu
   return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
 }
 
+export function verifyRequiredWeekThreeYunzhanDialogueInventory({ manifestRows, publicFiles, promptRecords = [], sourcePath = WEEK_THREE_YUNZHAN_SOURCE_PATH, source, mode = 'check' }) {
+  const directory = 'assets/week-three-yunzhan-dialogue/'; const rows = familyRows(manifestRows, directory); const files = familyFiles(publicFiles, directory);
+  requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: REQUIRED_WEEK_THREE_YUNZHAN_ASSETS, label: 'Week Three Yunzhan dialogue' });
+  for (const row of rows) if (row.screenSlots !== 'w3-m3 WeekThreeYunzhanDialogueScene') throw new Error('Asset manifest: Yunzhan screen slot invalid.');
+  const state = files.find((file) => file.path.endsWith('yunzhan-dialogue-states.webp')); if (state?.hasAlpha !== true || !state.alphaEdgeMismatch || state.alphaEdgeMismatch.inspectedPixels === 0 || state.alphaEdgeMismatch.mismatchRatio > MAX_WEEK_THREE_ALPHA_EDGE_MISMATCH_RATIO) throw new Error('Asset manifest: Yunzhan alpha-edge gate failed.');
+  if (typeof source !== 'string' || !source.includes("import { assetUrl } from '../utils/assets'") || (source.match(/<img\b/g) ?? []).length !== 2 || !source.includes('data-state-cell') || REQUIRED_WEEK_THREE_YUNZHAN_ASSETS.some((path) => !source.includes(path))) throw new Error(`Asset manifest: ${sourcePath} must render exact Yunzhan assetUrl slots.`);
+  if (promptRecords.length === 0) return { assetCount: rows.length, totalBytes: files.reduce((sum, file) => sum + (file.bytes ?? 0), 0), mode };
+  return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
+}
+
 export function verifyRequiredDragonPalaceInventory({
   manifestRows,
   publicFiles,
@@ -1310,7 +1324,7 @@ export async function collectAssetFiles(assetRoot, assetDirectory = 'assets/drag
       }
       const metadata = await sharp(bytes, { failOn: 'error', limitInputPixels: 20_000_000 }).metadata();
       let alphaEdgeMismatch;
-      if ((assetDirectory === 'assets/week-three-manor-help' && relativePath === 'manor-message-states.webp') || (assetDirectory === 'assets/week-three-cuilan' && relativePath === 'cuilan-boolean-states.webp')) {
+      if ((assetDirectory === 'assets/week-three-manor-help' && relativePath === 'manor-message-states.webp') || (assetDirectory === 'assets/week-three-cuilan' && relativePath === 'cuilan-boolean-states.webp') || (assetDirectory === 'assets/week-three-yunzhan-dialogue' && relativePath === 'yunzhan-dialogue-states.webp')) {
         const { data, info } = await sharp(bytes, { failOn: 'error', limitInputPixels: 20_000_000 }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
         alphaEdgeMismatch = measureAlphaEdgeMismatch(data, info.width, info.height);
       }
@@ -1341,6 +1355,7 @@ async function main() {
   const weekTwoHeavenlyBossRoot = join(root, 'public', 'assets', 'week-two-heavenly-boss');
   const weekThreeManorHelpRoot = join(root, 'public', 'assets', 'week-three-manor-help');
   const weekThreeCuilanRoot = join(root, 'public', 'assets', 'week-three-cuilan');
+  const weekThreeYunzhanRoot = join(root, 'public', 'assets', 'week-three-yunzhan-dialogue');
   const { manifestRows, promptRecords } = parseAssetManifest(await readFile(manifestPath, 'utf8'));
   const publicFiles = [
     ...await collectAssetFiles(dragonPalaceRoot),
@@ -1352,6 +1367,7 @@ async function main() {
     ...await collectAssetFiles(weekTwoHeavenlyBossRoot, 'assets/week-two-heavenly-boss'),
     ...await collectAssetFiles(weekThreeManorHelpRoot, 'assets/week-three-manor-help'),
     ...await collectAssetFiles(weekThreeCuilanRoot, 'assets/week-three-cuilan'),
+    ...await collectAssetFiles(weekThreeYunzhanRoot, 'assets/week-three-yunzhan-dialogue'),
   ];
   const sourceFiles = new Map(await Promise.all([
     'src/components/GameScene.tsx',
@@ -1392,6 +1408,7 @@ async function main() {
   const weekTwoHeavenlyBossResult = verifyRequiredWeekTwoHeavenlyBossInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_TWO_HEAVENLY_BOSS_SOURCE_PATH), 'utf8'), mode });
   const weekThreeManorHelpResult = verifyRequiredWeekThreeManorHelpInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_MANOR_HELP_SOURCE_PATH), 'utf8'), mode });
   const weekThreeCuilanResult = verifyRequiredWeekThreeCuilanBooleanInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_CUILAN_SOURCE_PATH), 'utf8'), mode });
+  const weekThreeYunzhanResult = verifyRequiredWeekThreeYunzhanDialogueInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_YUNZHAN_SOURCE_PATH), 'utf8'), mode });
   console.log(`Dragon Palace assets: ${dragonResult.assetCount} files, ${dragonResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Advanced Week One assets: ${advancedResult.assetCount} files, ${advancedResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Two horse-care assets: ${weekTwoHorseResult.assetCount} files, ${weekTwoHorseResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
@@ -1401,6 +1418,7 @@ async function main() {
   console.log(`Week Two heavenly Boss assets: ${weekTwoHeavenlyBossResult.assetCount} files, ${weekTwoHeavenlyBossResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Three manor-help assets: ${weekThreeManorHelpResult.assetCount} files, ${weekThreeManorHelpResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Three Cuilan assets: ${weekThreeCuilanResult.assetCount} files, ${weekThreeCuilanResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
+  console.log(`Week Three Yunzhan assets: ${weekThreeYunzhanResult.assetCount} files, ${weekThreeYunzhanResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

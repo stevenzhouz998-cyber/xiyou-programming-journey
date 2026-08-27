@@ -4,6 +4,8 @@ import type {
   ManorHelpMissionSession,
   CuilanBooleanCompletionEvidence,
   CuilanBooleanMissionSession,
+  YunzhanDialogueCompletionEvidence,
+  YunzhanDialogueMissionSession,
   ProgressV3,
 } from './types';
 
@@ -24,11 +26,13 @@ export type {
   HeavenlySignalBossMissionSession,
   ManorHelpMissionSession,
   CuilanBooleanMissionSession,
+  YunzhanDialogueMissionSession,
   ProgressDocument,
   ProgressSettings,
   LearningAbilitiesV1,
   ManorHelpCompletionEvidence,
   CuilanBooleanCompletionEvidence,
+  YunzhanDialogueCompletionEvidence,
   MissionCompletionEvidenceV1,
   ProgressV1,
   ProgressV2,
@@ -43,6 +47,7 @@ import { grantMissionRewards } from './equipment';
 import { deriveConditionObservation } from './conditionObservation';
 import { compileManorHelpDraft, runManorHelp } from '../blockly/weekThreeManorHelpContract';
 import { compileCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract';
+import { compileYunzhanDialogueDraft, runYunzhanDialogueForDraft } from '../blockly/weekThreeYunzhanDialogueContract';
 
 export interface CompletionInput {
   stars: number;
@@ -147,6 +152,14 @@ function formalCuilanCompletionEvidence(
   return { kind: 'formal-v3', completedAt, verifiedAt, workspace: structuredClone(session.workspace), trace: structuredClone(trace), run: structuredClone(run) };
 }
 
+function formalYunzhanDialogueCompletionEvidence(session: YunzhanDialogueMissionSession | undefined, completedAt: string, verifiedAt: string): Extract<YunzhanDialogueCompletionEvidence, { kind: 'formal-v3' }> | null {
+  if (!session || session.lastRun === null) return null;
+  let trace; try { trace = compileYunzhanDialogueDraft(session.workspace); } catch { return null; }
+  const run = runYunzhanDialogueForDraft(session.workspace, trace);
+  if (!deeplyEqual(session.lastTrace, trace) || !deeplyEqual(session.lastRun, run) || !run.completed || run.finalState !== 'origin-explained' || run.failureSnapshot !== null || run.penalty.livesLost !== 0 || run.penalty.resourcesLost !== 0 || run.penalty.starsLost !== 0) return null;
+  return { kind: 'formal-v3', completedAt, verifiedAt, workspace: structuredClone(session.workspace), trace: structuredClone(trace), run: structuredClone(run) };
+}
+
 export function completeMission(progress: ProgressV3, missionId: string, input: CompletionInput): ProgressV3 {
   if (!allMissionOutlines.some((mission) => mission.id === missionId)) throw new Error('任务编号无效');
   const previous = progress.missions[missionId];
@@ -159,15 +172,19 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
   const cuilanEvidence = missionId === 'w3-m2'
     ? formalCuilanCompletionEvidence(progress.sessions['w3-m2'], previous?.completedAt ?? now, now)
     : null;
+  const yunzhanEvidence = missionId === 'w3-m3'
+    ? formalYunzhanDialogueCompletionEvidence(progress.sessions['w3-m3'], previous?.completedAt ?? now, now)
+    : null;
   if (previous) {
     safeCount(previous.attempts, 1);
     safeCount(previous.hintsUsed, normalizedHints);
-    const existingEvidence = missionId === 'w3-m1' ? progress.missionCompletionEvidence['w3-m1'] : missionId === 'w3-m2' ? progress.missionCompletionEvidence['w3-m2'] : undefined;
+    const existingEvidence = missionId === 'w3-m1' ? progress.missionCompletionEvidence['w3-m1'] : missionId === 'w3-m2' ? progress.missionCompletionEvidence['w3-m2'] : missionId === 'w3-m3' ? progress.missionCompletionEvidence['w3-m3'] : undefined;
     const upgradeLegacyW3 = missionId === 'w3-m1'
       && existingEvidence?.kind === 'legacy-preformal'
       && formalEvidence !== null;
     const upgradeLegacyCuilan = missionId === 'w3-m2' && existingEvidence?.kind === 'legacy-preformal' && cuilanEvidence !== null;
-    if (previous.stars >= stars && !upgradeLegacyW3 && !upgradeLegacyCuilan) return progress;
+    const upgradeLegacyYunzhan = missionId === 'w3-m3' && existingEvidence?.kind === 'legacy-preformal' && yunzhanEvidence !== null;
+    if (previous.stars >= stars && !upgradeLegacyW3 && !upgradeLegacyCuilan && !upgradeLegacyYunzhan) return progress;
     const missions = {
       ...progress.missions,
       [missionId]: previous.stars >= stars ? previous : { ...previous, stars },
@@ -178,6 +195,7 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
       abilities: { conditionObservation: deriveConditionObservation(missions) },
       missionCompletionEvidence: upgradeLegacyW3 ? { ...progress.missionCompletionEvidence, 'w3-m1': formalEvidence! }
         : upgradeLegacyCuilan ? { ...progress.missionCompletionEvidence, 'w3-m2': cuilanEvidence! }
+        : upgradeLegacyYunzhan ? { ...progress.missionCompletionEvidence, 'w3-m3': yunzhanEvidence! }
         : progress.missionCompletionEvidence,
       savedAt: now,
     };
@@ -186,6 +204,7 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
     throw new Error('W3-M1完成需要当前保存workspace的双情境成功运行证据');
   }
   if (missionId === 'w3-m2' && cuilanEvidence === null) throw new Error('W3-M2完成需要当前保存workspace的正式Blockly成功证明');
+  if (missionId === 'w3-m3' && yunzhanEvidence === null) throw new Error('W3-M3完成需要当前保存workspace的双轮对话成功证明');
   const attempts = safeCount(0, 1);
   const hintsUsed = safeCount(0, normalizedHints);
   const completedAt = now;
@@ -206,6 +225,7 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
     abilities: { conditionObservation: deriveConditionObservation(missions) },
     missionCompletionEvidence: missionId === 'w3-m1' ? { ...progress.missionCompletionEvidence, 'w3-m1': formalEvidence! }
       : missionId === 'w3-m2' ? { ...progress.missionCompletionEvidence, 'w3-m2': cuilanEvidence! }
+      : missionId === 'w3-m3' ? { ...progress.missionCompletionEvidence, 'w3-m3': yunzhanEvidence! }
       : progress.missionCompletionEvidence,
     savedAt: now,
   };
@@ -222,6 +242,10 @@ export function isMissionUnlocked(progress: ProgressV3, missionId: string): bool
     const evidence = progress.missionCompletionEvidence['w3-m2'];
     return progress.missions['w3-m2']?.status === 'completed'
       && (evidence?.kind === 'formal-v3' || evidence?.kind === 'legacy-preformal');
+  }
+  if (missionId === 'w3-m4') {
+    const evidence = progress.missionCompletionEvidence['w3-m3'];
+    return progress.missions['w3-m3']?.status === 'completed' && evidence?.kind === 'formal-v3';
   }
   return progress.missions[allMissionOutlines[index - 1].id]?.status === 'completed';
 }
@@ -244,6 +268,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
   const heavenlyBossSession = week === 2 ? progress.sessions['w2-m5'] : undefined;
   const manorHelpSession = week === 3 ? progress.sessions['w3-m1'] : undefined;
   const cuilanBooleanSession = week === 3 ? progress.sessions['w3-m2'] : undefined;
+  const yunzhanDialogueSession = week === 3 ? progress.sessions['w3-m3'] : undefined;
   const sessionSupport = [
     ...(dragonSession ? getSessionSupport(dragonSession, 'w1-m1') : []),
     ...(ruyiSession ? getSessionSupport(ruyiSession, 'w1-m2') : []),
@@ -257,8 +282,9 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
     ...(heavenlyBossSession ? getSessionSupport(heavenlyBossSession, 'w2-m5') : []),
     ...(manorHelpSession ? getSessionSupport(manorHelpSession, 'w3-m1') : []),
     ...(cuilanBooleanSession ? getSessionSupport(cuilanBooleanSession, 'w3-m2') : []),
+    ...(yunzhanDialogueSession ? getSessionSupport(yunzhanDialogueSession, 'w3-m3') : []),
   ];
-  const sessionRecords = [dragonSession, ruyiSession, fourSeasSession, underworldSession, bossSession, horseCareSession, monkeyKingSession, peachElixirSession, furnaceConditionSession, heavenlyBossSession, manorHelpSession, cuilanBooleanSession].filter(
+  const sessionRecords = [dragonSession, ruyiSession, fourSeasSession, underworldSession, bossSession, horseCareSession, monkeyKingSession, peachElixirSession, furnaceConditionSession, heavenlyBossSession, manorHelpSession, cuilanBooleanSession, yunzhanDialogueSession].filter(
     (session): session is NonNullable<typeof session> => session !== undefined,
   );
   const sessionRuns = sessionRecords.reduce(

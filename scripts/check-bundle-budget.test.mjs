@@ -234,6 +234,14 @@ test('enforces the exact W3-M2 cold-load budget on its dedicated three-layer laz
   assert.throws(() => analyzeManifest({ ...manifest, [root]: { ...manifest[root], isDynamicEntry: false } }, sizes, sizes), /WeekThreeCuilanBooleanExperience must remain a lazy route entry/);
 });
 
+test('enforces the exact W3-M3 cold-load budget on its dedicated three-layer lazy route closure', () => {
+  const root = 'src/components/WeekThreeYunzhanDialogueExperience.tsx';
+  assert.equal(bundleBudget.COLD_LOAD_ROUTE_CLOSURE_BUDGETS[root], bundleBudget.WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES);
+  const manifest = { ...base, [root]: { file: 'assets/week-three-yunzhan.js', isDynamicEntry: true, imports: [] } };
+  const sizes = { 'assets/main.js': 1, 'assets/vendor.js': 1, 'assets/week-three-yunzhan.js': bundleBudget.WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES };
+  assert.equal(analyzeManifest(manifest, sizes, sizes).closures[root].rawBytes, bundleBudget.WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES);
+});
+
 test('keeps the W3-M2 route, scene, and Blockly workspace dynamically split from homepage static imports', () => {
   const routeSource = readFileSync(new URL('../src/components/MissionPageContent.tsx', import.meta.url), 'utf8');
   const experienceSource = readFileSync(new URL('../src/components/WeekThreeCuilanBooleanExperience.tsx', import.meta.url), 'utf8');

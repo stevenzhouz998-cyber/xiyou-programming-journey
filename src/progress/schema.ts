@@ -22,7 +22,9 @@ import { parseFurnaceConditionSession } from './furnaceConditionSessionSchema';
 import { parseHeavenlySignalBossSession } from './heavenlySignalBossSessionSchema';
 import { parseManorHelpSession } from './manorHelpSessionSchema';
 import { parseCuilanBooleanSession, parseCuilanBooleanWorkspace } from './cuilanBooleanSessionSchema';
+import { parseYunzhanDialogueSession, parseYunzhanDialogueWorkspace } from './yunzhanDialogueSessionSchema';
 import { compileCuilanBooleanDraft, runCuilanBooleanForDraft, type CuilanBooleanInstruction, type CuilanBooleanRunResult, type CuilanBooleanWorkspaceDraftV1 } from '../blockly/weekThreeCuilanBooleanContract';
+import { compileYunzhanDialogueDraft, runYunzhanDialogueForDraft } from '../blockly/weekThreeYunzhanDialogueContract';
 import { deriveConditionObservation } from './conditionObservation';
 import {
   compileManorHelpDraft,
@@ -98,7 +100,7 @@ const utf8Encoder = new TextEncoder();
 
 export const createInitialProgress = (): ProgressV3 => ({
   version: 3,
-  schemaRevision: 4,
+  schemaRevision: 5,
   learnerName: '小行者',
   missions: {},
   settings: { muted: false, reducedMotion: false, reducedMotionOverride: false, parentPin: 'unset' },
@@ -1625,6 +1627,12 @@ function sessions(value: unknown): MissionSessions {
       } catch {
         invalid('sessions.w3-m2无效');
       }
+    } else if (missionId === 'w3-m3') {
+      try {
+        result['w3-m3'] = parseYunzhanDialogueSession(rawSession);
+      } catch {
+        invalid('sessions.w3-m3无效');
+      }
     } else {
       invalid(`任务 ${missionId} 尚不支持可执行会话`);
     }
@@ -1816,7 +1824,7 @@ function missionCompletionEvidence(
   legacyRevisionThree = false,
 ): MissionCompletionEvidenceV1 {
   const source = object(value, 'missionCompletionEvidence');
-  const unexpected = Object.keys(source).find((key) => key !== 'w3-m1' && key !== 'w3-m2');
+  const unexpected = Object.keys(source).find((key) => key !== 'w3-m1' && key !== 'w3-m2' && key !== 'w3-m3');
   if (unexpected) invalid(`missionCompletionEvidence包含未知字段 ${unexpected}`);
   const mission = parsedMissions['w3-m1'];
   const rawEvidence = source['w3-m1'];
@@ -1832,7 +1840,17 @@ function missionCompletionEvidence(
     else invalid('missionCompletionEvidence.w3-m1.kind无效');
   }
   const cuilanMission = parsedMissions['w3-m2']; const rawCuilan = source['w3-m2'];
-  if (!cuilanMission) { if (rawCuilan !== undefined) invalid('missionCompletionEvidence.w3-m2没有对应完成任务'); return result; }
+  if (!cuilanMission) {
+    if (rawCuilan !== undefined) invalid('missionCompletionEvidence.w3-m2没有对应完成任务');
+    const yunzhanMission = parsedMissions['w3-m3']; const rawYunzhan = source['w3-m3'];
+    if (!yunzhanMission) { if (rawYunzhan !== undefined) invalid('missionCompletionEvidence.w3-m3没有对应完成任务'); return result; }
+    if (rawYunzhan === undefined) { result['w3-m3'] = { kind: 'legacy-preformal', completedAt: yunzhanMission.completedAt, sourceVersion: 3, sourceSchemaRevision: 4 }; return result; }
+    const yunzhan = object(rawYunzhan, 'missionCompletionEvidence.w3-m3');
+    if (yunzhan.kind !== 'legacy-preformal') invalid('missionCompletionEvidence.w3-m3没有W3-M2正式完成前置');
+    exactKeys(yunzhan, 'missionCompletionEvidence.w3-m3', ['kind', 'completedAt', 'sourceVersion', 'sourceSchemaRevision']);
+    if (date(yunzhan.completedAt, 'missionCompletionEvidence.w3-m3.completedAt') !== yunzhanMission.completedAt || yunzhan.sourceVersion !== 3 || yunzhan.sourceSchemaRevision !== 4) invalid('missionCompletionEvidence.w3-m3旧证明无效');
+    result['w3-m3'] = { kind: 'legacy-preformal', completedAt: yunzhanMission.completedAt, sourceVersion: 3, sourceSchemaRevision: 4 }; return result;
+  }
   if (legacyRevisionThree && rawCuilan === undefined) {
     result['w3-m2'] = { kind: 'legacy-preformal', completedAt: cuilanMission.completedAt, sourceVersion: 3, sourceSchemaRevision: 3 };
     return result;
@@ -1857,6 +1875,27 @@ function missionCompletionEvidence(
     invalid('missionCompletionEvidence.w3-m2必须是当前workspace成功重放');
   }
   result['w3-m2'] = { kind: 'formal-v3', completedAt: cuilanMission.completedAt, verifiedAt: date(cuilan.verifiedAt, 'missionCompletionEvidence.w3-m2.verifiedAt'), workspace, trace, run };
+  const yunzhanMission = parsedMissions['w3-m3']; const rawYunzhan = source['w3-m3'];
+  if (!yunzhanMission) { if (rawYunzhan !== undefined) invalid('missionCompletionEvidence.w3-m3没有对应完成任务'); return result; }
+  if (rawYunzhan === undefined) {
+    result['w3-m3'] = { kind: 'legacy-preformal', completedAt: yunzhanMission.completedAt, sourceVersion: 3, sourceSchemaRevision: 4 };
+    return result;
+  }
+  const yunzhan = object(rawYunzhan, 'missionCompletionEvidence.w3-m3');
+  if (yunzhan.kind === 'legacy-preformal') {
+    exactKeys(yunzhan, 'missionCompletionEvidence.w3-m3', ['kind', 'completedAt', 'sourceVersion', 'sourceSchemaRevision']);
+    if (date(yunzhan.completedAt, 'missionCompletionEvidence.w3-m3.completedAt') !== yunzhanMission.completedAt || yunzhan.sourceVersion !== 3 || yunzhan.sourceSchemaRevision !== 4) invalid('missionCompletionEvidence.w3-m3旧证明无效');
+    result['w3-m3'] = { kind: 'legacy-preformal', completedAt: yunzhanMission.completedAt, sourceVersion: 3, sourceSchemaRevision: 4 };
+    return result;
+  }
+  if (yunzhan.kind !== 'formal-v3') invalid('missionCompletionEvidence.w3-m3.kind无效');
+  exactKeys(yunzhan, 'missionCompletionEvidence.w3-m3', ['kind', 'completedAt', 'verifiedAt', 'workspace', 'trace', 'run']);
+  if (date(yunzhan.completedAt, 'missionCompletionEvidence.w3-m3.completedAt') !== yunzhanMission.completedAt) invalid('missionCompletionEvidence.w3-m3完成时间无效');
+  try {
+    const workspace = parseYunzhanDialogueWorkspace(yunzhan.workspace, 'missionCompletionEvidence.w3-m3.workspace'); const trace = compileYunzhanDialogueDraft(workspace); const run = runYunzhanDialogueForDraft(workspace, trace);
+    if (!deeplyEqual(yunzhan.trace, trace) || !deeplyEqual(yunzhan.run, run) || !run.completed || run.finalState !== 'origin-explained') invalid('missionCompletionEvidence.w3-m3必须是当前workspace成功重放');
+    result['w3-m3'] = { kind: 'formal-v3', completedAt: yunzhanMission.completedAt, verifiedAt: date(yunzhan.verifiedAt, 'missionCompletionEvidence.w3-m3.verifiedAt'), workspace, trace, run };
+  } catch { invalid('missionCompletionEvidence.w3-m3必须是当前workspace成功重放'); }
   return result;
 }
 
@@ -1876,19 +1915,20 @@ function migratedLegacyMissionCompletionEvidence(
       sourceSchemaRevision,
     }}),
     ...(cuilan === undefined ? {} : { 'w3-m2': { kind: 'legacy-preformal' as const, completedAt: cuilan.completedAt, sourceVersion: 3 as const, sourceSchemaRevision: 3 as const } }),
+    ...(parsedMissions['w3-m3'] === undefined ? {} : { 'w3-m3': { kind: 'legacy-preformal' as const, completedAt: parsedMissions['w3-m3']!.completedAt, sourceVersion: 3 as const, sourceSchemaRevision: 4 as const } }),
   };
 }
 
 function parseV3(source: Record<string, unknown>): ProgressV3 {
   const legacyRevision = source.schemaRevision === 1;
-  const currentRevision = source.schemaRevision === 3 || source.schemaRevision === 4;
+  const currentRevision = source.schemaRevision === 3 || source.schemaRevision === 4 || source.schemaRevision === 5;
   const revisionThree = source.schemaRevision === 3;
   exactKeys(source, '顶层', [
     'version', 'schemaRevision', 'learnerName', 'missions', 'settings', 'privacy', 'recovery', 'sessions',
     ...(legacyRevision ? [] : ['equipment']), ...(currentRevision ? ['abilities', 'missionCompletionEvidence'] : []), 'savedAt',
   ]);
-  if (source.schemaRevision !== 1 && source.schemaRevision !== 2 && source.schemaRevision !== 3 && source.schemaRevision !== 4) {
-    invalid('schemaRevision必须是1、2、3或4');
+  if (source.schemaRevision !== 1 && source.schemaRevision !== 2 && source.schemaRevision !== 3 && source.schemaRevision !== 4 && source.schemaRevision !== 5) {
+    invalid('schemaRevision必须是1、2、3、4或5');
   }
   const parsedCommon = common(source, true);
   const parsedSessions = sessions(source.sessions);
@@ -1903,7 +1943,7 @@ function parseV3(source: Record<string, unknown>): ProgressV3 {
   }
   return {
     version: 3,
-    schemaRevision: 4,
+    schemaRevision: 5,
     ...parsedCommon,
     ...privacyAndRecovery(source),
     sessions: parsedSessions,
@@ -1927,7 +1967,7 @@ export function migrateProgress(value: unknown): ProgressV3 {
   if (legacy.version === 2) return {
     ...legacy,
     version: 3,
-    schemaRevision: 4,
+    schemaRevision: 5,
     sessions: {},
     equipment: equipmentFromMissions(legacy.missions),
     abilities: { conditionObservation: deriveConditionObservation(legacy.missions) },
@@ -1935,7 +1975,7 @@ export function migrateProgress(value: unknown): ProgressV3 {
   };
   return {
     version: 3,
-    schemaRevision: 4,
+    schemaRevision: 5,
     learnerName: legacy.learnerName,
     missions: legacy.missions,
     settings: { ...legacy.settings, reducedMotionOverride: false },

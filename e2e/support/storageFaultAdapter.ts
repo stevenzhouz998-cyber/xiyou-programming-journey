@@ -410,6 +410,48 @@ function exactCuilanCompletionDelta(previous: ProgressV3, next: ProgressV3) {
   return exactAfterAllowedDelta(previous, next, (expected) => { expected.missions['w3-m2'] = structuredClone(completion); expected.missionCompletionEvidence['w3-m2'] = structuredClone(evidence); });
 }
 
+function isYunzhanWorkspace(value: unknown): boolean { return isPlainRecord(value) && value.missionId === 'w3-m3'; }
+function hasZeroYunzhanCounters(session: NonNullable<ProgressV3['sessions']['w3-m3']>): boolean {
+  return session.totalRuns === 0 && session.runtimeFailures === 0 && session.compileFailures === 0
+    && canonicalJson(session.conceptFailures) === canonicalJson({ programStructure: 0, branchRouting: 0, completeness: 0 });
+}
+function exactYunzhanDraftDelta(previous: ProgressV3, next: ProgressV3) {
+  const prior = previous.sessions['w3-m3']; const candidate = next.sessions['w3-m3'];
+  if (!candidate || next.missions['w3-m3'] !== undefined || (prior && canonicalJson(prior) === canonicalJson(candidate))) return false;
+  if (!prior) {
+    if (!isYunzhanWorkspace(candidate.workspace) || !hasZeroYunzhanCounters(candidate) || !hasEmptyArray(candidate.usedHintTiers) || !hasEmptyArray(candidate.lastTrace) || !hasEmptyArray(candidate.roundResults) || !hasEmptyArray(candidate.conditionObservationUses) || candidate.lastRun !== null || candidate.failureSnapshot !== null || candidate.lastRunAt !== null) return false;
+    return exactAfterAllowedDelta(previous, next, (expected) => { expected.sessions['w3-m3'] = structuredClone(candidate); });
+  }
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    const session = expected.sessions['w3-m3']!;
+    session.workspace = structuredClone(candidate.workspace); session.lastTrace = []; session.lastRun = null; session.roundResults = []; session.failureSnapshot = null; session.lastRunAt = null; session.savedAt = candidate.savedAt;
+  });
+}
+function exactYunzhanRunDelta(previous: ProgressV3, next: ProgressV3) {
+  const prior = previous.sessions['w3-m3']; const candidate = next.sessions['w3-m3'];
+  if (!prior || !candidate?.lastRun || candidate.lastRunAt === null || next.missions['w3-m3'] !== undefined || canonicalJson(candidate.workspace) !== canonicalJson(prior.workspace) || canonicalJson(candidate.usedHintTiers) !== canonicalJson(prior.usedHintTiers) || canonicalJson(candidate.conditionObservationUses) !== canonicalJson(prior.conditionObservationUses) || candidate.totalRuns !== prior.totalRuns + 1) return false;
+  const expectedFailures = structuredClone(prior.conceptFailures); const expectedRuntimeFailures = candidate.lastRun.completed ? prior.runtimeFailures : prior.runtimeFailures + 1;
+  if (!candidate.lastRun.completed) {
+    if (!candidate.lastRun.diagnostic || !isPlainRecord(candidate.lastRun.diagnostic)) return false;
+    if (candidate.lastRun.diagnostic.concept === 'branch-routing') expectedFailures.branchRouting += 1; else expectedFailures.completeness += 1;
+  }
+  if (candidate.runtimeFailures !== expectedRuntimeFailures || canonicalJson(candidate.conceptFailures) !== canonicalJson(expectedFailures)) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    const session = expected.sessions['w3-m3']!;
+    session.lastTrace = structuredClone(candidate.lastTrace); session.lastRun = structuredClone(candidate.lastRun); session.roundResults = structuredClone(candidate.roundResults); session.failureSnapshot = structuredClone(candidate.failureSnapshot); session.totalRuns = candidate.totalRuns; session.runtimeFailures = candidate.runtimeFailures; session.conceptFailures = structuredClone(candidate.conceptFailures); session.lastRunAt = candidate.lastRunAt; session.savedAt = candidate.savedAt;
+  });
+}
+function exactYunzhanObservationDelta(previous: ProgressV3, next: ProgressV3) {
+  const prior = previous.sessions['w3-m3']; const candidate = next.sessions['w3-m3']; const observation = candidate?.conditionObservationUses.at(-1);
+  if (!prior || !candidate || !observation || candidate.conditionObservationUses.length !== prior.conditionObservationUses.length + 1 || canonicalJson(candidate.conditionObservationUses.slice(0, -1)) !== canonicalJson(prior.conditionObservationUses) || prior.conditionObservationUses.some((use) => use.snapshotId === observation.snapshotId)) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => { const session = expected.sessions['w3-m3']!; session.conditionObservationUses.push(structuredClone(observation)); session.savedAt = candidate.savedAt; });
+}
+function exactYunzhanCompletionDelta(previous: ProgressV3, next: ProgressV3) {
+  const session = previous.sessions['w3-m3']; const completion = next.missions['w3-m3']; const evidence = next.missionCompletionEvidence['w3-m3']; const run = session?.lastRun;
+  if (!session || previous.missions['w3-m3'] !== undefined || !completion || evidence?.kind !== 'formal-v3' || !run || !run.completed || run.diagnostic !== null || run.failureSnapshot !== null || session.failureSnapshot !== null || run.finalState !== 'origin-explained' || run.penalty.livesLost !== 0 || run.penalty.resourcesLost !== 0 || run.penalty.starsLost !== 0 || completion.status !== 'completed' || !Number.isSafeInteger(completion.stars) || completion.stars < 1 || completion.stars > 3 || !Number.isSafeInteger(completion.hintsUsed) || completion.hintsUsed < 0 || completion.attempts !== 1 || completion.completedAt !== next.savedAt || evidence.completedAt !== completion.completedAt || evidence.verifiedAt !== next.savedAt || canonicalJson(evidence.workspace) !== canonicalJson(session.workspace) || canonicalJson(evidence.trace) !== canonicalJson(session.lastTrace) || canonicalJson(evidence.run) !== canonicalJson(run)) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => { expected.missions['w3-m3'] = structuredClone(completion); expected.missionCompletionEvidence['w3-m3'] = structuredClone(evidence); });
+}
+
 export const storageFaultAdapter: StorageFaultAdapter = {
   beforeProgressWrite: ({ storage, progress }) => {
     const mode = storage.getItem(MODE_KEY);
@@ -437,16 +479,20 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-cuilan-run' && exactCuilanRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-cuilan-observation' && exactCuilanObservationDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-cuilan-completion' && exactCuilanCompletionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-yunzhan-draft' && exactYunzhanDraftDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-yunzhan-run' && exactYunzhanRunDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-yunzhan-observation' && exactYunzhanObservationDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-yunzhan-completion' && exactYunzhanCompletionDelta(previous, progress)) return FAILURE;
     const advancedFailure = advancedStorageFaultHandler({ storage, progress });
     if (advancedFailure !== null) return advancedFailure;
     return null;
   },
   beforeProgressLoad: (storage) => {
     const mode = storage.getItem(MODE_KEY);
-    if (mode !== 'corrupt-regalia-current' && mode !== 'corrupt-advanced-current' && mode !== 'corrupt-horse-current' && mode !== 'corrupt-monkey-current' && mode !== 'corrupt-peach-current' && mode !== 'corrupt-boss-current' && mode !== 'corrupt-manor-current' && mode !== 'corrupt-cuilan-current') return;
+    if (mode !== 'corrupt-regalia-current' && mode !== 'corrupt-advanced-current' && mode !== 'corrupt-horse-current' && mode !== 'corrupt-monkey-current' && mode !== 'corrupt-peach-current' && mode !== 'corrupt-boss-current' && mode !== 'corrupt-manor-current' && mode !== 'corrupt-cuilan-current' && mode !== 'corrupt-yunzhan-current') return;
     const legal = storage.getItem(CURRENT_KEY);
     if (legal !== null) storage.setItem(SNAPSHOT_KEY, legal);
-    storage.setItem(CURRENT_KEY, mode === 'corrupt-regalia-current' ? '{broken w1-m3 current' : mode === 'corrupt-advanced-current' ? '{broken advanced current' : mode === 'corrupt-horse-current' ? '{broken w2-m1 current' : mode === 'corrupt-monkey-current' ? '{broken w2-m2 current' : mode === 'corrupt-peach-current' ? '{broken w2-m3 current' : mode === 'corrupt-boss-current' ? '{broken w2-m5 current' : mode === 'corrupt-manor-current' ? '{broken w3-m1 current' : '{broken w3-m2 current');
+    storage.setItem(CURRENT_KEY, mode === 'corrupt-regalia-current' ? '{broken w1-m3 current' : mode === 'corrupt-advanced-current' ? '{broken advanced current' : mode === 'corrupt-horse-current' ? '{broken w2-m1 current' : mode === 'corrupt-monkey-current' ? '{broken w2-m2 current' : mode === 'corrupt-peach-current' ? '{broken w2-m3 current' : mode === 'corrupt-boss-current' ? '{broken w2-m5 current' : mode === 'corrupt-manor-current' ? '{broken w3-m1 current' : mode === 'corrupt-cuilan-current' ? '{broken w3-m2 current' : '{broken w3-m3 current');
     storage.setItem(MODE_KEY, 'off');
   },
 };

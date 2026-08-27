@@ -17,6 +17,7 @@ import {
   verifyRequiredWeekTwoHeavenlyBossInventory,
   verifyRequiredWeekThreeManorHelpInventory,
   verifyRequiredWeekThreeCuilanBooleanInventory,
+  verifyRequiredWeekThreeYunzhanDialogueInventory,
   verifyAssetManifest,
 } from './check-asset-manifest.mjs';
 
@@ -230,6 +231,14 @@ test('requires the exact two approved W3-M2 Cuilan assets, their source slots, a
   assert.doesNotThrow(() => verifyRequiredWeekThreeCuilanBooleanInventory({ manifestRows: rows, publicFiles: files, promptRecords: [], source }));
   assert.throws(() => verifyRequiredWeekThreeCuilanBooleanInventory({ manifestRows: rows, publicFiles: [...files, { path: 'assets/week-three-cuilan/extra.webp' }], promptRecords: [], source }), /unexpected|exactly/i);
   assert.throws(() => verifyRequiredWeekThreeCuilanBooleanInventory({ manifestRows: rows, publicFiles: [{ ...files[0] }, { ...files[1], alphaEdgeMismatch: { inspectedPixels: 4, mismatchRatio: 0.05 } }], promptRecords: [], source }), /alpha-edge/i);
+});
+
+test('requires the exact two approved W3-M3 Yunzhan assets, visible assetUrl slots, and a clean alpha edge', () => {
+  const source = "import { assetUrl } from '../utils/assets'; const assets = ['assets/week-three-yunzhan-dialogue/yunzhan-dialogue-background.webp', 'assets/week-three-yunzhan-dialogue/yunzhan-dialogue-states.webp']; <img src={assetUrl(assets[0])} /><img src={assetUrl(assets[1])} /><div data-state-cell=\"0\" />";
+  const rows = [{ assetId: 'assets/week-three-yunzhan-dialogue/yunzhan-dialogue-background.webp', screenSlots: 'w3-m3 WeekThreeYunzhanDialogueScene', qaStatus: 'provenance-verified' }, { assetId: 'assets/week-three-yunzhan-dialogue/yunzhan-dialogue-states.webp', screenSlots: 'w3-m3 WeekThreeYunzhanDialogueScene', qaStatus: 'provenance-verified' }];
+  const files = [{ path: rows[0].assetId, bytes: 162000, width: 1672, height: 941, hasAlpha: false }, { path: rows[1].assetId, bytes: 288000, width: 2048, height: 768, hasAlpha: true, alphaEdgeMismatch: { inspectedPixels: 400, mismatchRatio: 0 } }];
+  assert.doesNotThrow(() => verifyRequiredWeekThreeYunzhanDialogueInventory({ manifestRows: rows, publicFiles: files, promptRecords: [], source }));
+  assert.throws(() => verifyRequiredWeekThreeYunzhanDialogueInventory({ manifestRows: rows, publicFiles: [...files, { path: 'assets/week-three-yunzhan-dialogue/extra.webp' }], promptRecords: [], source }), /exactly|unexpected/i);
 });
 
 test('traces every approved Dragon Palace raster to a real formal scene slot', async () => {

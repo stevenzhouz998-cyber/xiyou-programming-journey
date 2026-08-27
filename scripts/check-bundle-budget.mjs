@@ -8,9 +8,10 @@ import {
   HOME_TOTAL_LIMIT,
   PHASER_RAW_LIMIT,
   WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES,
+  WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES,
   WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES,
 } from './budget-limits.mjs';
-export { WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES, WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES };
+export { WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES, WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES, WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES };
 export {
   DRAGON_PALACE_COLD_LOAD_MAX_BYTES,
   DRAGON_PALACE_COLD_BYTES,
@@ -40,6 +41,7 @@ const SCENE_ROOTS = new Set(['src/components/GameScene.tsx', 'src/components/Ruy
 export const COLD_LOAD_ROUTE_CLOSURE_BUDGETS = Object.freeze({
   'src/components/WeekThreeManorHelpExperience.tsx': WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES,
   'src/components/WeekThreeCuilanBooleanExperience.tsx': WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES,
+  'src/components/WeekThreeYunzhanDialogueExperience.tsx': WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES,
 });
 const isPhaserSource = (key, chunk) => chunk.name === 'phaser' || /node_modules[\\/]phaser(?:[\\/]|$)/i.test(`${key} ${chunk.src ?? ''}`);
 const isBlocklySource = (key, chunk) => chunk.name === 'blockly-editor' || /node_modules[\\/]blockly(?:[\\/]|$)/i.test(`${key} ${chunk.src ?? ''}`);
@@ -55,6 +57,7 @@ const PRODUCTION_TEST_SENTINELS = [
   'fail-cuilan-run',
   'fail-cuilan-observation',
   'fail-cuilan-completion',
+  'corrupt-yunzhan-current', 'fail-yunzhan-draft', 'fail-yunzhan-run', 'fail-yunzhan-observation', 'fail-yunzhan-completion',
 ];
 const assertSafeFile = (file) => {
   const normalized = normalize(file);

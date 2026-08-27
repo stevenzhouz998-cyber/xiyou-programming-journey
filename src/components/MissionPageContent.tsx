@@ -34,6 +34,7 @@ import type { WeekTwoFurnaceConditionExperienceProps } from "./WeekTwoFurnaceCon
 import type { WeekTwoHeavenlySignalBossExperienceProps } from "./WeekTwoHeavenlySignalBossExperience";
 import type { WeekThreeManorHelpExperienceProps } from "./WeekThreeManorHelpExperience";
 import type { WeekThreeCuilanBooleanExperienceProps } from "./WeekThreeCuilanBooleanExperience";
+import type { WeekThreeYunzhanDialogueExperienceProps } from './WeekThreeYunzhanDialogueExperience';
 
 const ArrowLeft = lazy(() =>
   import("@phosphor-icons/react/dist/icons/ArrowLeft").then((module) => ({
@@ -97,6 +98,7 @@ const loadWeekThreeManorHelpExperience = () =>
   }));
 const loadWeekThreeCuilanBooleanExperience = () =>
   import('./WeekThreeCuilanBooleanExperience').then((module) => ({ default: module.WeekThreeCuilanBooleanExperience }));
+const loadWeekThreeYunzhanDialogueExperience = () => import('./WeekThreeYunzhanDialogueExperience').then((module) => ({ default: module.WeekThreeYunzhanDialogueExperience }));
 
 export function FourSeasRegaliaRouteBoundary({
   loader = loadFourSeasRegaliaExperience,
@@ -300,6 +302,10 @@ export function WeekThreeManorHelpRouteBoundary({
 export function WeekThreeCuilanBooleanRouteBoundary({ loader = loadWeekThreeCuilanBooleanExperience, reloadPage, ...props }: WeekThreeCuilanBooleanExperienceProps & { loader?: () => Promise<{ default: ComponentType<WeekThreeCuilanBooleanExperienceProps> }>; reloadPage?: () => void }) {
   const Experience = useMemo(() => lazy(loader), [loader]);
   return <LazySectionBoundary label="变化高翠兰任务" reloadPage={reloadPage}><Suspense fallback={<p className="mission-tools-loading" role="status">变化高翠兰任务加载中，请稍候……</p>}><Experience {...props} /></Suspense></LazySectionBoundary>;
+}
+export function WeekThreeYunzhanDialogueRouteBoundary({ loader = loadWeekThreeYunzhanDialogueExperience, reloadPage, ...props }: WeekThreeYunzhanDialogueExperienceProps & { loader?: () => Promise<{ default: ComponentType<WeekThreeYunzhanDialogueExperienceProps> }>; reloadPage?: () => void }) {
+  const Experience = useMemo(() => lazy(loader), [loader]);
+  return <LazySectionBoundary label="云栈洞对话任务" reloadPage={reloadPage}><Suspense fallback={<p className="mission-tools-loading" role="status">云栈洞对话任务加载中，请稍候……</p>}><Experience {...props} reloadPage={reloadPage} /></Suspense></LazySectionBoundary>;
 }
 
 function playAudio(path: string, muted: boolean) {
@@ -921,6 +927,15 @@ function MissionPageForId({
               />
             ) : mission.id === 'w3-m2' ? (
               <WeekThreeCuilanBooleanRouteBoundary
+                reducedMotion={reducedMotion}
+                muted={progress.settings.muted}
+                locked={completionSave !== null}
+                onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)}
+                onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
+                onInteractionLockChange={setBattleInteractionLocked}
+              />
+            ) : mission.id === 'w3-m3' ? (
+              <WeekThreeYunzhanDialogueRouteBoundary
                 reducedMotion={reducedMotion}
                 muted={progress.settings.muted}
                 locked={completionSave !== null}

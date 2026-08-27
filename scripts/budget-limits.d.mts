@@ -14,6 +14,7 @@ export const WEEK_TWO_FURNACE_COLD_LOAD_MAX_BYTES: number;
 export const WEEK_TWO_HEAVENLY_BOSS_COLD_LOAD_MAX_BYTES: number;
 export const WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES: number;
 export const WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES: number;
+export const WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES: number;
 export const W1_M4_COLD_LOAD_MAX_BYTES: number;
 export const W1_M5_COLD_LOAD_MAX_BYTES: number;
 export const DRAGON_PALACE_COLD_BYTES: number;

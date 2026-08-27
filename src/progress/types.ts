@@ -52,6 +52,12 @@ import type {
   CuilanCheckpointResult,
   CuilanFailureSnapshot,
 } from '../blockly/weekThreeCuilanBooleanContract';
+import type {
+  YunzhanDialogueFailureSnapshot,
+  YunzhanDialogueInstruction,
+  YunzhanDialogueRunResult,
+  YunzhanDialogueWorkspaceDraftV1,
+} from '../blockly/weekThreeYunzhanDialogueContract';
 
 export interface MissionProgress {
   status: 'completed';
@@ -220,6 +226,17 @@ export interface CuilanBooleanMissionSession extends Omit<MissionSessionData<
   }>;
 }
 
+export interface YunzhanDialogueMissionSession extends Omit<MissionSessionData<
+  YunzhanDialogueWorkspaceDraftV1,
+  YunzhanDialogueInstruction,
+  YunzhanDialogueRunResult
+>, 'conceptFailures'> {
+  conceptFailures: { programStructure: number; branchRouting: number; completeness: number };
+  roundResults: YunzhanDialogueRunResult['rounds'];
+  failureSnapshot: YunzhanDialogueFailureSnapshot | null;
+  conditionObservationUses: Array<{ snapshotId: string; usedAt: string; workspace: YunzhanDialogueWorkspaceDraftV1 }>;
+}
+
 export type ManorHelpCompletionEvidence =
   | {
     kind: 'legacy-preformal';
@@ -252,9 +269,14 @@ export type CuilanBooleanCompletionEvidence =
     run: CuilanBooleanRunResult;
   };
 
+export type YunzhanDialogueCompletionEvidence =
+  | { kind: 'legacy-preformal'; completedAt: string; sourceVersion: 3; sourceSchemaRevision: 4 }
+  | { kind: 'formal-v3'; completedAt: string; verifiedAt: string; workspace: YunzhanDialogueWorkspaceDraftV1; trace: YunzhanDialogueInstruction[]; run: YunzhanDialogueRunResult };
+
 export interface MissionCompletionEvidenceV1 {
   'w3-m1'?: ManorHelpCompletionEvidence;
   'w3-m2'?: CuilanBooleanCompletionEvidence;
+  'w3-m3'?: YunzhanDialogueCompletionEvidence;
 }
 
 export interface MissionSessionById {
@@ -270,6 +292,7 @@ export interface MissionSessionById {
   'w2-m5': HeavenlySignalBossMissionSession;
   'w3-m1': ManorHelpMissionSession;
   'w3-m2': CuilanBooleanMissionSession;
+  'w3-m3': YunzhanDialogueMissionSession;
 }
 
 export type ExecutableMissionId = keyof MissionSessionById;
@@ -278,7 +301,7 @@ export type MissionSessions = { [MissionId in ExecutableMissionId]?: MissionSess
 
 export interface ProgressV3 {
   version: 3;
-  schemaRevision: 3 | 4;
+  schemaRevision: 3 | 4 | 5;
   learnerName: string;
   missions: Record<string, MissionProgress>;
   settings: ProgressSettings;

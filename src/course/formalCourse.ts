@@ -101,6 +101,15 @@ export const formalWeekThreeMissions: FormalMissionSpec[] = [
       beat('取得线索并显形', '妖怪未认出悟空；悟空得知姓名住处后显出本相，妖怪逃走。'),
     ],
   }),
+  formalMission('w3-m3', {
+    subtitle: '让分支跟着西行使命走',
+    objective: '用同一张条件程序处理两轮云栈洞对话',
+    canon: { ...formalWeekThreeCanon, chapters: [19], title: '第十九回　云栈洞悟空收八戒', sourceUrl: 'https://zh.wikisource.org/zh-hans/西游记/第019回' },
+    storyBeats: [
+      beat('先听悟空身份', '只说明孙悟空身份时，猪刚鬣仍继续守着云栈洞。'),
+      beat('再说明西行使命', '明确说明保护唐三藏西行取经后，猪刚鬣放下钉耙，说明受观音点化的来历。'),
+    ],
+  }),
 ];
 
 export function getFormalMission(id: string): FormalMissionSpec | undefined {

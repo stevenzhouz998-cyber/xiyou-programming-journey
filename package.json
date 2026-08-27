@@ -15,7 +15,7 @@
     "test:e2e:update-evidence": "XIYOU_UPDATE_EVIDENCE=1 playwright test",
     "install:browsers": "playwright install chromium firefox webkit",
     "typecheck": "tsc --noEmit",
-    "test:bundle-script": "node --test scripts/check-bundle-budget.test.mjs scripts/check-advanced-week-one-e2e-contract.test.mjs scripts/check-week-two-monkey-king-e2e-contract.test.mjs scripts/check-week-two-peach-elixir-e2e-contract.test.mjs scripts/check-week-two-furnace-e2e-contract.test.mjs scripts/check-week-two-heavenly-boss-e2e-contract.test.mjs scripts/check-week-three-manor-help-e2e-contract.test.mjs scripts/check-week-three-cuilan-e2e-contract.test.mjs",
+    "test:bundle-script": "node --test scripts/check-bundle-budget.test.mjs scripts/check-advanced-week-one-e2e-contract.test.mjs scripts/check-week-two-monkey-king-e2e-contract.test.mjs scripts/check-week-two-peach-elixir-e2e-contract.test.mjs scripts/check-week-two-furnace-e2e-contract.test.mjs scripts/check-week-two-heavenly-boss-e2e-contract.test.mjs scripts/check-week-three-manor-help-e2e-contract.test.mjs scripts/check-week-three-cuilan-e2e-contract.test.mjs scripts/check-week-three-yunzhan-dialogue-e2e-contract.test.mjs",
     "verify:bundle": "npm run test:bundle-script && npm run build && node scripts/check-bundle-budget.mjs",
     "test:assets": "node --test scripts/check-asset-manifest.test.mjs",
     "check:assets": "node scripts/check-asset-manifest.mjs",
