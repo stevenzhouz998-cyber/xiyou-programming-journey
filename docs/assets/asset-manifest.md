@@ -28,10 +28,45 @@ This manifest gates the formal Dragon Palace media in `public/assets/dragon-pala
 | assets/week-two-heavenly-boss/heavenly-boss-states.webp | 646fbeb3f965ff5a6b868bf0d6f613329c485bd658489e8b4556db8099168bc8 | Multi-stage signal, horse-care, furnace and calm canonical-epilogue state sheet | OpenAI built-in image_gen | [Prompt W2M5-002](#prompt-w2m5-002-heavenly-boss-states) | 1672x941 | generated in-project with built-in image_gen; provenance verified | w2-m5 WeekTwoHeavenlySignalBossScene states branch | visual-qa-passed |
 | assets/week-three-manor-help/manor-help-background.webp | 0464a6c9038f79cfe7ddf61a4d3e4272d41d74eef920921686922227620aa4d2 | Bright Gao Family Manor roadside environment with an open message-playback foreground | OpenAI built-in image_gen | [Prompt W3M1-001](#prompt-w3m1-001-manor-help-background) | 1672x941 | generated in-project with built-in image_gen; provenance verified | w3-m1 WeekThreeManorHelpScene | visual-qa-passed |
 | assets/week-three-manor-help/manor-message-states.webp | 6a27fb45bb269146b4bf08182d872a09b4dc3488f267ee04032b030c2b2cab41 | Transparent Gao Cai request-and-return plus ordinary villager directions-and-continue state sheet | OpenAI built-in image_gen | [Prompt W3M1-002](#prompt-w3m1-002-manor-message-states) | 1672x941 | generated in-project with built-in image_gen; provenance verified | w3-m1 WeekThreeManorHelpScene | visual-qa-passed |
+| assets/week-three-cuilan/cuilan-disguise-background.webp | 8955dd2133ff59d8db5ba7d48220cb02207324c339cb1094d0c6b929a2141fad | Child-safe lantern-lit Gao Family Manor rear courtyard for the disguise-and-observation Boolean scene | OpenAI built-in image_gen | [Prompt W3M2-001](#prompt-w3m2-001-cuilan-disguise-background) | 1672x941 | generated in-project with built-in image_gen; provenance verified | w3-m2 WeekThreeCuilanBooleanScene | visual-qa-passed |
+| assets/week-three-cuilan/cuilan-boolean-states.webp | 07a6f2aef138c9a5cc0252c61b77197193f3ff86eca879355055f3548d183501 | Transparent five-state Wukong disguise, clue, reveal, and gentle escape sheet | OpenAI built-in image_gen | [Prompt W3M2-002](#prompt-w3m2-002-cuilan-boolean-states) | 2500x700 | generated in-project with built-in image_gen; provenance verified | w3-m2 WeekThreeCuilanBooleanScene | visual-qa-passed |
 
 ## Prompt records
 
 Accepted source illustrations were generated through separate calls to the environment's built-in `image_gen` tool. Generation sources remain outside `public` and outside this repository. The keyed sources were processed with local alpha removal, and Pillow/Sharp then performed only technical crop-to-content, resize, transparent-canvas placement, and WebP encoding. Existing compositions retain their prior encoding; DP-006 is a 256x384 transparent WebP encoded by Sharp 0.35.3 (`quality: 30`, `alphaQuality: 75`, `effort: 6`, `smartSubsample: true`) to preserve the fixed cold-load budget. DP-007 and DP-008 were encoded at 1024x512 and 640x640 with Sharp (`quality: 76`, `alphaQuality: 90`, `effort: 6`, `smartSubsample: true`). A first magenta-key DP-008 attempt was rejected during alpha QA because its purple clothing conflicted with the key; it was not shipped and is not an accepted prompt record. No artwork was redrawn in code.
+
+### Prompt W3M2-001 cuilan disguise background
+
+```text
+Use case: illustration-story
+Asset type: production W3-M2 formal game scene background, wide 16:9 landscape
+Primary request: A polished bright 3D Chinese children's storybook game environment inspired by Journey to the West chapter 18, showing a child-safe lantern-lit rear courtyard and doorway area of Gao Family Manor where a disguise-and-observation coding scene can unfold.
+Scene/backdrop: Traditional Chinese manor courtyard at early evening, warm timber pillars, tiled eaves, paper lantern glow without any writing, moonlit blue-green garden, open doorway and broad uncluttered foreground stage for later character sprites.
+Subject: Environment only. High Cuilan is already safe elsewhere and must not appear. No principal characters, no creature, no story action baked into the background.
+Style/medium: High-quality friendly 3D children's storybook illustration consistent with a commercial educational game and the existing bright jade, cinnabar, cream, muted blue and soft gold Journey to the West art direction.
+Composition/framing: 16:9 wide landscape, readable at 320px phone width, clear foreground stage in lower center, doorway slightly right, balanced negative space for overlaid characters and captions, crisp silhouettes.
+Lighting/mood: Warm lanterns and gentle moonlight, safe, curious, clever, never romantic, frightening or ominous.
+Constraints: Child-safe and culturally respectful; no bedroom, no bed, no intimate pose, no combat, no weapons, no people, no text, no letters, no pseudo-writing, no signs with glyphs, no logo, no watermark, no UI, no emoji, no border, no placeholder boxes.
+```
+
+### Prompt W3M2-002 cuilan boolean states
+
+```text
+Use case: illustration-story
+Asset type: production W3-M2 transparent character state sheet for a commercial children's coding game
+Primary request: Create one polished horizontal state sheet with five clearly separated full-body story states for later CSS cropping, based on Journey to the West chapter 18 and focused on Boolean appearance-versus-identity learning.
+Scene/backdrop: Genuinely transparent background with clean alpha. No floor, no scenery, no shadow rectangle, no checkerboard pattern.
+State 1: Sun Wukong beginning a magical transformation, friendly golden monkey hero silhouette with a soft swirl of warm magic, no weapon.
+State 2: Wukong disguised in the outward appearance and traditional clothing of Gao Cuilan, standing calmly and safely waiting; respectful child-safe presentation, no sensual pose.
+State 3: the same disguised Wukong listening intelligently while Zhu Ganglie stands at a doorway and talks, clearly fooled by the outward appearance; conversational distance, no touch.
+State 4: Wukong revealing his true friendly monkey-hero form with a clever confident gesture, Zhu Ganglie surprised and stepping backward; no attack and no weapon impact.
+State 5: Zhu Ganglie turning into a gentle wind-and-spark escape trail moving away while Wukong remains standing; no chase or combat.
+Style/medium: High-quality bright 3D Chinese children's storybook game characters, rounded friendly proportions, culturally respectful, consistent with the existing jade, cinnabar, cream, muted blue and soft gold project art direction.
+Composition/framing: 16:9 horizontal sprite sheet divided conceptually into five equal-width cells; generous transparent separation; consistent character scale and ground line; every head, hand, foot, ear, garment and magic effect fully inside its cell; no overlaps between cells.
+Lighting/mood: Warm lantern and gentle moonlight, clever and adventurous, safe and non-frightening.
+Constraints: Gao Cuilan herself is safely elsewhere and is not depicted; the disguised figure is Wukong. No bedroom, no bed, no kissing, no embrace, no intimate contact, no romance, no child character, no combat hit, no injury, no weapon, no text, no letters, no pseudo-writing, no labels, no logo, no watermark, no UI, no emoji, no border, no placeholder boxes. Preserve real alpha transparency.
+Processing: shipping states use this original generated result. Local processing only removed isolated alpha connected-component noise, cleared alpha values at or below 24, regrouped complete subject connected components into five equal 500px cells, and encoded WebP. One built-in cleanup edit baked a checkerboard into the image, was rejected, and is not shipped.
+```
 
 ### Prompt W2M4-001 furnace interior background
 

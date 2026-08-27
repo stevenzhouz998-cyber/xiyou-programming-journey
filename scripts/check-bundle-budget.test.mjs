@@ -190,6 +190,7 @@ test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
   assert.equal(bundleBudget.WEEK_TWO_FURNACE_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
   assert.equal(bundleBudget.WEEK_TWO_HEAVENLY_BOSS_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
   assert.equal(bundleBudget.WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
   assert.equal(bundleBudget.ENTRY_GZIP_LIMIT, 180 * 1024);
   assert.equal(bundleBudget.HOME_TOTAL_LIMIT, 650 * 1024);
   assert.equal(bundleBudget.PHASER_RAW_LIMIT, 1600 * 1024);
@@ -221,6 +222,25 @@ test('enforces the exact W3-M1 cold-load budget on its dedicated lazy route clos
     () => analyzeManifest({ ...manifest, 'src/main.tsx': { ...base['src/main.tsx'], imports: ['vendor.js', root] } }, { ...sizes, 'assets/week-three-manor-help.js': 1 }, sizes),
     /WeekThreeManorHelpExperience must stay outside the application entry static closure/,
   );
+});
+
+test('enforces the exact W3-M2 cold-load budget on its dedicated three-layer lazy route closure', () => {
+  const root = 'src/components/WeekThreeCuilanBooleanExperience.tsx';
+  assert.equal(bundleBudget.COLD_LOAD_ROUTE_CLOSURE_BUDGETS[root], bundleBudget.WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES);
+  const manifest = { ...base, [root]: { file: 'assets/week-three-cuilan.js', isDynamicEntry: true, imports: [] } };
+  const sizes = { 'assets/main.js': 1, 'assets/vendor.js': 1, 'assets/week-three-cuilan.js': bundleBudget.WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES };
+  assert.equal(analyzeManifest(manifest, sizes, sizes).closures[root].rawBytes, bundleBudget.WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES);
+  assert.throws(() => analyzeManifest(manifest, sizes, { ...sizes, 'assets/week-three-cuilan.js': bundleBudget.WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES + 1 }), /WeekThreeCuilanBooleanExperience closure exceeds its 3 MiB cold-load budget/);
+  assert.throws(() => analyzeManifest({ ...manifest, [root]: { ...manifest[root], isDynamicEntry: false } }, sizes, sizes), /WeekThreeCuilanBooleanExperience must remain a lazy route entry/);
+});
+
+test('keeps the W3-M2 route, scene, and Blockly workspace dynamically split from homepage static imports', () => {
+  const routeSource = readFileSync(new URL('../src/components/MissionPageContent.tsx', import.meta.url), 'utf8');
+  const experienceSource = readFileSync(new URL('../src/components/WeekThreeCuilanBooleanExperience.tsx', import.meta.url), 'utf8');
+  assert.match(routeSource, /import\(\s*['"]\.\/WeekThreeCuilanBooleanExperience['"]\s*\)/);
+  assert.match(routeSource, /mission\.id\s*===\s*['"]w3-m2['"][\s\S]{0,900}<WeekThreeCuilanBooleanRouteBoundary\b/);
+  assert.match(experienceSource, /import\(['"]\.\/WeekThreeCuilanBooleanBlocklyWorkspace['"]\)/);
+  assert.match(experienceSource, /import\(['"]\.\/WeekThreeCuilanBooleanScene['"]\)/);
 });
 
 test('requires the W3-M1 dedicated lazy route closure', () => {

@@ -45,6 +45,13 @@ import type {
   ManorHelpScenarioResult,
   ManorHelpWorkspaceDraftV1,
 } from '../blockly/weekThreeManorHelpContract';
+import type {
+  CuilanBooleanInstruction,
+  CuilanBooleanRunResult,
+  CuilanBooleanWorkspaceDraftV1,
+  CuilanCheckpointResult,
+  CuilanFailureSnapshot,
+} from '../blockly/weekThreeCuilanBooleanContract';
 
 export interface MissionProgress {
   status: 'completed';
@@ -192,6 +199,27 @@ export interface ManorHelpMissionSession extends Omit<MissionSessionData<
   }>;
 }
 
+export interface CuilanBooleanMissionSession extends Omit<MissionSessionData<
+  CuilanBooleanWorkspaceDraftV1,
+  CuilanBooleanInstruction,
+  CuilanBooleanRunResult
+>, 'conceptFailures'> {
+  conceptFailures: {
+    programStructure: number;
+    conditionSelection: number;
+    branchRouting: number;
+    sequencePrecondition: number;
+    completeness: number;
+  };
+  checkpointResults: CuilanCheckpointResult[];
+  failureSnapshot: CuilanFailureSnapshot | null;
+  conditionObservationUses: Array<{
+    snapshotId: string;
+    usedAt: string;
+    workspace: CuilanBooleanWorkspaceDraftV1;
+  }>;
+}
+
 export type ManorHelpCompletionEvidence =
   | {
     kind: 'legacy-preformal';
@@ -208,8 +236,25 @@ export type ManorHelpCompletionEvidence =
     run: ManorHelpRunResult;
   };
 
+export type CuilanBooleanCompletionEvidence =
+  | {
+    kind: 'legacy-preformal';
+    completedAt: string;
+    sourceVersion: 3;
+    sourceSchemaRevision: 3;
+  }
+  | {
+    kind: 'formal-v3';
+    completedAt: string;
+    verifiedAt: string;
+    workspace: CuilanBooleanWorkspaceDraftV1;
+    trace: CuilanBooleanInstruction[];
+    run: CuilanBooleanRunResult;
+  };
+
 export interface MissionCompletionEvidenceV1 {
   'w3-m1'?: ManorHelpCompletionEvidence;
+  'w3-m2'?: CuilanBooleanCompletionEvidence;
 }
 
 export interface MissionSessionById {
@@ -224,6 +269,7 @@ export interface MissionSessionById {
   'w2-m4': FurnaceConditionMissionSession;
   'w2-m5': HeavenlySignalBossMissionSession;
   'w3-m1': ManorHelpMissionSession;
+  'w3-m2': CuilanBooleanMissionSession;
 }
 
 export type ExecutableMissionId = keyof MissionSessionById;
@@ -232,7 +278,7 @@ export type MissionSessions = { [MissionId in ExecutableMissionId]?: MissionSess
 
 export interface ProgressV3 {
   version: 3;
-  schemaRevision: 3;
+  schemaRevision: 3 | 4;
   learnerName: string;
   missions: Record<string, MissionProgress>;
   settings: ProgressSettings;

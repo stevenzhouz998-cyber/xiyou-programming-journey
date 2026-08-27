@@ -22,6 +22,7 @@ import {
   createDefaultManorHelpDraft,
   runManorHelp,
 } from '../blockly/weekThreeManorHelpContract';
+import { compileCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract';
 
 const NOW = '2026-07-15T06:00:00.000Z';
 const wrongWeaponTrace: RuyiStaffInstruction[] = [
@@ -163,6 +164,14 @@ describe('progress rules', () => {
       needsSupport: ['真假条件与分支'],
     });
   });
+  it('includes W3-M2 boolean runs, failures, and support in the weekly report', () => {
+    const draft = createMissionSession('w3-m2', NOW).workspace;
+    const trace = compileCuilanBooleanDraft(draft);
+    let session = recordRun(createMissionSession('w3-m2', NOW), runCuilanBooleanForDraft(draft, trace), trace, NOW);
+    session = recordRun(session, runCuilanBooleanForDraft(draft, trace), trace, '2026-08-26T00:02:00.000Z');
+    const progress = createInitialProgress(); progress.sessions['w3-m2'] = session;
+    expect(getWeeklyReport(progress, 3)).toMatchObject({ sessionRuns: 2, sessionAdjustments: 2, needsSupport: ['布尔判断与分支'] });
+  });
   it('fails closed when weekly stars or hints overflow the safe integer range', () => {
     const progress = createInitialProgress();
     progress.missions['w1-m1'] = {
@@ -279,6 +288,19 @@ describe('progress rules', () => {
     expect(isMissionUnlocked(progress, 'w2-m1')).toBe(true);
   });
 
+  it('keeps W3-M3 unlocked for migrated W3-M2 legacy completion while requiring proof for new progress', () => {
+    const legacy = createInitialProgress();
+    legacy.missions['w3-m2'] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: NOW };
+    legacy.missionCompletionEvidence['w3-m2'] = { kind: 'legacy-preformal', completedAt: NOW, sourceVersion: 3, sourceSchemaRevision: 3 };
+    expect(isMissionUnlocked(legacy, 'w3-m3')).toBe(true);
+
+    const newPlayer = createInitialProgress();
+    newPlayer.missions['w3-m2'] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: NOW };
+    expect(isMissionUnlocked(newPlayer, 'w3-m3')).toBe(false);
+    newPlayer.missionCompletionEvidence['w3-m2'] = { kind: 'formal-v3', completedAt: NOW, verifiedAt: NOW, workspace: createMissionSession('w3-m2', NOW).workspace, trace: [], run: null } as any;
+    expect(isMissionUnlocked(newPlayer, 'w3-m3')).toBe(true);
+  });
+
   it('keeps the best star score while making repeated completion counters idempotent', () => {
     let progress = createInitialProgress();
     progress = {
@@ -292,7 +314,7 @@ describe('progress rules', () => {
     expect(progress.missions['w1-m1']).toMatchObject({ stars: 3, attempts: 1, hintsUsed: 0, status: 'completed' });
     expect(progress).toMatchObject({
       version: 3,
-      schemaRevision: 3,
+      schemaRevision: 4,
       sessions: {},
       privacy: { localDataNoticeSeen: true },
       recovery: { lastRecoveredAt: '2026-07-12T00:00:00.000Z', source: 'snapshot' },
@@ -302,7 +324,7 @@ describe('progress rules', () => {
   it('publishes the derived condition-observation ability with w2 completion and keeps it idempotent', () => {
     let progress = createInitialProgress();
     expect(progress).toMatchObject({
-      schemaRevision: 3,
+      schemaRevision: 4,
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
     });
 

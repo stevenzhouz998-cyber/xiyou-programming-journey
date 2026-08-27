@@ -72,12 +72,12 @@ describe('course manifest', () => {
     expect(appSource).not.toMatch(/from ['"]\.\/course\/(?:course|formalCourse)['"]/);
   });
 
-  it('promotes week two and only W3-M1 without legacy fallback', () => {
+  it('promotes week two and W3-M1/M2 without legacy fallback', () => {
     expect(formalWeekOneMissions).toHaveLength(5);
     expect(formalWeekTwoMissions).toHaveLength(5);
-    expect(formalWeekThreeMissions).toHaveLength(1);
+    expect(formalWeekThreeMissions).toHaveLength(2);
     for (const mission of formalWeekOneMissions) expect(mission).not.toHaveProperty('expectedSequence');
-    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5', 'w2-m1', 'w2-m2', 'w2-m3', 'w2-m4', 'w2-m5', 'w3-m1']);
+    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5', 'w2-m1', 'w2-m2', 'w2-m3', 'w2-m4', 'w2-m5', 'w3-m1', 'w3-m2']);
     for (const mission of course.weeks.flatMap((week) => week.missions)) {
       if (formalIds.has(mission.id)) expect(mission).not.toHaveProperty('expectedSequence');
       else expect(mission).toHaveProperty('expectedSequence', expect.any(Array));
@@ -107,13 +107,13 @@ describe('course manifest', () => {
     expect(pageSource).not.toMatch(/legacySequence\s*\?\?\s*\[\]/);
   });
 
-  it('registers only w3-m1 as a formal executable mission without a legacy sequence', () => {
-    const mission = getMission('w3-m1');
+  it('registers w3-m1 and w3-m2 as formal executable missions without legacy sequences', () => {
+    const mission = getMission('w3-m2');
     expect(mission).toBeDefined();
-    expect(isFormalMissionOutline(getMissionOutline('w3-m1'))).toBe(true);
-    expect(isExecutableMissionId('w3-m1')).toBe(true);
+    expect(isFormalMissionOutline(getMissionOutline('w3-m2'))).toBe(true);
+    expect(isExecutableMissionId('w3-m2')).toBe(true);
     expect('expectedSequence' in mission!).toBe(false);
-    for (const id of ['w3-m2', 'w3-m3', 'w3-m4', 'w3-m5']) {
+    for (const id of ['w3-m3', 'w3-m4', 'w3-m5']) {
       expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
       expect(isExecutableMissionId(id)).toBe(false);
     }

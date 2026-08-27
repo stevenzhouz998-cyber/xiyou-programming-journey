@@ -2,6 +2,8 @@ import { createInitialProgress, parseProgress } from './schema';
 import type {
   ManorHelpCompletionEvidence,
   ManorHelpMissionSession,
+  CuilanBooleanCompletionEvidence,
+  CuilanBooleanMissionSession,
   ProgressV3,
 } from './types';
 
@@ -21,10 +23,12 @@ export type {
   FurnaceConditionMissionSession,
   HeavenlySignalBossMissionSession,
   ManorHelpMissionSession,
+  CuilanBooleanMissionSession,
   ProgressDocument,
   ProgressSettings,
   LearningAbilitiesV1,
   ManorHelpCompletionEvidence,
+  CuilanBooleanCompletionEvidence,
   MissionCompletionEvidenceV1,
   ProgressV1,
   ProgressV2,
@@ -38,6 +42,7 @@ import { getSessionSupport } from './session';
 import { grantMissionRewards } from './equipment';
 import { deriveConditionObservation } from './conditionObservation';
 import { compileManorHelpDraft, runManorHelp } from '../blockly/weekThreeManorHelpContract';
+import { compileCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract';
 
 export interface CompletionInput {
   stars: number;
@@ -127,6 +132,21 @@ function formalManorHelpCompletionEvidence(
   };
 }
 
+function formalCuilanCompletionEvidence(
+  session: CuilanBooleanMissionSession | undefined,
+  completedAt: string,
+  verifiedAt: string,
+): Extract<CuilanBooleanCompletionEvidence, { kind: 'formal-v3' }> | null {
+  if (!session || session.lastRun === null) return null;
+  let trace;
+  try { trace = compileCuilanBooleanDraft(session.workspace); } catch { return null; }
+  const run = runCuilanBooleanForDraft(session.workspace, trace);
+  if (!deeplyEqual(session.lastTrace, trace) || !deeplyEqual(session.lastRun, run)
+    || !run.completed || run.finalState !== 'demon-fled' || run.failureSnapshot !== null
+    || run.penalty.livesLost !== 0 || run.penalty.resourcesLost !== 0 || run.penalty.starsLost !== 0) return null;
+  return { kind: 'formal-v3', completedAt, verifiedAt, workspace: structuredClone(session.workspace), trace: structuredClone(trace), run: structuredClone(run) };
+}
+
 export function completeMission(progress: ProgressV3, missionId: string, input: CompletionInput): ProgressV3 {
   if (!allMissionOutlines.some((mission) => mission.id === missionId)) throw new Error('任务编号无效');
   const previous = progress.missions[missionId];
@@ -136,14 +156,18 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
   const formalEvidence = missionId === 'w3-m1'
     ? formalManorHelpCompletionEvidence(progress.sessions['w3-m1'], previous?.completedAt ?? now, now)
     : null;
+  const cuilanEvidence = missionId === 'w3-m2'
+    ? formalCuilanCompletionEvidence(progress.sessions['w3-m2'], previous?.completedAt ?? now, now)
+    : null;
   if (previous) {
     safeCount(previous.attempts, 1);
     safeCount(previous.hintsUsed, normalizedHints);
-    const existingEvidence = progress.missionCompletionEvidence['w3-m1'];
+    const existingEvidence = missionId === 'w3-m1' ? progress.missionCompletionEvidence['w3-m1'] : missionId === 'w3-m2' ? progress.missionCompletionEvidence['w3-m2'] : undefined;
     const upgradeLegacyW3 = missionId === 'w3-m1'
       && existingEvidence?.kind === 'legacy-preformal'
       && formalEvidence !== null;
-    if (previous.stars >= stars && !upgradeLegacyW3) return progress;
+    const upgradeLegacyCuilan = missionId === 'w3-m2' && existingEvidence?.kind === 'legacy-preformal' && cuilanEvidence !== null;
+    if (previous.stars >= stars && !upgradeLegacyW3 && !upgradeLegacyCuilan) return progress;
     const missions = {
       ...progress.missions,
       [missionId]: previous.stars >= stars ? previous : { ...previous, stars },
@@ -152,8 +176,8 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
       ...progress,
       missions,
       abilities: { conditionObservation: deriveConditionObservation(missions) },
-      missionCompletionEvidence: upgradeLegacyW3
-        ? { ...progress.missionCompletionEvidence, 'w3-m1': formalEvidence }
+      missionCompletionEvidence: upgradeLegacyW3 ? { ...progress.missionCompletionEvidence, 'w3-m1': formalEvidence! }
+        : upgradeLegacyCuilan ? { ...progress.missionCompletionEvidence, 'w3-m2': cuilanEvidence! }
         : progress.missionCompletionEvidence,
       savedAt: now,
     };
@@ -161,6 +185,7 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
   if (missionId === 'w3-m1' && formalEvidence === null) {
     throw new Error('W3-M1完成需要当前保存workspace的双情境成功运行证据');
   }
+  if (missionId === 'w3-m2' && cuilanEvidence === null) throw new Error('W3-M2完成需要当前保存workspace的正式Blockly成功证明');
   const attempts = safeCount(0, 1);
   const hintsUsed = safeCount(0, normalizedHints);
   const completedAt = now;
@@ -179,8 +204,8 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
     missions,
     equipment: grantMissionRewards(progress.equipment, missionId, completedAt),
     abilities: { conditionObservation: deriveConditionObservation(missions) },
-    missionCompletionEvidence: missionId === 'w3-m1'
-      ? { ...progress.missionCompletionEvidence, 'w3-m1': formalEvidence! }
+    missionCompletionEvidence: missionId === 'w3-m1' ? { ...progress.missionCompletionEvidence, 'w3-m1': formalEvidence! }
+      : missionId === 'w3-m2' ? { ...progress.missionCompletionEvidence, 'w3-m2': cuilanEvidence! }
       : progress.missionCompletionEvidence,
     savedAt: now,
   };
@@ -190,6 +215,14 @@ export function isMissionUnlocked(progress: ProgressV3, missionId: string): bool
   const index = allMissionOutlines.findIndex((mission) => mission.id === missionId);
   if (index < 0) return false;
   if (index === 0) return true;
+  if (missionId === 'w3-m3') {
+    // A migrated child keeps the historical W3-M2 unlock marker; a new player
+    // still needs a saved proof rather than a bare completion flag.
+    if (progress.missions['w3-m3']?.status === 'completed') return true;
+    const evidence = progress.missionCompletionEvidence['w3-m2'];
+    return progress.missions['w3-m2']?.status === 'completed'
+      && (evidence?.kind === 'formal-v3' || evidence?.kind === 'legacy-preformal');
+  }
   return progress.missions[allMissionOutlines[index - 1].id]?.status === 'completed';
 }
 
@@ -210,6 +243,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
   const furnaceConditionSession = week === 2 ? progress.sessions['w2-m4'] : undefined;
   const heavenlyBossSession = week === 2 ? progress.sessions['w2-m5'] : undefined;
   const manorHelpSession = week === 3 ? progress.sessions['w3-m1'] : undefined;
+  const cuilanBooleanSession = week === 3 ? progress.sessions['w3-m2'] : undefined;
   const sessionSupport = [
     ...(dragonSession ? getSessionSupport(dragonSession, 'w1-m1') : []),
     ...(ruyiSession ? getSessionSupport(ruyiSession, 'w1-m2') : []),
@@ -222,8 +256,9 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
     ...(furnaceConditionSession ? getSessionSupport(furnaceConditionSession, 'w2-m4') : []),
     ...(heavenlyBossSession ? getSessionSupport(heavenlyBossSession, 'w2-m5') : []),
     ...(manorHelpSession ? getSessionSupport(manorHelpSession, 'w3-m1') : []),
+    ...(cuilanBooleanSession ? getSessionSupport(cuilanBooleanSession, 'w3-m2') : []),
   ];
-  const sessionRecords = [dragonSession, ruyiSession, fourSeasSession, underworldSession, bossSession, horseCareSession, monkeyKingSession, peachElixirSession, furnaceConditionSession, heavenlyBossSession, manorHelpSession].filter(
+  const sessionRecords = [dragonSession, ruyiSession, fourSeasSession, underworldSession, bossSession, horseCareSession, monkeyKingSession, peachElixirSession, furnaceConditionSession, heavenlyBossSession, manorHelpSession, cuilanBooleanSession].filter(
     (session): session is NonNullable<typeof session> => session !== undefined,
   );
   const sessionRuns = sessionRecords.reduce(

@@ -25,8 +25,10 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   ))
   const conditionObservation = progress.abilities.conditionObservation
   const manorSession = progress.sessions['w3-m1']
-  const observationUses = new Map((manorSession?.conditionObservationUses ?? []).map((use) => [use.snapshotId, use])).size
-  const latestObservationUse = [...(manorSession?.conditionObservationUses ?? [])]
+  const cuilanSession = progress.sessions['w3-m2']
+  const allObservationUses = [...(manorSession?.conditionObservationUses ?? []), ...(cuilanSession?.conditionObservationUses ?? [])]
+  const observationUses = new Map(allObservationUses.map((use) => [use.snapshotId, use])).size
+  const latestObservationUse = [...allObservationUses]
     .sort((left, right) => right.usedAt.localeCompare(left.usedAt))[0]
   const latestObservationTime = latestObservationUse
     ? new Intl.DateTimeFormat('zh-CN', {
@@ -39,6 +41,7 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
       ? '已获得待稳定'
       : '已稳定'
   const completionEvidence = progress.missionCompletionEvidence['w3-m1']
+  const cuilanEvidence = progress.missionCompletionEvidence['w3-m2']
   return <><section className="parent-equipment-report" role="region" aria-label="装备与跨关学习工具">
     <div className="parent-equipment-heading"><span className="eyebrow">真实通关奖励</span><h2>装备与跨关学习工具</h2><p>这里只记录已安全保存的获得、装备和主动使用证据。</p></div>
     <div className="parent-equipment-columns">
@@ -60,6 +63,8 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     {latestObservationTime ? <p>{`最近使用：${latestObservationTime}`}</p> : null}
     {completionEvidence?.kind === 'formal-v3' ? <p>庄上求助正式 Blockly 证明已保存</p> : null}
     {completionEvidence?.kind === 'legacy-preformal' ? <p>历史兼容完成记录，尚非正式 Blockly 证明</p> : null}
+    {cuilanEvidence?.kind === 'formal-v3' ? <p>变化高翠兰正式 Blockly 证明已保存</p> : null}
+    {cuilanEvidence?.kind === 'legacy-preformal' ? <p>变化高翠兰历史兼容完成记录，尚非正式 Blockly 证明</p> : null}
   </section></>
 }
 

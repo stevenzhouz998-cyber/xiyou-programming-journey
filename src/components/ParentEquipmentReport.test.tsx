@@ -1,10 +1,11 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { completeMission, createInitialProgress } from '../progress/progress'
-import { createMissionSession, recordConditionObservationUse, recordRun, updateWorkspaceDraft } from '../progress/session'
+import { createMissionSession, recordConditionObservationUse, recordCuilanConditionObservationUse, recordRun, updateWorkspaceDraft } from '../progress/session'
 import { recordEquipmentEffectUse } from '../progress/equipmentEffectSession'
 import { equipItem } from '../progress/equipmentOperations'
 import { compileManorHelpDraft, createDefaultManorHelpDraft, runManorHelp } from '../blockly/weekThreeManorHelpContract'
+import { compileCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract'
 import { ParentEquipmentReport } from './ParentEquipmentReport'
 
 describe('ParentEquipmentReport', () => {
@@ -86,5 +87,18 @@ describe('ParentEquipmentReport', () => {
     const ability = screen.getAllByRole('region', { name: '火眼金睛学习能力' }).at(-1)
     expect(ability).toHaveTextContent('历史兼容完成记录，尚非正式 Blockly 证明')
     expect(ability).not.toHaveTextContent('庄上求助正式 Blockly 证明已保存')
+  })
+
+  it('summarizes W3-M2 observation use without exposing the child answer or trace', () => {
+    const now = '2026-08-26T00:00:00.000Z'
+    const session = createMissionSession('w3-m2', now)
+    const trace = compileCuilanBooleanDraft(session.workspace)
+    const failed = recordRun(session, runCuilanBooleanForDraft(session.workspace, trace), trace, now)
+    let progress = createInitialProgress()
+    progress.sessions['w3-m2'] = recordCuilanConditionObservationUse(failed, failed.failureSnapshot!.snapshotId, '2026-08-26T00:01:00.000Z')
+    render(<ParentEquipmentReport progress={progress} />)
+    const ability = screen.getAllByRole('region', { name: '火眼金睛学习能力' }).at(-1)!
+    expect(ability).toHaveTextContent('主动观察 1 次')
+    expect(ability).not.toHaveTextContent(/cuilan-|appearance-matches|identity-is|sourceBlockId|instructionId|trace/)
   })
 })

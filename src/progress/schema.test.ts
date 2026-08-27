@@ -13,7 +13,7 @@ import {
   FOUR_SEAS_WORKSPACE_LIMITS,
   type FourSeasWorkspaceDraftV1,
 } from '../blockly/fourSeasRegaliaDraft';
-import { createInitialProgress } from './progress';
+import { completeMission, createInitialProgress } from './progress';
 import { initialEquipment } from './equipment';
 import { migrateProgress, parseProgress, PROGRESS_SCHEMA_LIMITS } from './schema';
 import {
@@ -37,6 +37,7 @@ import {
   createDefaultManorHelpDraft,
   runManorHelp,
 } from '../blockly/weekThreeManorHelpContract';
+import { compileCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract';
 
 const fourSeasDraft = (): FourSeasWorkspaceDraftV1 => ({
   version: 1,
@@ -142,7 +143,7 @@ type ValidV3 = Omit<ProgressV3, 'sessions'> & {
 const validV3 = (): ValidV3 => ({
   ...validV2,
   version: 3 as const,
-  schemaRevision: 3 as const,
+  schemaRevision: 4 as const,
   missions: structuredClone(validV2.missions),
   sessions: { 'w1-m1': validSession() },
   equipment: initialEquipment(),
@@ -292,6 +293,14 @@ describe('progress schema', () => {
       expect(migrated.missionCompletionEvidence['w3-m1']).toEqual(marker);
       expect(migrateProgress(JSON.parse(JSON.stringify(migrated))).missionCompletionEvidence['w3-m1']).toEqual(marker);
     }
+  });
+  it('migrates pre-formal W3-M2 completion to legacy evidence without inventing a formal proof', () => {
+    const v3r2 = validV3Revision2();
+    v3r2.missions = { 'w3-m2': validMission };
+    const migrated = migrateProgress(v3r2);
+    expect(migrated.missionCompletionEvidence['w3-m2']).toEqual({
+      kind: 'legacy-preformal', completedAt: NOW, sourceVersion: 3, sourceSchemaRevision: 3,
+    });
   });
   it('round-trips a real compiled w1-m3 nested draft, trace, canonical run, ids, parents, and counters', () => {
     const session = validFourSeasSession();
@@ -522,7 +531,7 @@ describe('progress schema', () => {
     const progress = createInitialProgress();
     expect(progress).toMatchObject({
       version: 3,
-      schemaRevision: 3,
+      schemaRevision: 4,
       sessions: {},
       equipment: initialEquipment(),
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
@@ -541,7 +550,7 @@ describe('progress schema', () => {
     const migrated = migrateProgress(legacy);
     expect(migrated).toMatchObject({
       version: 3,
-      schemaRevision: 3,
+      schemaRevision: 4,
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
     });
     expect(migrated.equipment).toEqual({
@@ -726,7 +735,7 @@ describe('progress schema', () => {
     expect(migrateProgress(validV1)).toEqual({
       ...validV1,
       version: 3,
-      schemaRevision: 3,
+      schemaRevision: 4,
       settings: { ...validV1.settings, reducedMotionOverride: false },
       privacy: { localDataNoticeSeen: false },
       recovery: { lastRecoveredAt: null, source: null },
@@ -741,7 +750,7 @@ describe('progress schema', () => {
     expect(migrateProgress(validV2)).toEqual({
       ...validV2,
       version: 3,
-      schemaRevision: 3,
+      schemaRevision: 4,
       sessions: {},
       equipment: initialEquipment(),
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
@@ -764,7 +773,7 @@ describe('progress schema', () => {
 
     expect(migrated).toMatchObject({
       version: 3,
-      schemaRevision: 3,
+      schemaRevision: 4,
       missions,
       settings: legacy.settings,
       privacy: legacy.privacy,
@@ -1359,6 +1368,27 @@ describe('progress schema', () => {
 
   it.each([null, [], new Date(), Object.create(null)])('rejects non-plain document objects', (value) => {
     expect(() => migrateProgress(value)).toThrow('进度文件格式无效');
+  });
+
+  it('wraps malformed W3-M2 session parser errors in the unified progress-file error', () => {
+    const value = validV3() as any;
+    const session = createMissionSession('w3-m2', NOW);
+    session.totalRuns = 1;
+    session.lastRunAt = NOW;
+    value.sessions = { 'w3-m2': session };
+    expect(() => parseProgress(JSON.stringify(value))).toThrow(/进度文件格式无效/);
+  });
+
+  it('wraps forged formal W3-M2 proof workspace and trace errors in the unified progress-file error', () => {
+    const draft = createMissionSession('w3-m2', NOW).workspace;
+    draft.blocks.find((block) => block.id === 'cuilan-identity-condition')!.type = 'w3_cuilan_condition_identity_is_cuilan';
+    const trace = compileCuilanBooleanDraft(draft);
+    const session = recordRun(updateWorkspaceDraft(createMissionSession('w3-m2', NOW), draft, NOW), runCuilanBooleanForDraft(draft, trace), trace, NOW);
+    let progress = createInitialProgress(); progress.sessions['w3-m2'] = session; progress = completeMission(progress, 'w3-m2', { stars: 3, hintsUsed: 0 });
+    const forgedWorkspace = structuredClone(progress) as any; forgedWorkspace.missionCompletionEvidence['w3-m2'].workspace.blocks = [];
+    const forgedTrace = structuredClone(progress) as any; forgedTrace.missionCompletionEvidence['w3-m2'].trace = [];
+    expect(() => parseProgress(JSON.stringify(forgedWorkspace))).toThrow(/进度文件格式无效/);
+    expect(() => parseProgress(JSON.stringify(forgedTrace))).toThrow(/进度文件格式无效/);
   });
 
   it('keeps strict V2 validation as a legacy document contract', () => {

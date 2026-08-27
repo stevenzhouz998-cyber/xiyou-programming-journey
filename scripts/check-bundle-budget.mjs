@@ -7,9 +7,10 @@ import {
   GAME_SCENE_RAW_LIMIT,
   HOME_TOTAL_LIMIT,
   PHASER_RAW_LIMIT,
+  WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES,
   WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES,
 } from './budget-limits.mjs';
-export { WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES };
+export { WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES, WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES };
 export {
   DRAGON_PALACE_COLD_LOAD_MAX_BYTES,
   DRAGON_PALACE_COLD_BYTES,
@@ -38,6 +39,7 @@ const MODE_ROOTS = ['src/components/BlocklyWorkspace.tsx', 'src/components/RuyiS
 const SCENE_ROOTS = new Set(['src/components/GameScene.tsx', 'src/components/RuyiStaffScene.tsx', 'src/components/FourSeasRegaliaScene.tsx']);
 export const COLD_LOAD_ROUTE_CLOSURE_BUDGETS = Object.freeze({
   'src/components/WeekThreeManorHelpExperience.tsx': WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES,
+  'src/components/WeekThreeCuilanBooleanExperience.tsx': WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES,
 });
 const isPhaserSource = (key, chunk) => chunk.name === 'phaser' || /node_modules[\\/]phaser(?:[\\/]|$)/i.test(`${key} ${chunk.src ?? ''}`);
 const isBlocklySource = (key, chunk) => chunk.name === 'blockly-editor' || /node_modules[\\/]blockly(?:[\\/]|$)/i.test(`${key} ${chunk.src ?? ''}`);
@@ -48,6 +50,11 @@ const PRODUCTION_TEST_SENTINELS = [
   'fail-regalia-session',
   'fail-regalia-completion',
   '四海披挂测试存储故障',
+  'corrupt-cuilan-current',
+  'fail-cuilan-draft',
+  'fail-cuilan-run',
+  'fail-cuilan-observation',
+  'fail-cuilan-completion',
 ];
 const assertSafeFile = (file) => {
   const normalized = normalize(file);

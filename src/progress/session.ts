@@ -49,6 +49,14 @@ import {
   type ManorHelpRunResult,
   type ManorHelpWorkspaceDraftV1,
 } from '../blockly/weekThreeManorHelpContract';
+import {
+  compileCuilanBooleanDraft,
+  createDefaultCuilanBooleanDraft,
+  runCuilanBooleanForDraft,
+  type CuilanBooleanInstruction,
+  type CuilanBooleanRunResult,
+  type CuilanBooleanWorkspaceDraftV1,
+} from '../blockly/weekThreeCuilanBooleanContract';
 import type {
   DragonPalaceMissionSession,
   ExecutableMissionId,
@@ -63,6 +71,7 @@ import type {
   FurnaceConditionMissionSession,
   HeavenlySignalBossMissionSession,
   ManorHelpMissionSession,
+  CuilanBooleanMissionSession,
 } from './types';
 import { isExecutableMissionId } from './executableMissionIds';
 
@@ -113,6 +122,7 @@ export function createMissionSession(missionId: 'w2-m3', now: string): PeachElix
 export function createMissionSession(missionId: 'w2-m4', now: string): FurnaceConditionMissionSession;
 export function createMissionSession(missionId: 'w2-m5', now: string): HeavenlySignalBossMissionSession;
 export function createMissionSession(missionId: 'w3-m1', now: string): ManorHelpMissionSession;
+export function createMissionSession(missionId: 'w3-m2', now: string): CuilanBooleanMissionSession;
 export function createMissionSession(
   missionIdOrNow: ExecutableMissionId | string,
   suppliedNow?: string,
@@ -124,7 +134,9 @@ export function createMissionSession(
   }
   assertCanonicalIso(now);
   const session = {
-    workspace: missionIdOrNow === 'w3-m1'
+    workspace: missionIdOrNow === 'w3-m2'
+      ? createDefaultCuilanBooleanDraft()
+      : missionIdOrNow === 'w3-m1'
       ? createDefaultManorHelpDraft()
       : missionIdOrNow === 'w2-m5'
       ? createDefaultHeavenlySignalBossDraft()
@@ -141,7 +153,9 @@ export function createMissionSession(
     runtimeFailures: 0,
     compileFailures: 0,
     usedHintTiers: [],
-    conceptFailures: missionIdOrNow === 'w3-m1'
+    conceptFailures: missionIdOrNow === 'w3-m2'
+      ? { programStructure: 0, conditionSelection: 0, branchRouting: 0, sequencePrecondition: 0, completeness: 0 }
+      : missionIdOrNow === 'w3-m1'
       ? { programStructure: 0, conditionSelection: 0, branchRouting: 0, completeness: 0 }
       : missionIdOrNow === 'w2-m5'
       ? { programStructure: 0, loopCount: 0, eventRouting: 0, handlerSequence: 0, sequencePrecondition: 0, loopCondition: 0, conditionNeverMet: 0, completeness: 0 }
@@ -154,6 +168,9 @@ export function createMissionSession(
   }
   if (missionIdOrNow === 'w3-m1') {
     Object.assign(session, { scenarioResults: [], failureSnapshot: null, conditionObservationUses: [] });
+  }
+  if (missionIdOrNow === 'w3-m2') {
+    Object.assign(session, { checkpointResults: [], failureSnapshot: null, conditionObservationUses: [] });
   }
   return session as MissionSessionById[ExecutableMissionId];
 }
@@ -180,9 +197,10 @@ export function updateWorkspaceDraft(session: PeachElixirMissionSession, workspa
 export function updateWorkspaceDraft(session: FurnaceConditionMissionSession, workspace: FurnaceConditionWorkspaceDraftV1, now: string): FurnaceConditionMissionSession;
 export function updateWorkspaceDraft(session: HeavenlySignalBossMissionSession, workspace: HeavenlySignalBossWorkspaceDraftV1, now: string): HeavenlySignalBossMissionSession;
 export function updateWorkspaceDraft(session: ManorHelpMissionSession, workspace: ManorHelpWorkspaceDraftV1, now: string): ManorHelpMissionSession;
+export function updateWorkspaceDraft(session: CuilanBooleanMissionSession, workspace: CuilanBooleanWorkspaceDraftV1, now: string): CuilanBooleanMissionSession;
 export function updateWorkspaceDraft(
   session: MissionSession,
-  workspace: WorkspaceDraftV1 | RuyiWorkspaceDraftV1 | FourSeasWorkspaceDraftV1 | AdvancedWeekOneWorkspaceDraftV1 | HorseCareWorkspaceDraftV1 | MonkeyKingWorkspaceDraftV1 | PeachElixirWorkspaceDraftV1 | FurnaceConditionWorkspaceDraftV1 | HeavenlySignalBossWorkspaceDraftV1 | ManorHelpWorkspaceDraftV1,
+  workspace: WorkspaceDraftV1 | RuyiWorkspaceDraftV1 | FourSeasWorkspaceDraftV1 | AdvancedWeekOneWorkspaceDraftV1 | HorseCareWorkspaceDraftV1 | MonkeyKingWorkspaceDraftV1 | PeachElixirWorkspaceDraftV1 | FurnaceConditionWorkspaceDraftV1 | HeavenlySignalBossWorkspaceDraftV1 | ManorHelpWorkspaceDraftV1 | CuilanBooleanWorkspaceDraftV1,
   now: string,
 ): MissionSession {
   assertCanonicalIso(now);
@@ -199,6 +217,9 @@ export function updateWorkspaceDraft(
   if ('missionId' in workspace && workspace.missionId === 'w3-m1' && 'missionId' in session.workspace && session.workspace.missionId === 'w3-m1' && session.lastTrace.length > 0) {
     try { preservesManorHelpRun = JSON.stringify(compileManorHelpDraft(workspace)) === JSON.stringify(session.lastTrace); } catch { preservesManorHelpRun = false; }
     if (!preservesManorHelpRun) Object.assign(next, { lastTrace: [], lastRun: null, scenarioResults: [], failureSnapshot: null, lastRunAt: null });
+  }
+  if ('missionId' in workspace && workspace.missionId === 'w3-m2') {
+    Object.assign(next, { lastTrace: [], lastRun: null, checkpointResults: [], failureSnapshot: null, lastRunAt: null });
   }
   return next;
 }
@@ -243,14 +264,32 @@ export function recordRun(session: PeachElixirMissionSession, result: PeachElixi
 export function recordRun(session: FurnaceConditionMissionSession, result: FurnaceConditionRunResult, trace: FurnaceConditionInstruction[], now: string): FurnaceConditionMissionSession;
 export function recordRun(session: HeavenlySignalBossMissionSession, result: HeavenlySignalBossRunResult, trace: HeavenlySignalBossInstruction[], now: string): HeavenlySignalBossMissionSession;
 export function recordRun(session: ManorHelpMissionSession, result: ManorHelpRunResult, trace: ManorHelpInstruction[], now: string): ManorHelpMissionSession;
+export function recordRun(session: CuilanBooleanMissionSession, result: CuilanBooleanRunResult, trace: CuilanBooleanInstruction[], now: string): CuilanBooleanMissionSession;
 export function recordRun(
   session: MissionSession,
-  result: BattleRunResult | RuyiStaffBattleRunResult | FourSeasBattleRunResult | AdvancedWeekOneRunResult | HorseCareRunResult | MonkeyKingRunResult | PeachElixirRunResult | FurnaceConditionRunResult | HeavenlySignalBossRunResult | ManorHelpRunResult,
-  trace: DragonPalaceInstruction[] | RuyiStaffInstruction[] | FourSeasInstruction[] | AdvancedWeekOneInstruction[] | HorseCareInstruction[] | MonkeyKingInstruction[] | PeachElixirInstruction[] | FurnaceConditionInstruction[] | HeavenlySignalBossInstruction[] | ManorHelpInstruction[],
+  result: BattleRunResult | RuyiStaffBattleRunResult | FourSeasBattleRunResult | AdvancedWeekOneRunResult | HorseCareRunResult | MonkeyKingRunResult | PeachElixirRunResult | FurnaceConditionRunResult | HeavenlySignalBossRunResult | ManorHelpRunResult | CuilanBooleanRunResult,
+  trace: DragonPalaceInstruction[] | RuyiStaffInstruction[] | FourSeasInstruction[] | AdvancedWeekOneInstruction[] | HorseCareInstruction[] | MonkeyKingInstruction[] | PeachElixirInstruction[] | FurnaceConditionInstruction[] | HeavenlySignalBossInstruction[] | ManorHelpInstruction[] | CuilanBooleanInstruction[],
   now: string,
 ): MissionSession {
   assertCanonicalIso(now);
   const next = cloneSession(session);
+  if ('missionId' in next.workspace && next.workspace.missionId === 'w3-m2') {
+    const canonicalTrace = compileCuilanBooleanDraft(next.workspace);
+    const canonicalRun = runCuilanBooleanForDraft(next.workspace, canonicalTrace);
+    if (JSON.stringify(trace) !== JSON.stringify(canonicalTrace) || JSON.stringify(result) !== JSON.stringify(canonicalRun)) throw new Error('W3-M2运行必须来自当前可见图的确定性编译与重放');
+    const cuilan = next as CuilanBooleanMissionSession;
+    cuilan.totalRuns = increment(cuilan.totalRuns);
+    if (!canonicalRun.completed) {
+      cuilan.runtimeFailures = increment(cuilan.runtimeFailures);
+      const concept = canonicalRun.diagnostic?.concept;
+      if (concept === 'condition-selection') cuilan.conceptFailures.conditionSelection = increment(cuilan.conceptFailures.conditionSelection);
+      else if (concept === 'branch-routing') cuilan.conceptFailures.branchRouting = increment(cuilan.conceptFailures.branchRouting);
+      else if (concept === 'sequence-precondition') cuilan.conceptFailures.sequencePrecondition = increment(cuilan.conceptFailures.sequencePrecondition);
+      else cuilan.conceptFailures.completeness = increment(cuilan.conceptFailures.completeness);
+    }
+    Object.assign(cuilan, { lastTrace: structuredClone(canonicalTrace), lastRun: structuredClone(canonicalRun), checkpointResults: structuredClone(canonicalRun.checkpointResults), failureSnapshot: structuredClone(canonicalRun.failureSnapshot), lastRunAt: now, savedAt: now });
+    return cuilan;
+  }
   if ('missionId' in next.workspace && next.workspace.missionId === 'w3-m1') {
     const canonicalTrace = compileManorHelpDraft(next.workspace);
     const canonicalRun = runManorHelp(canonicalTrace);
@@ -307,19 +346,37 @@ export function recordConditionObservationUse(
   session: ManorHelpMissionSession,
   snapshotId: string,
   now: string,
-): ManorHelpMissionSession {
+): ManorHelpMissionSession;
+export function recordConditionObservationUse(
+  session: CuilanBooleanMissionSession,
+  snapshotId: string,
+  now: string,
+): CuilanBooleanMissionSession;
+export function recordConditionObservationUse(
+  session: ManorHelpMissionSession | CuilanBooleanMissionSession,
+  snapshotId: string,
+  now: string,
+): ManorHelpMissionSession | CuilanBooleanMissionSession {
   assertCanonicalIso(now);
   if (typeof snapshotId !== 'string' || snapshotId.length === 0 || snapshotId.length > 256) throw new Error('条件观察快照编号无效');
   if (session.failureSnapshot === null || session.failureSnapshot.snapshotId !== snapshotId) throw new Error('条件观察快照不是当前失败快照');
   if (session.conditionObservationUses.some((use) => use.snapshotId === snapshotId)) return session;
   const next = cloneSession(session);
-  next.conditionObservationUses.push({
-    snapshotId,
-    usedAt: now,
-    workspace: structuredClone(session.workspace),
-  });
+  if (next.workspace.missionId === 'w3-m1') {
+    (next as ManorHelpMissionSession).conditionObservationUses.push({ snapshotId, usedAt: now, workspace: structuredClone(next.workspace) });
+  } else {
+    (next as CuilanBooleanMissionSession).conditionObservationUses.push({ snapshotId, usedAt: now, workspace: structuredClone(next.workspace) });
+  }
   next.savedAt = now;
   return next;
+}
+
+export function recordCuilanConditionObservationUse(
+  session: CuilanBooleanMissionSession,
+  snapshotId: string,
+  now: string,
+): CuilanBooleanMissionSession {
+  return recordConditionObservationUse(session, snapshotId, now);
 }
 
 export function recordHint<TSession extends MissionSession>(
@@ -352,6 +409,7 @@ export function getSessionSupport(session: PeachElixirMissionSession, missionId:
 export function getSessionSupport(session: FurnaceConditionMissionSession, missionId: 'w2-m4'): string[];
 export function getSessionSupport(session: HeavenlySignalBossMissionSession, missionId: 'w2-m5'): string[];
 export function getSessionSupport(session: ManorHelpMissionSession, missionId: 'w3-m1'): string[];
+export function getSessionSupport(session: CuilanBooleanMissionSession, missionId: 'w3-m2'): string[];
 export function getSessionSupport(
   session: RuyiStaffMissionSession,
   missionId: 'w1-m2',
@@ -374,6 +432,18 @@ export function getSessionSupport(
       || manor.conceptFailures.completeness >= 2
     ) support.push('真假条件与分支');
     if (new Set(manor.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
+    return support;
+  }
+  if (missionId === 'w3-m2') {
+    const cuilan = session as CuilanBooleanMissionSession;
+    if (
+      cuilan.conceptFailures.programStructure >= 2
+      || cuilan.conceptFailures.conditionSelection >= 2
+      || cuilan.conceptFailures.branchRouting >= 2
+      || cuilan.conceptFailures.sequencePrecondition >= 2
+      || cuilan.conceptFailures.completeness >= 2
+    ) support.push('布尔判断与分支');
+    if (new Set(cuilan.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
     return support;
   }
   if (missionId === 'w2-m3') {

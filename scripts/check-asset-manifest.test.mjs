@@ -16,6 +16,7 @@ import {
   verifyRequiredWeekTwoFurnaceInventory,
   verifyRequiredWeekTwoHeavenlyBossInventory,
   verifyRequiredWeekThreeManorHelpInventory,
+  verifyRequiredWeekThreeCuilanBooleanInventory,
   verifyAssetManifest,
 } from './check-asset-manifest.mjs';
 
@@ -214,6 +215,21 @@ test('requires the exact two approved W2-M5 heavenly signal Boss assets', async 
       { path: 'assets/week-two-heavenly-boss/signal-dispatch-background.webp' }, { path: 'assets/week-two-heavenly-boss/heavenly-boss-states.webp' },
     ], promptRecords: [], source,
   }));
+});
+
+test('requires the exact two approved W3-M2 Cuilan assets, their source slots, and a clean alpha edge', () => {
+  const source = "import { assetUrl } from '../utils/assets'; const background = '/assets/week-three-cuilan/cuilan-disguise-background.webp'; const states = '/assets/week-three-cuilan/cuilan-boolean-states.webp'; const source = (path) => assetUrl(path); <img src={source(background)} /><img src={source(states)} /><div data-state-cell=\"0\" />";
+  const rows = [
+    { assetId: 'assets/week-three-cuilan/cuilan-disguise-background.webp', screenSlots: 'w3-m2 WeekThreeCuilanBooleanScene', qaStatus: 'visual-qa-passed' },
+    { assetId: 'assets/week-three-cuilan/cuilan-boolean-states.webp', screenSlots: 'w3-m2 WeekThreeCuilanBooleanScene', qaStatus: 'visual-qa-passed' },
+  ];
+  const files = [
+    { path: 'assets/week-three-cuilan/cuilan-disguise-background.webp', bytes: 172450, width: 1672, height: 941, hasAlpha: false },
+    { path: 'assets/week-three-cuilan/cuilan-boolean-states.webp', bytes: 350002, width: 2500, height: 700, hasAlpha: true, alphaEdgeMismatch: { inspectedPixels: 400, mismatchRatio: 0 } },
+  ];
+  assert.doesNotThrow(() => verifyRequiredWeekThreeCuilanBooleanInventory({ manifestRows: rows, publicFiles: files, promptRecords: [], source }));
+  assert.throws(() => verifyRequiredWeekThreeCuilanBooleanInventory({ manifestRows: rows, publicFiles: [...files, { path: 'assets/week-three-cuilan/extra.webp' }], promptRecords: [], source }), /unexpected|exactly/i);
+  assert.throws(() => verifyRequiredWeekThreeCuilanBooleanInventory({ manifestRows: rows, publicFiles: [{ ...files[0] }, { ...files[1], alphaEdgeMismatch: { inspectedPixels: 4, mismatchRatio: 0.05 } }], promptRecords: [], source }), /alpha-edge/i);
 });
 
 test('traces every approved Dragon Palace raster to a real formal scene slot', async () => {

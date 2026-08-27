@@ -33,6 +33,7 @@ import type { WeekTwoPeachElixirExperienceProps } from "./WeekTwoPeachElixirExpe
 import type { WeekTwoFurnaceConditionExperienceProps } from "./WeekTwoFurnaceConditionExperience";
 import type { WeekTwoHeavenlySignalBossExperienceProps } from "./WeekTwoHeavenlySignalBossExperience";
 import type { WeekThreeManorHelpExperienceProps } from "./WeekThreeManorHelpExperience";
+import type { WeekThreeCuilanBooleanExperienceProps } from "./WeekThreeCuilanBooleanExperience";
 
 const ArrowLeft = lazy(() =>
   import("@phosphor-icons/react/dist/icons/ArrowLeft").then((module) => ({
@@ -94,6 +95,8 @@ const loadWeekThreeManorHelpExperience = () =>
   import("./WeekThreeManorHelpExperience").then((module) => ({
     default: module.WeekThreeManorHelpExperience,
   }));
+const loadWeekThreeCuilanBooleanExperience = () =>
+  import('./WeekThreeCuilanBooleanExperience').then((module) => ({ default: module.WeekThreeCuilanBooleanExperience }));
 
 export function FourSeasRegaliaRouteBoundary({
   loader = loadFourSeasRegaliaExperience,
@@ -292,6 +295,11 @@ export function WeekThreeManorHelpRouteBoundary({
       </Suspense>
     </LazySectionBoundary>
   );
+}
+
+export function WeekThreeCuilanBooleanRouteBoundary({ loader = loadWeekThreeCuilanBooleanExperience, reloadPage, ...props }: WeekThreeCuilanBooleanExperienceProps & { loader?: () => Promise<{ default: ComponentType<WeekThreeCuilanBooleanExperienceProps> }>; reloadPage?: () => void }) {
+  const Experience = useMemo(() => lazy(loader), [loader]);
+  return <LazySectionBoundary label="变化高翠兰任务" reloadPage={reloadPage}><Suspense fallback={<p className="mission-tools-loading" role="status">变化高翠兰任务加载中，请稍候……</p>}><Experience {...props} /></Suspense></LazySectionBoundary>;
 }
 
 function playAudio(path: string, muted: boolean) {
@@ -904,6 +912,15 @@ function MissionPageForId({
               />
             ) : mission.id === 'w3-m1' ? (
               <WeekThreeManorHelpRouteBoundary
+                reducedMotion={reducedMotion}
+                muted={progress.settings.muted}
+                locked={completionSave !== null}
+                onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)}
+                onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
+                onInteractionLockChange={setBattleInteractionLocked}
+              />
+            ) : mission.id === 'w3-m2' ? (
+              <WeekThreeCuilanBooleanRouteBoundary
                 reducedMotion={reducedMotion}
                 muted={progress.settings.muted}
                 locked={completionSave !== null}

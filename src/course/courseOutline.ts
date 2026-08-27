@@ -61,7 +61,7 @@ export function getMissionOutline(id: string): CourseOutlineMission | undefined 
 }
 
 export function isFormalMissionOutline(outline: CourseOutlineMission | undefined): boolean {
-  return outline?.week === 1 || outline?.id === 'w2-m1' || outline?.id === 'w2-m2' || outline?.id === 'w2-m3' || outline?.id === 'w2-m4' || outline?.id === 'w2-m5' || outline?.id === 'w3-m1';
+  return outline?.week === 1 || outline?.id === 'w2-m1' || outline?.id === 'w2-m2' || outline?.id === 'w2-m3' || outline?.id === 'w2-m4' || outline?.id === 'w2-m5' || outline?.id === 'w3-m1' || outline?.id === 'w3-m2';
 }
 
 function deriveHints(extension: MissionPresentationExtension, stepCount: number): HintSet {

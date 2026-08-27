@@ -92,6 +92,15 @@ export const formalWeekThreeMissions: FormalMissionSpec[] = [
       beat('高太公迎请', '高太公得知取经人一行到来，迎请他们入庄说明困扰。'),
     ],
   }),
+  formalMission('w3-m2', {
+    subtitle: '同一时刻，外形和身份可以一真一假',
+    objective: '让两道条件分别判断伪装外形与真实身份',
+    canon: formalWeekThreeCanon,
+    storyBeats: [
+      beat('变化等候', '高翠兰安全离开后，悟空变作她的模样等候妖怪。'),
+      beat('取得线索并显形', '妖怪未认出悟空；悟空得知姓名住处后显出本相，妖怪逃走。'),
+    ],
+  }),
 ];
 
 export function getFormalMission(id: string): FormalMissionSpec | undefined {

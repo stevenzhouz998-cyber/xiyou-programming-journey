@@ -55,7 +55,6 @@ export const course: CourseManifest = {
     deriveWeekFromOutline('week-3', { subtitle: '看条件，再选择正确分支', canon: c18to19,
       missions: [
         ...formalWeekThreeMissions,
-        mission('w3-m2', { subtitle: '身份与外形分开判断', objective: '用条件区分变化后的外形与真实身份', canon: c18to19, storyBeats: [beat('悟空变化', '悟空变作高翠兰模样等待妖怪。'), beat('妖怪现身', '妖怪不知是悟空变化，来到庄中。')], expectedSequence: ['transform', 'wait', 'if_demon_arrives', 'reveal_identity'] }),
         mission('w3-m3', { subtitle: '让分支跟着条件走', objective: '按原著线索选择追赶与交锋分支', canon: c18to19, storyBeats: [beat('追至云栈洞', '妖怪败走，悟空追到云栈洞。'), beat('说出来历', '妖怪听说是取经人，交代自己受菩萨点化的来历。')], expectedSequence: ['chase', 'reach_cave', 'fight', 'if_pilgrim_named', 'tell_origin'] }),
         mission('w3-m4', { subtitle: '满足条件才加入取经队伍', objective: '组合八戒归队的必要条件', canon: c18to19, storyBeats: [beat('拜见唐僧', '妖怪随悟空前来拜见唐僧。'), beat('得名八戒', '唐僧为他摩顶受戒，取别名八戒。')], expectedSequence: ['meet_tang', 'tell_guanyin_order', 'receive_precepts', 'join_team'] }),
         mission('w3-m5', { subtitle: '用条件复原收徒经过', objective: '完整复现第十八至十九回的条件链', canon: c18to19, storyBeats: [beat('由求助到降魔', '悟空依据高才所述前往庄中。'), beat('由交锋到收徒', '云栈洞交锋后，八戒随唐僧取经。')], expectedSequence: ['hear_report', 'transform', 'chase', 'learn_origin', 'join_team'] }),

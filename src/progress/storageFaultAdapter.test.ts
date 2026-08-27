@@ -4,8 +4,9 @@ import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import type { FourSeasInstruction } from '../battle/types';
 import { storageFaultAdapter as e2eStorageFaultAdapter } from '../../e2e/support/storageFaultAdapter';
 import { completeMission, createInitialProgress, serializeProgress } from './progress';
-import { createMissionSession, recordConditionObservationUse, recordHint, recordRun, updateWorkspaceDraft } from './session';
+import { createMissionSession, recordConditionObservationUse, recordCuilanConditionObservationUse, recordHint, recordRun, updateWorkspaceDraft } from './session';
 import { compileManorHelpDraft, createDefaultManorHelpDraft, runManorHelp } from '../blockly/weekThreeManorHelpContract';
+import { compileCuilanBooleanDraft, createDefaultCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract';
 import { compileHeavenlySignalBossDraft, createDefaultHeavenlySignalBossDraft, runHeavenlySignalBoss } from '../blockly/weekTwoHeavenlySignalBossContract';
 import { storageFaultAdapter as productionStorageFaultAdapter } from './storageFaultAdapter';
 import type { ProgressV3 } from './types';
@@ -78,6 +79,25 @@ function withSuccessfulManorRun(base = withManorDraft()) {
     sessions: { ...base.sessions, 'w3-m1': recordRun(session, runManorHelp(trace), trace, '2026-08-26T00:02:00.000Z') },
     savedAt: '2026-08-26T00:02:00.000Z',
   };
+}
+
+function withCuilanDraft(base = createInitialProgress()) {
+  const session = createMissionSession('w3-m2', NOW);
+  return { ...base, sessions: { ...base.sessions, 'w3-m2': updateWorkspaceDraft(session, session.workspace, NOW) }, savedAt: NOW };
+}
+
+function withFailedCuilanRun(base = withCuilanDraft()) {
+  const session = base.sessions['w3-m2']!;
+  const trace = compileCuilanBooleanDraft(session.workspace);
+  return { ...base, sessions: { ...base.sessions, 'w3-m2': recordRun(session, runCuilanBooleanForDraft(session.workspace, trace), trace, '2026-08-27T00:01:00.000Z') }, savedAt: '2026-08-27T00:01:00.000Z' };
+}
+
+function withSuccessfulCuilanRun(base = withCuilanDraft()) {
+  const draft = createDefaultCuilanBooleanDraft();
+  draft.blocks.find((block) => block.id === 'cuilan-identity-condition')!.type = 'w3_cuilan_condition_identity_is_cuilan';
+  const trace = compileCuilanBooleanDraft(draft);
+  const session = updateWorkspaceDraft(base.sessions['w3-m2']!, draft, '2026-08-27T00:01:00.000Z');
+  return { ...base, sessions: { ...base.sessions, 'w3-m2': recordRun(session, runCuilanBooleanForDraft(draft, trace), trace, '2026-08-27T00:02:00.000Z') }, savedAt: '2026-08-27T00:02:00.000Z' };
 }
 
 describe('storage fault adapters', () => {
@@ -190,6 +210,25 @@ describe('storage fault adapters', () => {
       completedAt: NOW,
     };
     expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: staleCompletionTime })).toBeNull();
+  });
+
+  it('injects only exact W3-M2 draft, failed-run, observation, and formal completion deltas', () => {
+    const storage = new MemoryStorage();
+    const base = createInitialProgress(); const draft = withCuilanDraft(base);
+    storeCurrent(storage, base, 'fail-cuilan-draft');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: draft })).toMatch(/fault/i);
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: { ...draft, learnerName: 'unrelated' } })).toBeNull();
+    const failed = withFailedCuilanRun(draft);
+    storeCurrent(storage, draft, 'fail-cuilan-run');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: failed })).toMatch(/fault/i);
+    const observed = { ...failed, sessions: { ...failed.sessions, 'w3-m2': recordCuilanConditionObservationUse(failed.sessions['w3-m2']!, failed.sessions['w3-m2']!.failureSnapshot!.snapshotId, '2026-08-27T00:02:00.000Z') }, savedAt: '2026-08-27T00:02:00.000Z' };
+    storeCurrent(storage, failed, 'fail-cuilan-observation');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: observed })).toMatch(/fault/i);
+    const successful = withSuccessfulCuilanRun(); const completed = completeMission(successful, 'w3-m2', { stars: 3, hintsUsed: 0 });
+    storeCurrent(storage, successful, 'fail-cuilan-completion');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: completed })).toMatch(/fault/i);
+    const forged = structuredClone(completed); delete forged.missionCompletionEvidence['w3-m2'];
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: forged })).toBeNull();
   });
 
   it('rejects W3 completion when the persisted success run has a diagnostic or penalty', () => {

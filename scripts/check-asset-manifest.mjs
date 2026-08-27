@@ -13,6 +13,7 @@ export const REQUIRED_TOOL = 'OpenAI built-in image_gen';
 export const REQUIRED_PROVENANCE = 'generated in-project with built-in image_gen; provenance verified';
 export const REQUIRED_ART_DIRECTION = 'commercial children’s learning game, refined Chinese ink-and-color illustration, Journey to the West Dragon Palace, warm jade/cinnabar/gold palette, readable silhouettes, no text, no logo, no emoji, no UI frame.';
 export const REQUIRED_ADVANCED_ART_DIRECTION = "polished 3D children's storybook game";
+export const REQUIRED_CUILAN_ART_DIRECTION = "children's storybook";
 
 const EXPECTED_COLUMNS = [
   'Asset ID',
@@ -49,7 +50,7 @@ const REQUIRED_METADATA = [
 ];
 
 const QA_STATUSES = new Set(['planned', 'generated', 'provenance-verified', 'visual-qa-passed', 'rejected']);
-const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/'];
+const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/'];
 
 const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
   ['assets/dragon-palace/background.webp', [
@@ -124,6 +125,11 @@ const WEEK_THREE_MANOR_HELP_SOURCE_PATH = 'src/components/WeekThreeManorHelpScen
 const REQUIRED_WEEK_THREE_MANOR_HELP_ASSETS = [
   'assets/week-three-manor-help/manor-help-background.webp',
   'assets/week-three-manor-help/manor-message-states.webp',
+];
+const WEEK_THREE_CUILAN_SOURCE_PATH = 'src/components/WeekThreeCuilanBooleanScene.tsx';
+const REQUIRED_WEEK_THREE_CUILAN_ASSETS = [
+  'assets/week-three-cuilan/cuilan-disguise-background.webp',
+  'assets/week-three-cuilan/cuilan-boolean-states.webp',
 ];
 
 function isPhaserSceneClass(node, sourceFile) {
@@ -627,7 +633,9 @@ function verifyPromptRecords(promptRecords, manifestRows) {
     const record = recordsByAnchor.get(anchor);
     if (!record) throw new Error(`Asset manifest: prompt anchor ${anchor} is missing for ${row.assetId}.`);
     if (record.promptId !== linkedPromptId) throw new Error(`Asset manifest: prompt ${linkedPromptId.startsWith('DP-') ? 'DP label' : 'identifier'} ${linkedPromptId} does not match heading ${record.heading}.`);
-    const requiredArtDirection = row.assetId.startsWith('assets/week-one-advanced/') || row.assetId.startsWith('assets/week-two-heaven/') || row.assetId.startsWith('assets/week-two-great-sage/') || row.assetId.startsWith('assets/week-two-peach-elixir/') || row.assetId.startsWith('assets/week-two-furnace/') || row.assetId.startsWith('assets/week-two-heavenly-boss/') || row.assetId.startsWith('assets/week-three-manor-help/')
+    const requiredArtDirection = row.assetId.startsWith('assets/week-three-cuilan/')
+      ? REQUIRED_CUILAN_ART_DIRECTION
+      : row.assetId.startsWith('assets/week-one-advanced/') || row.assetId.startsWith('assets/week-two-heaven/') || row.assetId.startsWith('assets/week-two-great-sage/') || row.assetId.startsWith('assets/week-two-peach-elixir/') || row.assetId.startsWith('assets/week-two-furnace/') || row.assetId.startsWith('assets/week-two-heavenly-boss/') || row.assetId.startsWith('assets/week-three-manor-help/')
       ? REQUIRED_ADVANCED_ART_DIRECTION
       : REQUIRED_ART_DIRECTION;
     if (!record.prompt.includes(requiredArtDirection)) {
@@ -1098,6 +1106,24 @@ export function verifyRequiredWeekThreeManorHelpInventory({ manifestRows, public
   return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
 }
 
+export function verifyRequiredWeekThreeCuilanBooleanInventory({ manifestRows, publicFiles, promptRecords = [], sourcePath = WEEK_THREE_CUILAN_SOURCE_PATH, source, mode = 'check' }) {
+  const directory = 'assets/week-three-cuilan/';
+  const rows = familyRows(manifestRows, directory);
+  const files = familyFiles(publicFiles, directory);
+  requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: REQUIRED_WEEK_THREE_CUILAN_ASSETS, label: 'Week Three Cuilan boolean' });
+  for (const row of rows) if (row.screenSlots !== 'w3-m2 WeekThreeCuilanBooleanScene') throw new Error(`Asset manifest: ${row.assetId} screen slots must be exactly w3-m2 WeekThreeCuilanBooleanScene.`);
+  const stateFile = files.find((file) => file.path === 'assets/week-three-cuilan/cuilan-boolean-states.webp');
+  if (stateFile?.hasAlpha !== true) throw new Error('Asset manifest: Week Three Cuilan states must preserve a true alpha channel.');
+  if (!stateFile.alphaEdgeMismatch || stateFile.alphaEdgeMismatch.inspectedPixels === 0 || stateFile.alphaEdgeMismatch.mismatchRatio > MAX_WEEK_THREE_ALPHA_EDGE_MISMATCH_RATIO) throw new Error('Asset manifest: Week Three Cuilan states fail the alpha-edge contamination gate.');
+  if (typeof source !== 'string') throw new Error(`Asset manifest: ${sourcePath} source text is required for WeekThreeCuilanBooleanScene slot verification.`);
+  const literals = source.match(/\/assets\/week-three-cuilan\/[a-z0-9-]+\.webp/g) ?? [];
+  const expectedLiterals = REQUIRED_WEEK_THREE_CUILAN_ASSETS.map((assetId) => `/${assetId}`);
+  if (literals.length !== expectedLiterals.length || new Set(literals).size !== expectedLiterals.length || expectedLiterals.some((assetId) => !literals.includes(assetId))) throw new Error(`Asset manifest: ${sourcePath} must contain exactly the two approved Week Three Cuilan image paths.`);
+  if (!source.includes("import { assetUrl } from '../utils/assets'") || (source.match(/<img\b/g) ?? []).length !== 2 || !source.includes('data-state-cell')) throw new Error(`Asset manifest: ${sourcePath} must render the two approved assetUrl slots through its visible five-cell scene.`);
+  if (promptRecords.length === 0) return { assetCount: rows.length, totalBytes: files.reduce((sum, file) => sum + (file.bytes ?? 0), 0), mode };
+  return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
+}
+
 export function verifyRequiredDragonPalaceInventory({
   manifestRows,
   publicFiles,
@@ -1284,7 +1310,7 @@ export async function collectAssetFiles(assetRoot, assetDirectory = 'assets/drag
       }
       const metadata = await sharp(bytes, { failOn: 'error', limitInputPixels: 20_000_000 }).metadata();
       let alphaEdgeMismatch;
-      if (assetDirectory === 'assets/week-three-manor-help' && relativePath === 'manor-message-states.webp') {
+      if ((assetDirectory === 'assets/week-three-manor-help' && relativePath === 'manor-message-states.webp') || (assetDirectory === 'assets/week-three-cuilan' && relativePath === 'cuilan-boolean-states.webp')) {
         const { data, info } = await sharp(bytes, { failOn: 'error', limitInputPixels: 20_000_000 }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
         alphaEdgeMismatch = measureAlphaEdgeMismatch(data, info.width, info.height);
       }
@@ -1314,6 +1340,7 @@ async function main() {
   const weekTwoFurnaceRoot = join(root, 'public', 'assets', 'week-two-furnace');
   const weekTwoHeavenlyBossRoot = join(root, 'public', 'assets', 'week-two-heavenly-boss');
   const weekThreeManorHelpRoot = join(root, 'public', 'assets', 'week-three-manor-help');
+  const weekThreeCuilanRoot = join(root, 'public', 'assets', 'week-three-cuilan');
   const { manifestRows, promptRecords } = parseAssetManifest(await readFile(manifestPath, 'utf8'));
   const publicFiles = [
     ...await collectAssetFiles(dragonPalaceRoot),
@@ -1324,6 +1351,7 @@ async function main() {
     ...await collectAssetFiles(weekTwoFurnaceRoot, 'assets/week-two-furnace'),
     ...await collectAssetFiles(weekTwoHeavenlyBossRoot, 'assets/week-two-heavenly-boss'),
     ...await collectAssetFiles(weekThreeManorHelpRoot, 'assets/week-three-manor-help'),
+    ...await collectAssetFiles(weekThreeCuilanRoot, 'assets/week-three-cuilan'),
   ];
   const sourceFiles = new Map(await Promise.all([
     'src/components/GameScene.tsx',
@@ -1363,6 +1391,7 @@ async function main() {
   const weekTwoFurnaceResult = verifyRequiredWeekTwoFurnaceInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_TWO_FURNACE_SOURCE_PATH), 'utf8'), mode });
   const weekTwoHeavenlyBossResult = verifyRequiredWeekTwoHeavenlyBossInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_TWO_HEAVENLY_BOSS_SOURCE_PATH), 'utf8'), mode });
   const weekThreeManorHelpResult = verifyRequiredWeekThreeManorHelpInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_MANOR_HELP_SOURCE_PATH), 'utf8'), mode });
+  const weekThreeCuilanResult = verifyRequiredWeekThreeCuilanBooleanInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_CUILAN_SOURCE_PATH), 'utf8'), mode });
   console.log(`Dragon Palace assets: ${dragonResult.assetCount} files, ${dragonResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Advanced Week One assets: ${advancedResult.assetCount} files, ${advancedResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Two horse-care assets: ${weekTwoHorseResult.assetCount} files, ${weekTwoHorseResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
@@ -1371,6 +1400,7 @@ async function main() {
   console.log(`Week Two furnace assets: ${weekTwoFurnaceResult.assetCount} files, ${weekTwoFurnaceResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Two heavenly Boss assets: ${weekTwoHeavenlyBossResult.assetCount} files, ${weekTwoHeavenlyBossResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Three manor-help assets: ${weekThreeManorHelpResult.assetCount} files, ${weekThreeManorHelpResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
+  console.log(`Week Three Cuilan assets: ${weekThreeCuilanResult.assetCount} files, ${weekThreeCuilanResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
