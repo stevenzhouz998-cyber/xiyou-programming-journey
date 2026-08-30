@@ -10,11 +10,12 @@ const LATER = '2026-08-27T00:01:00.000Z';
 
 describe('W3-M2 revision 5 session', () => {
   it('migrates revision 3 while preserving a completed legacy w3-m2 without inventing a session', () => {
-    const old = { ...createInitialProgress(), schemaRevision: 3 as const, missions: {
+    const { works: _works, ...legacy } = createInitialProgress();
+    const old = { ...legacy, schemaRevision: 3 as const, missions: {
       'w3-m2': { status: 'completed' as const, stars: 3 as const, attempts: 1, hintsUsed: 0, completedAt: NOW },
     } };
     const migrated = migrateProgress(old);
-    expect(migrated.schemaRevision).toBe(7);
+    expect(migrated.schemaRevision).toBe(8);
     expect(migrated.missionCompletionEvidence['w3-m2']).toMatchObject({ kind: 'legacy-preformal' });
     expect(migrated.sessions['w3-m2']).toBeUndefined();
   });
@@ -88,7 +89,8 @@ describe('W3-M2 revision 5 session', () => {
   });
 
   it('retains a migrated W3-M2 legacy unlock while a new completion still requires formal proof', () => {
-    const legacy = migrateProgress({ ...createInitialProgress(), schemaRevision: 3 as const, missions: {
+    const { works: _works, ...oldProgress } = createInitialProgress();
+    const legacy = migrateProgress({ ...oldProgress, schemaRevision: 3 as const, missions: {
       'w3-m2': { status: 'completed' as const, stars: 3 as const, attempts: 1, hintsUsed: 0, completedAt: NOW },
     } });
     expect(isMissionUnlocked(legacy, 'w3-m3')).toBe(true);

@@ -9,6 +9,10 @@ import { compileCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/
 import { compileWeekThreeBossDraft } from '../blockly/weekThreeBossCompiler'
 import { runWeekThreeBossDraft } from '../blockly/weekThreeBossContract'
 import { createSolvedWeekThreeBossDraftForTest } from '../blockly/weekThreeBossTestHelpers'
+import { compileWeekFourMappingDraft } from '../blockly/weekFourMappingCompiler'
+import { compareWeekFourMappingTraces } from '../blockly/weekFourMappingContract'
+import { SOLVED_WEEK_FOUR_MAPPING_PYTHON, parseWeekFourMappingPython } from '../engine/weekFourPythonMappingGrammar'
+import { createWeekFourMappingSession, recordWeekFourMappingRun, updateWeekFourMappingCode } from '../progress/weekFourMappingSession'
 import { ParentEquipmentReport } from './ParentEquipmentReport'
 
 describe('ParentEquipmentReport', () => {
@@ -131,5 +135,22 @@ describe('ParentEquipmentReport', () => {
     expect(report).toHaveTextContent('正式 Blockly 证明已保存')
     expect(report).not.toHaveTextContent(/boss-manor|instructionId|sourceBlockId|canon-bajie-ready|pilgrimage-explicit|full trace/)
     expect(screen.getByRole('region', { name: '火眼金睛学习能力' })).toHaveTextContent('主动观察 1 次')
+  })
+
+  it('summarizes W4 mapping safely and keeps code, answer tokens, and raw IDs out of the parent view', () => {
+    let progress = createInitialProgress()
+    const draft = updateWeekFourMappingCode(createWeekFourMappingSession('2026-08-30T00:00:00.000Z'), SOLVED_WEEK_FOUR_MAPPING_PYTHON, '2026-08-30T00:00:01.000Z')
+    const blocklyTrace = compileWeekFourMappingDraft(draft.workspace).trace
+    const pythonTrace = parseWeekFourMappingPython(draft.pythonCode).trace
+    progress.sessions['w4-m1'] = recordWeekFourMappingRun(draft, { blocklyTrace, pythonTrace, run: compareWeekFourMappingTraces(blocklyTrace, pythonTrace) }, '2026-08-30T00:00:02.000Z')
+    progress.missionCompletionEvidence['w3-m5'] = { kind: 'formal-v3' } as never
+    progress = completeMission(progress, 'w4-m1', { stars: 3, hintsUsed: 0 })
+    render(<ParentEquipmentReport progress={progress} />)
+    const report = screen.getByRole('region', { name: '第四周积木与 Python 对照摘要' })
+    expect(report).toHaveTextContent('已运行 1 次')
+    expect(report).toHaveTextContent('映射差异 0 次')
+    expect(report).toHaveTextContent('基础设施故障 0 次')
+    expect(report).toHaveTextContent('正式双轨证明与对照作品已保存')
+    expect(report).not.toHaveTextContent(/if identity|appearance|mapping-condition|w4-m1-first-python-mapping|白骨精/)
   })
 })

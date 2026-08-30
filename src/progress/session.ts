@@ -83,6 +83,8 @@ import {
   type WeekThreeBossRunResult,
   type WeekThreeBossWorkspaceDraftV1,
 } from '../blockly/weekThreeBossContract';
+import { createWeekFourMappingSession } from './weekFourMappingSession';
+import type { WeekFourMappingMissionSession } from './weekFourMappingSession';
 import type {
   DragonPalaceMissionSession,
   ExecutableMissionId,
@@ -155,6 +157,7 @@ export function createMissionSession(missionId: 'w3-m1', now: string): ManorHelp
 export function createMissionSession(missionId: 'w3-m4', now: string): BajieJoiningMissionSession;
 export function createMissionSession(missionId: 'w3-m5', now: string): WeekThreeBossMissionSession;
 export function createMissionSession(missionId: 'w3-m3', now: string): YunzhanDialogueMissionSession;
+export function createMissionSession(missionId: 'w4-m1', now: string): WeekFourMappingMissionSession;
 export function createMissionSession(missionId: 'w3-m2', now: string): CuilanBooleanMissionSession;
 export function createMissionSession(
   missionIdOrNow: ExecutableMissionId | string,
@@ -166,6 +169,7 @@ export function createMissionSession(
     throw new Error('任务编号无效');
   }
   assertCanonicalIso(now);
+  if (missionIdOrNow === 'w4-m1') return createWeekFourMappingSession(now) as AnyMissionSession;
   const session = {
     workspace: missionIdOrNow === 'w3-m5'
       ? createDefaultWeekThreeBossDraft()

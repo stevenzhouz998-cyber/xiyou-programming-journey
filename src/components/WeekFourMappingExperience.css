@@ -1,0 +1,21 @@
+.week-four-mapping-experience { min-width: 0; display: grid; gap: 1rem; }
+.week-four-mapping-layout { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 1rem; }
+.week-four-mapping-workspace { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.week-four-mapping-scene, .week-four-mapping-blockly-panel, .week-four-mapping-python-panel, .week-four-mapping-feedback, .week-four-mapping-observation { min-width: 0; border: 1px solid var(--ink-200, #c8d0d4); border-radius: 16px; padding: 1rem; background: var(--paper, #fffdf6); }
+.week-four-mapping-scene img { max-width: 100%; height: auto; display: block; border-radius: 12px; }
+.week-four-mapping-scene > img + img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; object-position: left center; }
+.week-four-mapping-scene > img[data-state="mismatch"] { object-position: center center; }
+.week-four-mapping-scene > img[data-state="matched"] { object-position: right center; }
+.week-four-mapping-scene article { border-inline-start: 4px solid #52766b; padding-inline-start: .75rem; }
+.week-four-mapping-blockly-host { min-width: 0; height: 360px; overflow: hidden; }
+.week-four-mapping-blockly-host .injectionDiv, .week-four-mapping-blockly-host .blocklySvg { width: 100%; height: 100%; }
+.week-four-mapping-codemirror { min-height: 180px; overflow: auto; border-radius: 8px; background: #142321; color: #f5eed9; padding: .75rem; }
+.week-four-mapping-codemirror .cm-content, .week-four-mapping-codemirror .cm-scroller { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: .75rem; line-height: 1.45; }
+.week-four-mapping-codemirror .cm-scroller { overflow-x: auto; }
+.week-four-mapping-codemirror pre { margin: 0; white-space: pre-wrap; }
+.week-four-mapping-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.week-four-mapping-feedback p { width: 100%; margin: 0; }
+.week-four-mapping-experience :focus-visible { outline: 3px solid #b85f22; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .week-four-mapping-experience *, .week-four-mapping-experience *::before, .week-four-mapping-experience *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+@media (max-width: 900px) { .week-four-mapping-layout, .week-four-mapping-workspace { grid-template-columns: minmax(0, 1fr); } .week-four-mapping-blockly-host { height: 320px; } }
+@media (max-width: 390px) { .week-four-mapping-scene, .week-four-mapping-blockly-panel, .week-four-mapping-python-panel, .week-four-mapping-feedback, .week-four-mapping-observation { border-radius: 10px; padding: .75rem; } }

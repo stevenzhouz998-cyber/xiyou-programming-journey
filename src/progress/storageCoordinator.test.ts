@@ -11,6 +11,7 @@ import {
 import { saveProgressCoordinated } from './storageCoordinator';
 import { repairLoadedProgressCoordinated } from './storageRepair';
 import { clearProgressCoordinated, importProgressCoordinated } from './storageCoordinatorParent';
+import { createWeekFourMappingSession, updateWeekFourMappingCode } from './weekFourMappingSession';
 import type { ProgressV3 } from './types';
 
 class MemoryStorage implements Storage {
@@ -49,6 +50,22 @@ const immediateLockManager = {
 };
 
 describe('cross-tab storage coordinator', () => {
+  it('never lets a stale W4 appearance draft overwrite a newer saved identity draft', async () => {
+    const storage = new MemoryStorage();
+    const base = createInitialProgress();
+    storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(base));
+    storage.setItem(REVISION_PROGRESS_KEY, '0');
+    const appearance = { ...base, sessions: { 'w4-m1': createWeekFourMappingSession('2026-08-30T00:00:00.000Z') } };
+    const identity = {
+      ...base,
+      sessions: {
+        'w4-m1': updateWeekFourMappingCode(appearance.sessions['w4-m1']!, appearance.sessions['w4-m1']!.pythonCode.replace('appearance', 'identity'), '2026-08-30T00:00:01.000Z'),
+      },
+    };
+    expect(await saveProgressCoordinated(identity, 0, { storage, lockManager: immediateLockManager })).toMatchObject({ status: 'saved', revision: 1 });
+    expect(await saveProgressCoordinated(appearance, 0, { storage, lockManager: immediateLockManager })).toMatchObject({ status: 'conflict', expectedRevision: 0, actualRevision: 1 });
+    expect(JSON.parse(storage.getItem(CURRENT_PROGRESS_KEY)!).sessions['w4-m1'].pythonCode).toContain('identity');
+  });
   it('ignores browser test fault sentinels in the production coordinator', async () => {
     const storage = new MemoryStorage();
     storage.setItem(CURRENT_PROGRESS_KEY, serializeProgress(createInitialProgress()));

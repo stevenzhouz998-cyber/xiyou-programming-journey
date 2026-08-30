@@ -72,6 +72,8 @@ import type {
   WeekThreeBossRunResult,
   WeekThreeBossWorkspaceDraftV1,
 } from '../blockly/weekThreeBossContract';
+import type { WeekFourMappingMissionSession } from './weekFourMappingSession';
+export type { WeekFourMappingMissionSession } from './weekFourMappingSession';
 
 export interface MissionProgress {
   status: 'completed';
@@ -344,12 +346,36 @@ export type WeekThreeBossCompletionEvidence =
     run: WeekThreeBossRunResult;
   };
 
+export type WeekFourMappingCompletionEvidence =
+  | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 1 | 2 | 3; sourceSchemaRevision: null | 1 | 2 | 3 | 4 | 5 | 6 | 7 }
+  | {
+    kind: 'formal-v3'; completedAt: string; verifiedAt: string;
+    workspace: import('../blockly/weekFourMappingDraft').WeekFourMappingWorkspaceDraftV1;
+    pythonCode: string;
+    blocklyTrace: import('../blockly/weekFourMappingContract').WeekFourMappingTraceItem[];
+    pythonTrace: import('../blockly/weekFourMappingContract').WeekFourMappingTraceItem[];
+    run: import('../blockly/weekFourMappingContract').WeekFourMappingRunResult;
+    workId: 'w4-m1-first-python-mapping';
+  };
+
+export interface WeekFourMappingWorkV1 {
+  kind: 'blockly-python-mapping-v1';
+  workId: 'w4-m1-first-python-mapping'; missionId: 'w4-m1'; title: '第一份积木与 Python 对照经卷';
+  workspace: import('../blockly/weekFourMappingDraft').WeekFourMappingWorkspaceDraftV1;
+  pythonCode: string;
+  blocklyTrace: import('../blockly/weekFourMappingContract').WeekFourMappingTraceItem[];
+  pythonTrace: import('../blockly/weekFourMappingContract').WeekFourMappingTraceItem[];
+  run: import('../blockly/weekFourMappingContract').WeekFourMappingRunResult;
+  createdAt: string; verifiedAt: string;
+}
+
 export interface MissionCompletionEvidenceV1 {
   'w3-m1'?: ManorHelpCompletionEvidence;
   'w3-m2'?: CuilanBooleanCompletionEvidence;
   'w3-m3'?: YunzhanDialogueCompletionEvidence;
   'w3-m4'?: BajieJoiningCompletionEvidence;
   'w3-m5'?: WeekThreeBossCompletionEvidence;
+  'w4-m1'?: WeekFourMappingCompletionEvidence;
 }
 
 export interface MissionSessionById {
@@ -368,6 +394,7 @@ export interface MissionSessionById {
   'w3-m3': YunzhanDialogueMissionSession;
   'w3-m4': BajieJoiningMissionSession;
   'w3-m5': WeekThreeBossMissionSession;
+  'w4-m1': WeekFourMappingMissionSession;
 }
 
 export type ExecutableMissionId = keyof MissionSessionById;
@@ -377,7 +404,7 @@ export type MissionSessions = { [MissionId in keyof MissionSessionById]?: Missio
 
 export interface ProgressV3 {
   version: 3;
-  schemaRevision: 3 | 4 | 5 | 6 | 7;
+  schemaRevision: 3 | 4 | 5 | 6 | 7 | 8;
   learnerName: string;
   missions: Record<string, MissionProgress>;
   settings: ProgressSettings;
@@ -390,6 +417,7 @@ export interface ProgressV3 {
   equipment: RewardEquipmentStateV1;
   abilities: LearningAbilitiesV1;
   missionCompletionEvidence: MissionCompletionEvidenceV1;
+  works: Partial<Record<'w4-m1-first-python-mapping', WeekFourMappingWorkV1>>;
   savedAt: string;
 }
 

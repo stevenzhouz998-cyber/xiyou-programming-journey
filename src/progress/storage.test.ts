@@ -100,6 +100,7 @@ function legacyV2(name = 'V2 行者') {
     equipment: _equipment,
     abilities: _abilities,
     missionCompletionEvidence: _missionCompletionEvidence,
+    works: _works,
     ...withoutV3OnlyFields
   } = current;
   return JSON.stringify({

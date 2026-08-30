@@ -18,6 +18,7 @@ import { compileFourSeasRegaliaWorkspace } from '../blockly/fourSeasRegaliaCompi
 import { loadFourSeasWorkspaceDraft, type FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft';
 import { updateWorkspaceDraft } from '../progress/session';
 import type { CoordinatedSaveResult } from '../progress/storageCoordinator';
+import { updateWeekFourMappingCode } from '../progress/weekFourMappingSession';
 
 const originalStorage = localStorage;
 const originalLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
@@ -133,6 +134,19 @@ function Probe() {
 }
 
 describe('ProgressContext persistence status', () => {
+  it('routes W4 code changes through the same revision-checked mission-session transaction', async () => {
+    installStorage({});
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    let result!: CoordinatedSaveResult;
+    await act(async () => {
+      result = await latestContext!.updateMissionSession('w4-m1', (session) => (
+        updateWeekFourMappingCode(session, session.pythonCode.replace('appearance', 'identity'), '2026-08-30T00:00:01.000Z')
+      ));
+    });
+    expect(result).toMatchObject({ status: 'saved', revision: 1 });
+    expect(latestContext!.progress.sessions['w4-m1']).toMatchObject({ pythonCode: expect.stringContaining('identity'), lastRun: null });
+    expect(localStorage.getItem(REVISION_PROGRESS_KEY)).toBe('1');
+  });
   it('persists W3-M4 through the typed session and hint APIs, including a failed write', async () => {
     const storage = installStorage({});
     render(<ProgressProvider><Probe /></ProgressProvider>);

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { course, getMission, validateCourse } from './course';
 import { courseOutline, getMissionOutline, isFormalMissionOutline } from './courseOutline';
 import { commandLabel } from '../engine/commandLabels';
-import { formalWeekOneMissions, formalWeekThreeMissions, formalWeekTwoMissions } from './formalCourse';
+import { formalWeekFourCanon, formalWeekOneMissions, formalWeekThreeMissions, formalWeekTwoMissions } from './formalCourse';
 import { isExecutableMissionId } from '../progress/executableMissionIds';
 
 describe('course manifest', () => {
@@ -77,7 +77,7 @@ describe('course manifest', () => {
     expect(formalWeekTwoMissions).toHaveLength(5);
     expect(formalWeekThreeMissions).toHaveLength(5);
     for (const mission of formalWeekOneMissions) expect(mission).not.toHaveProperty('expectedSequence');
-    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5', 'w2-m1', 'w2-m2', 'w2-m3', 'w2-m4', 'w2-m5', 'w3-m1', 'w3-m2', 'w3-m3', 'w3-m4', 'w3-m5']);
+    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5', 'w2-m1', 'w2-m2', 'w2-m3', 'w2-m4', 'w2-m5', 'w3-m1', 'w3-m2', 'w3-m3', 'w3-m4', 'w3-m5', 'w4-m1']);
     for (const mission of course.weeks.flatMap((week) => week.missions)) {
       if (formalIds.has(mission.id)) expect(mission).not.toHaveProperty('expectedSequence');
       else expect(mission).toHaveProperty('expectedSequence', expect.any(Array));
@@ -133,6 +133,23 @@ describe('course manifest', () => {
     const boss = getMission('w3-m5');
     expect(isFormalMissionOutline(getMissionOutline('w3-m5'))).toBe(true);
     expect(boss).not.toHaveProperty('expectedSequence');
+  });
+
+  it('registers w4-m1 as formal Blockly-to-Python mapping without legacy answers', () => {
+    const mission = getMission('w4-m1');
+    expect(mission).toBeDefined();
+    expect(isFormalMissionOutline(getMissionOutline('w4-m1'))).toBe(true);
+    expect(isExecutableMissionId('w4-m1')).toBe(true);
+    expect(mission?.mode).toBe('blockly');
+    expect(mission?.canon.chapters).toEqual([27]);
+    expect(mission?.canon).toEqual(formalWeekFourCanon);
+    expect(mission).not.toHaveProperty('expectedSequence');
+    expect(mission).not.toHaveProperty('expectedOutput');
+    expect(mission).not.toHaveProperty('starterCode');
+    for (const id of ['w4-m2', 'w4-m3', 'w4-m4', 'w4-m5']) {
+      expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
+      expect(isExecutableMissionId(id)).toBe(false);
+    }
   });
 
   it('gives every selectable command a child-readable Chinese label', () => {

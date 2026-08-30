@@ -36,6 +36,8 @@ This manifest gates the formal Dragon Palace media in `public/assets/dragon-pala
 | assets/week-three-bajie-joining/bajie-joining-states.webp | 408a52ad14ee571c4f3d2ce2b30ba88d06ef5078e44de0feba40f7c3774dc2ec | Transparent three-state Zhu Wuneng explanation, Bajie naming, and westward luggage-departure sheet | OpenAI built-in image_gen | [Prompt W3M4-002](#prompt-w3m4-002-bajie-joining-states) | 1500x500 | generated in-project with built-in image_gen; provenance verified | w3-m4 WeekThreeBajieJoiningScene | visual-qa-passed |
 | assets/week-three-boss/week-three-boss-background.webp | 62de44e39f0978dc03933629e65942cf29c2b06c09bd3d73e79a3ce9edae481e | Bright Gao Village, Yunzhai cave, and westward-road panorama for the single W3-M5 story stage | OpenAI built-in image_gen | [Prompt W3M5-001](#prompt-w3m5-001-boss-background) | 1280x720 | generated in-project with built-in image_gen; provenance verified | w3-m5 WeekThreeBossScene | visual-qa-passed |
 | assets/week-three-boss/week-three-boss-states.webp | dc3905b48fa147da497b7260e22f62beed3b617de31dd3dd757a31116f03a4f1 | Four nonviolent 3D storybook state vignettes for the W3-M5 recap | OpenAI built-in image_gen | [Prompt W3M5-002](#prompt-w3m5-002-boss-states) | 1024x1024 | generated in-project with built-in image_gen; provenance verified | w3-m5 WeekThreeBossScene | visual-qa-passed |
+| assets/week-four-mapping/white-tiger-ridge-background.webp | be1e3a53a62a22f9154f385b548c37e446e1f6a4e1f946dab87332483809e266 | Bright, child-safe White Tiger Ridge entrance background for the Blockly-to-Python mapping stage | OpenAI built-in image_gen | [Prompt W4M1-001](#prompt-w4m1-001-white-tiger-ridge-background) | 1280x720 | generated in-project with built-in image_gen; provenance verified | w4-m1 WeekFourMappingScene | visual-qa-passed |
+| assets/week-four-mapping/mapping-states.webp | 65ef2327d5a25d1b5349fcbfaad32f59412dea7ad89ed55025dbc7d9cfa4d247 | Transparent three-cell waiting, mismatch, and mapping-proven state sprite for the Blockly-to-Python stage | OpenAI built-in image_gen | [Prompt W4M1-002](#prompt-w4m1-002-mapping-states) | 1536x512 | generated in-project with built-in image_gen; provenance verified | w4-m1 WeekFourMappingScene | visual-qa-passed |
 
 ## Prompt records
 
@@ -122,6 +124,35 @@ Primary request: Four evenly spaced children-safe vignettes showing Gao Cai seek
 Style/medium: polished bright 3D Chinese children's storybook illustration.
 Constraints: no text, pseudo-text, watermark, combat, weapons, marriage, humiliation, violence, emoji, UI or borders.
 Processing: accepted OpenAI built-in image_gen source `exec-0bedfc29-5f65-43f6-9d5c-68bb8d64ca78.png` was resized only to 1024x1024 and encoded as WebP quality 58. Original-size visual QA found no lettering, combat, binding, adult content or UI.
+```
+
+### Prompt W4M1-001 white-tiger-ridge-background
+
+```text
+Use case: illustration-story
+Asset type: W4-M1 积木变代码儿童编程关卡的16:9宽幅白虎岭入口背景
+Primary request: 明亮精致的3D中国儿童绘本风格，西游记第二十七回白虎岭入口，只作为Blockly到Python过渡关卡的安全故事背景。
+Scene/backdrop: 清晨山岭入口、层叠浅色岩石、松树、柔和云雾和通往远方的山路；前景宽阔平坦，留出左中部供证据卡和角色状态叠加。
+Subject: 不出现人物、妖怪、武器、尸体或骷髅。
+Style/medium: polished bright 3D Chinese children's storybook game environment, jade green, warm gold sunlight, restrained cinnabar accents, rounded readable forms.
+Composition/framing: 16:9 landscape, intended final crop 1280x720, readable at phone width, generous clear foreground, no UI frame.
+Lighting/mood: clear hopeful morning, curious and thoughtful, never frightening.
+Constraints: no text, no letters, no Chinese characters, no pseudo-writing, no logo, no watermark, no UI, no combat, no attack, no injury, no corpse, no skeleton, no horror, no people, no weapons.
+Processing: accepted OpenAI built-in image_gen source `exec-dca4ab00-baef-407d-bd71-ef43d6b0420f.png` (1672x941 RGB) was original-size inspected by the generation owner. Sharp only center-cropped the near-16:9 source to 1280x720 and encoded WebP (`quality: 82`, `effort: 6`, `smartSubsample: true`); no redraw, compositing, alpha processing, or content edits. The source remains under `.codex/generated_images` outside this repository. The recorded W4-M1 five-project visual QA covers 320, 390, 768 and 1440 layouts, crop clarity, readable states, focus, reduced motion and mute; the manifest status is `visual-qa-passed`.
+```
+
+### Prompt W4M1-002 mapping-states
+
+```text
+Use case: illustration-story
+Asset type: W4-M1 等待对照、发现差异、映射一致三态透明横向 sprite
+Primary request: 明亮精致的3D中国儿童绘本风格，一张1536x512透明背景横向三格状态图；左、中、右为三个边界精确、各512x512且互不重叠的单元：左格是卷轴与积木等待对照，中格是两条柔和光路出现一个差异节点，右格是两条光路准确汇合并点亮经卷。
+Subject: 使用卷轴、真实形态的Blockly积木轮廓和整洁Python代码卷轴作为叙事物件；不出现可读代码文字，不出现人物或妖怪。
+Style/medium: polished bright 3D Chinese children's storybook game props, jade green, warm ivory, soft gold, restrained cinnabar.
+Composition/framing: exact 3:1 horizontal strip, three non-overlapping equal 512x512 cells aligned left-to-right, identical scale and camera, generous transparent padding inside each cell, readable when CSS crops exactly one cell on mobile.
+Lighting/mood: patient learning, gentle discovery, confident success.
+Constraints: genuine transparent background, no text, no letters, no Chinese characters, no pseudo-writing, no emoji, no logo, no watermark, no UI frame, no combat, no weapon, no injury, no corpse, no skeleton, no horror, no specific woman, old woman or old man disguise.
+Processing: accepted OpenAI built-in image_gen source `exec-d4e244e1-cc94-4515-bbae-f248a490255d.png` (2172x724 RGBA, exact 3:1) was original-size inspected by the generation owner. Sharp only proportionally resized it to 1536x512 and encoded WebP (`quality: 90`, `alphaQuality: 100`, `effort: 6`, `smartSubsample: true`), preserving alpha without chroma keying, background removal, redraw, crop, compositing, or content edits. The three source and shipping cells therefore remain exactly 0–511, 512–1023, and 1024–1535. The source remains under `.codex/generated_images` outside this repository. The recorded W4-M1 five-project visual QA covers all three cells at 320, 390, 768 and 1440 widths, alpha clarity, focus, reduced motion and mute; the manifest status is `visual-qa-passed`.
 ```
 
 ### Prompt W3M2-001 cuilan disguise background

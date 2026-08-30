@@ -12,7 +12,11 @@ import { compileHeavenlySignalBossDraft, createDefaultHeavenlySignalBossDraft, r
 import { compileWeekThreeBossDraft } from '../blockly/weekThreeBossCompiler';
 import { runWeekThreeBossDraft } from '../blockly/weekThreeBossContract';
 import { createSolvedWeekThreeBossDraftForTest } from '../blockly/weekThreeBossTestHelpers';
-import { WEEK_THREE_BOSS_STORAGE_FAULT_MODES, storageFaultAdapter as productionStorageFaultAdapter } from './storageFaultAdapter';
+import { compileWeekFourMappingDraft } from '../blockly/weekFourMappingCompiler';
+import { compareWeekFourMappingTraces } from '../blockly/weekFourMappingContract';
+import { SOLVED_WEEK_FOUR_MAPPING_PYTHON, parseWeekFourMappingPython } from '../engine/weekFourPythonMappingGrammar';
+import { createWeekFourMappingSession, recordWeekFourMappingObservation, recordWeekFourMappingRun, updateWeekFourMappingCode } from './weekFourMappingSession';
+import { WEEK_FOUR_MAPPING_STORAGE_FAULT_MODES, WEEK_THREE_BOSS_STORAGE_FAULT_MODES, storageFaultAdapter as productionStorageFaultAdapter } from './storageFaultAdapter';
 import type { ProgressV3 } from './types';
 
 const CURRENT_KEY = 'xiyou-programming-progress-v3';
@@ -136,6 +140,25 @@ function withSuccessfulBossRun(base = withBossDraft()) {
   return { ...base, sessions: { ...base.sessions, 'w3-m5': recordRun(session, runWeekThreeBossDraft(draft), compiled.trace, '2026-08-30T00:02:00.000Z') }, savedAt: '2026-08-30T00:02:00.000Z' };
 }
 
+function withW4Draft(base = createInitialProgress()) {
+  const session = updateWeekFourMappingCode(createWeekFourMappingSession(NOW), SOLVED_WEEK_FOUR_MAPPING_PYTHON, '2026-08-30T00:00:01.000Z');
+  return { ...base, sessions: { ...base.sessions, 'w4-m1': session }, savedAt: session.savedAt };
+}
+function withW4Run(base = withW4Draft()) {
+  const session = base.sessions['w4-m1']!;
+  const blocklyTrace = compileWeekFourMappingDraft(session.workspace).trace;
+  const pythonTrace = parseWeekFourMappingPython(session.pythonCode).trace;
+  const saved = recordWeekFourMappingRun(session, { blocklyTrace, pythonTrace, run: compareWeekFourMappingTraces(blocklyTrace, pythonTrace) }, '2026-08-30T00:00:02.000Z');
+  return { ...base, sessions: { ...base.sessions, 'w4-m1': saved }, savedAt: saved.savedAt };
+}
+function withW4FailedRun(base = createInitialProgress()) {
+  const session = createWeekFourMappingSession(NOW);
+  const blocklyTrace = compileWeekFourMappingDraft(session.workspace).trace;
+  const pythonTrace = parseWeekFourMappingPython(session.pythonCode).trace;
+  const saved = recordWeekFourMappingRun(session, { blocklyTrace, pythonTrace, run: compareWeekFourMappingTraces(blocklyTrace, pythonTrace) }, '2026-08-30T00:00:02.000Z');
+  return { ...base, sessions: { ...base.sessions, 'w4-m1': saved }, savedAt: saved.savedAt };
+}
+
 describe('storage fault adapters', () => {
   it('keeps the E2E fault adapter free of W3 runtime imports', () => {
     const source = readFileSync('e2e/support/storageFaultAdapter.ts', 'utf8');
@@ -154,6 +177,34 @@ describe('storage fault adapters', () => {
     expect(WEEK_THREE_BOSS_STORAGE_FAULT_MODES).toEqual([
       'fail-week-three-boss-draft', 'fail-week-three-boss-run', 'fail-week-three-boss-observation', 'fail-week-three-boss-completion', 'corrupt-week-three-boss-current',
     ]);
+  });
+
+  it('declares five isolated W4 write faults without enabling them in production', () => {
+    expect(WEEK_FOUR_MAPPING_STORAGE_FAULT_MODES).toEqual([
+      'fail-w4-m1-draft', 'fail-w4-m1-run', 'fail-w4-m1-observation', 'fail-w4-m1-work', 'fail-w4-m1-completion',
+    ]);
+  });
+
+  it('injects only exact W4 draft, run, and atomic work/completion deltas', () => {
+    const storage = new MemoryStorage();
+    const base = createInitialProgress(); const draft = withW4Draft(base); const run = withW4Run(draft);
+    storeCurrent(storage, base, 'fail-w4-m1-draft');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: draft })).toMatch(/fault/i);
+    storeCurrent(storage, draft, 'fail-w4-m1-run');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: run })).toMatch(/fault/i);
+    const forCompletion = structuredClone(run); forCompletion.missionCompletionEvidence['w3-m5'] = { kind: 'formal-v3' } as never;
+    const completed = completeMission(forCompletion, 'w4-m1', { stars: 3, hintsUsed: 0 });
+    storeCurrent(storage, forCompletion, 'fail-w4-m1-work');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: completed })).toMatch(/fault/i);
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: { ...completed, works: {} } })).toBeNull();
+    storeCurrent(storage, forCompletion, 'fail-w4-m1-completion');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: completed })).toMatch(/fault/i);
+
+    const failed = withW4FailedRun();
+    const observedSession = recordWeekFourMappingObservation(failed.sessions['w4-m1']!, '2026-08-30T00:00:03.000Z');
+    const observed = { ...failed, sessions: { ...failed.sessions, 'w4-m1': observedSession }, savedAt: observedSession.savedAt };
+    storeCurrent(storage, failed, 'fail-w4-m1-observation');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: observed })).toMatch(/fault/i);
   });
 
   it('injects only an exact w1-m3 draft delta and ignores settings or hint writes', () => {

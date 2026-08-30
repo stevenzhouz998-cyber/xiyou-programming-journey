@@ -44,11 +44,11 @@ describe('W3-M3 session 保存合同', () => {
   });
 
   it('将 revision 4 升至 5，并把既有 W3-M3 完成记录隔离为 legacy-preformal', () => {
-    const legacy = createInitialProgress();
+    const { works: _works, ...legacy } = createInitialProgress();
     legacy.schemaRevision = 4;
     legacy.missions['w3-m3'] = { status: 'completed', stars: 2, attempts: 1, hintsUsed: 0, completedAt: NOW };
     const migrated = migrateProgress(legacy);
-    expect(migrated.schemaRevision).toBe(7);
+    expect(migrated.schemaRevision).toBe(8);
     expect(migrated.missionCompletionEvidence['w3-m3']).toMatchObject({ kind: 'legacy-preformal', completedAt: NOW });
   });
 });

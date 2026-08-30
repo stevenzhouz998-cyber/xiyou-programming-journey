@@ -21,6 +21,7 @@ import {
   verifyRequiredWeekThreeYunzhanDialogueInventory,
   verifyRequiredWeekThreeBajieJoiningInventory,
   verifyRequiredWeekThreeBossInventory,
+  verifyRequiredWeekFourMappingInventory,
   verifyAssetManifest,
 } from './check-asset-manifest.mjs';
 
@@ -300,6 +301,33 @@ test('requires the exact two W3-M5 WebP assets, live assetUrl scene slots, and c
   assert.throws(() => verifyRequiredWeekThreeBossInventory({ manifestRows: rows.map((item) => ({ ...item, qaStatus: 'generated' })), publicFiles: files, promptRecords, source, mode: 'verify' }), /visual-qa-passed/i);
   assert.throws(() => verifyRequiredWeekThreeBossInventory({ manifestRows: rows, publicFiles: [files[0], { ...files[1], bytes: 512 * 1024 + 1 }], promptRecords, source }), /512 KiB/i);
   assert.throws(() => verifyRequiredWeekThreeBossInventory({ manifestRows: rows, publicFiles: files, promptRecords, source: source.replace('assetUrl(path)', "'/not-live.webp'") }), /assetUrl|source/i);
+});
+
+test('requires the exact two W4-M1 assets, 1536x512 alpha state cells, and two live scene assetUrl slots', () => {
+  const background = 'assets/week-four-mapping/white-tiger-ridge-background.webp';
+  const states = 'assets/week-four-mapping/mapping-states.webp';
+  const source = `import { assetUrl } from '../utils/assets';
+    export function WeekFourMappingScene() { return <><img src={assetUrl('/${background}')} /><img src={assetUrl('/${states}')} /></>; }`;
+  const rows = [
+    row({ assetId: background, purpose: 'White Tiger Ridge entry background', promptOrSourceReference: '[Prompt W4M1-001](#prompt-w4m1-001-white-tiger-ridge-background)', dimensions: '1280x720', screenSlots: 'w4-m1 WeekFourMappingScene', qaStatus: 'provenance-verified' }),
+    row({ assetId: states, purpose: 'Transparent three-cell Blockly to Python mapping state sheet', promptOrSourceReference: '[Prompt W4M1-002](#prompt-w4m1-002-mapping-states)', dimensions: '1536x512', screenSlots: 'w4-m1 WeekFourMappingScene', qaStatus: 'provenance-verified' }),
+  ];
+  const files = [
+    file({ path: background, bytes: 180_000, width: 1280, height: 720, hasAlpha: false }),
+    file({ path: states, bytes: 200_000, width: 1536, height: 512, hasAlpha: true }),
+  ];
+  const prompts = [
+    promptRecord({ heading: 'Prompt W4M1-001 white-tiger-ridge-background', anchor: '#prompt-w4m1-001-white-tiger-ridge-background', prompt: "Style/medium: polished bright 3D Chinese children's storybook game environment" }),
+    promptRecord({ heading: 'Prompt W4M1-002 mapping-states', anchor: '#prompt-w4m1-002-mapping-states', prompt: "Style/medium: polished bright 3D Chinese children's storybook game props" }),
+  ];
+  assert.doesNotThrow(() => verifyRequiredWeekFourMappingInventory({ manifestRows: rows, publicFiles: files, promptRecords: prompts, source }));
+  assert.throws(() => verifyRequiredWeekFourMappingInventory({ manifestRows: rows, publicFiles: [...files, file({ path: 'assets/week-four-mapping/extra.webp' })], promptRecords: prompts, source }), /exactly|unexpected/i);
+  assert.throws(() => verifyRequiredWeekFourMappingInventory({ manifestRows: rows, publicFiles: [files[0], { ...files[1], width: 1535 }], promptRecords: prompts, source }), /1536x512|three equal/i);
+  assert.throws(() => verifyRequiredWeekFourMappingInventory({ manifestRows: rows, publicFiles: [files[0], { ...files[1], hasAlpha: false }], promptRecords: prompts, source }), /alpha/i);
+  assert.throws(() => verifyRequiredWeekFourMappingInventory({ manifestRows: rows, publicFiles: files, promptRecords: prompts, source: source.replace(`assetUrl('/${states}')`, "'/not-live.webp'") }), /assetUrl|scene/i);
+  assert.throws(() => verifyRequiredWeekFourMappingInventory({ manifestRows: rows.map((item) => ({ ...item, screenSlots: 'wrong' })), publicFiles: files, promptRecords: prompts, source }), /screen slots/i);
+  assert.throws(() => verifyRequiredWeekFourMappingInventory({ manifestRows: rows, publicFiles: [{ ...files[0], bytes: 512 * 1024 + 1 }, files[1]], promptRecords: prompts, source }), /512 KiB/i);
+  assert.throws(() => verifyRequiredWeekFourMappingInventory({ manifestRows: rows, publicFiles: files, promptRecords: prompts, source, mode: 'verify' }), /visual-qa-passed/i);
 });
 
 test('rejects W3-M4 scene-slot bypasses that discard, shadow, or dead-code the imported assetUrl binding', () => {

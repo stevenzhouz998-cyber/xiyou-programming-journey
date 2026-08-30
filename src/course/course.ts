@@ -7,6 +7,8 @@ import {
   formalWeekTwoMissions,
   formalWeekThreeCanon,
   formalWeekThreeMissions,
+  formalWeekFourCanon,
+  formalWeekFourMissions,
 } from './formalCourse';
 
 const SOURCE_ROOT = 'https://zh.wikisource.org/zh-hans/西游记';
@@ -31,7 +33,7 @@ const c18to19 = {
   chapters: [18, 19],
   title: '第十八至十九回　高老庄大圣降魔　云栈洞悟空收八戒',
 };
-const c27 = canon([27], '第二十七回　尸魔三戏唐三藏　圣僧恨逐美猴王');
+const c27 = formalWeekFourCanon;
 const c44to46 = canon([44, 45, 46], '第四十四至四十六回　车迟国斗法');
 const c59to61 = canon([59, 60, 61], '第五十九至六十一回　三调芭蕉扇');
 
@@ -59,7 +61,7 @@ export const course: CourseManifest = {
     }),
     deriveWeekFromOutline('week-4', { subtitle: '从积木跨入 Python', canon: c27,
       missions: [
-        mission('w4-m1', { subtitle: '同一逻辑，两种写法', objective: '把三次变化的积木流程映射为 Python', mode: 'blockly', canon: c27, storyBeats: [beat('尸魔设变', '白骨精为吃唐僧肉，先后设计三次变化。'), beat('悟空识破', '悟空三次都识破变化。')], expectedSequence: ['repeat_three', 'observe_appearance', 'keep_identity'] }),
+        ...formalWeekFourMissions,
         mission('w4-m2', { subtitle: '女子外形，身份未变', objective: '用变量记录外形与身份', mode: 'python', canon: c27, storyBeats: [beat('变作女子', '白骨精先变作送斋女子接近唐僧。'), beat('悟空识破', '悟空赶回后识破妖怪。')], expectedSequence: ['appearance_woman', 'identity_demon'], starterCode: "appearance = '女子'\nidentity = '白骨精'\nprint(identity)", expectedOutput: '白骨精' }),
         mission('w4-m3', { subtitle: '老妇外形，条件不变', objective: '用 if 判断身份是否改变', mode: 'python', canon: c27, storyBeats: [beat('变作老妇', '白骨精第二次变作老妇人。'), beat('再次识破', '悟空认出仍是妖怪。')], expectedSequence: ['appearance_old_woman', 'if_identity_demon'], starterCode: "appearance = '老妇'\nidentity = '白骨精'\nif identity == '白骨精':\n    print('识破变化')", expectedOutput: '识破变化' }),
         mission('w4-m4', { subtitle: '老翁之后的原著结果', objective: '用列表保持三次变化的原著顺序', mode: 'python', canon: c27, storyBeats: [beat('变作老翁', '白骨精第三次变作老翁寻找妻女。'), beat('悟空被逐', '悟空打死白骨精后，唐僧写下贬书将他逐走。')], expectedSequence: ['woman', 'old_woman', 'old_man', 'banish_wukong'], starterCode: "appearances = ['女子', '老妇', '老翁']\nfor item in appearances:\n    print(item)", expectedOutput: '女子\n老妇\n老翁' }),

@@ -50,7 +50,7 @@ const REQUIRED_METADATA = [
 ];
 
 const QA_STATUSES = new Set(['planned', 'generated', 'provenance-verified', 'visual-qa-passed', 'rejected']);
-const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/', 'assets/week-three-yunzhan-dialogue/', 'assets/week-three-bajie-joining/', 'assets/week-three-boss/'];
+const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/', 'assets/week-three-yunzhan-dialogue/', 'assets/week-three-bajie-joining/', 'assets/week-three-boss/', 'assets/week-four-mapping/'];
 
 const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
   ['assets/dragon-palace/background.webp', [
@@ -137,6 +137,8 @@ const WEEK_THREE_BAJIE_JOINING_SOURCE_PATH = 'src/components/WeekThreeBajieJoini
 const REQUIRED_WEEK_THREE_BAJIE_JOINING_ASSETS = ['assets/week-three-bajie-joining/bajie-joining-background.webp', 'assets/week-three-bajie-joining/bajie-joining-states.webp'];
 const WEEK_THREE_BOSS_SOURCE_PATH = 'src/components/WeekThreeBossScene.tsx';
 const REQUIRED_WEEK_THREE_BOSS_ASSETS = ['assets/week-three-boss/week-three-boss-background.webp', 'assets/week-three-boss/week-three-boss-states.webp'];
+const WEEK_FOUR_MAPPING_SOURCE_PATH = 'src/components/WeekFourMappingScene.tsx';
+const REQUIRED_WEEK_FOUR_MAPPING_ASSETS = ['assets/week-four-mapping/white-tiger-ridge-background.webp', 'assets/week-four-mapping/mapping-states.webp'];
 const REQUIRED_BAJIE_JOINING_ART_DIRECTION = "polished bright 3D Chinese children's storybook game";
 const REQUIRED_BAJIE_JOINING_PROMPT_SAFETY = ['no text', 'no pseudo-text', 'no binding', 'no ear pulling', 'no attack', 'no adult marriage', 'no humiliating pose'];
 
@@ -647,7 +649,7 @@ function verifyPromptRecords(promptRecords, manifestRows) {
       ? 'polished bright 3D'
       : row.assetId.startsWith('assets/week-three-cuilan/')
       ? REQUIRED_CUILAN_ART_DIRECTION
-      : row.assetId.startsWith('assets/week-three-boss/')
+      : row.assetId.startsWith('assets/week-three-boss/') || row.assetId.startsWith('assets/week-four-mapping/')
       ? "3D Chinese children's storybook"
       : row.assetId.startsWith('assets/week-one-advanced/') || row.assetId.startsWith('assets/week-two-heaven/') || row.assetId.startsWith('assets/week-two-great-sage/') || row.assetId.startsWith('assets/week-two-peach-elixir/') || row.assetId.startsWith('assets/week-two-furnace/') || row.assetId.startsWith('assets/week-two-heavenly-boss/') || row.assetId.startsWith('assets/week-three-manor-help/') || row.assetId.startsWith('assets/week-three-yunzhan-dialogue/')
       ? REQUIRED_ADVANCED_ART_DIRECTION
@@ -1330,6 +1332,46 @@ export function verifyRequiredWeekThreeBossInventory({ manifestRows, publicFiles
   return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
 }
 
+export function verifyRequiredWeekFourMappingInventory({ manifestRows, publicFiles, promptRecords = [], sourcePath = WEEK_FOUR_MAPPING_SOURCE_PATH, source, mode = 'check' }) {
+  const directory = 'assets/week-four-mapping/';
+  const rows = familyRows(manifestRows, directory);
+  const files = familyFiles(publicFiles, directory);
+  requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: REQUIRED_WEEK_FOUR_MAPPING_ASSETS, label: 'Week Four mapping' });
+  for (const row of rows) if (row.screenSlots !== 'w4-m1 WeekFourMappingScene') throw new Error(`Asset manifest: ${row.assetId} screen slots must be exactly w4-m1 WeekFourMappingScene.`);
+  const states = files.find((file) => file.path === 'assets/week-four-mapping/mapping-states.webp');
+  if (states?.hasAlpha !== true) throw new Error('Asset manifest: Week Four mapping states must preserve a true alpha channel.');
+  if (states?.width !== 1536 || states?.height !== 512) throw new Error('Asset manifest: Week Four mapping state sheet must be exactly 1536x512 with three equal 512x512 cells.');
+  if (typeof source !== 'string') throw new Error(`Asset manifest: ${sourcePath} source text is required for WeekFourMappingScene slot verification.`);
+  const { sourceFile, checker } = createBoundSource(sourcePath, source);
+  if (sourceFile.parseDiagnostics.length > 0) throw new Error(`Asset manifest: ${sourcePath} cannot be parsed as TypeScript for WeekFourMappingScene slot verification.`);
+  let assetUrlSymbol = null;
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || statement.moduleSpecifier.getText(sourceFile) !== "'../utils/assets'") continue;
+    const named = statement.importClause?.namedBindings;
+    if (!named || !ts.isNamedImports(named)) continue;
+    const imported = named.elements.find((item) => !item.isTypeOnly && !item.propertyName && item.name.text === 'assetUrl');
+    if (imported) assetUrlSymbol = checker.getSymbolAtLocation(imported.name) ?? null;
+  }
+  const livePaths = [];
+  const visit = (node) => {
+    if (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) {
+      if (node.tagName.getText(sourceFile) === 'img') {
+        const src = node.attributes.properties.find((attribute) => ts.isJsxAttribute(attribute) && attribute.name.text === 'src');
+        const expression = src?.initializer && ts.isJsxExpression(src.initializer) ? src.initializer.expression : null;
+        const inspect = (candidate) => {
+          if (ts.isCallExpression(candidate) && ts.isIdentifier(candidate.expression) && checker.getSymbolAtLocation(candidate.expression) === assetUrlSymbol && candidate.arguments.length === 1 && ts.isStringLiteral(candidate.arguments[0])) livePaths.push(candidate.arguments[0].text.replace(/^\//, ''));
+          ts.forEachChild(candidate, inspect);
+        };
+        if (expression) inspect(expression);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  if (!assetUrlSymbol || livePaths.length !== 2 || new Set(livePaths).size !== 2 || REQUIRED_WEEK_FOUR_MAPPING_ASSETS.some((assetId) => !livePaths.includes(assetId))) throw new Error(`Asset manifest: ${sourcePath} must render exactly two live approved image assetUrl scene slots.`);
+  return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
+}
+
 export function verifyRequiredDragonPalaceInventory({
   manifestRows,
   publicFiles,
@@ -1561,6 +1603,7 @@ async function main() {
   const weekThreeYunzhanRoot = join(root, 'public', 'assets', 'week-three-yunzhan-dialogue');
   const weekThreeBajieJoiningRoot = join(root, 'public', 'assets', 'week-three-bajie-joining');
   const weekThreeBossRoot = join(root, 'public', 'assets', 'week-three-boss');
+  const weekFourMappingRoot = join(root, 'public', 'assets', 'week-four-mapping');
   const { manifestRows, promptRecords } = parseAssetManifest(await readFile(manifestPath, 'utf8'));
   const publicFiles = [
     ...await collectAssetFiles(dragonPalaceRoot),
@@ -1575,6 +1618,7 @@ async function main() {
     ...await collectAssetFiles(weekThreeYunzhanRoot, 'assets/week-three-yunzhan-dialogue'),
     ...await collectAssetFiles(weekThreeBajieJoiningRoot, 'assets/week-three-bajie-joining'),
     ...await collectAssetFiles(weekThreeBossRoot, 'assets/week-three-boss'),
+    ...await collectAssetFiles(weekFourMappingRoot, 'assets/week-four-mapping'),
   ];
   const sourceFiles = new Map(await Promise.all([
     'src/components/GameScene.tsx',
@@ -1618,6 +1662,7 @@ async function main() {
   const weekThreeYunzhanResult = verifyRequiredWeekThreeYunzhanDialogueInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_YUNZHAN_SOURCE_PATH), 'utf8'), mode });
   const weekThreeBajieJoiningResult = verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_BAJIE_JOINING_SOURCE_PATH), 'utf8'), mode });
   const weekThreeBossResult = verifyRequiredWeekThreeBossInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_BOSS_SOURCE_PATH), 'utf8'), mode });
+  const weekFourMappingResult = verifyRequiredWeekFourMappingInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_FOUR_MAPPING_SOURCE_PATH), 'utf8'), mode });
   console.log(`Dragon Palace assets: ${dragonResult.assetCount} files, ${dragonResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Advanced Week One assets: ${advancedResult.assetCount} files, ${advancedResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Two horse-care assets: ${weekTwoHorseResult.assetCount} files, ${weekTwoHorseResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
@@ -1630,6 +1675,7 @@ async function main() {
   console.log(`Week Three Yunzhan assets: ${weekThreeYunzhanResult.assetCount} files, ${weekThreeYunzhanResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Three Bajie-joining assets: ${weekThreeBajieJoiningResult.assetCount} files, ${weekThreeBajieJoiningResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Three boss assets: ${weekThreeBossResult.assetCount} files, ${weekThreeBossResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
+  console.log(`Week Four mapping assets: ${weekFourMappingResult.assetCount} files, ${weekFourMappingResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

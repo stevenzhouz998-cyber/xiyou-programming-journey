@@ -37,6 +37,8 @@ import type { WeekThreeCuilanBooleanExperienceProps } from "./WeekThreeCuilanBoo
 import type { WeekThreeYunzhanDialogueExperienceProps } from './WeekThreeYunzhanDialogueExperience';
 import type { WeekThreeBajieJoiningExperienceProps } from './WeekThreeBajieJoiningExperience';
 import type { WeekThreeBossExperienceProps } from './WeekThreeBossExperience';
+import type { WeekFourMappingExperienceProps } from './WeekFourMappingExperience';
+import { WeekFourMappingWorkReview } from './WeekFourMappingWorkReview';
 
 const ArrowLeft = lazy(() =>
   import("@phosphor-icons/react/dist/icons/ArrowLeft").then((module) => ({
@@ -103,6 +105,7 @@ const loadWeekThreeCuilanBooleanExperience = () =>
 const loadWeekThreeYunzhanDialogueExperience = () => import('./WeekThreeYunzhanDialogueExperience').then((module) => ({ default: module.WeekThreeYunzhanDialogueExperience }));
 const loadWeekThreeBajieJoiningExperience = () => import('./WeekThreeBajieJoiningExperience').then((module) => ({ default: module.WeekThreeBajieJoiningExperience }));
 const loadWeekThreeBossExperience = () => import('./WeekThreeBossExperience').then((module) => ({ default: module.WeekThreeBossExperience }));
+const loadWeekFourMappingExperience = () => import('./WeekFourMappingExperience').then((module) => ({ default: module.WeekFourMappingExperience }));
 
 export function FourSeasRegaliaRouteBoundary({
   loader = loadFourSeasRegaliaExperience,
@@ -324,6 +327,12 @@ export function WeekThreeBossRouteBoundary({ loader = loadWeekThreeBossExperienc
   const Experience = useMemo(() => lazy(loader), [loader, retryGeneration]);
   const retry = loader === loadWeekThreeBossExperience ? (reloadPage ?? reloadSectionPage) : () => setRetryGeneration((generation) => generation + 1);
   return <LazySectionBoundary key={retryGeneration} label="高老庄总试炼" reloadPage={retry}><Suspense fallback={<p className="mission-tools-loading" role="status">总试炼加载中，请稍候……</p>}><Experience {...props} reloadPage={reloadPage} /></Suspense></LazySectionBoundary>;
+}
+export function WeekFourMappingRouteBoundary({ loader = loadWeekFourMappingExperience, reloadPage, ...props }: WeekFourMappingExperienceProps & { loader?: () => Promise<{ default: ComponentType<WeekFourMappingExperienceProps> }>; reloadPage?: () => void }) {
+  const [retryGeneration, setRetryGeneration] = useState(0);
+  const Experience = useMemo(() => lazy(loader), [loader, retryGeneration]);
+  const retry = loader === loadWeekFourMappingExperience ? (reloadPage ?? reloadSectionPage) : () => setRetryGeneration((generation) => generation + 1);
+  return <LazySectionBoundary key={retryGeneration} label="积木变代码体验" reloadPage={retry}><Suspense fallback={<p className="mission-tools-loading" role="status">积木变代码体验加载中，请稍候……</p>}><Experience {...props} /></Suspense></LazySectionBoundary>;
 }
 
 function playAudio(path: string, muted: boolean) {
@@ -805,6 +814,9 @@ function MissionPageForId({
               <h2>{mission.objective}</h2>
               <p>知识法宝：{mission.knowledge}</p>
             </div>
+            {mission.id === 'w4-m2' ? (
+              <WeekFourMappingWorkReview work={progress.works['w4-m1-first-python-mapping']} />
+            ) : null}
             {mission.id === 'w1-m1' ? (
               <LazySectionBoundary label="龙宫求兵任务">
                 <Suspense
@@ -972,6 +984,15 @@ function MissionPageForId({
               />
             ) : mission.id === 'w3-m5' ? (
               <WeekThreeBossRouteBoundary
+                reducedMotion={reducedMotion}
+                muted={progress.settings.muted}
+                locked={completionSave !== null}
+                onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)}
+                onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
+                onInteractionLockChange={setBattleInteractionLocked}
+              />
+            ) : mission.id === 'w4-m1' ? (
+              <WeekFourMappingRouteBoundary
                 reducedMotion={reducedMotion}
                 muted={progress.settings.muted}
                 locked={completionSave !== null}

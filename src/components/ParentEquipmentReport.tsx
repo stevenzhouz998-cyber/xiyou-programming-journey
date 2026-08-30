@@ -51,6 +51,10 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   const weekThree = getWeeklyReport(progress, 3)
   const boss = weekThree.weekThreeBoss ?? { runs: 0, successfulFullRuns: 0, conceptFailures: { manorHelpSpecificity: 0, disguiseIdentity: 0, yunzhanBranch: 0, joiningOperator: 0, programStructure: 0 }, firstBlocker: null, observations: 0, proof: 'none' as const }
   const bossEvidence = progress.missionCompletionEvidence['w3-m5']
+  const weekFour = getWeeklyReport(progress, 4).weekFourMapping ?? {
+    runs: 0, mappingDifferences: 0, validationFailures: 0, infrastructureFailures: 0,
+    observations: 0, workSaved: false, proof: 'none' as const, completedAt: null,
+  }
   const blockerLabels = {
     'manor-help-specificity': '庄口求助判断过宽',
     'disguise-identity': '外形与身份判断',
@@ -94,6 +98,15 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     <p>{`主动观察 ${boss.observations} 次`}</p>
     {boss.proof === 'formal-v3' ? <p>第三周总试炼正式 Blockly 证明已保存</p> : null}
     {boss.proof === 'legacy-replay-only' ? <p>第三周总试炼历史兼容完成记录，尚非正式 Blockly 证明</p> : null}
+  </section>
+  <section className="parent-equipment-report" role="region" aria-label="第四周积木与 Python 对照摘要">
+    <div className="parent-equipment-heading"><span className="eyebrow">第四周双轨练习</span><h2>第四周积木与 Python 对照摘要</h2><p>只汇总已保存的学习次数与证明状态，不展示代码、字段答案、积木编号或运行细节。</p></div>
+    <p>{`已运行 ${weekFour.runs} 次，映射差异 ${weekFour.mappingDifferences} 次。`}</p>
+    <p>{`安全验证拒绝 ${weekFour.validationFailures} 次；基础设施故障 ${weekFour.infrastructureFailures} 次（不计入学习困难）。`}</p>
+    <p>{`主动观察 ${weekFour.observations} 次。`}</p>
+    {weekFour.proof === 'formal-v3' && weekFour.workSaved ? <p>正式双轨证明与对照作品已保存</p> : null}
+    {weekFour.proof === 'legacy-replay-only' ? <p>第四周历史兼容完成记录，尚非正式双轨证明</p> : null}
+    {weekFour.proof === 'formal-v3' && !weekFour.workSaved ? <p>正式证明记录异常：尚未发现已保存作品</p> : null}
   </section></>
 }
 

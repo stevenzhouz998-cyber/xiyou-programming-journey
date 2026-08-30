@@ -19,6 +19,12 @@ export const formalWeekThreeCanon: CanonRef = {
   sourceUrl: 'https://zh.wikisource.org/zh-hans/西游记/第018回',
 };
 
+export const formalWeekFourCanon: CanonRef = {
+  chapters: [27],
+  title: '第二十七回　尸魔三戏唐三藏　圣僧恨逐美猴王',
+  sourceUrl: 'https://zh.wikisource.org/zh-hans/西游记/第027回',
+};
+
 const beat = (title: string, summary: string): StoryBeat => ({ title, summary, canon: true });
 
 const formalMission = (id: string, extension: Omit<FormalMissionExtension, 'mode'>): FormalMissionSpec => (
@@ -130,7 +136,19 @@ export const formalWeekThreeMissions: FormalMissionSpec[] = [
   }),
 ];
 
+export const formalWeekFourMissions: FormalMissionSpec[] = [
+  formalMission('w4-m1', {
+    subtitle: '同一逻辑，两种写法',
+    objective: '让 Blockly 与 Python 在两张公开卡上做出相同判断',
+    canon: formalWeekFourCanon,
+    storyBeats: [
+      beat('白虎岭前核验身份', '外形可能改变，身份需要核验。'),
+      beat('积木映射为 Python', '把同一条条件判断准确写成 Python。'),
+    ],
+  }),
+];
+
 export function getFormalMission(id: string): FormalMissionSpec | undefined {
-  return [...formalWeekOneMissions, ...formalWeekTwoMissions, ...formalWeekThreeMissions]
+  return [...formalWeekOneMissions, ...formalWeekTwoMissions, ...formalWeekThreeMissions, ...formalWeekFourMissions]
     .find((mission) => mission.id === id);
 }

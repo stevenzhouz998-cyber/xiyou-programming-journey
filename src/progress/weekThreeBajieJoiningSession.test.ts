@@ -16,6 +16,11 @@ import { createSolvedWeekThreeBossDraftForTest } from '../blockly/weekThreeBossT
 const NOW = '2020-01-01T00:00:00.000Z';
 const LATER = '2020-01-01T00:00:01.000Z';
 
+function oldV3(schemaRevision: 3 | 4 | 5) {
+  const { works: _works, ...legacy } = createInitialProgress();
+  return { ...legacy, schemaRevision };
+}
+
 function formalM3(progress = createInitialProgress()) {
   const cuilan = createMissionSession('w3-m2', NOW);
   const cuilanDraft = structuredClone(cuilan.workspace);
@@ -44,18 +49,16 @@ function successfulBajieSession() {
 
 describe('W3-M4 八戒归队 Progress V3', () => {
   it('migrates revision 5 to 6 and isolates old W3-M4 completion as legacy without opening W3-M5', () => {
-    const legacy = createInitialProgress();
-    legacy.schemaRevision = 5;
+    const legacy = oldV3(5);
     legacy.missions['w3-m4'] = { status: 'completed', stars: 2, attempts: 1, hintsUsed: 0, completedAt: NOW };
     const migrated = migrateProgress(legacy);
-    expect(migrated.schemaRevision).toBe(7);
+    expect(migrated.schemaRevision).toBe(8);
     expect((migrated as any).missionCompletionEvidence['w3-m4']).toMatchObject({ kind: 'legacy-preformal', completedAt: NOW });
     expect(isMissionUnlocked(migrated, 'w3-m5')).toBe(false);
   });
 
   it('keeps W3-M5 replay access only when its own historical completion already exists', () => {
-    const legacy = createInitialProgress();
-    legacy.schemaRevision = 5;
+    const legacy = oldV3(5);
     legacy.missions['w3-m4'] = { status: 'completed', stars: 2, attempts: 1, hintsUsed: 0, completedAt: NOW };
     legacy.missions['w3-m5'] = { status: 'completed', stars: 2, attempts: 1, hintsUsed: 0, completedAt: LATER };
     expect(isMissionUnlocked(migrateProgress(legacy), 'w3-m5')).toBe(true);
@@ -68,7 +71,7 @@ describe('W3-M4 八戒归队 Progress V3', () => {
     const v2 = migrateProgress({ version: 2, schemaRevision: 1, learnerName: '旧档', missions: { 'w3-m4': mission, 'w3-m5': mission }, settings: { muted: false, reducedMotion: false, reducedMotionOverride: false, parentPin: 'unset' }, privacy: { localDataNoticeSeen: false }, recovery: { lastRecoveredAt: null, source: null }, savedAt: NOW });
     expect(v2.missionCompletionEvidence['w3-m4']).toMatchObject({ sourceVersion: 2, sourceSchemaRevision: 1 });
     expect(isMissionUnlocked(v2, 'w3-m5')).toBe(true);
-    const v3 = createInitialProgress(); v3.schemaRevision = 4; v3.missions['w3-m4'] = mission;
+    const v3 = oldV3(4); v3.missions['w3-m4'] = mission;
     const migratedV3 = migrateProgress(v3);
     expect(migratedV3.missionCompletionEvidence['w3-m4']).toMatchObject({ sourceVersion: 3, sourceSchemaRevision: 4 });
     const invalidMarker = structuredClone(migratedV3);
@@ -92,8 +95,8 @@ describe('W3-M4 八戒归队 Progress V3', () => {
       expect(isMissionUnlocked(migrated, 'w3-m5')).toBe(true);
       expect(migrateProgress(structuredClone(migrated))).toEqual(migrated);
     }
-    const oldV3 = createInitialProgress(); oldV3.schemaRevision = 3; oldV3.missions['w3-m5'] = mission;
-    expect(migrateProgress(oldV3).missionCompletionEvidence['w3-m5']).toMatchObject({ kind: 'legacy-replay-only', sourceVersion: 3, sourceSchemaRevision: 6 });
+    const oldV3Document = oldV3(3); oldV3Document.missions['w3-m5'] = mission;
+    expect(migrateProgress(oldV3Document).missionCompletionEvidence['w3-m5']).toMatchObject({ kind: 'legacy-replay-only', sourceVersion: 3, sourceSchemaRevision: 6 });
   });
 
   it('requires a formal W3-M3 proof before entering W3-M4', () => {

@@ -191,6 +191,8 @@ test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
   assert.equal(bundleBudget.WEEK_TWO_HEAVENLY_BOSS_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
   assert.equal(bundleBudget.WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
   assert.equal(bundleBudget.WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.WEEK_FOUR_MAPPING_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.PYTHON_RUNTIME_TRANSFER_MAX_BYTES, 15 * 1024 * 1024);
   assert.equal(bundleBudget.ENTRY_GZIP_LIMIT, 180 * 1024);
   assert.equal(bundleBudget.HOME_TOTAL_LIMIT, 650 * 1024);
   assert.equal(bundleBudget.PHASER_RAW_LIMIT, 1600 * 1024);
@@ -286,6 +288,29 @@ test('enforces the exact W3-M5 3 MiB cold-load closure and keeps its Blockly and
   assert.throws(() => analyzeManifest(manifest, sizes, { ...sizes, 'assets/week-three-boss-scene.js': 2 }), /WeekThreeBossExperience closure exceeds its 3 MiB cold-load budget/);
   assert.throws(() => analyzeManifest({ ...manifest, 'src/main.tsx': { ...base['src/main.tsx'], imports: ['vendor.js', workspace] } }, sizes, sizes), /WeekThreeBossBlocklyWorkspace must stay outside the application entry static closure/);
   assert.throws(() => analyzeManifest({ ...manifest, 'src/main.tsx': { ...base['src/main.tsx'], imports: ['vendor.js', scene] } }, sizes, sizes), /WeekThreeBossScene must stay outside the application entry static closure/);
+});
+
+test('enforces the W4-M1 3 MiB lazy Experience closure and keeps Blockly and scene chunks out of the entry', () => {
+  const root = 'src/components/WeekFourMappingExperience.tsx';
+  const workspace = 'src/components/WeekFourMappingBlocklyWorkspace.tsx';
+  const scene = 'src/components/WeekFourMappingScene.tsx';
+  assert.equal(bundleBudget.WEEK_FOUR_MAPPING_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.COLD_LOAD_ROUTE_CLOSURE_BUDGETS[root], bundleBudget.WEEK_FOUR_MAPPING_COLD_LOAD_MAX_BYTES);
+  const manifest = {
+    ...base,
+    [root]: { file: 'assets/week-four-mapping.js', isDynamicEntry: true, imports: [], dynamicImports: [workspace, scene] },
+    [workspace]: { file: 'assets/week-four-mapping-workspace.js', isDynamicEntry: true, imports: [] },
+    [scene]: { file: 'assets/week-four-mapping-scene.js', isDynamicEntry: true, imports: [] },
+  };
+  const sizes = {
+    'assets/main.js': 1, 'assets/vendor.js': 1,
+    'assets/week-four-mapping.js': bundleBudget.WEEK_FOUR_MAPPING_COLD_LOAD_MAX_BYTES - 2,
+    'assets/week-four-mapping-workspace.js': 1, 'assets/week-four-mapping-scene.js': 1,
+  };
+  assert.equal(analyzeManifest(manifest, sizes, sizes).closures[root].rawBytes, bundleBudget.WEEK_FOUR_MAPPING_COLD_LOAD_MAX_BYTES);
+  assert.throws(() => analyzeManifest(manifest, sizes, { ...sizes, 'assets/week-four-mapping-scene.js': 2 }), /WeekFourMappingExperience closure exceeds its 3 MiB cold-load budget/);
+  assert.throws(() => analyzeManifest({ ...manifest, 'src/main.tsx': { ...base['src/main.tsx'], imports: ['vendor.js', workspace] } }, sizes, sizes), /WeekFourMappingBlocklyWorkspace must stay outside the application entry static closure/);
+  assert.throws(() => analyzeManifest({ ...manifest, 'src/main.tsx': { ...base['src/main.tsx'], imports: ['vendor.js', scene] } }, sizes, sizes), /WeekFourMappingScene must stay outside the application entry static closure/);
 });
 
 test('keeps the W3-M4 route, scene, and Blockly workspace dynamically split from homepage static imports', () => {

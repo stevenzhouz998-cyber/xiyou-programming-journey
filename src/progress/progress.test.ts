@@ -24,6 +24,11 @@ import {
 } from '../blockly/weekThreeManorHelpContract';
 import { compileCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract';
 import { compileYunzhanDialogueDraft, runYunzhanDialogueForDraft } from '../blockly/weekThreeYunzhanDialogueContract';
+import { compileWeekFourMappingDraft } from '../blockly/weekFourMappingCompiler';
+import { compareWeekFourMappingTraces } from '../blockly/weekFourMappingContract';
+import { SOLVED_WEEK_FOUR_MAPPING_PYTHON, parseWeekFourMappingPython } from '../engine/weekFourPythonMappingGrammar';
+import { createWeekFourMappingSession, recordWeekFourMappingRun, updateWeekFourMappingCode } from './weekFourMappingSession';
+import { migrateProgress } from './schema';
 
 const NOW = '2026-07-15T06:00:00.000Z';
 const wrongWeaponTrace: RuyiStaffInstruction[] = [
@@ -72,7 +77,56 @@ function successfulManorHelpSession() {
   );
 }
 
+function successfulWeekFourMappingSession() {
+  const draft = updateWeekFourMappingCode(createWeekFourMappingSession(NOW), SOLVED_WEEK_FOUR_MAPPING_PYTHON, '2026-08-30T00:00:01.000Z');
+  const blocklyTrace = compileWeekFourMappingDraft(draft.workspace).trace;
+  const pythonTrace = parseWeekFourMappingPython(draft.pythonCode).trace;
+  return recordWeekFourMappingRun(draft, { blocklyTrace, pythonTrace, run: compareWeekFourMappingTraces(blocklyTrace, pythonTrace) }, '2026-08-30T00:00:02.000Z');
+}
+
 describe('progress rules', () => {
+  it('publishes the W4 proof and work atomically, reports only safe summary fields, and unlocks W4-M2', () => {
+    const progress = createInitialProgress();
+    progress.missionCompletionEvidence['w3-m5'] = { kind: 'formal-v3' } as never;
+    progress.sessions['w4-m1'] = successfulWeekFourMappingSession();
+    const completed = completeMission(progress, 'w4-m1', { stars: 3, hintsUsed: 0 });
+    expect(completed.missionCompletionEvidence['w4-m1']).toMatchObject({ kind: 'formal-v3', workId: 'w4-m1-first-python-mapping' });
+    expect(completed.works['w4-m1-first-python-mapping']).toMatchObject({ kind: 'blockly-python-mapping-v1', missionId: 'w4-m1' });
+    expect(isMissionUnlocked(completed, 'w4-m2')).toBe(true);
+    expect(getWeeklyReport(completed, 4)).toMatchObject({ weekFourMapping: { runs: 1, mappingDifferences: 0, validationFailures: 0, infrastructureFailures: 0, observations: 0, workSaved: true, proof: 'formal-v3' } });
+  });
+
+  it('upgrades legacy W4 history without changing its original completion, stars, or attempts', () => {
+    const progress = createInitialProgress();
+    progress.missions['w4-m1'] = { status: 'completed', stars: 3, attempts: 7, hintsUsed: 2, completedAt: NOW };
+    progress.missionCompletionEvidence['w4-m1'] = { kind: 'legacy-replay-only', completedAt: NOW, sourceVersion: 3, sourceSchemaRevision: 7 };
+    progress.missionCompletionEvidence['w3-m5'] = { kind: 'formal-v3' } as never;
+    progress.sessions['w4-m1'] = successfulWeekFourMappingSession();
+    const upgraded = completeMission(progress, 'w4-m1', { stars: 1, hintsUsed: 0 });
+    expect(upgraded.missions['w4-m1']).toEqual(progress.missions['w4-m1']);
+    expect(upgraded.missionCompletionEvidence['w4-m1']).toMatchObject({ kind: 'formal-v3', completedAt: NOW });
+    expect(upgraded.works['w4-m1-first-python-mapping']).toMatchObject({ createdAt: NOW });
+  });
+
+  it('upgrades a migrated V2 W4 legacy replay to formal-v3 after a real saved replay', () => {
+    const migrated = migrateProgress({
+      version: 2 as const,
+      schemaRevision: 1 as const,
+      learnerName: '小行者',
+      missions: { 'w4-m1': { status: 'completed' as const, stars: 3 as const, attempts: 4, hintsUsed: 1, completedAt: NOW } },
+      settings: { muted: true, reducedMotion: false, reducedMotionOverride: false, parentPin: '4826' },
+      privacy: { localDataNoticeSeen: false },
+      recovery: { lastRecoveredAt: null, source: null },
+      savedAt: NOW,
+    });
+    migrated.missionCompletionEvidence['w3-m5'] = { kind: 'formal-v3' } as never;
+    migrated.sessions['w4-m1'] = successfulWeekFourMappingSession();
+
+    const upgraded = completeMission(migrated, 'w4-m1', { stars: 1, hintsUsed: 0 });
+    expect(upgraded.missionCompletionEvidence['w4-m1']).toMatchObject({ kind: 'formal-v3', completedAt: NOW });
+    expect(upgraded.works['w4-m1-first-python-mapping']).toBeDefined();
+    expect(upgraded.missions['w4-m1']).toEqual(migrated.missions['w4-m1']);
+  });
   it('rejects W3-M1 completion until the current saved workspace has a canonical two-scenario success', () => {
     expect(() => completeMission(createInitialProgress(), 'w3-m1', { stars: 3, hintsUsed: 0 }))
       .toThrow(/W3-M1.*运行证据/);
@@ -315,7 +369,7 @@ describe('progress rules', () => {
     expect(progress.missions['w1-m1']).toMatchObject({ stars: 3, attempts: 1, hintsUsed: 0, status: 'completed' });
     expect(progress).toMatchObject({
       version: 3,
-      schemaRevision: 7,
+      schemaRevision: 8,
       sessions: {},
       privacy: { localDataNoticeSeen: true },
       recovery: { lastRecoveredAt: '2026-07-12T00:00:00.000Z', source: 'snapshot' },
@@ -325,7 +379,7 @@ describe('progress rules', () => {
   it('publishes the derived condition-observation ability with w2 completion and keeps it idempotent', () => {
     let progress = createInitialProgress();
     expect(progress).toMatchObject({
-      schemaRevision: 7,
+      schemaRevision: 8,
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
     });
 
