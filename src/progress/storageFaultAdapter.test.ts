@@ -7,6 +7,7 @@ import { completeMission, createInitialProgress, serializeProgress } from './pro
 import { createMissionSession, recordConditionObservationUse, recordCuilanConditionObservationUse, recordHint, recordRun, updateWorkspaceDraft } from './session';
 import { compileManorHelpDraft, createDefaultManorHelpDraft, runManorHelp } from '../blockly/weekThreeManorHelpContract';
 import { compileCuilanBooleanDraft, createDefaultCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract';
+import { compileBajieJoiningDraft, runBajieJoiningForDraft } from '../blockly/weekThreeBajieJoiningContract';
 import { compileHeavenlySignalBossDraft, createDefaultHeavenlySignalBossDraft, runHeavenlySignalBoss } from '../blockly/weekTwoHeavenlySignalBossContract';
 import { storageFaultAdapter as productionStorageFaultAdapter } from './storageFaultAdapter';
 import type { ProgressV3 } from './types';
@@ -98,6 +99,19 @@ function withSuccessfulCuilanRun(base = withCuilanDraft()) {
   const trace = compileCuilanBooleanDraft(draft);
   const session = updateWorkspaceDraft(base.sessions['w3-m2']!, draft, '2026-08-27T00:01:00.000Z');
   return { ...base, sessions: { ...base.sessions, 'w3-m2': recordRun(session, runCuilanBooleanForDraft(draft, trace), trace, '2026-08-27T00:02:00.000Z') }, savedAt: '2026-08-27T00:02:00.000Z' };
+}
+
+function withBajieDraft(base = createInitialProgress()) {
+  const session = createMissionSession('w3-m4', NOW);
+  return { ...base, sessions: { ...base.sessions, 'w3-m4': updateWorkspaceDraft(session, session.workspace, NOW) }, savedAt: NOW };
+}
+function withFailedBajieRun(base = withBajieDraft()) {
+  const session = base.sessions['w3-m4']!; const trace = compileBajieJoiningDraft(session.workspace);
+  return { ...base, sessions: { ...base.sessions, 'w3-m4': recordRun(session, runBajieJoiningForDraft(session.workspace, trace), trace, '2026-08-28T00:01:00.000Z') }, savedAt: '2026-08-28T00:01:00.000Z' };
+}
+function withSuccessfulBajieRun(base = withBajieDraft()) {
+  const draft = structuredClone(base.sessions['w3-m4']!.workspace); draft.blocks.find((block) => block.id === 'bajie-boolean-operation')!.operator = 'and'; const trace = compileBajieJoiningDraft(draft); const session = updateWorkspaceDraft(base.sessions['w3-m4']!, draft, '2026-08-28T00:01:00.000Z');
+  return { ...base, sessions: { ...base.sessions, 'w3-m4': recordRun(session, runBajieJoiningForDraft(draft, trace), trace, '2026-08-28T00:02:00.000Z') }, savedAt: '2026-08-28T00:02:00.000Z' };
 }
 
 describe('storage fault adapters', () => {
@@ -293,5 +307,20 @@ describe('storage fault adapters', () => {
     expect(storage.getItem(SNAPSHOT_KEY)).toBe(current);
     expect(storage.getItem(CURRENT_KEY)).toBe('{broken w3-m1 current');
     expect(storage.getItem(MODE_KEY)).toBe('off');
+  });
+
+  it('injects only exact W3-M4 draft, run, observation, completion, and corrupt deltas', () => {
+    const storage = new MemoryStorage(); const base = createInitialProgress(); const draft = withBajieDraft(base);
+    storeCurrent(storage, base, 'fail-bajie-draft'); expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: draft })).toMatch(/fault/i);
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: { ...draft, settings: { ...draft.settings, muted: true } } })).toBeNull();
+    const hinted = structuredClone(draft); hinted.sessions['w3-m4']!.usedHintTiers.push('observe'); storeCurrent(storage, base, 'fail-bajie-draft'); expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: hinted })).toBeNull();
+    const failed = withFailedBajieRun(draft); storeCurrent(storage, draft, 'fail-bajie-run'); expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: failed })).toMatch(/fault/i);
+    const badRun = structuredClone(failed); badRun.sessions['w3-m4']!.lastRun!.penalty = { livesLost: 1, resourcesLost: 0, starsLost: 0 } as never; storeCurrent(storage, draft, 'fail-bajie-run'); expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: badRun })).toBeNull();
+    const observed = { ...failed, sessions: { ...failed.sessions, 'w3-m4': recordConditionObservationUse(failed.sessions['w3-m4']!, failed.sessions['w3-m4']!.failureSnapshot!.snapshotId, '2026-08-28T00:02:00.000Z') }, savedAt: '2026-08-28T00:02:00.000Z' };
+    storeCurrent(storage, failed, 'fail-bajie-observation'); expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: observed })).toMatch(/fault/i);
+    const success = withSuccessfulBajieRun(); const run = success.sessions['w3-m4']!.lastRun!; const completion = structuredClone(success); completion.missions['w3-m4'] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: completion.savedAt }; completion.missionCompletionEvidence['w3-m4'] = { kind: 'formal-v3', completedAt: completion.savedAt, verifiedAt: completion.savedAt, workspace: structuredClone(success.sessions['w3-m4']!.workspace), trace: structuredClone(success.sessions['w3-m4']!.lastTrace), run: structuredClone(run) };
+    storeCurrent(storage, success, 'fail-bajie-completion'); expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: completion })).toMatch(/fault/i);
+    const badCompletion = structuredClone(completion); badCompletion.missions['w3-m4']!.stars = 4 as never; storeCurrent(storage, success, 'fail-bajie-completion'); expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: badCompletion })).toBeNull();
+    const current = serializeProgress(completion); storage.setItem(CURRENT_KEY, current); storage.setItem(MODE_KEY, 'corrupt-bajie-current'); e2eStorageFaultAdapter.beforeProgressLoad(storage); expect(storage.getItem(SNAPSHOT_KEY)).toBe(current); expect(storage.getItem(CURRENT_KEY)).toBe('{broken w3-m4 current');
   });
 });

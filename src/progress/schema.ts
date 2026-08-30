@@ -23,8 +23,10 @@ import { parseHeavenlySignalBossSession } from './heavenlySignalBossSessionSchem
 import { parseManorHelpSession } from './manorHelpSessionSchema';
 import { parseCuilanBooleanSession, parseCuilanBooleanWorkspace } from './cuilanBooleanSessionSchema';
 import { parseYunzhanDialogueSession, parseYunzhanDialogueWorkspace } from './yunzhanDialogueSessionSchema';
+import { parseBajieJoiningSession, parseBajieJoiningWorkspace, sameBajieJoiningData } from './bajieJoiningSessionSchema';
 import { compileCuilanBooleanDraft, runCuilanBooleanForDraft, type CuilanBooleanInstruction, type CuilanBooleanRunResult, type CuilanBooleanWorkspaceDraftV1 } from '../blockly/weekThreeCuilanBooleanContract';
 import { compileYunzhanDialogueDraft, runYunzhanDialogueForDraft } from '../blockly/weekThreeYunzhanDialogueContract';
+import { compileBajieJoiningDraft, runBajieJoiningForDraft, type BajieJoiningInstruction, type BajieJoiningRunResult, type BajieJoiningWorkspaceDraftV1 } from '../blockly/weekThreeBajieJoiningContract';
 import { deriveConditionObservation } from './conditionObservation';
 import {
   compileManorHelpDraft,
@@ -100,7 +102,7 @@ const utf8Encoder = new TextEncoder();
 
 export const createInitialProgress = (): ProgressV3 => ({
   version: 3,
-  schemaRevision: 5,
+  schemaRevision: 6,
   learnerName: '小行者',
   missions: {},
   settings: { muted: false, reducedMotion: false, reducedMotionOverride: false, parentPin: 'unset' },
@@ -1633,6 +1635,12 @@ function sessions(value: unknown): MissionSessions {
       } catch {
         invalid('sessions.w3-m3无效');
       }
+    } else if (missionId === 'w3-m4') {
+      try {
+        result['w3-m4'] = parseBajieJoiningSession(rawSession);
+      } catch {
+        invalid('sessions.w3-m4无效');
+      }
     } else {
       invalid(`任务 ${missionId} 尚不支持可执行会话`);
     }
@@ -1818,84 +1826,135 @@ function legacyManorHelpCompletionEvidence(
   } as Extract<ManorHelpCompletionEvidence, { kind: 'legacy-preformal' }>;
 }
 
+function legacyBajieJoiningCompletionEvidence(
+  source: Record<string, unknown>,
+  field: string,
+  missionCompletedAt: string,
+): Extract<MissionCompletionEvidenceV1['w3-m4'], { kind: 'legacy-preformal' }> {
+  exactKeys(source, field, ['kind', 'completedAt', 'sourceVersion', 'sourceSchemaRevision']);
+  if (source.kind !== 'legacy-preformal' || date(source.completedAt, `${field}.completedAt`) !== missionCompletedAt) invalid(`${field}旧证明无效`);
+  const valid = (source.sourceVersion === 1 && source.sourceSchemaRevision === null)
+    || (source.sourceVersion === 2 && source.sourceSchemaRevision === 1)
+    || (source.sourceVersion === 3 && (source.sourceSchemaRevision === 1 || source.sourceSchemaRevision === 2 || source.sourceSchemaRevision === 3 || source.sourceSchemaRevision === 4 || source.sourceSchemaRevision === 5));
+  if (!valid) invalid(`${field}来源版本组合无效`);
+  return { kind: 'legacy-preformal', completedAt: missionCompletedAt, sourceVersion: source.sourceVersion, sourceSchemaRevision: source.sourceSchemaRevision } as Extract<MissionCompletionEvidenceV1['w3-m4'], { kind: 'legacy-preformal' }>;
+}
+
 function missionCompletionEvidence(
   value: unknown,
   parsedMissions: Record<string, MissionProgress>,
+  parsedSessions: MissionSessions,
   legacyRevisionThree = false,
+  legacyBeforeSix = false,
+  legacyM4Source: { sourceVersion: 1 | 2 | 3; sourceSchemaRevision: null | 1 | 2 | 3 | 4 | 5 } | null = null,
 ): MissionCompletionEvidenceV1 {
   const source = object(value, 'missionCompletionEvidence');
-  const unexpected = Object.keys(source).find((key) => key !== 'w3-m1' && key !== 'w3-m2' && key !== 'w3-m3');
+  const unexpected = Object.keys(source).find((key) => key !== 'w3-m1' && key !== 'w3-m2' && key !== 'w3-m3' && key !== 'w3-m4' && key !== 'w3-m5');
   if (unexpected) invalid(`missionCompletionEvidence包含未知字段 ${unexpected}`);
-  const mission = parsedMissions['w3-m1'];
-  const rawEvidence = source['w3-m1'];
-  if (!mission && rawEvidence !== undefined) invalid('missionCompletionEvidence.w3-m1没有对应完成任务');
-  if (mission && rawEvidence === undefined) invalid('missionCompletionEvidence.w3-m1缺少完成证明');
   const result: MissionCompletionEvidenceV1 = {};
-  if (!mission) {
-    if (source['w3-m1'] !== undefined) invalid('missionCompletionEvidence.w3-m1没有对应完成任务');
+  const manorMission = parsedMissions['w3-m1']; const rawManor = source['w3-m1'];
+  if (!manorMission) {
+    if (rawManor !== undefined) invalid('missionCompletionEvidence.w3-m1没有对应完成任务');
   } else {
-    const evidence = object(rawEvidence, 'missionCompletionEvidence.w3-m1');
-    if (evidence.kind === 'formal-v3') result['w3-m1'] = formalManorHelpCompletionEvidence(evidence, 'missionCompletionEvidence.w3-m1', mission.completedAt);
-    else if (evidence.kind === 'legacy-preformal') result['w3-m1'] = legacyManorHelpCompletionEvidence(evidence, 'missionCompletionEvidence.w3-m1', mission.completedAt);
+    if (rawManor === undefined) invalid('missionCompletionEvidence.w3-m1缺少完成证明');
+    const evidence = object(rawManor, 'missionCompletionEvidence.w3-m1');
+    if (evidence.kind === 'formal-v3') result['w3-m1'] = formalManorHelpCompletionEvidence(evidence, 'missionCompletionEvidence.w3-m1', manorMission.completedAt);
+    else if (evidence.kind === 'legacy-preformal') result['w3-m1'] = legacyManorHelpCompletionEvidence(evidence, 'missionCompletionEvidence.w3-m1', manorMission.completedAt);
     else invalid('missionCompletionEvidence.w3-m1.kind无效');
   }
+
   const cuilanMission = parsedMissions['w3-m2']; const rawCuilan = source['w3-m2'];
   if (!cuilanMission) {
     if (rawCuilan !== undefined) invalid('missionCompletionEvidence.w3-m2没有对应完成任务');
-    const yunzhanMission = parsedMissions['w3-m3']; const rawYunzhan = source['w3-m3'];
-    if (!yunzhanMission) { if (rawYunzhan !== undefined) invalid('missionCompletionEvidence.w3-m3没有对应完成任务'); return result; }
-    if (rawYunzhan === undefined) { result['w3-m3'] = { kind: 'legacy-preformal', completedAt: yunzhanMission.completedAt, sourceVersion: 3, sourceSchemaRevision: 4 }; return result; }
-    const yunzhan = object(rawYunzhan, 'missionCompletionEvidence.w3-m3');
-    if (yunzhan.kind !== 'legacy-preformal') invalid('missionCompletionEvidence.w3-m3没有W3-M2正式完成前置');
-    exactKeys(yunzhan, 'missionCompletionEvidence.w3-m3', ['kind', 'completedAt', 'sourceVersion', 'sourceSchemaRevision']);
-    if (date(yunzhan.completedAt, 'missionCompletionEvidence.w3-m3.completedAt') !== yunzhanMission.completedAt || yunzhan.sourceVersion !== 3 || yunzhan.sourceSchemaRevision !== 4) invalid('missionCompletionEvidence.w3-m3旧证明无效');
-    result['w3-m3'] = { kind: 'legacy-preformal', completedAt: yunzhanMission.completedAt, sourceVersion: 3, sourceSchemaRevision: 4 }; return result;
-  }
-  if (legacyRevisionThree && rawCuilan === undefined) {
+  } else if (rawCuilan === undefined && legacyRevisionThree) {
     result['w3-m2'] = { kind: 'legacy-preformal', completedAt: cuilanMission.completedAt, sourceVersion: 3, sourceSchemaRevision: 3 };
-    return result;
+  } else {
+    if (rawCuilan === undefined) invalid('missionCompletionEvidence.w3-m2缺少完成证明');
+    const cuilan = object(rawCuilan, 'missionCompletionEvidence.w3-m2');
+    if (cuilan.kind === 'legacy-preformal') {
+      exactKeys(cuilan, 'missionCompletionEvidence.w3-m2', ['kind', 'completedAt', 'sourceVersion', 'sourceSchemaRevision']);
+      if (date(cuilan.completedAt, 'missionCompletionEvidence.w3-m2.completedAt') !== cuilanMission.completedAt || cuilan.sourceVersion !== 3 || cuilan.sourceSchemaRevision !== 3) invalid('missionCompletionEvidence.w3-m2旧证明无效');
+      result['w3-m2'] = { kind: 'legacy-preformal', completedAt: cuilanMission.completedAt, sourceVersion: 3, sourceSchemaRevision: 3 };
+    } else {
+      if (cuilan.kind !== 'formal-v3') invalid('missionCompletionEvidence.w3-m2.kind无效');
+      exactKeys(cuilan, 'missionCompletionEvidence.w3-m2', ['kind', 'completedAt', 'verifiedAt', 'workspace', 'trace', 'run']);
+      if (date(cuilan.completedAt, 'missionCompletionEvidence.w3-m2.completedAt') !== cuilanMission.completedAt) invalid('missionCompletionEvidence.w3-m2完成时间无效');
+      try {
+        const workspace = parseCuilanBooleanWorkspace(cuilan.workspace, 'missionCompletionEvidence.w3-m2.workspace'); const trace = compileCuilanBooleanDraft(workspace); const run = runCuilanBooleanForDraft(workspace, trace);
+        if (!deeplyEqual(cuilan.trace, trace) || !deeplyEqual(cuilan.run, run) || !run.completed || run.finalState !== 'demon-fled') invalid('missionCompletionEvidence.w3-m2必须是当前workspace成功重放');
+        result['w3-m2'] = { kind: 'formal-v3', completedAt: cuilanMission.completedAt, verifiedAt: date(cuilan.verifiedAt, 'missionCompletionEvidence.w3-m2.verifiedAt'), workspace, trace, run };
+      } catch { invalid('missionCompletionEvidence.w3-m2必须是当前workspace成功重放'); }
+    }
   }
-  if (rawCuilan === undefined) invalid('missionCompletionEvidence.w3-m2缺少完成证明');
-  const cuilan = object(rawCuilan, 'missionCompletionEvidence.w3-m2');
-  if (cuilan.kind === 'legacy-preformal') {
-    exactKeys(cuilan, 'missionCompletionEvidence.w3-m2', ['kind', 'completedAt', 'sourceVersion', 'sourceSchemaRevision']);
-    if (date(cuilan.completedAt, 'missionCompletionEvidence.w3-m2.completedAt') !== cuilanMission.completedAt || cuilan.sourceVersion !== 3 || cuilan.sourceSchemaRevision !== 3) invalid('missionCompletionEvidence.w3-m2旧证明无效');
-    result['w3-m2'] = { kind: 'legacy-preformal', completedAt: cuilanMission.completedAt, sourceVersion: 3, sourceSchemaRevision: 3 };
-    return result;
-  }
-  if (cuilan.kind !== 'formal-v3') invalid('missionCompletionEvidence.w3-m2.kind无效');
-  exactKeys(cuilan, 'missionCompletionEvidence.w3-m2', ['kind', 'completedAt', 'verifiedAt', 'workspace', 'trace', 'run']);
-  if (date(cuilan.completedAt, 'missionCompletionEvidence.w3-m2.completedAt') !== cuilanMission.completedAt) invalid('missionCompletionEvidence.w3-m2完成时间无效');
-  let workspace: CuilanBooleanWorkspaceDraftV1; let trace: CuilanBooleanInstruction[]; let run: CuilanBooleanRunResult;
-  try {
-    workspace = parseCuilanBooleanWorkspace(cuilan.workspace, 'missionCompletionEvidence.w3-m2.workspace');
-    trace = compileCuilanBooleanDraft(workspace); run = runCuilanBooleanForDraft(workspace, trace);
-    if (!deeplyEqual(cuilan.trace, trace) || !deeplyEqual(cuilan.run, run) || !run.completed || run.finalState !== 'demon-fled') invalid('missionCompletionEvidence.w3-m2必须是当前workspace成功重放');
-  } catch {
-    invalid('missionCompletionEvidence.w3-m2必须是当前workspace成功重放');
-  }
-  result['w3-m2'] = { kind: 'formal-v3', completedAt: cuilanMission.completedAt, verifiedAt: date(cuilan.verifiedAt, 'missionCompletionEvidence.w3-m2.verifiedAt'), workspace, trace, run };
+
   const yunzhanMission = parsedMissions['w3-m3']; const rawYunzhan = source['w3-m3'];
-  if (!yunzhanMission) { if (rawYunzhan !== undefined) invalid('missionCompletionEvidence.w3-m3没有对应完成任务'); return result; }
-  if (rawYunzhan === undefined) {
+  if (!yunzhanMission) {
+    if (rawYunzhan !== undefined) invalid('missionCompletionEvidence.w3-m3没有对应完成任务');
+  } else if (rawYunzhan === undefined) {
     result['w3-m3'] = { kind: 'legacy-preformal', completedAt: yunzhanMission.completedAt, sourceVersion: 3, sourceSchemaRevision: 4 };
-    return result;
+  } else {
+    const yunzhan = object(rawYunzhan, 'missionCompletionEvidence.w3-m3');
+    if (yunzhan.kind === 'legacy-preformal') {
+      exactKeys(yunzhan, 'missionCompletionEvidence.w3-m3', ['kind', 'completedAt', 'sourceVersion', 'sourceSchemaRevision']);
+      if (date(yunzhan.completedAt, 'missionCompletionEvidence.w3-m3.completedAt') !== yunzhanMission.completedAt || yunzhan.sourceVersion !== 3 || yunzhan.sourceSchemaRevision !== 4) invalid('missionCompletionEvidence.w3-m3旧证明无效');
+      result['w3-m3'] = { kind: 'legacy-preformal', completedAt: yunzhanMission.completedAt, sourceVersion: 3, sourceSchemaRevision: 4 };
+    } else {
+      if (yunzhan.kind !== 'formal-v3' || result['w3-m2']?.kind !== 'formal-v3') invalid('missionCompletionEvidence.w3-m3没有W3-M2正式完成前置');
+      exactKeys(yunzhan, 'missionCompletionEvidence.w3-m3', ['kind', 'completedAt', 'verifiedAt', 'workspace', 'trace', 'run']);
+      if (date(yunzhan.completedAt, 'missionCompletionEvidence.w3-m3.completedAt') !== yunzhanMission.completedAt) invalid('missionCompletionEvidence.w3-m3完成时间无效');
+      try {
+        const workspace = parseYunzhanDialogueWorkspace(yunzhan.workspace, 'missionCompletionEvidence.w3-m3.workspace'); const trace = compileYunzhanDialogueDraft(workspace); const run = runYunzhanDialogueForDraft(workspace, trace);
+        if (!deeplyEqual(yunzhan.trace, trace) || !deeplyEqual(yunzhan.run, run) || !run.completed || run.finalState !== 'origin-explained') invalid('missionCompletionEvidence.w3-m3必须是当前workspace成功重放');
+        result['w3-m3'] = { kind: 'formal-v3', completedAt: yunzhanMission.completedAt, verifiedAt: date(yunzhan.verifiedAt, 'missionCompletionEvidence.w3-m3.verifiedAt'), workspace, trace, run };
+      } catch { invalid('missionCompletionEvidence.w3-m3必须是当前workspace成功重放'); }
+    }
   }
-  const yunzhan = object(rawYunzhan, 'missionCompletionEvidence.w3-m3');
-  if (yunzhan.kind === 'legacy-preformal') {
-    exactKeys(yunzhan, 'missionCompletionEvidence.w3-m3', ['kind', 'completedAt', 'sourceVersion', 'sourceSchemaRevision']);
-    if (date(yunzhan.completedAt, 'missionCompletionEvidence.w3-m3.completedAt') !== yunzhanMission.completedAt || yunzhan.sourceVersion !== 3 || yunzhan.sourceSchemaRevision !== 4) invalid('missionCompletionEvidence.w3-m3旧证明无效');
-    result['w3-m3'] = { kind: 'legacy-preformal', completedAt: yunzhanMission.completedAt, sourceVersion: 3, sourceSchemaRevision: 4 };
-    return result;
+
+  const bajieMission = parsedMissions['w3-m4']; const rawBajie = source['w3-m4'];
+  if (!bajieMission) {
+    if (rawBajie !== undefined) invalid('missionCompletionEvidence.w3-m4没有对应完成任务');
+  } else if (rawBajie === undefined && legacyBeforeSix) {
+    if (legacyM4Source === null) invalid('missionCompletionEvidence.w3-m4缺少历史来源');
+    result['w3-m4'] = { kind: 'legacy-preformal', completedAt: bajieMission.completedAt, ...legacyM4Source } as MissionCompletionEvidenceV1['w3-m4'];
+  } else {
+    if (rawBajie === undefined) invalid('missionCompletionEvidence.w3-m4缺少完成证明');
+    const bajie = object(rawBajie, 'missionCompletionEvidence.w3-m4');
+    if (bajie.kind === 'legacy-preformal') {
+      result['w3-m4'] = legacyBajieJoiningCompletionEvidence(bajie, 'missionCompletionEvidence.w3-m4', bajieMission.completedAt);
+    } else {
+      if (bajie.kind !== 'formal-v3' || result['w3-m3']?.kind !== 'formal-v3') invalid('missionCompletionEvidence.w3-m4没有W3-M3正式完成前置');
+      exactKeys(bajie, 'missionCompletionEvidence.w3-m4', ['kind', 'completedAt', 'verifiedAt', 'workspace', 'trace', 'run']);
+      if (date(bajie.completedAt, 'missionCompletionEvidence.w3-m4.completedAt') !== bajieMission.completedAt) invalid('missionCompletionEvidence.w3-m4完成时间无效');
+      let workspace: BajieJoiningWorkspaceDraftV1; let trace: BajieJoiningInstruction[]; let run: BajieJoiningRunResult;
+      try { workspace = parseBajieJoiningWorkspace(bajie.workspace, 'missionCompletionEvidence.w3-m4.workspace'); trace = compileBajieJoiningDraft(workspace); run = runBajieJoiningForDraft(workspace, trace); }
+      catch { invalid('missionCompletionEvidence.w3-m4必须是当前workspace成功重放'); }
+      if (!sameBajieJoiningData(bajie.trace, trace!) || !sameBajieJoiningData(bajie.run, run!) || !run!.completed || run!.finalState !== 'westward-team-departed' || run!.failureSnapshot !== null) invalid('missionCompletionEvidence.w3-m4必须是当前workspace成功重放');
+      const verifiedAt = date(bajie.verifiedAt, 'missionCompletionEvidence.w3-m4.verifiedAt');
+      const session = parsedSessions['w3-m4'];
+      if (!session || session.lastRun === null || !session.lastRun.completed || !sameBajieJoiningData(session.workspace, workspace!) || !sameBajieJoiningData(session.lastTrace, trace!) || !sameBajieJoiningData(session.lastRun, run!) || session.lastRunAt === null || session.lastRunAt > session.savedAt || session.savedAt > verifiedAt || bajieMission.completedAt > verifiedAt) invalid('missionCompletionEvidence.w3-m4必须绑定当前完成session');
+      result['w3-m4'] = { kind: 'formal-v3', completedAt: bajieMission.completedAt, verifiedAt, workspace: workspace!, trace: trace!, run: run! };
+    }
   }
-  if (yunzhan.kind !== 'formal-v3') invalid('missionCompletionEvidence.w3-m3.kind无效');
-  exactKeys(yunzhan, 'missionCompletionEvidence.w3-m3', ['kind', 'completedAt', 'verifiedAt', 'workspace', 'trace', 'run']);
-  if (date(yunzhan.completedAt, 'missionCompletionEvidence.w3-m3.completedAt') !== yunzhanMission.completedAt) invalid('missionCompletionEvidence.w3-m3完成时间无效');
-  try {
-    const workspace = parseYunzhanDialogueWorkspace(yunzhan.workspace, 'missionCompletionEvidence.w3-m3.workspace'); const trace = compileYunzhanDialogueDraft(workspace); const run = runYunzhanDialogueForDraft(workspace, trace);
-    if (!deeplyEqual(yunzhan.trace, trace) || !deeplyEqual(yunzhan.run, run) || !run.completed || run.finalState !== 'origin-explained') invalid('missionCompletionEvidence.w3-m3必须是当前workspace成功重放');
-    result['w3-m3'] = { kind: 'formal-v3', completedAt: yunzhanMission.completedAt, verifiedAt: date(yunzhan.verifiedAt, 'missionCompletionEvidence.w3-m3.verifiedAt'), workspace, trace, run };
-  } catch { invalid('missionCompletionEvidence.w3-m3必须是当前workspace成功重放'); }
+  const m5Mission = parsedMissions['w3-m5']; const rawM5 = source['w3-m5'];
+  if (!m5Mission) {
+    if (rawM5 !== undefined) invalid('missionCompletionEvidence.w3-m5没有对应完成任务');
+  } else if (rawM5 === undefined && legacyBeforeSix) {
+    if (legacyM4Source === null) invalid('missionCompletionEvidence.w3-m5缺少历史来源');
+    result['w3-m5'] = { kind: 'legacy-replay-only', completedAt: m5Mission.completedAt, ...legacyM4Source } as MissionCompletionEvidenceV1['w3-m5'];
+  } else {
+    if (rawM5 === undefined && result['w3-m4']?.kind === 'formal-v3') {
+      // Current legacy W3-M5 completion follows a formal W3-M4 proof and is
+      // not historical replay data, so it must not invent a replay marker.
+    } else if (rawM5 === undefined) invalid('missionCompletionEvidence.w3-m5缺少历史重玩标记');
+    else {
+    const marker = object(rawM5, 'missionCompletionEvidence.w3-m5');
+    exactKeys(marker, 'missionCompletionEvidence.w3-m5', ['kind', 'completedAt', 'sourceVersion', 'sourceSchemaRevision']);
+    if (marker.kind !== 'legacy-replay-only' || date(marker.completedAt, 'missionCompletionEvidence.w3-m5.completedAt') !== m5Mission.completedAt) invalid('missionCompletionEvidence.w3-m5旧标记无效');
+    const valid = (marker.sourceVersion === 1 && marker.sourceSchemaRevision === null) || (marker.sourceVersion === 2 && marker.sourceSchemaRevision === 1) || (marker.sourceVersion === 3 && (marker.sourceSchemaRevision === 1 || marker.sourceSchemaRevision === 2 || marker.sourceSchemaRevision === 3 || marker.sourceSchemaRevision === 4 || marker.sourceSchemaRevision === 5));
+    if (!valid) invalid('missionCompletionEvidence.w3-m5来源版本组合无效');
+    result['w3-m5'] = { kind: 'legacy-replay-only', completedAt: m5Mission.completedAt, sourceVersion: marker.sourceVersion, sourceSchemaRevision: marker.sourceSchemaRevision } as MissionCompletionEvidenceV1['w3-m5'];
+    }
+  }
   return result;
 }
 
@@ -1916,34 +1975,40 @@ function migratedLegacyMissionCompletionEvidence(
     }}),
     ...(cuilan === undefined ? {} : { 'w3-m2': { kind: 'legacy-preformal' as const, completedAt: cuilan.completedAt, sourceVersion: 3 as const, sourceSchemaRevision: 3 as const } }),
     ...(parsedMissions['w3-m3'] === undefined ? {} : { 'w3-m3': { kind: 'legacy-preformal' as const, completedAt: parsedMissions['w3-m3']!.completedAt, sourceVersion: 3 as const, sourceSchemaRevision: 4 as const } }),
+    ...(parsedMissions['w3-m4'] === undefined ? {} : { 'w3-m4': { kind: 'legacy-preformal' as const, completedAt: parsedMissions['w3-m4']!.completedAt, sourceVersion, sourceSchemaRevision } as MissionCompletionEvidenceV1['w3-m4'] }),
+    ...(parsedMissions['w3-m5'] === undefined ? {} : { 'w3-m5': { kind: 'legacy-replay-only' as const, completedAt: parsedMissions['w3-m5']!.completedAt, sourceVersion, sourceSchemaRevision } as MissionCompletionEvidenceV1['w3-m5'] }),
   };
 }
 
 function parseV3(source: Record<string, unknown>): ProgressV3 {
   const legacyRevision = source.schemaRevision === 1;
-  const currentRevision = source.schemaRevision === 3 || source.schemaRevision === 4 || source.schemaRevision === 5;
+  const currentRevision = source.schemaRevision === 3 || source.schemaRevision === 4 || source.schemaRevision === 5 || source.schemaRevision === 6;
   const revisionThree = source.schemaRevision === 3;
   exactKeys(source, '顶层', [
     'version', 'schemaRevision', 'learnerName', 'missions', 'settings', 'privacy', 'recovery', 'sessions',
     ...(legacyRevision ? [] : ['equipment']), ...(currentRevision ? ['abilities', 'missionCompletionEvidence'] : []), 'savedAt',
   ]);
-  if (source.schemaRevision !== 1 && source.schemaRevision !== 2 && source.schemaRevision !== 3 && source.schemaRevision !== 4 && source.schemaRevision !== 5) {
-    invalid('schemaRevision必须是1、2、3、4或5');
+  if (source.schemaRevision !== 1 && source.schemaRevision !== 2 && source.schemaRevision !== 3 && source.schemaRevision !== 4 && source.schemaRevision !== 5 && source.schemaRevision !== 6) {
+    invalid('schemaRevision必须是1、2、3、4、5或6');
   }
   const parsedCommon = common(source, true);
   const parsedSessions = sessions(source.sessions);
   const parsedAbilities = currentRevision
     ? learningAbilities(source.abilities, parsedCommon.missions)
     : { conditionObservation: deriveConditionObservation(parsedCommon.missions) };
-  const observationUses = [...(parsedSessions['w3-m1']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m2']?.conditionObservationUses ?? [])];
+  const observationUses = [...(parsedSessions['w3-m1']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m2']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m3']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m4']?.conditionObservationUses ?? [])];
   if (observationUses.length > 0
     && (parsedAbilities.conditionObservation.acquiredAt === null
       || parsedAbilities.conditionObservation.stableUnlockedAt === null)) {
     invalid('conditionObservationUses需要已获得且已稳定的火眼金睛能力');
   }
+  const parsedEvidence = currentRevision
+      ? missionCompletionEvidence(source.missionCompletionEvidence, parsedCommon.missions, parsedSessions, revisionThree, source.schemaRevision !== 6, { sourceVersion: 3, sourceSchemaRevision: source.schemaRevision as 1 | 2 | 3 | 4 | 5 })
+    : migratedLegacyMissionCompletionEvidence(parsedCommon.missions, 3, source.schemaRevision as 1 | 2);
+  if (parsedCommon.missions['w3-m5'] && parsedEvidence['w3-m4']?.kind !== 'formal-v3' && parsedEvidence['w3-m5']?.kind !== 'legacy-replay-only') invalid('W3-M5历史完成缺少重玩标记');
   return {
     version: 3,
-    schemaRevision: 5,
+    schemaRevision: 6,
     ...parsedCommon,
     ...privacyAndRecovery(source),
     sessions: parsedSessions,
@@ -1951,9 +2016,7 @@ function parseV3(source: Record<string, unknown>): ProgressV3 {
       ? equipmentFromMissions(parsedCommon.missions)
       : validateEquipmentRewards(equipment(source.equipment), parsedCommon.missions),
     abilities: parsedAbilities,
-    missionCompletionEvidence: currentRevision
-      ? missionCompletionEvidence(source.missionCompletionEvidence, parsedCommon.missions, revisionThree)
-      : migratedLegacyMissionCompletionEvidence(parsedCommon.missions, 3, source.schemaRevision as 1 | 2),
+    missionCompletionEvidence: parsedEvidence,
   };
 }
 
@@ -1967,7 +2030,7 @@ export function migrateProgress(value: unknown): ProgressV3 {
   if (legacy.version === 2) return {
     ...legacy,
     version: 3,
-    schemaRevision: 5,
+    schemaRevision: 6,
     sessions: {},
     equipment: equipmentFromMissions(legacy.missions),
     abilities: { conditionObservation: deriveConditionObservation(legacy.missions) },
@@ -1975,7 +2038,7 @@ export function migrateProgress(value: unknown): ProgressV3 {
   };
   return {
     version: 3,
-    schemaRevision: 5,
+    schemaRevision: 6,
     learnerName: legacy.learnerName,
     missions: legacy.missions,
     settings: { ...legacy.settings, reducedMotionOverride: false },

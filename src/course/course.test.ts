@@ -72,12 +72,12 @@ describe('course manifest', () => {
     expect(appSource).not.toMatch(/from ['"]\.\/course\/(?:course|formalCourse)['"]/);
   });
 
-  it('promotes week two and W3-M1/M2 without legacy fallback', () => {
+  it('promotes week two and W3-M1 through M4 without legacy fallback', () => {
     expect(formalWeekOneMissions).toHaveLength(5);
     expect(formalWeekTwoMissions).toHaveLength(5);
-    expect(formalWeekThreeMissions).toHaveLength(3);
+    expect(formalWeekThreeMissions).toHaveLength(4);
     for (const mission of formalWeekOneMissions) expect(mission).not.toHaveProperty('expectedSequence');
-    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5', 'w2-m1', 'w2-m2', 'w2-m3', 'w2-m4', 'w2-m5', 'w3-m1', 'w3-m2', 'w3-m3']);
+    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5', 'w2-m1', 'w2-m2', 'w2-m3', 'w2-m4', 'w2-m5', 'w3-m1', 'w3-m2', 'w3-m3', 'w3-m4']);
     for (const mission of course.weeks.flatMap((week) => week.missions)) {
       if (formalIds.has(mission.id)) expect(mission).not.toHaveProperty('expectedSequence');
       else expect(mission).toHaveProperty('expectedSequence', expect.any(Array));
@@ -101,13 +101,15 @@ describe('course manifest', () => {
     expect(pageSource).toMatch(/mission\.id === 'w2-m3'[\s\S]*WeekTwoPeachElixirRouteBoundary/);
     expect(pageSource).toMatch(/mission\.id === 'w2-m4'[\s\S]*WeekTwoFurnaceConditionRouteBoundary/);
     expect(pageSource).toMatch(/mission\.id === 'w3-m1'[\s\S]*WeekThreeManorHelpRouteBoundary/);
+    expect(pageSource).toMatch(/mission\.id === 'w3-m4'[\s\S]*WeekThreeBajieJoiningRouteBoundary/);
+    expect(pageSource).toMatch(/export function WeekThreeBajieJoiningRouteBoundary/);
     expect(pageSource).toMatch(/import\(["']\.\/WeekThreeManorHelpExperience["']\)/);
     expect(pageSource).toMatch(/export function WeekThreeManorHelpRouteBoundary/);
     expect(courseSource).not.toMatch(/mission\('w2-m5'[\s\S]*expectedSequence/);
     expect(pageSource).not.toMatch(/legacySequence\s*\?\?\s*\[\]/);
   });
 
-  it('registers w3-m1 through w3-m3 as formal executable missions without legacy sequences', () => {
+  it('registers w3-m1 through w3-m4 as formal executable missions without legacy sequences', () => {
     const mission = getMission('w3-m2');
     expect(mission).toBeDefined();
     expect(isFormalMissionOutline(getMissionOutline('w3-m2'))).toBe(true);
@@ -115,10 +117,23 @@ describe('course manifest', () => {
     expect('expectedSequence' in mission!).toBe(false);
     expect(isFormalMissionOutline(getMissionOutline('w3-m3'))).toBe(true);
     expect(isExecutableMissionId('w3-m3')).toBe(true);
-    for (const id of ['w3-m4', 'w3-m5']) {
-      expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
-      expect(isExecutableMissionId(id)).toBe(false);
-    }
+    const bajie = getMission('w3-m4');
+    expect(bajie).toBeDefined();
+    expect(isFormalMissionOutline(getMissionOutline('w3-m4'))).toBe(true);
+    expect(isExecutableMissionId('w3-m4')).toBe(true);
+    expect('expectedSequence' in bajie!).toBe(false);
+    expect(bajie?.mode).toBe('blockly');
+    expect(bajie?.canon.chapters).toEqual([19]);
+    expect(bajie?.subtitle).toMatch(/两个必要条件.*同时/);
+    expect(bajie?.objective).toMatch(/同时满足/);
+    expect(bajie?.storyBeats.map((beat) => beat.summary).join('\n')).toContain('观音此前已授戒，法名悟能');
+    expect(bajie?.storyBeats.map((beat) => beat.summary).join('\n')).toContain('唐僧后来另名八戒');
+    expect(bajie?.storyBeats.map((beat) => beat.summary).join('\n')).toContain('挑担西行');
+    expect(bajie?.storyBeats.map((beat) => beat.summary).join('\n')).not.toContain('唐僧为他摩顶受戒');
+    const boss = getMission('w3-m5');
+    expect(isFormalMissionOutline(getMissionOutline('w3-m5'))).toBe(false);
+    expect(isExecutableMissionId('w3-m5')).toBe(false);
+    expect(boss).toHaveProperty('expectedSequence', expect.any(Array));
   });
 
   it('gives every selectable command a child-readable Chinese label', () => {

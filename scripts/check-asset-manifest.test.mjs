@@ -8,6 +8,7 @@ import {
   collectAssetFiles,
   decodeWebpDimensions,
   measureAlphaEdgeMismatch,
+  measureLowAlphaResidue,
   parseAssetManifest,
   readWebpDimensions,
   verifyRequiredAdvancedWeekOneInventory,
@@ -18,6 +19,7 @@ import {
   verifyRequiredWeekThreeManorHelpInventory,
   verifyRequiredWeekThreeCuilanBooleanInventory,
   verifyRequiredWeekThreeYunzhanDialogueInventory,
+  verifyRequiredWeekThreeBajieJoiningInventory,
   verifyAssetManifest,
 } from './check-asset-manifest.mjs';
 
@@ -239,6 +241,92 @@ test('requires the exact two approved W3-M3 Yunzhan assets, visible assetUrl slo
   const files = [{ path: rows[0].assetId, bytes: 162000, width: 1672, height: 941, hasAlpha: false }, { path: rows[1].assetId, bytes: 288000, width: 2048, height: 768, hasAlpha: true, alphaEdgeMismatch: { inspectedPixels: 400, mismatchRatio: 0 } }];
   assert.doesNotThrow(() => verifyRequiredWeekThreeYunzhanDialogueInventory({ manifestRows: rows, publicFiles: files, promptRecords: [], source }));
   assert.throws(() => verifyRequiredWeekThreeYunzhanDialogueInventory({ manifestRows: rows, publicFiles: [...files, { path: 'assets/week-three-yunzhan-dialogue/extra.webp' }], promptRecords: [], source }), /exactly|unexpected/i);
+});
+
+test('requires the exact W3-M4 Bajie-joining inventory, safe provenance, and two live assetUrl scene slots', () => {
+  const background = 'assets/week-three-bajie-joining/bajie-joining-background.webp';
+  const states = 'assets/week-three-bajie-joining/bajie-joining-states.webp';
+  const source = `import { assetUrl } from '../utils/assets';
+    const BACKGROUND = '${background}'; const STATES = '${states}';
+    export function WeekThreeBajieJoiningScene() { const source = (path) => assetUrl(path); return <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></>; }`;
+  const promptSafety = 'polished bright 3D Chinese children\'s storybook game; no text; no pseudo-text; no binding; no ear pulling; no attack; no adult marriage; no humiliating pose.';
+  const rows = [
+    row({ assetId: background, purpose: 'Bright Gao family courtyard background for Bajie joining', promptOrSourceReference: '[Prompt W3M4-001](#prompt-w3m4-001-bajie-joining-background)', dimensions: '1672x941', screenSlots: 'w3-m4 WeekThreeBajieJoiningScene', qaStatus: 'visual-qa-passed' }),
+    row({ assetId: states, purpose: 'Transparent Bajie joining story states', promptOrSourceReference: '[Prompt W3M4-002](#prompt-w3m4-002-bajie-joining-states)', dimensions: '2172x724', screenSlots: 'w3-m4 WeekThreeBajieJoiningScene', qaStatus: 'visual-qa-passed' }),
+  ];
+  const files = [
+    file({ path: background, bytes: 172450, width: 1672, height: 941, hasAlpha: false }),
+    file({ path: states, bytes: 350002, width: 2172, height: 724, hasAlpha: true, alphaZeroRgbPixels: 0, webpLossless: true, alphaEdgeMismatch: { inspectedPixels: 400, mismatchRatio: 0 }, lowAlphaResidue: { inspectedPixels: 400, orphanPixels: 0, longLineRuns: 0 } }),
+  ];
+  const promptRecords = [
+    promptRecord({ heading: 'Prompt W3M4-001 bajie joining background', anchor: '#prompt-w3m4-001-bajie-joining-background', prompt: promptSafety }),
+    promptRecord({ heading: 'Prompt W3M4-002 bajie joining states', anchor: '#prompt-w3m4-002-bajie-joining-states', prompt: promptSafety }),
+  ];
+  assert.doesNotThrow(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: files, promptRecords, source, mode: 'verify' }));
+  assert.throws(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: [...files, { path: 'assets/week-three-bajie-joining/extra.webp' }], promptRecords, source }), /exactly|unexpected/i);
+  assert.throws(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: [rows[0], { ...rows[1], screenSlots: 'w3-m4 WrongScene' }], publicFiles: files, promptRecords, source }), /screen slots/i);
+  assert.throws(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: files, promptRecords, source: `${source}\nconst hidden = 'assets/week-three-bajie-joining/extra.webp';` }), /exactly.*two|approved/i);
+  assert.throws(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows.map((item) => ({ ...item, sha256: '' })), publicFiles: files, promptRecords, source }), /SHA-256/i);
+  assert.throws(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows.map((item) => ({ ...item, dimensions: '' })), publicFiles: files, promptRecords, source }), /dimensions/i);
+  assert.throws(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows.map((item) => ({ ...item, qaStatus: 'generated' })), publicFiles: files, promptRecords, source }), /QA status/i);
+  assert.throws(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: files, promptRecords: promptRecords.slice(0, 1), source }), /prompt.*missing|unreferenced/i);
+  assert.throws(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: files, promptRecords: promptRecords.map((record) => ({ ...record, prompt: record.prompt.replace('no pseudo-text; ', '') })), source }), /pseudo-text/i);
+  assert.throws(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: [{ ...files[0], bytes: 512 * 1024 + 1 }, files[1]], promptRecords, source }), /512 KiB/i);
+  assert.throws(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: [files[0], { ...files[1], alphaEdgeMismatch: { inspectedPixels: 400, mismatchRatio: 0.041 } }], promptRecords, source }), /alpha-edge/i);
+});
+
+test('rejects W3-M4 scene-slot bypasses that discard, shadow, or dead-code the imported assetUrl binding', () => {
+  const background = 'assets/week-three-bajie-joining/bajie-joining-background.webp';
+  const states = 'assets/week-three-bajie-joining/bajie-joining-states.webp';
+  const prompt = 'polished bright 3D Chinese children\'s storybook game; no text; no pseudo-text; no binding; no ear pulling; no attack; no adult marriage; no humiliating pose.';
+  const rows = [
+    row({ assetId: background, purpose: 'Background', promptOrSourceReference: '[Prompt W3M4-001](#prompt-w3m4-001-bajie-joining-background)', dimensions: '1672x941', screenSlots: 'w3-m4 WeekThreeBajieJoiningScene', qaStatus: 'visual-qa-passed' }),
+    row({ assetId: states, purpose: 'States', promptOrSourceReference: '[Prompt W3M4-002](#prompt-w3m4-002-bajie-joining-states)', dimensions: '2172x724', screenSlots: 'w3-m4 WeekThreeBajieJoiningScene', qaStatus: 'visual-qa-passed' }),
+  ];
+  const files = [file({ path: background, width: 1672, height: 941 }), file({ path: states, width: 2172, height: 724, hasAlpha: true, alphaZeroRgbPixels: 0, webpLossless: true, alphaEdgeMismatch: { inspectedPixels: 1, mismatchRatio: 0 }, lowAlphaResidue: { inspectedPixels: 1, orphanPixels: 0, longLineRuns: 0 } })];
+  const promptRecords = [promptRecord({ heading: 'Prompt W3M4-001 bajie joining background', anchor: '#prompt-w3m4-001-bajie-joining-background', prompt }), promptRecord({ heading: 'Prompt W3M4-002 bajie joining states', anchor: '#prompt-w3m4-002-bajie-joining-states', prompt })];
+  const scene = (sourceBody) => `import { assetUrl } from '../utils/assets'; const BACKGROUND = '${background}'; const STATES = '${states}'; export function WeekThreeBajieJoiningScene() { ${sourceBody} }`;
+  const verify = (source) => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: files, promptRecords, source, mode: 'verify' });
+  assert.throws(() => verify(scene("const source = (path) => { assetUrl(path); return '/not-approved.webp'; }; return <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></>;")), /source.*assetUrl|assetUrl.*source/i);
+  assert.throws(() => verify(scene("const assetUrl = (path) => '/not-approved.webp'; const source = (path) => assetUrl(path); return <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></>;")), /imported.*assetUrl|assetUrl.*binding/i);
+  assert.throws(() => verify(scene("const source = (path) => { if (false) return assetUrl(path); /* assetUrl(path) */ return '/not-approved.webp'; }; return <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></>;")), /source.*assetUrl|assetUrl.*source/i);
+  assert.throws(() => verify(scene("const source = (path) => assetUrl(path); { const source = (path) => '/not-approved.webp'; return <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></>; }")), /same.*source|source.*binding/i);
+  assert.throws(() => verify(scene("const source = (path) => assetUrl(path); const unused = () => <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></>; return <section>无图片</section>;")), /exported.*return|return.*img|exactly two img/i);
+  for (const conditionalImages of [
+    "false ? <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></> : null",
+    "false && <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></>",
+    "false || <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></>",
+    "null ?? <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></>",
+  ]) assert.throws(() => verify(scene(`const source = (path) => assetUrl(path); return <>{${conditionalImages}}</>;`)), /conditional|exactly two img/i);
+  for (const nestedFunctionImages of [
+    "() => <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></>",
+    "function () { return <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></>; }",
+  ]) assert.throws(() => verify(scene(`const source = (path) => assetUrl(path); return <>{${nestedFunctionImages}}</>;`)), /exactly two img/i);
+  assert.throws(() => verify(`import { assetUrl } from '../utils/assets'; const BACKGROUND = '${background}'; const STATES = '${states}'; function OtherScene() { const source = (path) => assetUrl(path); return <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></>; }`), /exactly one exported WeekThreeBajieJoiningScene/i);
+  assert.throws(() => verify(`import { assetUrl } from '../utils/assets'; const BACKGROUND = '${background}'; const STATES = '${states}'; const source = (path) => assetUrl(path); export function WeekThreeBajieJoiningScene() { return <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></>; } export function WeekThreeBajieJoiningScene() { return <section />; }`), /exactly one exported WeekThreeBajieJoiningScene/i);
+});
+
+test('records W3-M4 alpha-zero handling without treating it as image-safety proof and rejects low-alpha residue', () => {
+  const rgba = new Uint8Array(10 * 10 * 4);
+  rgba[(5 * 10 + 5) * 4 + 3] = 255;
+  rgba[(5 * 10 + 4) * 4 + 3] = 8;
+  assert.deepEqual(measureLowAlphaResidue(rgba, 10, 10), { inspectedPixels: 1, orphanPixels: 0, longLineRuns: 0 });
+  rgba[3] = 8;
+  assert.equal(measureLowAlphaResidue(rgba, 10, 10).orphanPixels, 1);
+
+  const background = 'assets/week-three-bajie-joining/bajie-joining-background.webp';
+  const states = 'assets/week-three-bajie-joining/bajie-joining-states.webp';
+  const source = `import { assetUrl } from '../utils/assets'; const BACKGROUND = '${background}'; const STATES = '${states}'; export function WeekThreeBajieJoiningScene() { const source = (path) => assetUrl(path); return <><img src={source(BACKGROUND)} /><img src={source(STATES)} /></>; }`;
+  const prompt = 'polished bright 3D Chinese children\'s storybook game; no text; no pseudo-text; no binding; no ear pulling; no attack; no adult marriage; no humiliating pose.';
+  const rows = [row({ assetId: background, purpose: 'Background', promptOrSourceReference: '[Prompt W3M4-001](#prompt-w3m4-001-bajie-joining-background)', dimensions: '1672x941', screenSlots: 'w3-m4 WeekThreeBajieJoiningScene', qaStatus: 'visual-qa-passed' }), row({ assetId: states, purpose: 'States', promptOrSourceReference: '[Prompt W3M4-002](#prompt-w3m4-002-bajie-joining-states)', dimensions: '2172x724', screenSlots: 'w3-m4 WeekThreeBajieJoiningScene', qaStatus: 'visual-qa-passed' })];
+  const files = [file({ path: background, width: 1672, height: 941 }), file({ path: states, width: 2172, height: 724, hasAlpha: true, alphaZeroRgbPixels: 0, webpLossless: true, alphaEdgeMismatch: { inspectedPixels: 1, mismatchRatio: 0 }, lowAlphaResidue: { inspectedPixels: 1, orphanPixels: 0, longLineRuns: 0 } })];
+  const promptRecords = [promptRecord({ heading: 'Prompt W3M4-001 bajie joining background', anchor: '#prompt-w3m4-001-bajie-joining-background', prompt }), promptRecord({ heading: 'Prompt W3M4-002 bajie joining states', anchor: '#prompt-w3m4-002-bajie-joining-states', prompt })];
+  assert.doesNotThrow(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: files, promptRecords, source, mode: 'verify' }));
+  assert.doesNotThrow(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: [rows[0], { ...rows[1], dimensions: '1500x500' }], publicFiles: [files[0], { ...files[1], width: 1500, height: 500 }], promptRecords, source, mode: 'verify' }));
+  assert.doesNotThrow(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: [files[0], { ...files[1], alphaZeroRgbPixels: 1 }], promptRecords, source }));
+  assert.doesNotThrow(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: [files[0], { ...files[1], webpLossless: false, alphaZeroRgbPixels: 1 }], promptRecords, source }));
+  assert.throws(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: [files[0], { ...files[1], lowAlphaResidue: { inspectedPixels: 80, orphanPixels: 49, longLineRuns: 0 } }], promptRecords, source }), /low-alpha residue/i);
+  assert.throws(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: [files[0], { ...files[1], lowAlphaResidue: { inspectedPixels: 24, orphanPixels: 24, longLineRuns: 1 } }], promptRecords, source }), /low-alpha residue/i);
 });
 
 test('traces every approved Dragon Palace raster to a real formal scene slot', async () => {

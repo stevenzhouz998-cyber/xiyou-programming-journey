@@ -1,17 +1,19 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
-import { dirname, isAbsolute, join, normalize, relative, resolve, win32 } from 'node:path';
+import { dirname, isAbsolute, join, normalize, posix, relative, resolve, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import {
   ENTRY_GZIP_LIMIT,
   GAME_SCENE_RAW_LIMIT,
   HOME_TOTAL_LIMIT,
   PHASER_RAW_LIMIT,
   WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES,
+  WEEK_THREE_BAJIE_JOINING_COLD_LOAD_MAX_BYTES,
   WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES,
   WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES,
 } from './budget-limits.mjs';
-export { WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES, WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES, WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES };
+export { WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES, WEEK_THREE_BAJIE_JOINING_COLD_LOAD_MAX_BYTES, WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES, WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES };
 export {
   DRAGON_PALACE_COLD_LOAD_MAX_BYTES,
   DRAGON_PALACE_COLD_BYTES,
@@ -42,7 +44,21 @@ export const COLD_LOAD_ROUTE_CLOSURE_BUDGETS = Object.freeze({
   'src/components/WeekThreeManorHelpExperience.tsx': WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES,
   'src/components/WeekThreeCuilanBooleanExperience.tsx': WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES,
   'src/components/WeekThreeYunzhanDialogueExperience.tsx': WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES,
+  'src/components/WeekThreeBajieJoiningExperience.tsx': WEEK_THREE_BAJIE_JOINING_COLD_LOAD_MAX_BYTES,
 });
+const COLD_LOAD_ROUTE_STATIC_ISOLATION = Object.freeze({
+  'src/components/WeekThreeBajieJoiningExperience.tsx': [
+    'src/components/WeekThreeBajieJoiningBlocklyWorkspace.tsx',
+    'src/components/WeekThreeBajieJoiningScene.tsx',
+  ],
+});
+const WEEK_THREE_BAJIE_JOINING_ENTRY_FORBIDDEN = new Set([
+  'src/components/WeekThreeBajieJoiningExperience.tsx',
+  'src/components/WeekThreeBajieJoiningBlocklyWorkspace.tsx',
+  'src/components/WeekThreeBajieJoiningScene.tsx',
+]);
+const STATIC_SOURCE_EXTENSIONS = ['.tsx', '.ts', '.mts', '.jsx', '.js'];
+const MAX_STATIC_SOURCE_CLOSURE_FILES = 500;
 const isPhaserSource = (key, chunk) => chunk.name === 'phaser' || /node_modules[\\/]phaser(?:[\\/]|$)/i.test(`${key} ${chunk.src ?? ''}`);
 const isBlocklySource = (key, chunk) => chunk.name === 'blockly-editor' || /node_modules[\\/]blockly(?:[\\/]|$)/i.test(`${key} ${chunk.src ?? ''}`);
 const PRODUCTION_TEST_SENTINELS = [
@@ -58,12 +74,55 @@ const PRODUCTION_TEST_SENTINELS = [
   'fail-cuilan-observation',
   'fail-cuilan-completion',
   'corrupt-yunzhan-current', 'fail-yunzhan-draft', 'fail-yunzhan-run', 'fail-yunzhan-observation', 'fail-yunzhan-completion',
+  'corrupt-bajie-current', 'fail-bajie-draft', 'fail-bajie-run', 'fail-bajie-observation', 'fail-bajie-completion',
 ];
 const assertSafeFile = (file) => {
   const normalized = normalize(file);
   const portable = file.replaceAll('\\', '/');
   if (isAbsolute(file) || win32.isAbsolute(file) || portable === '..' || portable.startsWith('../') || portable.split('/').includes('..') || normalized === '..') throw new Error(`Bundle budget: unsafe manifest file path ${file}.`);
 };
+
+function staticRelativeModuleSpecifiers(sourcePath, source) {
+  const sourceFile = ts.createSourceFile(sourcePath, source, ts.ScriptTarget.Latest, true, sourcePath.endsWith('.tsx') || sourcePath.endsWith('.jsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  if (sourceFile.parseDiagnostics.length > 0) throw new Error(`Bundle budget: ${sourcePath} cannot be parsed for entry static-import verification.`);
+  const specifiers = [];
+  for (const statement of sourceFile.statements) {
+    if (ts.isImportDeclaration(statement)) {
+      const clause = statement.importClause;
+      const named = clause?.namedBindings;
+      const allNamedTypeOnly = named && ts.isNamedImports(named) && named.elements.length > 0 && named.elements.every((item) => item.isTypeOnly);
+      if (clause?.isTypeOnly || allNamedTypeOnly || !ts.isStringLiteral(statement.moduleSpecifier) || !statement.moduleSpecifier.text.startsWith('.')) continue;
+      specifiers.push(statement.moduleSpecifier.text);
+    }
+    if (ts.isExportDeclaration(statement) && !statement.isTypeOnly && ts.isStringLiteral(statement.moduleSpecifier) && statement.moduleSpecifier.text.startsWith('.')) specifiers.push(statement.moduleSpecifier.text);
+  }
+  return specifiers;
+}
+
+function resolveStaticSourceSpecifier(sourceFiles, from, specifier) {
+  const base = posix.normalize(posix.join(posix.dirname(from), specifier));
+  const candidates = [...STATIC_SOURCE_EXTENSIONS.map((extension) => `${base}${extension}`), ...STATIC_SOURCE_EXTENSIONS.map((extension) => `${base}/index${extension}`)];
+  return candidates.find((candidate) => sourceFiles.has(candidate)) ?? null;
+}
+
+export function assertNoWeekThreeBajieJoiningEntryStaticImports(sourceFiles) {
+  if (!(sourceFiles instanceof Map) || typeof sourceFiles.get('src/main.tsx') !== 'string') throw new Error('Bundle budget: source files must include src/main.tsx for W3-M4 entry isolation.');
+  const visited = new Set();
+  const pending = ['src/main.tsx'];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (visited.has(current)) continue;
+    if (visited.size >= MAX_STATIC_SOURCE_CLOSURE_FILES) throw new Error(`Bundle budget: entry static-import closure exceeded ${MAX_STATIC_SOURCE_CLOSURE_FILES} source files.`);
+    visited.add(current);
+    if (WEEK_THREE_BAJIE_JOINING_ENTRY_FORBIDDEN.has(current)) throw new Error(`Bundle budget: ${current.split('/').at(-1).replace('.tsx', '')} entered the application entry static import closure.`);
+    const source = sourceFiles.get(current);
+    if (typeof source !== 'string') throw new Error(`Bundle budget: entry static-import source ${current} is missing.`);
+    for (const specifier of staticRelativeModuleSpecifiers(current, source)) {
+      const dependency = resolveStaticSourceSpecifier(sourceFiles, current, specifier);
+      if (dependency) pending.push(dependency);
+    }
+  }
+}
 
 export function assertNoSourceVisualAssets(files) {
   const sourceAsset = files.find((file) => /\.(?:png|avif)$/i.test(file));
@@ -171,6 +230,9 @@ export function analyzeManifest(manifest, gzipSizes, rawSizes = {}) {
     if (!manifest[root]) continue;
     if (!manifest[root].isDynamicEntry) throw new Error(`Bundle budget: ${root.split('/').at(-1).replace('.tsx', '')} must remain a lazy route entry.`);
     if (visited.has(root)) throw new Error(`Bundle budget: ${root.split('/').at(-1).replace('.tsx', '')} must stay outside the application entry static closure.`);
+    for (const isolatedRoot of COLD_LOAD_ROUTE_STATIC_ISOLATION[root] ?? []) {
+      if (visited.has(isolatedRoot)) throw new Error(`Bundle budget: ${isolatedRoot.split('/').at(-1).replace('.tsx', '')} must stay outside the application entry static closure.`);
+    }
     const keys = collectRuntimeClosure(manifest, root);
     const files = [...new Set([...keys].map((key) => manifest[key].file).filter((file) => file?.endsWith('.js')))];
     const closure = { files, rawBytes: files.reduce((sum, file) => sum + (rawSizes[file] ?? 0), 0), gzipBytes: files.reduce((sum, file) => sum + (gzipSizes[file] ?? 0), 0) };
@@ -188,6 +250,9 @@ export function analyzeManifest(manifest, gzipSizes, rawSizes = {}) {
 
 async function main() {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const sourcePaths = (await listFiles(join(root, 'src'))).filter((file) => /\.(?:[cm]?[jt]sx?)$/.test(file));
+  const sourceFiles = new Map(await Promise.all(sourcePaths.map(async (file) => [`src/${file}`, await readFile(join(root, 'src', file), 'utf8')])));
+  assertNoWeekThreeBajieJoiningEntryStaticImports(sourceFiles);
   assertNoSourceVisualAssets(await listFiles(join(root, 'public')));
   const distRoot = join(root, 'dist');
   const distFiles = await listFiles(distRoot);

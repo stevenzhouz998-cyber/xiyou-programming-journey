@@ -17,11 +17,12 @@ describe('executable mission ids', () => {
       'w3-m1',
       'w3-m2',
       'w3-m3',
+      'w3-m4',
     ]) {
       expect(isExecutableMissionId(id)).toBe(true);
     }
 
-    for (const id of ['legacy-mission', '', 'w2-m6']) {
+    for (const id of ['legacy-mission', '', 'w2-m6', 'w3-m5']) {
       expect(isExecutableMissionId(id)).toBe(false);
     }
   });

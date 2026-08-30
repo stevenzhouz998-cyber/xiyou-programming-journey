@@ -27,7 +27,8 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   const manorSession = progress.sessions['w3-m1']
   const cuilanSession = progress.sessions['w3-m2']
   const yunzhanSession = progress.sessions['w3-m3']
-  const allObservationUses = [...(manorSession?.conditionObservationUses ?? []), ...(cuilanSession?.conditionObservationUses ?? []), ...(yunzhanSession?.conditionObservationUses ?? [])]
+  const bajieSession = progress.sessions['w3-m4']
+  const allObservationUses = [...(manorSession?.conditionObservationUses ?? []), ...(cuilanSession?.conditionObservationUses ?? []), ...(yunzhanSession?.conditionObservationUses ?? []), ...(bajieSession?.conditionObservationUses ?? [])]
   const observationUses = new Map(allObservationUses.map((use) => [use.snapshotId, use])).size
   const latestObservationUse = [...allObservationUses]
     .sort((left, right) => right.usedAt.localeCompare(left.usedAt))[0]
@@ -44,6 +45,7 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   const completionEvidence = progress.missionCompletionEvidence['w3-m1']
   const cuilanEvidence = progress.missionCompletionEvidence['w3-m2']
   const yunzhanEvidence = progress.missionCompletionEvidence['w3-m3']
+  const bajieEvidence = progress.missionCompletionEvidence['w3-m4']
   return <><section className="parent-equipment-report" role="region" aria-label="装备与跨关学习工具">
     <div className="parent-equipment-heading"><span className="eyebrow">真实通关奖励</span><h2>装备与跨关学习工具</h2><p>这里只记录已安全保存的获得、装备和主动使用证据。</p></div>
     <div className="parent-equipment-columns">
@@ -69,6 +71,9 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     {cuilanEvidence?.kind === 'legacy-preformal' ? <p>变化高翠兰历史兼容完成记录，尚非正式 Blockly 证明</p> : null}
     {yunzhanEvidence?.kind === 'formal-v3' ? <p>云栈洞交锋正式 Blockly 证明已保存</p> : null}
     {yunzhanEvidence?.kind === 'legacy-preformal' ? <p>云栈洞交锋历史兼容完成记录，尚非正式 Blockly 证明</p> : null}
+    {bajieSession ? <p>八戒归队：已运行 {bajieSession.totalRuns} 次，组合错误 {bajieSession.conceptFailures.booleanComposition} 次，观察 {bajieSession.conditionObservationUses.length} 次。</p> : null}
+    {bajieEvidence?.kind === 'formal-v3' ? <p>八戒归队正式 Blockly 证明已保存</p> : null}
+    {bajieEvidence?.kind === 'legacy-preformal' ? <p>八戒归队历史兼容完成记录，尚非正式 Blockly 证明</p> : null}
   </section></>
 }
 

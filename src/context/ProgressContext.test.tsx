@@ -133,6 +133,20 @@ function Probe() {
 }
 
 describe('ProgressContext persistence status', () => {
+  it('persists W3-M4 through the typed session and hint APIs, including a failed write', async () => {
+    const storage = installStorage({});
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    let saved: CoordinatedSaveResult | undefined;
+    await act(async () => { saved = await latestContext!.updateMissionSession('w3-m4', (session) => recordHint(session, 'observe', SESSION_NOW)); });
+    expect(saved).toMatchObject({ status: 'saved' });
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).sessions['w3-m4']).toMatchObject({ usedHintTiers: ['observe'] });
+    storage.failWrites = true;
+    let failed: CoordinatedSaveResult | undefined;
+    await act(async () => { failed = await latestContext!.recordMissionHint('w3-m4', 'think'); });
+    expect(failed).toMatchObject({ status: 'unsaved' });
+    expect(latestContext!.progress.sessions['w3-m4']?.usedHintTiers).toEqual(['observe', 'think']);
+  });
+
   it('normalizes a rejected storage chunk load and leaves pending with an actionable error', async () => {
     installStorage({});
     render(<ProgressProvider

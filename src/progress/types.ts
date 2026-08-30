@@ -58,6 +58,13 @@ import type {
   YunzhanDialogueRunResult,
   YunzhanDialogueWorkspaceDraftV1,
 } from '../blockly/weekThreeYunzhanDialogueContract';
+import type {
+  BajieJoiningFailureSnapshot,
+  BajieJoiningInstruction,
+  BajieJoiningRunResult,
+  BajieJoiningScenarioResult,
+  BajieJoiningWorkspaceDraftV1,
+} from '../blockly/weekThreeBajieJoiningContract';
 
 export interface MissionProgress {
   status: 'completed';
@@ -237,6 +244,17 @@ export interface YunzhanDialogueMissionSession extends Omit<MissionSessionData<
   conditionObservationUses: Array<{ snapshotId: string; usedAt: string; workspace: YunzhanDialogueWorkspaceDraftV1 }>;
 }
 
+export interface BajieJoiningMissionSession extends Omit<MissionSessionData<
+  BajieJoiningWorkspaceDraftV1,
+  BajieJoiningInstruction,
+  BajieJoiningRunResult
+>, 'conceptFailures'> {
+  conceptFailures: { programStructure: number; booleanComposition: number; completeness: number };
+  scenarioResults: BajieJoiningScenarioResult[];
+  failureSnapshot: BajieJoiningFailureSnapshot | null;
+  conditionObservationUses: Array<{ snapshotId: string; usedAt: string; workspace: BajieJoiningWorkspaceDraftV1 }>;
+}
+
 export type ManorHelpCompletionEvidence =
   | {
     kind: 'legacy-preformal';
@@ -273,10 +291,23 @@ export type YunzhanDialogueCompletionEvidence =
   | { kind: 'legacy-preformal'; completedAt: string; sourceVersion: 3; sourceSchemaRevision: 4 }
   | { kind: 'formal-v3'; completedAt: string; verifiedAt: string; workspace: YunzhanDialogueWorkspaceDraftV1; trace: YunzhanDialogueInstruction[]; run: YunzhanDialogueRunResult };
 
+export type BajieJoiningCompletionEvidence =
+  | { kind: 'legacy-preformal'; completedAt: string; sourceVersion: 1; sourceSchemaRevision: null }
+  | { kind: 'legacy-preformal'; completedAt: string; sourceVersion: 2; sourceSchemaRevision: 1 }
+  | { kind: 'legacy-preformal'; completedAt: string; sourceVersion: 3; sourceSchemaRevision: 1 | 2 | 3 | 4 | 5 }
+  | { kind: 'formal-v3'; completedAt: string; verifiedAt: string; workspace: BajieJoiningWorkspaceDraftV1; trace: BajieJoiningInstruction[]; run: BajieJoiningRunResult };
+
+export type BajieLegacyReplayEvidence =
+  | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 1; sourceSchemaRevision: null }
+  | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 2; sourceSchemaRevision: 1 }
+  | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 3; sourceSchemaRevision: 1 | 2 | 3 | 4 | 5 };
+
 export interface MissionCompletionEvidenceV1 {
   'w3-m1'?: ManorHelpCompletionEvidence;
   'w3-m2'?: CuilanBooleanCompletionEvidence;
   'w3-m3'?: YunzhanDialogueCompletionEvidence;
+  'w3-m4'?: BajieJoiningCompletionEvidence;
+  'w3-m5'?: BajieLegacyReplayEvidence;
 }
 
 export interface MissionSessionById {
@@ -293,15 +324,17 @@ export interface MissionSessionById {
   'w3-m1': ManorHelpMissionSession;
   'w3-m2': CuilanBooleanMissionSession;
   'w3-m3': YunzhanDialogueMissionSession;
+  'w3-m4': BajieJoiningMissionSession;
 }
 
 export type ExecutableMissionId = keyof MissionSessionById;
 export type MissionSession = MissionSessionById[ExecutableMissionId];
-export type MissionSessions = { [MissionId in ExecutableMissionId]?: MissionSessionById[MissionId] };
+export type AnyMissionSession = MissionSession | BajieJoiningMissionSession;
+export type MissionSessions = { [MissionId in keyof MissionSessionById]?: MissionSessionById[MissionId] };
 
 export interface ProgressV3 {
   version: 3;
-  schemaRevision: 3 | 4 | 5;
+  schemaRevision: 3 | 4 | 5 | 6;
   learnerName: string;
   missions: Record<string, MissionProgress>;
   settings: ProgressSettings;

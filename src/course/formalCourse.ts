@@ -110,6 +110,15 @@ export const formalWeekThreeMissions: FormalMissionSpec[] = [
       beat('再说明西行使命', '明确说明保护唐三藏西行取经后，猪刚鬣放下钉耙，说明受观音点化的来历。'),
     ],
   }),
+  formalMission('w3-m4', {
+    subtitle: '两个必要条件要同时满足',
+    objective: '让观音此前授戒与明确愿随唐僧西去两个条件同时满足',
+    canon: { ...formalWeekThreeCanon, chapters: [19], title: '第十九回　云栈洞悟空收八戒', sourceUrl: 'https://zh.wikisource.org/zh-hans/西游记/第019回' },
+    storyBeats: [
+      beat('拜见并复述安排', '猪悟能拜见唐僧并复述观音安排；观音此前已授戒，法名悟能。'),
+      beat('另名八戒，挑担西行', '唐僧后来另名八戒，八戒挑担西行。'),
+    ],
+  }),
 ];
 
 export function getFormalMission(id: string): FormalMissionSpec | undefined {

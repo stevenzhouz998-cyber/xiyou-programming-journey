@@ -50,7 +50,7 @@ const REQUIRED_METADATA = [
 ];
 
 const QA_STATUSES = new Set(['planned', 'generated', 'provenance-verified', 'visual-qa-passed', 'rejected']);
-const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/', 'assets/week-three-yunzhan-dialogue/'];
+const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/', 'assets/week-three-yunzhan-dialogue/', 'assets/week-three-bajie-joining/'];
 
 const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
   ['assets/dragon-palace/background.webp', [
@@ -133,6 +133,10 @@ const REQUIRED_WEEK_THREE_CUILAN_ASSETS = [
 ];
 const WEEK_THREE_YUNZHAN_SOURCE_PATH = 'src/components/WeekThreeYunzhanDialogueScene.tsx';
 const REQUIRED_WEEK_THREE_YUNZHAN_ASSETS = ['assets/week-three-yunzhan-dialogue/yunzhan-dialogue-background.webp', 'assets/week-three-yunzhan-dialogue/yunzhan-dialogue-states.webp'];
+const WEEK_THREE_BAJIE_JOINING_SOURCE_PATH = 'src/components/WeekThreeBajieJoiningScene.tsx';
+const REQUIRED_WEEK_THREE_BAJIE_JOINING_ASSETS = ['assets/week-three-bajie-joining/bajie-joining-background.webp', 'assets/week-three-bajie-joining/bajie-joining-states.webp'];
+const REQUIRED_BAJIE_JOINING_ART_DIRECTION = "polished bright 3D Chinese children's storybook game";
+const REQUIRED_BAJIE_JOINING_PROMPT_SAFETY = ['no text', 'no pseudo-text', 'no binding', 'no ear pulling', 'no attack', 'no adult marriage', 'no humiliating pose'];
 
 function isPhaserSceneClass(node, sourceFile) {
   return ts.isClassDeclaration(node) && node.heritageClauses?.some(
@@ -635,7 +639,9 @@ function verifyPromptRecords(promptRecords, manifestRows) {
     const record = recordsByAnchor.get(anchor);
     if (!record) throw new Error(`Asset manifest: prompt anchor ${anchor} is missing for ${row.assetId}.`);
     if (record.promptId !== linkedPromptId) throw new Error(`Asset manifest: prompt ${linkedPromptId.startsWith('DP-') ? 'DP label' : 'identifier'} ${linkedPromptId} does not match heading ${record.heading}.`);
-    const requiredArtDirection = row.assetId.startsWith('assets/week-three-yunzhan-dialogue/')
+    const requiredArtDirection = row.assetId.startsWith('assets/week-three-bajie-joining/')
+      ? REQUIRED_BAJIE_JOINING_ART_DIRECTION
+      : row.assetId.startsWith('assets/week-three-yunzhan-dialogue/')
       ? 'polished bright 3D'
       : row.assetId.startsWith('assets/week-three-cuilan/')
       ? REQUIRED_CUILAN_ART_DIRECTION
@@ -644,6 +650,11 @@ function verifyPromptRecords(promptRecords, manifestRows) {
       : REQUIRED_ART_DIRECTION;
     if (!record.prompt.includes(requiredArtDirection)) {
       throw new Error(`Asset manifest: ${record.heading} is missing the exact shared art direction required for ${row.assetId}.`);
+    }
+    if (row.assetId.startsWith('assets/week-three-bajie-joining/')) {
+      for (const requirement of REQUIRED_BAJIE_JOINING_PROMPT_SAFETY) {
+        if (!record.prompt.includes(requirement)) throw new Error(`Asset manifest: ${record.heading} is missing the required W3-M4 provenance/safety-intent phrase ${requirement}.`);
+      }
     }
   }
   for (const anchor of recordsByAnchor.keys()) if (!referencedAnchors.has(anchor)) throw new Error(`Asset manifest: unreferenced prompt record ${anchor}.`);
@@ -1022,6 +1033,10 @@ export function verifyRequiredWeekTwoHeavenlyBossInventory({ manifestRows, publi
 const ALPHA_EDGE_OPAQUE_ALPHA = 250;
 const ALPHA_EDGE_COLOR_DISTANCE = 96;
 const MAX_WEEK_THREE_ALPHA_EDGE_MISMATCH_RATIO = 0.04;
+const LOW_ALPHA_RESIDUE_THRESHOLD = 16;
+const LOW_ALPHA_FOREGROUND_RADIUS = 4;
+const MAX_LOW_ALPHA_ORPHAN_PIXELS = 48;
+const MIN_LOW_ALPHA_LINE_RESIDUE_LENGTH = 24;
 
 export function measureAlphaEdgeMismatch(rgba, width, height) {
   if (!(rgba instanceof Uint8Array) || !Number.isInteger(width) || !Number.isInteger(height)
@@ -1050,6 +1065,55 @@ export function measureAlphaEdgeMismatch(rgba, width, height) {
     if (distance > ALPHA_EDGE_COLOR_DISTANCE) mismatchedPixels += 1;
   }
   return { inspectedPixels, mismatchedPixels, mismatchRatio: inspectedPixels === 0 ? 0 : mismatchedPixels / inspectedPixels };
+}
+
+export function measureLowAlphaResidue(rgba, width, height) {
+  if (!(rgba instanceof Uint8Array) || !Number.isInteger(width) || !Number.isInteger(height)
+    || width <= 0 || height <= 0 || rgba.length !== width * height * 4) {
+    throw new Error('Asset manifest: low-alpha residue metric requires complete RGBA pixels.');
+  }
+  const orphanMap = new Uint8Array(width * height);
+  const at = (x, y) => (y * width + x) * 4;
+  const hasOpaqueForegroundNearby = (x, y) => {
+    for (let neighborY = Math.max(0, y - LOW_ALPHA_FOREGROUND_RADIUS); neighborY <= Math.min(height - 1, y + LOW_ALPHA_FOREGROUND_RADIUS); neighborY += 1) {
+      for (let neighborX = Math.max(0, x - LOW_ALPHA_FOREGROUND_RADIUS); neighborX <= Math.min(width - 1, x + LOW_ALPHA_FOREGROUND_RADIUS); neighborX += 1) {
+        if (rgba[at(neighborX, neighborY) + 3] >= ALPHA_EDGE_OPAQUE_ALPHA) return true;
+      }
+    }
+    return false;
+  };
+  let inspectedPixels = 0;
+  let orphanPixels = 0;
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+    const alpha = rgba[at(x, y) + 3];
+    if (alpha === 0 || alpha > LOW_ALPHA_RESIDUE_THRESHOLD) continue;
+    inspectedPixels += 1;
+    if (!hasOpaqueForegroundNearby(x, y)) {
+      orphanMap[y * width + x] = 1;
+      orphanPixels += 1;
+    }
+  }
+  let longLineRuns = 0;
+  const countRuns = (length, point) => {
+    let run = 0;
+    for (let index = 0; index < length; index += 1) {
+      if (point(index)) run += 1;
+      else if (run >= MIN_LOW_ALPHA_LINE_RESIDUE_LENGTH) { longLineRuns += 1; run = 0; }
+      else run = 0;
+    }
+    if (run >= MIN_LOW_ALPHA_LINE_RESIDUE_LENGTH) longLineRuns += 1;
+  };
+  for (let y = 0; y < height; y += 1) countRuns(width, (x) => orphanMap[y * width + x] === 1);
+  for (let x = 0; x < width; x += 1) countRuns(height, (y) => orphanMap[y * width + x] === 1);
+  return { inspectedPixels, orphanPixels, longLineRuns };
+}
+
+function countAlphaZeroRgbPixels(rgba) {
+  let count = 0;
+  for (let offset = 0; offset < rgba.length; offset += 4) {
+    if (rgba[offset + 3] === 0 && (rgba[offset] !== 0 || rgba[offset + 1] !== 0 || rgba[offset + 2] !== 0)) count += 1;
+  }
+  return count;
 }
 
 function verifyWeekThreeManorHelpSceneSource(sourcePath, source) {
@@ -1135,6 +1199,117 @@ export function verifyRequiredWeekThreeYunzhanDialogueInventory({ manifestRows, 
   const state = files.find((file) => file.path.endsWith('yunzhan-dialogue-states.webp')); if (state?.hasAlpha !== true || !state.alphaEdgeMismatch || state.alphaEdgeMismatch.inspectedPixels === 0 || state.alphaEdgeMismatch.mismatchRatio > MAX_WEEK_THREE_ALPHA_EDGE_MISMATCH_RATIO) throw new Error('Asset manifest: Yunzhan alpha-edge gate failed.');
   if (typeof source !== 'string' || !source.includes("import { assetUrl } from '../utils/assets'") || (source.match(/<img\b/g) ?? []).length !== 2 || !source.includes('data-state-cell') || REQUIRED_WEEK_THREE_YUNZHAN_ASSETS.some((path) => !source.includes(path))) throw new Error(`Asset manifest: ${sourcePath} must render exact Yunzhan assetUrl slots.`);
   if (promptRecords.length === 0) return { assetCount: rows.length, totalBytes: files.reduce((sum, file) => sum + (file.bytes ?? 0), 0), mode };
+  return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
+}
+
+function verifyWeekThreeBajieJoiningSceneSource(sourcePath, source) {
+  const { sourceFile, checker } = createBoundSource(sourcePath, source);
+  if (sourceFile.parseDiagnostics.length > 0) throw new Error(`Asset manifest: ${sourcePath} cannot be parsed as TypeScript for WeekThreeBajieJoiningScene slot verification.`);
+  const constants = new Map();
+  let assetUrlSymbol = null;
+  for (const statement of sourceFile.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier) && statement.moduleSpecifier.text === '../utils/assets') {
+      const bindings = statement.importClause?.namedBindings;
+      if (bindings && ts.isNamedImports(bindings)) {
+        const imported = bindings.elements.find((item) => !item.isTypeOnly && !item.propertyName && item.name.text === 'assetUrl');
+        assetUrlSymbol = imported ? checker.getSymbolAtLocation(imported.name) ?? null : null;
+      }
+    }
+    if (ts.isVariableStatement(statement)) for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && (declaration.name.text === 'BACKGROUND' || declaration.name.text === 'STATES')) constants.set(declaration.name.text, declaration.initializer);
+    }
+  }
+  if (!assetUrlSymbol
+    || constants.get('BACKGROUND')?.getText(sourceFile) !== "'assets/week-three-bajie-joining/bajie-joining-background.webp'"
+    || constants.get('STATES')?.getText(sourceFile) !== "'assets/week-three-bajie-joining/bajie-joining-states.webp'") {
+    throw new Error(`Asset manifest: ${sourcePath} must bind the two approved Bajie-joining image constants and imported assetUrl.`);
+  }
+  const exportedScenes = [];
+  for (const statement of sourceFile.statements) {
+    const exported = Boolean(statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword));
+    if (exported && ts.isFunctionDeclaration(statement) && statement.name?.text === 'WeekThreeBajieJoiningScene') exportedScenes.push(statement);
+    if (exported && ts.isVariableStatement(statement)) for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && declaration.name.text === 'WeekThreeBajieJoiningScene' && declaration.initializer && (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer))) exportedScenes.push(declaration.initializer);
+    }
+  }
+  if (exportedScenes.length !== 1) throw new Error(`Asset manifest: ${sourcePath} must export exactly one exported WeekThreeBajieJoiningScene lexical function.`);
+  const [exportedScene] = exportedScenes;
+  const sourceDeclarations = [];
+  const jsxReturns = [];
+  const visitComponent = (node, isRoot = false) => {
+    if (!isRoot && ts.isFunctionLike(node)) return;
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'source' && node.initializer) sourceDeclarations.push(node);
+    if (ts.isReturnStatement(node) && node.expression && (ts.isJsxElement(node.expression) || ts.isJsxSelfClosingElement(node.expression) || ts.isJsxFragment(node.expression))) jsxReturns.push(node.expression);
+    ts.forEachChild(node, (child) => visitComponent(child));
+  };
+  if (ts.isBlock(exportedScene.body)) visitComponent(exportedScene.body, true);
+  else if (ts.isJsxElement(exportedScene.body) || ts.isJsxSelfClosingElement(exportedScene.body) || ts.isJsxFragment(exportedScene.body)) jsxReturns.push(exportedScene.body);
+  if (jsxReturns.length !== 1) throw new Error(`Asset manifest: ${sourcePath} exported WeekThreeBajieJoiningScene must have exactly one JSX return tree.`);
+  if (sourceDeclarations.length !== 1) throw new Error(`Asset manifest: ${sourcePath} must declare exactly one live source binding for the two scene images.`);
+  const [sourceDeclaration] = sourceDeclarations;
+  const sourceSymbol = checker.getSymbolAtLocation(sourceDeclaration.name);
+  const sourceInitializer = sourceDeclaration.initializer;
+  if (!sourceSymbol || !(ts.isArrowFunction(sourceInitializer) || ts.isFunctionExpression(sourceInitializer)) || sourceInitializer.parameters.length !== 1 || !ts.isIdentifier(sourceInitializer.parameters[0].name) || ts.isBlock(sourceInitializer.body)) {
+    throw new Error(`Asset manifest: ${sourcePath} source must have one direct URL-return expression derived from imported assetUrl(path).`);
+  }
+  const pathParameterSymbol = checker.getSymbolAtLocation(sourceInitializer.parameters[0].name);
+  const isImportedAssetUrlCall = (node) => ts.isCallExpression(node)
+    && ts.isIdentifier(node.expression)
+    && checker.getSymbolAtLocation(node.expression) === assetUrlSymbol
+    && node.arguments.length === 1
+    && ts.isIdentifier(node.arguments[0])
+    && checker.getSymbolAtLocation(node.arguments[0]) === pathParameterSymbol;
+  const isDerivedAssetUrl = (node) => {
+    if (isImportedAssetUrlCall(node)) return true;
+    if (ts.isParenthesizedExpression(node)) return isDerivedAssetUrl(node.expression);
+    if (ts.isTemplateExpression(node)) return node.templateSpans.length > 0 && isImportedAssetUrlCall(node.templateSpans[0].expression);
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) return isDerivedAssetUrl(node.left);
+    return false;
+  };
+  if (!isDerivedAssetUrl(sourceInitializer.body)) throw new Error(`Asset manifest: ${sourcePath} source must directly derive its returned URL from the imported assetUrl(path) binding.`);
+  const imageBindings = [];
+  const visitReturnedJsx = (node, isRoot = false) => {
+    if (!isRoot && ts.isFunctionLike(node)) return;
+    if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && node.tagName.getText(sourceFile) === 'img') imageBindings.push(node);
+    ts.forEachChild(node, (child) => visitReturnedJsx(child));
+  };
+  visitReturnedJsx(jsxReturns[0], true);
+  const conditionalImage = imageBindings.find((image) => {
+    for (let ancestor = image.parent; ancestor; ancestor = ancestor.parent) {
+      if (ts.isConditionalExpression(ancestor)) return true;
+      if (ts.isBinaryExpression(ancestor) && [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(ancestor.operatorToken.kind)) return true;
+      if (ancestor === jsxReturns[0]) return false;
+    }
+    return true;
+  });
+  if (conditionalImage) throw new Error(`Asset manifest: ${sourcePath} scene img slots must be unconditional descendants of the exported WeekThreeBajieJoiningScene return tree.`);
+  const boundArguments = [];
+  for (const image of imageBindings) {
+    const src = image.attributes.properties.filter((attribute) => ts.isJsxAttribute(attribute) && attribute.name.text === 'src');
+    const expression = src.length === 1 && src[0].initializer && ts.isJsxExpression(src[0].initializer) ? src[0].initializer.expression : null;
+    if (!expression || !ts.isCallExpression(expression) || !ts.isIdentifier(expression.expression) || checker.getSymbolAtLocation(expression.expression) !== sourceSymbol || expression.arguments.length !== 1 || !ts.isIdentifier(expression.arguments[0])) boundArguments.push(null);
+    else boundArguments.push(expression.arguments[0].text);
+  }
+  if (imageBindings.length !== 2 || boundArguments.length !== 2 || boundArguments.sort().join(',') !== 'BACKGROUND,STATES') {
+    throw new Error(`Asset manifest: ${sourcePath} must render exactly two img src bindings through the same verified source(BACKGROUND) and source(STATES) binding.`);
+  }
+}
+
+export function verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows, publicFiles, promptRecords = [], sourcePath = WEEK_THREE_BAJIE_JOINING_SOURCE_PATH, source, mode = 'check' }) {
+  const directory = 'assets/week-three-bajie-joining/';
+  const rows = familyRows(manifestRows, directory);
+  const files = familyFiles(publicFiles, directory);
+  requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: REQUIRED_WEEK_THREE_BAJIE_JOINING_ASSETS, label: 'Week Three Bajie joining' });
+  for (const row of rows) if (row.screenSlots !== 'w3-m4 WeekThreeBajieJoiningScene') throw new Error(`Asset manifest: ${row.assetId} screen slots must be exactly w3-m4 WeekThreeBajieJoiningScene.`);
+  const stateFile = files.find((file) => file.path === 'assets/week-three-bajie-joining/bajie-joining-states.webp');
+  if (stateFile?.hasAlpha !== true) throw new Error('Asset manifest: Week Three Bajie-joining states must preserve a true alpha channel.');
+  if (!stateFile.alphaEdgeMismatch || stateFile.alphaEdgeMismatch.inspectedPixels === 0 || stateFile.alphaEdgeMismatch.mismatchRatio > MAX_WEEK_THREE_ALPHA_EDGE_MISMATCH_RATIO) throw new Error('Asset manifest: Week Three Bajie-joining states fail the alpha-edge contamination gate.');
+  if (!Number.isInteger(stateFile?.width) || !Number.isInteger(stateFile?.height) || stateFile.width !== stateFile.height * 3) throw new Error('Asset manifest: Week Three Bajie-joining state sheet must use three equal square cells; the provenance fixture records the original 2172x724 source sheet.');
+  if (!stateFile.lowAlphaResidue || !Number.isInteger(stateFile.lowAlphaResidue.inspectedPixels) || !Number.isInteger(stateFile.lowAlphaResidue.orphanPixels) || !Number.isInteger(stateFile.lowAlphaResidue.longLineRuns) || stateFile.lowAlphaResidue.orphanPixels > MAX_LOW_ALPHA_ORPHAN_PIXELS || stateFile.lowAlphaResidue.longLineRuns > 0) throw new Error('Asset manifest: Week Three Bajie-joining states fail the low-alpha residue gate.');
+  if (typeof source !== 'string') throw new Error(`Asset manifest: ${sourcePath} source text is required for WeekThreeBajieJoiningScene slot verification.`);
+  const literals = source.match(/assets\/week-three-bajie-joining\/[a-z0-9-]+\.webp/g) ?? [];
+  if (literals.length !== REQUIRED_WEEK_THREE_BAJIE_JOINING_ASSETS.length || new Set(literals).size !== REQUIRED_WEEK_THREE_BAJIE_JOINING_ASSETS.length || REQUIRED_WEEK_THREE_BAJIE_JOINING_ASSETS.some((assetId) => !literals.includes(assetId))) throw new Error(`Asset manifest: ${sourcePath} must contain exactly the two approved Week Three Bajie-joining image paths.`);
+  verifyWeekThreeBajieJoiningSceneSource(sourcePath, source);
   return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
 }
 
@@ -1324,9 +1499,17 @@ export async function collectAssetFiles(assetRoot, assetDirectory = 'assets/drag
       }
       const metadata = await sharp(bytes, { failOn: 'error', limitInputPixels: 20_000_000 }).metadata();
       let alphaEdgeMismatch;
-      if ((assetDirectory === 'assets/week-three-manor-help' && relativePath === 'manor-message-states.webp') || (assetDirectory === 'assets/week-three-cuilan' && relativePath === 'cuilan-boolean-states.webp') || (assetDirectory === 'assets/week-three-yunzhan-dialogue' && relativePath === 'yunzhan-dialogue-states.webp')) {
+      let alphaZeroRgbPixels;
+      let lowAlphaResidue;
+      let webpLossless;
+      if ((assetDirectory === 'assets/week-three-manor-help' && relativePath === 'manor-message-states.webp') || (assetDirectory === 'assets/week-three-cuilan' && relativePath === 'cuilan-boolean-states.webp') || (assetDirectory === 'assets/week-three-yunzhan-dialogue' && relativePath === 'yunzhan-dialogue-states.webp') || (assetDirectory === 'assets/week-three-bajie-joining' && relativePath === 'bajie-joining-states.webp')) {
         const { data, info } = await sharp(bytes, { failOn: 'error', limitInputPixels: 20_000_000 }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
         alphaEdgeMismatch = measureAlphaEdgeMismatch(data, info.width, info.height);
+        if (assetDirectory === 'assets/week-three-bajie-joining' && relativePath === 'bajie-joining-states.webp') {
+          alphaZeroRgbPixels = countAlphaZeroRgbPixels(data);
+          lowAlphaResidue = measureLowAlphaResidue(data, info.width, info.height);
+          webpLossless = bytes.includes(Buffer.from('VP8L'));
+        }
       }
       publicFiles.push({
         path: posix.join(assetDirectory, relativePath),
@@ -1334,6 +1517,9 @@ export async function collectAssetFiles(assetRoot, assetDirectory = 'assets/drag
         bytes: bytes.length,
         hasAlpha: metadata.hasAlpha === true,
         ...(alphaEdgeMismatch ? { alphaEdgeMismatch } : {}),
+        ...(alphaZeroRgbPixels !== undefined ? { alphaZeroRgbPixels } : {}),
+        ...(lowAlphaResidue ? { lowAlphaResidue } : {}),
+        ...(webpLossless !== undefined ? { webpLossless } : {}),
         ...decodedDimensions,
       });
     } finally {
@@ -1356,6 +1542,7 @@ async function main() {
   const weekThreeManorHelpRoot = join(root, 'public', 'assets', 'week-three-manor-help');
   const weekThreeCuilanRoot = join(root, 'public', 'assets', 'week-three-cuilan');
   const weekThreeYunzhanRoot = join(root, 'public', 'assets', 'week-three-yunzhan-dialogue');
+  const weekThreeBajieJoiningRoot = join(root, 'public', 'assets', 'week-three-bajie-joining');
   const { manifestRows, promptRecords } = parseAssetManifest(await readFile(manifestPath, 'utf8'));
   const publicFiles = [
     ...await collectAssetFiles(dragonPalaceRoot),
@@ -1368,6 +1555,7 @@ async function main() {
     ...await collectAssetFiles(weekThreeManorHelpRoot, 'assets/week-three-manor-help'),
     ...await collectAssetFiles(weekThreeCuilanRoot, 'assets/week-three-cuilan'),
     ...await collectAssetFiles(weekThreeYunzhanRoot, 'assets/week-three-yunzhan-dialogue'),
+    ...await collectAssetFiles(weekThreeBajieJoiningRoot, 'assets/week-three-bajie-joining'),
   ];
   const sourceFiles = new Map(await Promise.all([
     'src/components/GameScene.tsx',
@@ -1409,6 +1597,7 @@ async function main() {
   const weekThreeManorHelpResult = verifyRequiredWeekThreeManorHelpInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_MANOR_HELP_SOURCE_PATH), 'utf8'), mode });
   const weekThreeCuilanResult = verifyRequiredWeekThreeCuilanBooleanInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_CUILAN_SOURCE_PATH), 'utf8'), mode });
   const weekThreeYunzhanResult = verifyRequiredWeekThreeYunzhanDialogueInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_YUNZHAN_SOURCE_PATH), 'utf8'), mode });
+  const weekThreeBajieJoiningResult = verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_BAJIE_JOINING_SOURCE_PATH), 'utf8'), mode });
   console.log(`Dragon Palace assets: ${dragonResult.assetCount} files, ${dragonResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Advanced Week One assets: ${advancedResult.assetCount} files, ${advancedResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Two horse-care assets: ${weekTwoHorseResult.assetCount} files, ${weekTwoHorseResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
@@ -1419,6 +1608,7 @@ async function main() {
   console.log(`Week Three manor-help assets: ${weekThreeManorHelpResult.assetCount} files, ${weekThreeManorHelpResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Three Cuilan assets: ${weekThreeCuilanResult.assetCount} files, ${weekThreeCuilanResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Three Yunzhan assets: ${weekThreeYunzhanResult.assetCount} files, ${weekThreeYunzhanResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
+  console.log(`Week Three Bajie-joining assets: ${weekThreeBajieJoiningResult.assetCount} files, ${weekThreeBajieJoiningResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

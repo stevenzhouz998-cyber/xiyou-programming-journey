@@ -65,11 +65,20 @@ import {
   type YunzhanDialogueRunResult,
   type YunzhanDialogueWorkspaceDraftV1,
 } from '../blockly/weekThreeYunzhanDialogueContract';
+import {
+  compileBajieJoiningDraft,
+  createDefaultBajieJoiningDraft,
+  runBajieJoiningForDraft,
+  type BajieJoiningInstruction,
+  type BajieJoiningRunResult,
+  type BajieJoiningWorkspaceDraftV1,
+} from '../blockly/weekThreeBajieJoiningContract';
 import type {
   DragonPalaceMissionSession,
   ExecutableMissionId,
   FourSeasRegaliaMissionSession,
   MissionSession,
+  AnyMissionSession,
   MissionSessionById,
   RuyiStaffMissionSession,
   AdvancedWeekOneMissionSession,
@@ -81,6 +90,7 @@ import type {
   ManorHelpMissionSession,
   CuilanBooleanMissionSession,
   YunzhanDialogueMissionSession,
+  BajieJoiningMissionSession,
 } from './types';
 import { isExecutableMissionId } from './executableMissionIds';
 
@@ -103,7 +113,7 @@ function increment(value: number): number {
   return value + 1;
 }
 
-function cloneSession<TSession extends MissionSession>(session: TSession): TSession {
+function cloneSession<TSession extends AnyMissionSession>(session: TSession): TSession {
   return structuredClone(session);
 }
 
@@ -131,20 +141,23 @@ export function createMissionSession(missionId: 'w2-m3', now: string): PeachElix
 export function createMissionSession(missionId: 'w2-m4', now: string): FurnaceConditionMissionSession;
 export function createMissionSession(missionId: 'w2-m5', now: string): HeavenlySignalBossMissionSession;
 export function createMissionSession(missionId: 'w3-m1', now: string): ManorHelpMissionSession;
+export function createMissionSession(missionId: 'w3-m4', now: string): BajieJoiningMissionSession;
 export function createMissionSession(missionId: 'w3-m3', now: string): YunzhanDialogueMissionSession;
 export function createMissionSession(missionId: 'w3-m2', now: string): CuilanBooleanMissionSession;
 export function createMissionSession(
-  missionIdOrNow: ExecutableMissionId | string,
+  missionIdOrNow: ExecutableMissionId | 'w3-m4' | string,
   suppliedNow?: string,
-): MissionSession {
+): AnyMissionSession {
   const missionIdOnly = suppliedNow === undefined && isExecutableMissionId(missionIdOrNow);
   const now = suppliedNow ?? (missionIdOnly ? new Date(0).toISOString() : missionIdOrNow);
-  if (suppliedNow !== undefined && !isExecutableMissionId(missionIdOrNow)) {
+  if (suppliedNow !== undefined && !isExecutableMissionId(missionIdOrNow) && missionIdOrNow !== 'w3-m4') {
     throw new Error('任务编号无效');
   }
   assertCanonicalIso(now);
   const session = {
-    workspace: missionIdOrNow === 'w3-m3'
+    workspace: missionIdOrNow === 'w3-m4'
+      ? createDefaultBajieJoiningDraft()
+      : missionIdOrNow === 'w3-m3'
       ? createDefaultYunzhanDialogueDraft()
       : missionIdOrNow === 'w3-m2'
       ? createDefaultCuilanBooleanDraft()
@@ -165,7 +178,9 @@ export function createMissionSession(
     runtimeFailures: 0,
     compileFailures: 0,
     usedHintTiers: [],
-    conceptFailures: missionIdOrNow === 'w3-m3'
+    conceptFailures: missionIdOrNow === 'w3-m4'
+      ? { programStructure: 0, booleanComposition: 0, completeness: 0 }
+      : missionIdOrNow === 'w3-m3'
       ? { programStructure: 0, branchRouting: 0, completeness: 0 }
       : missionIdOrNow === 'w3-m2'
       ? { programStructure: 0, conditionSelection: 0, branchRouting: 0, sequencePrecondition: 0, completeness: 0 }
@@ -176,7 +191,7 @@ export function createMissionSession(
       : { programStructure: 0, sequencePrecondition: 0, completeness: 0 },
     lastRunAt: null,
     savedAt: now,
-  } as MissionSession;
+  } as AnyMissionSession;
   if (missionIdOrNow === 'w1-m4' || missionIdOrNow === 'w1-m5') {
     Object.assign(session, { equipmentEffectsUsed: [] });
   }
@@ -189,7 +204,10 @@ export function createMissionSession(
   if (missionIdOrNow === 'w3-m3') {
     Object.assign(session, { roundResults: [], failureSnapshot: null, conditionObservationUses: [] });
   }
-  return session as MissionSessionById[ExecutableMissionId];
+  if (missionIdOrNow === 'w3-m4') {
+    Object.assign(session, { scenarioResults: [], failureSnapshot: null, conditionObservationUses: [] });
+  }
+  return session as MissionSessionById[keyof MissionSessionById];
 }
 
 export function updateWorkspaceDraft(
@@ -216,11 +234,12 @@ export function updateWorkspaceDraft(session: HeavenlySignalBossMissionSession, 
 export function updateWorkspaceDraft(session: ManorHelpMissionSession, workspace: ManorHelpWorkspaceDraftV1, now: string): ManorHelpMissionSession;
 export function updateWorkspaceDraft(session: CuilanBooleanMissionSession, workspace: CuilanBooleanWorkspaceDraftV1, now: string): CuilanBooleanMissionSession;
 export function updateWorkspaceDraft(session: YunzhanDialogueMissionSession, workspace: YunzhanDialogueWorkspaceDraftV1, now: string): YunzhanDialogueMissionSession;
+export function updateWorkspaceDraft(session: BajieJoiningMissionSession, workspace: BajieJoiningWorkspaceDraftV1, now: string): BajieJoiningMissionSession;
 export function updateWorkspaceDraft(
-  session: MissionSession,
-  workspace: WorkspaceDraftV1 | RuyiWorkspaceDraftV1 | FourSeasWorkspaceDraftV1 | AdvancedWeekOneWorkspaceDraftV1 | HorseCareWorkspaceDraftV1 | MonkeyKingWorkspaceDraftV1 | PeachElixirWorkspaceDraftV1 | FurnaceConditionWorkspaceDraftV1 | HeavenlySignalBossWorkspaceDraftV1 | ManorHelpWorkspaceDraftV1 | CuilanBooleanWorkspaceDraftV1 | YunzhanDialogueWorkspaceDraftV1,
+  session: AnyMissionSession,
+  workspace: WorkspaceDraftV1 | RuyiWorkspaceDraftV1 | FourSeasWorkspaceDraftV1 | AdvancedWeekOneWorkspaceDraftV1 | HorseCareWorkspaceDraftV1 | MonkeyKingWorkspaceDraftV1 | PeachElixirWorkspaceDraftV1 | FurnaceConditionWorkspaceDraftV1 | HeavenlySignalBossWorkspaceDraftV1 | ManorHelpWorkspaceDraftV1 | CuilanBooleanWorkspaceDraftV1 | YunzhanDialogueWorkspaceDraftV1 | BajieJoiningWorkspaceDraftV1,
   now: string,
-): MissionSession {
+): AnyMissionSession {
   assertCanonicalIso(now);
   const next = cloneSession(session);
   Object.assign(next, { workspace: structuredClone(workspace), savedAt: now });
@@ -242,10 +261,13 @@ export function updateWorkspaceDraft(
   if ('missionId' in workspace && workspace.missionId === 'w3-m3') {
     Object.assign(next, { lastTrace: [], lastRun: null, roundResults: [], failureSnapshot: null, lastRunAt: null });
   }
+  if ('missionId' in workspace && workspace.missionId === 'w3-m4') {
+    Object.assign(next, { lastTrace: [], lastRun: null, scenarioResults: [], failureSnapshot: null, lastRunAt: null });
+  }
   return next;
 }
 
-export function recordCompileFailure<TSession extends MissionSession>(
+export function recordCompileFailure<TSession extends AnyMissionSession>(
   session: TSession,
   concept: 'program-structure',
   now: string,
@@ -287,14 +309,29 @@ export function recordRun(session: HeavenlySignalBossMissionSession, result: Hea
 export function recordRun(session: ManorHelpMissionSession, result: ManorHelpRunResult, trace: ManorHelpInstruction[], now: string): ManorHelpMissionSession;
 export function recordRun(session: CuilanBooleanMissionSession, result: CuilanBooleanRunResult, trace: CuilanBooleanInstruction[], now: string): CuilanBooleanMissionSession;
 export function recordRun(session: YunzhanDialogueMissionSession, result: YunzhanDialogueRunResult, trace: YunzhanDialogueInstruction[], now: string): YunzhanDialogueMissionSession;
+export function recordRun(session: BajieJoiningMissionSession, result: BajieJoiningRunResult, trace: BajieJoiningInstruction[], now: string): BajieJoiningMissionSession;
 export function recordRun(
-  session: MissionSession,
-  result: BattleRunResult | RuyiStaffBattleRunResult | FourSeasBattleRunResult | AdvancedWeekOneRunResult | HorseCareRunResult | MonkeyKingRunResult | PeachElixirRunResult | FurnaceConditionRunResult | HeavenlySignalBossRunResult | ManorHelpRunResult | CuilanBooleanRunResult | YunzhanDialogueRunResult,
-  trace: DragonPalaceInstruction[] | RuyiStaffInstruction[] | FourSeasInstruction[] | AdvancedWeekOneInstruction[] | HorseCareInstruction[] | MonkeyKingInstruction[] | PeachElixirInstruction[] | FurnaceConditionInstruction[] | HeavenlySignalBossInstruction[] | ManorHelpInstruction[] | CuilanBooleanInstruction[] | YunzhanDialogueInstruction[],
+  session: AnyMissionSession,
+  result: BattleRunResult | RuyiStaffBattleRunResult | FourSeasBattleRunResult | AdvancedWeekOneRunResult | HorseCareRunResult | MonkeyKingRunResult | PeachElixirRunResult | FurnaceConditionRunResult | HeavenlySignalBossRunResult | ManorHelpRunResult | CuilanBooleanRunResult | YunzhanDialogueRunResult | BajieJoiningRunResult,
+  trace: DragonPalaceInstruction[] | RuyiStaffInstruction[] | FourSeasInstruction[] | AdvancedWeekOneInstruction[] | HorseCareInstruction[] | MonkeyKingInstruction[] | PeachElixirInstruction[] | FurnaceConditionInstruction[] | HeavenlySignalBossInstruction[] | ManorHelpInstruction[] | CuilanBooleanInstruction[] | YunzhanDialogueInstruction[] | BajieJoiningInstruction[],
   now: string,
-): MissionSession {
+): AnyMissionSession {
   assertCanonicalIso(now);
   const next = cloneSession(session);
+  if ('missionId' in next.workspace && next.workspace.missionId === 'w3-m4') {
+    const canonicalTrace = compileBajieJoiningDraft(next.workspace);
+    const canonicalRun = runBajieJoiningForDraft(next.workspace, canonicalTrace);
+    if (JSON.stringify(trace) !== JSON.stringify(canonicalTrace) || JSON.stringify(result) !== JSON.stringify(canonicalRun)) throw new Error('W3-M4运行必须来自当前可见图的确定性编译与重放');
+    const bajie = next as BajieJoiningMissionSession;
+    bajie.totalRuns = increment(bajie.totalRuns);
+    if (!canonicalRun.completed) {
+      bajie.runtimeFailures = increment(bajie.runtimeFailures);
+      if (canonicalRun.diagnostic?.concept === 'invalid-trace') bajie.conceptFailures.completeness = increment(bajie.conceptFailures.completeness);
+      else bajie.conceptFailures.booleanComposition = increment(bajie.conceptFailures.booleanComposition);
+    }
+    Object.assign(bajie, { lastTrace: structuredClone(canonicalTrace), lastRun: structuredClone(canonicalRun), scenarioResults: structuredClone(canonicalRun.scenarioResults), failureSnapshot: structuredClone(canonicalRun.failureSnapshot), lastRunAt: now, savedAt: now });
+    return bajie;
+  }
   if ('missionId' in next.workspace && next.workspace.missionId === 'w3-m2') {
     const canonicalTrace = compileCuilanBooleanDraft(next.workspace);
     const canonicalRun = runCuilanBooleanForDraft(next.workspace, canonicalTrace);
@@ -390,10 +427,15 @@ export function recordConditionObservationUse(
   now: string,
 ): YunzhanDialogueMissionSession;
 export function recordConditionObservationUse(
-  session: ManorHelpMissionSession | CuilanBooleanMissionSession | YunzhanDialogueMissionSession,
+  session: BajieJoiningMissionSession,
   snapshotId: string,
   now: string,
-): ManorHelpMissionSession | CuilanBooleanMissionSession | YunzhanDialogueMissionSession {
+): BajieJoiningMissionSession;
+export function recordConditionObservationUse(
+  session: ManorHelpMissionSession | CuilanBooleanMissionSession | YunzhanDialogueMissionSession | BajieJoiningMissionSession,
+  snapshotId: string,
+  now: string,
+): ManorHelpMissionSession | CuilanBooleanMissionSession | YunzhanDialogueMissionSession | BajieJoiningMissionSession {
   assertCanonicalIso(now);
   if (typeof snapshotId !== 'string' || snapshotId.length === 0 || snapshotId.length > 256) throw new Error('条件观察快照编号无效');
   if (session.failureSnapshot === null || session.failureSnapshot.snapshotId !== snapshotId) throw new Error('条件观察快照不是当前失败快照');
@@ -403,8 +445,10 @@ export function recordConditionObservationUse(
     (next as ManorHelpMissionSession).conditionObservationUses.push({ snapshotId, usedAt: now, workspace: structuredClone(next.workspace) });
   } else if (next.workspace.missionId === 'w3-m2') {
     (next as CuilanBooleanMissionSession).conditionObservationUses.push({ snapshotId, usedAt: now, workspace: structuredClone(next.workspace) });
-  } else {
+  } else if (next.workspace.missionId === 'w3-m3') {
     (next as YunzhanDialogueMissionSession).conditionObservationUses.push({ snapshotId, usedAt: now, workspace: structuredClone(next.workspace) });
+  } else {
+    (next as BajieJoiningMissionSession).conditionObservationUses.push({ snapshotId, usedAt: now, workspace: structuredClone(next.workspace) });
   }
   next.savedAt = now;
   return next;
@@ -418,7 +462,7 @@ export function recordCuilanConditionObservationUse(
   return recordConditionObservationUse(session, snapshotId, now);
 }
 
-export function recordHint<TSession extends MissionSession>(
+export function recordHint<TSession extends AnyMissionSession>(
   session: TSession,
   tier: HintTier,
   now: string,
@@ -450,6 +494,7 @@ export function getSessionSupport(session: HeavenlySignalBossMissionSession, mis
 export function getSessionSupport(session: ManorHelpMissionSession, missionId: 'w3-m1'): string[];
 export function getSessionSupport(session: CuilanBooleanMissionSession, missionId: 'w3-m2'): string[];
 export function getSessionSupport(session: YunzhanDialogueMissionSession, missionId: 'w3-m3'): string[];
+export function getSessionSupport(session: BajieJoiningMissionSession, missionId: 'w3-m4'): string[];
 export function getSessionSupport(
   session: RuyiStaffMissionSession,
   missionId: 'w1-m2',
@@ -490,6 +535,13 @@ export function getSessionSupport(
     const yunzhan = session as YunzhanDialogueMissionSession;
     if (yunzhan.conceptFailures.programStructure >= 2 || yunzhan.conceptFailures.branchRouting >= 2 || yunzhan.conceptFailures.completeness >= 2) support.push('双轮条件分支');
     if (new Set(yunzhan.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
+    return support;
+  }
+  if (missionId === 'w3-m4') {
+    const bajie = session as BajieJoiningMissionSession;
+    if (bajie.conceptFailures.booleanComposition >= 2) support.push('多条件组合');
+    if (bajie.conceptFailures.completeness >= 2) support.push('完整条件核对');
+    if (new Set(bajie.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
     return support;
   }
   if (missionId === 'w2-m3') {

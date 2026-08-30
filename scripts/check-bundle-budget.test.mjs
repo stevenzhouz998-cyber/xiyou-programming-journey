@@ -7,7 +7,7 @@ import ts from 'typescript';
 import * as bundleBudget from './check-bundle-budget.mjs';
 import { assertFourSeasE2ESourceContract } from './check-four-seas-e2e-contract.mjs';
 
-const { analyzeManifest, assertNoProductionTestSentinels, assertNoSourceVisualAssets } = bundleBudget;
+const { analyzeManifest, assertNoProductionTestSentinels, assertNoSourceVisualAssets, assertNoWeekThreeBajieJoiningEntryStaticImports } = bundleBudget;
 
 const base = {
   'src/main.tsx': { file: 'assets/main.js', isEntry: true, imports: ['vendor.js'] },
@@ -242,6 +242,64 @@ test('enforces the exact W3-M3 cold-load budget on its dedicated three-layer laz
   assert.equal(analyzeManifest(manifest, sizes, sizes).closures[root].rawBytes, bundleBudget.WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES);
 });
 
+test('enforces the exact W3-M4 3 MiB cold-load closure and keeps its Blockly and scene chunks out of the entry', () => {
+  const root = 'src/components/WeekThreeBajieJoiningExperience.tsx';
+  const workspace = 'src/components/WeekThreeBajieJoiningBlocklyWorkspace.tsx';
+  const scene = 'src/components/WeekThreeBajieJoiningScene.tsx';
+  assert.equal(bundleBudget.WEEK_THREE_BAJIE_JOINING_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.COLD_LOAD_ROUTE_CLOSURE_BUDGETS[root], bundleBudget.WEEK_THREE_BAJIE_JOINING_COLD_LOAD_MAX_BYTES);
+  const manifest = {
+    ...base,
+    [root]: { file: 'assets/week-three-bajie-joining.js', isDynamicEntry: true, imports: [], dynamicImports: [workspace, scene] },
+    [workspace]: { file: 'assets/week-three-bajie-workspace.js', isDynamicEntry: true, imports: [] },
+    [scene]: { file: 'assets/week-three-bajie-scene.js', isDynamicEntry: true, imports: [] },
+  };
+  const sizes = {
+    'assets/main.js': 1, 'assets/vendor.js': 1,
+    'assets/week-three-bajie-joining.js': bundleBudget.WEEK_THREE_BAJIE_JOINING_COLD_LOAD_MAX_BYTES - 2,
+    'assets/week-three-bajie-workspace.js': 1, 'assets/week-three-bajie-scene.js': 1,
+  };
+  assert.equal(analyzeManifest(manifest, sizes, sizes).closures[root].rawBytes, bundleBudget.WEEK_THREE_BAJIE_JOINING_COLD_LOAD_MAX_BYTES);
+  assert.throws(() => analyzeManifest(manifest, sizes, { ...sizes, 'assets/week-three-bajie-scene.js': 2 }), /WeekThreeBajieJoiningExperience closure exceeds its 3 MiB cold-load budget/);
+  assert.throws(() => analyzeManifest({ ...manifest, 'src/main.tsx': { ...base['src/main.tsx'], imports: ['vendor.js', workspace] } }, sizes, sizes), /WeekThreeBajieJoiningBlocklyWorkspace must stay outside the application entry static closure/);
+  assert.throws(() => analyzeManifest({ ...manifest, 'src/main.tsx': { ...base['src/main.tsx'], imports: ['vendor.js', scene] } }, sizes, sizes), /WeekThreeBajieJoiningScene must stay outside the application entry static closure/);
+});
+
+test('keeps the W3-M4 route, scene, and Blockly workspace dynamically split from homepage static imports', () => {
+  const routeSource = readFileSync(new URL('../src/components/MissionPageContent.tsx', import.meta.url), 'utf8');
+  const experienceSource = readFileSync(new URL('../src/components/WeekThreeBajieJoiningExperience.tsx', import.meta.url), 'utf8');
+  assert.match(routeSource, /import\(\s*['"]\.\/WeekThreeBajieJoiningExperience['"]\s*\)/);
+  assert.match(routeSource, /mission\.id\s*===\s*['"]w3-m4['"][\s\S]{0,900}<WeekThreeBajieJoiningRouteBoundary\b/);
+  assert.match(experienceSource, /import\(['"]\.\/WeekThreeBajieJoiningBlocklyWorkspace['"]\)/);
+  assert.match(experienceSource, /import\(['"]\.\/WeekThreeBajieJoiningScene['"]\)/);
+});
+
+test('rejects W3-M4 static entry reachability even when Vite erases the source-module manifest keys', () => {
+  const sources = new Map([
+    ['src/main.tsx', "import App from './App';"],
+    ['src/App.tsx', "import { WeekThreeBajieJoiningScene } from './components/WeekThreeBajieJoiningScene'; export default WeekThreeBajieJoiningScene;"],
+    ['src/components/WeekThreeBajieJoiningScene.tsx', 'export const WeekThreeBajieJoiningScene = () => null;'],
+  ]);
+  assert.throws(() => assertNoWeekThreeBajieJoiningEntryStaticImports(sources), /WeekThreeBajieJoiningScene.*static import closure/i);
+  assert.doesNotThrow(() => assertNoWeekThreeBajieJoiningEntryStaticImports(new Map([
+    ['src/main.tsx', "import App from './App';"],
+    ['src/App.tsx', "const load = () => import('./components/WeekThreeBajieJoiningScene'); export default load;"],
+  ])));
+});
+
+test('rejects missing manifest source keys when entry source statically reaches the W3-M4 workspace', () => {
+  const sources = new Map([
+    ['src/main.tsx', "import App from './App';"],
+    ['src/App.tsx', "export { WeekThreeBajieJoiningBlocklyWorkspace } from './components/WeekThreeBajieJoiningBlocklyWorkspace';"],
+    ['src/components/WeekThreeBajieJoiningBlocklyWorkspace.tsx', 'export const WeekThreeBajieJoiningBlocklyWorkspace = () => null;'],
+  ]);
+  const manifest = { ...base };
+  assert.throws(() => {
+    assertNoWeekThreeBajieJoiningEntryStaticImports(sources);
+    analyzeManifest(manifest, { 'assets/main.js': 1, 'assets/vendor.js': 1 }, { 'assets/main.js': 1, 'assets/vendor.js': 1 });
+  }, /WeekThreeBajieJoiningBlocklyWorkspace.*static import closure/i);
+});
+
 test('keeps the W3-M2 route, scene, and Blockly workspace dynamically split from homepage static imports', () => {
   const routeSource = readFileSync(new URL('../src/components/MissionPageContent.tsx', import.meta.url), 'utf8');
   const experienceSource = readFileSync(new URL('../src/components/WeekThreeCuilanBooleanExperience.tsx', import.meta.url), 'utf8');
@@ -257,9 +315,10 @@ test('requires the W3-M1 dedicated lazy route closure', () => {
   assert.match(routeSource, /mission\.id\s*===\s*['"]w3-m1['"][\s\S]{0,900}<WeekThreeManorHelpRouteBoundary\b/);
 });
 
-test('keeps the Four Seas E2E AST contract isolated from bundle analysis', () => {
+test('keeps the Four Seas E2E AST contract isolated while allowing the W3-M4 entry-import AST gate', () => {
   const source = readFileSync(new URL('./check-bundle-budget.mjs', import.meta.url), 'utf8');
-  assert.doesNotMatch(source, /check-four-seas-e2e-contract|typescript|ts\.createSourceFile/);
+  assert.doesNotMatch(source, /check-four-seas-e2e-contract/);
+  assert.match(source, /assertNoWeekThreeBajieJoiningEntryStaticImports/);
 });
 
 test('keeps the progress-core manual chunk stable in the E2E fault build', () => {
@@ -1304,6 +1363,11 @@ test('rejects every E2E storage fault sentinel from production bundle bytes', ()
     'fail-regalia-session',
     'fail-regalia-completion',
     '四海披挂测试存储故障',
+    'corrupt-bajie-current',
+    'fail-bajie-draft',
+    'fail-bajie-run',
+    'fail-bajie-observation',
+    'fail-bajie-completion',
   ]) {
     assert.throws(
       () => assertNoProductionTestSentinels(new Map([['assets/app.js', Buffer.from(`prefix ${sentinel} suffix`)]])),
