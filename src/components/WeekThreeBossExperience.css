@@ -1,0 +1,9 @@
+.week-three-boss-experience { display: grid; gap: 1rem; }
+.week-three-boss-workspace { border: 3px solid #d99a4e; border-radius: 1rem; padding: 1rem; background: #fff9e7; }
+.week-three-boss-workspace li { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .7rem 0; }
+.week-three-boss-scene { overflow: hidden; border-radius: 1rem; background: #f6e2ad; }
+.week-three-boss-scene img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.week-three-boss-scene .week-three-boss-states { display: block; width: min(54%, 28rem); aspect-ratio: 1; margin: -4rem auto 0; position: relative; overflow: hidden; border-radius: .8rem; }
+.week-three-boss-scene .week-three-boss-states img { width: 200%; height: 200%; max-width: none; aspect-ratio: auto; transform: translate(calc(var(--frame-x) * -50%), calc(var(--frame-y) * -50%)); }
+.week-three-boss-scene p { margin: 0; padding: .6rem 1rem; }
+@media (max-width: 390px) { .week-three-boss-workspace { padding: .7rem; } }

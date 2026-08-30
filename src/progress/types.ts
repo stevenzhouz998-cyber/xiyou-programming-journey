@@ -65,6 +65,13 @@ import type {
   BajieJoiningScenarioResult,
   BajieJoiningWorkspaceDraftV1,
 } from '../blockly/weekThreeBajieJoiningContract';
+import type {
+  WeekThreeBossFailureSnapshot,
+  WeekThreeBossConcept,
+  WeekThreeBossInstruction,
+  WeekThreeBossRunResult,
+  WeekThreeBossWorkspaceDraftV1,
+} from '../blockly/weekThreeBossContract';
 
 export interface MissionProgress {
   status: 'completed';
@@ -255,6 +262,30 @@ export interface BajieJoiningMissionSession extends Omit<MissionSessionData<
   conditionObservationUses: Array<{ snapshotId: string; usedAt: string; workspace: BajieJoiningWorkspaceDraftV1 }>;
 }
 
+/** Saved evidence for the one connected W3-M5 state-machine workspace. */
+export interface WeekThreeBossMissionSession extends Omit<MissionSessionData<
+  WeekThreeBossWorkspaceDraftV1,
+  WeekThreeBossInstruction,
+  WeekThreeBossRunResult
+>, 'conceptFailures'> {
+  successfulFullRuns: number;
+  conceptFailures: {
+    programStructure: number;
+    manorHelpSpecificity: number;
+    disguiseIdentity: number;
+    yunzhanBranch: number;
+    joiningOperator: number;
+  };
+  failureSnapshot: WeekThreeBossFailureSnapshot | null;
+  /** Immutable learning-history fact: the first runtime concept that blocked this Boss. */
+  firstBlockingConcept: WeekThreeBossConcept | null;
+  conditionObservationUses: Array<{
+    snapshotId: string;
+    usedAt: string;
+    workspace: WeekThreeBossWorkspaceDraftV1;
+  }>;
+}
+
 export type ManorHelpCompletionEvidence =
   | {
     kind: 'legacy-preformal';
@@ -302,12 +333,23 @@ export type BajieLegacyReplayEvidence =
   | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 2; sourceSchemaRevision: 1 }
   | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 3; sourceSchemaRevision: 1 | 2 | 3 | 4 | 5 };
 
+export type WeekThreeBossCompletionEvidence =
+  | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 3; sourceSchemaRevision: 6 }
+  | {
+    kind: 'formal-v3';
+    completedAt: string;
+    verifiedAt: string;
+    workspace: WeekThreeBossWorkspaceDraftV1;
+    trace: WeekThreeBossInstruction[];
+    run: WeekThreeBossRunResult;
+  };
+
 export interface MissionCompletionEvidenceV1 {
   'w3-m1'?: ManorHelpCompletionEvidence;
   'w3-m2'?: CuilanBooleanCompletionEvidence;
   'w3-m3'?: YunzhanDialogueCompletionEvidence;
   'w3-m4'?: BajieJoiningCompletionEvidence;
-  'w3-m5'?: BajieLegacyReplayEvidence;
+  'w3-m5'?: WeekThreeBossCompletionEvidence;
 }
 
 export interface MissionSessionById {
@@ -325,16 +367,17 @@ export interface MissionSessionById {
   'w3-m2': CuilanBooleanMissionSession;
   'w3-m3': YunzhanDialogueMissionSession;
   'w3-m4': BajieJoiningMissionSession;
+  'w3-m5': WeekThreeBossMissionSession;
 }
 
 export type ExecutableMissionId = keyof MissionSessionById;
 export type MissionSession = MissionSessionById[ExecutableMissionId];
-export type AnyMissionSession = MissionSession | BajieJoiningMissionSession;
+export type AnyMissionSession = MissionSession;
 export type MissionSessions = { [MissionId in keyof MissionSessionById]?: MissionSessionById[MissionId] };
 
 export interface ProgressV3 {
   version: 3;
-  schemaRevision: 3 | 4 | 5 | 6;
+  schemaRevision: 3 | 4 | 5 | 6 | 7;
   learnerName: string;
   missions: Record<string, MissionProgress>;
   settings: ProgressSettings;

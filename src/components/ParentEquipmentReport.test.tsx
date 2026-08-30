@@ -6,6 +6,9 @@ import { recordEquipmentEffectUse } from '../progress/equipmentEffectSession'
 import { equipItem } from '../progress/equipmentOperations'
 import { compileManorHelpDraft, createDefaultManorHelpDraft, runManorHelp } from '../blockly/weekThreeManorHelpContract'
 import { compileCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract'
+import { compileWeekThreeBossDraft } from '../blockly/weekThreeBossCompiler'
+import { runWeekThreeBossDraft } from '../blockly/weekThreeBossContract'
+import { createSolvedWeekThreeBossDraftForTest } from '../blockly/weekThreeBossTestHelpers'
 import { ParentEquipmentReport } from './ParentEquipmentReport'
 
 describe('ParentEquipmentReport', () => {
@@ -100,5 +103,33 @@ describe('ParentEquipmentReport', () => {
     const ability = screen.getAllByRole('region', { name: '火眼金睛学习能力' }).at(-1)!
     expect(ability).toHaveTextContent('主动观察 1 次')
     expect(ability).not.toHaveTextContent(/cuilan-|appearance-matches|identity-is|sourceBlockId|instructionId|trace/)
+  })
+
+  it('summarizes W3-M5 runs, first blockers, concept failures, observations, and proof without internal identifiers', () => {
+    const now = '2026-08-30T00:00:00.000Z'
+    const failed = createMissionSession('w3-m5', now)
+    const failedTrace = compileWeekThreeBossDraft(failed.workspace)
+    const failedRun = recordRun(failed, runWeekThreeBossDraft(failed.workspace), failedTrace.ok ? failedTrace.trace : [], now)
+    const observed = recordConditionObservationUse(failedRun, failedRun.failureSnapshot!.snapshotId, '2026-08-30T00:01:00.000Z')
+    const solved = createSolvedWeekThreeBossDraftForTest()
+    const solvedTrace = compileWeekThreeBossDraft(solved)
+    const success = recordRun(updateWorkspaceDraft(observed, solved, '2026-08-30T00:02:00.000Z'), runWeekThreeBossDraft(solved), solvedTrace.ok ? solvedTrace.trace : [], '2026-08-30T00:02:00.000Z')
+    success.conceptFailures.disguiseIdentity = 2
+    success.conceptFailures.yunzhanBranch = 3
+    success.conceptFailures.joiningOperator = 4
+    let progress = createInitialProgress()
+    progress.sessions['w3-m5'] = success
+    progress.missionCompletionEvidence['w3-m5'] = { kind: 'formal-v3', completedAt: now, verifiedAt: now, workspace: structuredClone(success.workspace), trace: structuredClone(success.lastTrace), run: structuredClone(success.lastRun!) }
+    render(<ParentEquipmentReport progress={progress} />)
+    const report = screen.getByRole('region', { name: '第三周总试炼学习摘要' })
+    expect(report).toHaveTextContent('已运行 2 次')
+    expect(report).toHaveTextContent('庄口求助判断过宽 1 次')
+    expect(report).toHaveTextContent('外形与身份判断 2 次')
+    expect(report).toHaveTextContent('云栈洞分支 3 次')
+    expect(report).toHaveTextContent('两个条件组合 4 次')
+    expect(report).toHaveTextContent('主动观察 1 次')
+    expect(report).toHaveTextContent('正式 Blockly 证明已保存')
+    expect(report).not.toHaveTextContent(/boss-manor|instructionId|sourceBlockId|canon-bajie-ready|pilgrimage-explicit|full trace/)
+    expect(screen.getByRole('region', { name: '火眼金睛学习能力' })).toHaveTextContent('主动观察 1 次')
   })
 })

@@ -36,6 +36,7 @@ import type { WeekThreeManorHelpExperienceProps } from "./WeekThreeManorHelpExpe
 import type { WeekThreeCuilanBooleanExperienceProps } from "./WeekThreeCuilanBooleanExperience";
 import type { WeekThreeYunzhanDialogueExperienceProps } from './WeekThreeYunzhanDialogueExperience';
 import type { WeekThreeBajieJoiningExperienceProps } from './WeekThreeBajieJoiningExperience';
+import type { WeekThreeBossExperienceProps } from './WeekThreeBossExperience';
 
 const ArrowLeft = lazy(() =>
   import("@phosphor-icons/react/dist/icons/ArrowLeft").then((module) => ({
@@ -101,6 +102,7 @@ const loadWeekThreeCuilanBooleanExperience = () =>
   import('./WeekThreeCuilanBooleanExperience').then((module) => ({ default: module.WeekThreeCuilanBooleanExperience }));
 const loadWeekThreeYunzhanDialogueExperience = () => import('./WeekThreeYunzhanDialogueExperience').then((module) => ({ default: module.WeekThreeYunzhanDialogueExperience }));
 const loadWeekThreeBajieJoiningExperience = () => import('./WeekThreeBajieJoiningExperience').then((module) => ({ default: module.WeekThreeBajieJoiningExperience }));
+const loadWeekThreeBossExperience = () => import('./WeekThreeBossExperience').then((module) => ({ default: module.WeekThreeBossExperience }));
 
 export function FourSeasRegaliaRouteBoundary({
   loader = loadFourSeasRegaliaExperience,
@@ -316,6 +318,12 @@ export function WeekThreeBajieJoiningRouteBoundary({ loader = loadWeekThreeBajie
   const retryLocalRoute = () => setRetryGeneration((generation) => generation + 1);
   const retry = loader === loadWeekThreeBajieJoiningExperience ? (reloadPage ?? reloadSectionPage) : retryLocalRoute;
   return <LazySectionBoundary key={retryGeneration} label="八戒归队条件任务" reloadPage={retry}><Suspense fallback={<p className="mission-tools-loading" role="status">八戒归队任务加载中，请稍候……</p>}><Experience {...props} reloadPage={reloadPage} /></Suspense></LazySectionBoundary>;
+}
+export function WeekThreeBossRouteBoundary({ loader = loadWeekThreeBossExperience, reloadPage, ...props }: WeekThreeBossExperienceProps & { loader?: () => Promise<{ default: ComponentType<WeekThreeBossExperienceProps> }>; reloadPage?: () => void }) {
+  const [retryGeneration, setRetryGeneration] = useState(0);
+  const Experience = useMemo(() => lazy(loader), [loader, retryGeneration]);
+  const retry = loader === loadWeekThreeBossExperience ? (reloadPage ?? reloadSectionPage) : () => setRetryGeneration((generation) => generation + 1);
+  return <LazySectionBoundary key={retryGeneration} label="高老庄总试炼" reloadPage={retry}><Suspense fallback={<p className="mission-tools-loading" role="status">总试炼加载中，请稍候……</p>}><Experience {...props} reloadPage={reloadPage} /></Suspense></LazySectionBoundary>;
 }
 
 function playAudio(path: string, muted: boolean) {
@@ -955,6 +963,15 @@ function MissionPageForId({
               />
             ) : mission.id === 'w3-m4' ? (
               <WeekThreeBajieJoiningRouteBoundary
+                reducedMotion={reducedMotion}
+                muted={progress.settings.muted}
+                locked={completionSave !== null}
+                onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)}
+                onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
+                onInteractionLockChange={setBattleInteractionLocked}
+              />
+            ) : mission.id === 'w3-m5' ? (
+              <WeekThreeBossRouteBoundary
                 reducedMotion={reducedMotion}
                 muted={progress.settings.muted}
                 locked={completionSave !== null}

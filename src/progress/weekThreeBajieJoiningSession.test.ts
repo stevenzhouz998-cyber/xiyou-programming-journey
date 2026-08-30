@@ -10,6 +10,8 @@ import { isExecutableMissionId } from './executableMissionIds';
 import { migrateProgress } from './schema';
 import { createMissionSession, recordConditionObservationUse, recordRun, updateWorkspaceDraft } from './session';
 import { parseBajieJoiningSession, parseBajieJoiningWorkspace, sameBajieJoiningData } from './bajieJoiningSessionSchema';
+import { runWeekThreeBossDraft } from '../blockly/weekThreeBossContract';
+import { createSolvedWeekThreeBossDraftForTest } from '../blockly/weekThreeBossTestHelpers';
 
 const NOW = '2020-01-01T00:00:00.000Z';
 const LATER = '2020-01-01T00:00:01.000Z';
@@ -46,7 +48,7 @@ describe('W3-M4 八戒归队 Progress V3', () => {
     legacy.schemaRevision = 5;
     legacy.missions['w3-m4'] = { status: 'completed', stars: 2, attempts: 1, hintsUsed: 0, completedAt: NOW };
     const migrated = migrateProgress(legacy);
-    expect(migrated.schemaRevision).toBe(6);
+    expect(migrated.schemaRevision).toBe(7);
     expect((migrated as any).missionCompletionEvidence['w3-m4']).toMatchObject({ kind: 'legacy-preformal', completedAt: NOW });
     expect(isMissionUnlocked(migrated, 'w3-m5')).toBe(false);
   });
@@ -91,7 +93,7 @@ describe('W3-M4 八戒归队 Progress V3', () => {
       expect(migrateProgress(structuredClone(migrated))).toEqual(migrated);
     }
     const oldV3 = createInitialProgress(); oldV3.schemaRevision = 3; oldV3.missions['w3-m5'] = mission;
-    expect(migrateProgress(oldV3).missionCompletionEvidence['w3-m5']).toMatchObject({ kind: 'legacy-replay-only', sourceVersion: 3, sourceSchemaRevision: 3 });
+    expect(migrateProgress(oldV3).missionCompletionEvidence['w3-m5']).toMatchObject({ kind: 'legacy-replay-only', sourceVersion: 3, sourceSchemaRevision: 6 });
   });
 
   it('requires a formal W3-M3 proof before entering W3-M4', () => {
@@ -162,18 +164,34 @@ describe('W3-M4 八戒归队 Progress V3', () => {
     const progress = formalM3();
     progress.sessions['w3-m4'] = successfulBajieSession();
     const formalM4 = completeMission(progress, 'w3-m4', { stars: 3, hintsUsed: 0 });
+    let boss = createMissionSession('w3-m5', NOW);
+    const solved = createSolvedWeekThreeBossDraftForTest();
+    boss = updateWorkspaceDraft(boss, solved, NOW);
+    const bossRun = runWeekThreeBossDraft(solved);
+    boss = recordRun(boss, bossRun, bossRun.trace, NOW);
+    formalM4.sessions['w3-m5'] = boss;
     const completedM5 = completeMission(formalM4, 'w3-m5', { stars: 2, hintsUsed: 0 });
-    expect(completedM5.missionCompletionEvidence['w3-m5']).toBeUndefined();
+    expect(completedM5.missionCompletionEvidence['w3-m5']?.kind).toBe('formal-v3');
     expect(migrateProgress(JSON.parse(serializeProgress(completedM5)))).toEqual(completedM5);
     expect(isMissionUnlocked(completedM5, 'w3-m5')).toBe(true);
-    expect(isExecutableMissionId('w3-m5')).toBe(false);
+    expect(isExecutableMissionId('w3-m5')).toBe(true);
+  });
+
+  it('refuses W3-M5 formal completion until W3-M4 itself is completed with formal-v3 evidence', () => {
+    const progress = formalM3();
+    let boss = createMissionSession('w3-m5', NOW);
+    const solved = createSolvedWeekThreeBossDraftForTest();
+    boss = updateWorkspaceDraft(boss, solved, NOW);
+    const run = runWeekThreeBossDraft(solved);
+    progress.sessions['w3-m5'] = recordRun(boss, run, run.trace, NOW);
+    expect(() => completeMission(progress, 'w3-m5', { stars: 3, hintsUsed: 0 })).toThrow(/W3-M4.*formal-v3|W3-M4.*正式/);
   });
 
   it('does not trust a bare current W3-M5 completion and bounds hostile session values', () => {
     const bare = createInitialProgress();
     bare.missions['w3-m5'] = { status: 'completed', stars: 1, attempts: 1, hintsUsed: 0, completedAt: NOW };
     expect(isMissionUnlocked(bare, 'w3-m5')).toBe(false);
-    expect(() => migrateProgress(bare)).toThrow(/W3-M5|重玩标记/);
+    expect(() => migrateProgress(bare)).toThrow(/W3-M5|重玩标记|完成证明/);
     const huge = createMissionSession('w3-m4', NOW);
     huge.totalRuns = 1_000_001;
     expect(() => parseBajieJoiningSession(huge)).toThrow(/范围/);

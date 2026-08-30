@@ -34,6 +34,8 @@ This manifest gates the formal Dragon Palace media in `public/assets/dragon-pala
 | assets/week-three-yunzhan-dialogue/yunzhan-dialogue-states.webp | 898d041b589871267719aa3746ebd6b36aabae4cb71d818a7e30214de254db39 | Transparent four-state guard, listen, pilgrimage explanation, and de-escalated origin dialogue sheet | OpenAI built-in image_gen | [Prompt W3M3-002](#prompt-w3m3-002-yunzhan-dialogue-states) | 2048x768 | generated in-project with built-in image_gen; provenance verified | w3-m3 WeekThreeYunzhanDialogueScene | visual-qa-passed |
 | assets/week-three-bajie-joining/bajie-joining-background.webp | 8214aff1b76717b74baad3f55195ff63c6edc14b7c3a17735ad43b5d6cda0951 | Warm morning Gao Family Manor courtyard and reception hall with a clear reconciliation stage and open westward gate | OpenAI built-in image_gen | [Prompt W3M4-001](#prompt-w3m4-001-bajie-joining-background) | 1672x941 | generated in-project with built-in image_gen; provenance verified | w3-m4 WeekThreeBajieJoiningScene | visual-qa-passed |
 | assets/week-three-bajie-joining/bajie-joining-states.webp | 408a52ad14ee571c4f3d2ce2b30ba88d06ef5078e44de0feba40f7c3774dc2ec | Transparent three-state Zhu Wuneng explanation, Bajie naming, and westward luggage-departure sheet | OpenAI built-in image_gen | [Prompt W3M4-002](#prompt-w3m4-002-bajie-joining-states) | 1500x500 | generated in-project with built-in image_gen; provenance verified | w3-m4 WeekThreeBajieJoiningScene | visual-qa-passed |
+| assets/week-three-boss/week-three-boss-background.webp | 62de44e39f0978dc03933629e65942cf29c2b06c09bd3d73e79a3ce9edae481e | Bright Gao Village, Yunzhai cave, and westward-road panorama for the single W3-M5 story stage | OpenAI built-in image_gen | [Prompt W3M5-001](#prompt-w3m5-001-boss-background) | 1280x720 | generated in-project with built-in image_gen; provenance verified | w3-m5 WeekThreeBossScene | visual-qa-passed |
+| assets/week-three-boss/week-three-boss-states.webp | dc3905b48fa147da497b7260e22f62beed3b617de31dd3dd757a31116f03a4f1 | Four nonviolent 3D storybook state vignettes for the W3-M5 recap | OpenAI built-in image_gen | [Prompt W3M5-002](#prompt-w3m5-002-boss-states) | 1024x1024 | generated in-project with built-in image_gen; provenance verified | w3-m5 WeekThreeBossScene | visual-qa-passed |
 
 ## Prompt records
 
@@ -97,6 +99,29 @@ Constraints: real transparent alpha; no written text, labels, calligraphy, symbo
 Safety QA constraints: no text; no pseudo-text; no binding; no ear pulling; no attack; no adult marriage; no humiliating pose.
 Accepted chroma edit: replace only the baked checkerboard background with uniform magenta while preserving every character, object, pose, face, clothing color, luggage, spacing, group order, canvas dimensions and panoramic layout; no redraw, crop, resize, reposition, text or watermark.
 Processing: two direct built-in transparency attempts (`exec-fc232fb5-a022-44e5-88f4-e3ea44ec7371.png` and `exec-3558ca49-d1fd-467c-8583-9ee09922f52c.png`) were rejected because they baked checkerboards into opaque RGB. The first magenta-key sheet (`exec-15eb0b77-fa45-4119-822c-aa7674dea7fa.png`) was also rejected after integrated review because the third-cell Wukong staff crossed the right canvas boundary. The accepted built-in correction (`exec-6b3bad29-59e5-4e13-8423-67985d1de3e7.png`, 2172x724 RGB) removed only that staff and kept all three groups on a uniform magenta key. Local processing used hue/saturation/value key classification, a soft matte, connected opaque-foreground RGB propagation, alpha values below 16 cleared to zero, a two-pixel nearest-opaque edge decontamination pass, resize to three equal 500x500 cells, and lossless WebP encoding (`lossless: true`, `effort: 6`). Alpha-zero RGB was cleared in the pre-encode RGBA buffer; WebP decoders may canonicalize invisible RGB behind fully transparent pixels, so the gate treats alpha-zero RGB as non-semantic and separately rejects low-alpha disconnected residue. No character or story artwork was redrawn in code. The final 1500x500 file has genuine alpha, transparent corners, complete characters and luggage, no cropped staff, no generated text, and no binding/ear-pulling/attack/adult-marriage/humiliation scene. A real composite over a pale background was inspected at original resolution. Automated alpha-edge QA is 0 mismatches / 10,703 inspected, below the unchanged 4% project limit; there are no remaining alpha values from 1 through 15.
+```
+
+### Prompt W3M5-001 boss background
+
+```text
+Use case: illustration-story
+Asset type: W3-M5 children's coding-game story-stage background, wide landscape raster
+Primary request: Bright polished 3D Chinese children's storybook panorama connecting Gao Village manor, Yunzhai cave and the westward road in one cohesive nonviolent Journey to the West scene.
+Scene/backdrop: sunny sky, traditional rooftops, green hills and a clear open stage; no characters.
+Style/medium: premium rounded 3D children's storybook illustration.
+Constraints: no text, pseudo-text, watermark, combat, weapons, distress, adult romance, humiliation, emoji or UI.
+Processing: accepted OpenAI built-in image_gen source `exec-fccbf3d9-1620-4bbc-bef8-e1c4f1025200.png` was resized only to 1280x720 and encoded as WebP quality 62. Original composition was not redrawn. Original-size visual QA found no lettering, combat, binding, adult content or UI.
+```
+
+### Prompt W3M5-002 boss states
+
+```text
+Use case: illustration-story
+Asset type: W3-M5 four-state nonviolent 3D storybook raster
+Primary request: Four evenly spaced children-safe vignettes showing Gao Cai seeking help, Wukong investigating, Yunzhai dialogue, and Bajie carrying travel luggage west.
+Style/medium: polished bright 3D Chinese children's storybook illustration.
+Constraints: no text, pseudo-text, watermark, combat, weapons, marriage, humiliation, violence, emoji, UI or borders.
+Processing: accepted OpenAI built-in image_gen source `exec-0bedfc29-5f65-43f6-9d5c-68bb8d64ca78.png` was resized only to 1024x1024 and encoded as WebP quality 58. Original-size visual QA found no lettering, combat, binding, adult content or UI.
 ```
 
 ### Prompt W3M2-001 cuilan disguise background

@@ -119,6 +119,15 @@ export const formalWeekThreeMissions: FormalMissionSpec[] = [
       beat('另名八戒，挑担西行', '唐僧后来另名八戒，八戒挑担西行。'),
     ],
   }),
+  formalMission('w3-m5', {
+    subtitle: '在一张图中复盘高老庄条件链',
+    objective: '让同一张 Blockly 图从庄口求助依次推进到八戒归队',
+    canon: { ...formalWeekThreeCanon, chapters: [18, 19], title: '第十八至十九回　高老庄收八戒', sourceUrl: 'https://zh.wikisource.org/zh-hans/西游记/第018回' },
+    storyBeats: [
+      beat('四段公开证据', '庄口求助、后宅伪装、云栈洞对话与归队核验必须在同一轮运行中完成。'),
+      beat('回顾完成', '八戒挑担随师徒西行，第三周条件学习进入回顾完成。'),
+    ],
+  }),
 ];
 
 export function getFormalMission(id: string): FormalMissionSpec | undefined {

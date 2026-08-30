@@ -55,7 +55,6 @@ export const course: CourseManifest = {
     deriveWeekFromOutline('week-3', { subtitle: '看条件，再选择正确分支', canon: c18to19,
       missions: [
         ...formalWeekThreeMissions,
-        mission('w3-m5', { subtitle: '用条件复原收徒经过', objective: '完整复现第十八至十九回的条件链', canon: c18to19, storyBeats: [beat('由求助到降魔', '悟空依据高才所述前往庄中。'), beat('由交锋到收徒', '云栈洞交锋后，八戒随唐僧取经。')], expectedSequence: ['hear_report', 'transform', 'chase', 'learn_origin', 'join_team'] }),
       ],
     }),
     deriveWeekFromOutline('week-4', { subtitle: '从积木跨入 Python', canon: c27,

@@ -9,7 +9,10 @@ import { compileManorHelpDraft, createDefaultManorHelpDraft, runManorHelp } from
 import { compileCuilanBooleanDraft, createDefaultCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract';
 import { compileBajieJoiningDraft, runBajieJoiningForDraft } from '../blockly/weekThreeBajieJoiningContract';
 import { compileHeavenlySignalBossDraft, createDefaultHeavenlySignalBossDraft, runHeavenlySignalBoss } from '../blockly/weekTwoHeavenlySignalBossContract';
-import { storageFaultAdapter as productionStorageFaultAdapter } from './storageFaultAdapter';
+import { compileWeekThreeBossDraft } from '../blockly/weekThreeBossCompiler';
+import { runWeekThreeBossDraft } from '../blockly/weekThreeBossContract';
+import { createSolvedWeekThreeBossDraftForTest } from '../blockly/weekThreeBossTestHelpers';
+import { WEEK_THREE_BOSS_STORAGE_FAULT_MODES, storageFaultAdapter as productionStorageFaultAdapter } from './storageFaultAdapter';
 import type { ProgressV3 } from './types';
 
 const CURRENT_KEY = 'xiyou-programming-progress-v3';
@@ -113,6 +116,25 @@ function withSuccessfulBajieRun(base = withBajieDraft()) {
   const draft = structuredClone(base.sessions['w3-m4']!.workspace); draft.blocks.find((block) => block.id === 'bajie-boolean-operation')!.operator = 'and'; const trace = compileBajieJoiningDraft(draft); const session = updateWorkspaceDraft(base.sessions['w3-m4']!, draft, '2026-08-28T00:01:00.000Z');
   return { ...base, sessions: { ...base.sessions, 'w3-m4': recordRun(session, runBajieJoiningForDraft(draft, trace), trace, '2026-08-28T00:02:00.000Z') }, savedAt: '2026-08-28T00:02:00.000Z' };
 }
+function withFormalW3M4(base = createInitialProgress()) {
+  return completeMission(withSuccessfulBajieRun(withBajieDraft(base)), 'w3-m4', { stars: 3, hintsUsed: 0 });
+}
+
+function withBossDraft(base = createInitialProgress()) {
+  const session = createMissionSession('w3-m5', NOW);
+  return { ...base, sessions: { ...base.sessions, 'w3-m5': updateWorkspaceDraft(session, session.workspace, NOW) }, savedAt: NOW };
+}
+function withFailedBossRun(base = withBossDraft()) {
+  const session = base.sessions['w3-m5']!; const compiled = compileWeekThreeBossDraft(session.workspace);
+  if (!compiled.ok) throw new Error('test boss draft must compile');
+  return { ...base, sessions: { ...base.sessions, 'w3-m5': recordRun(session, runWeekThreeBossDraft(session.workspace), compiled.trace, '2026-08-30T00:01:00.000Z') }, savedAt: '2026-08-30T00:01:00.000Z' };
+}
+function withSuccessfulBossRun(base = withBossDraft()) {
+  const draft = createSolvedWeekThreeBossDraftForTest(); const compiled = compileWeekThreeBossDraft(draft);
+  if (!compiled.ok) throw new Error('test solved boss draft must compile');
+  const session = updateWorkspaceDraft(base.sessions['w3-m5']!, draft, '2026-08-30T00:01:00.000Z');
+  return { ...base, sessions: { ...base.sessions, 'w3-m5': recordRun(session, runWeekThreeBossDraft(draft), compiled.trace, '2026-08-30T00:02:00.000Z') }, savedAt: '2026-08-30T00:02:00.000Z' };
+}
 
 describe('storage fault adapters', () => {
   it('keeps the E2E fault adapter free of W3 runtime imports', () => {
@@ -126,6 +148,12 @@ describe('storage fault adapters', () => {
     expect(productionStorageFaultAdapter.beforeProgressWrite({ storage, progress: createInitialProgress() })).toBeNull();
     productionStorageFaultAdapter.beforeProgressLoad(storage);
     expect(storage.reads).toEqual([]);
+  });
+
+  it('declares the four isolated W3-M5 write faults and current-corruption mode without enabling them in production', () => {
+    expect(WEEK_THREE_BOSS_STORAGE_FAULT_MODES).toEqual([
+      'fail-week-three-boss-draft', 'fail-week-three-boss-run', 'fail-week-three-boss-observation', 'fail-week-three-boss-completion', 'corrupt-week-three-boss-current',
+    ]);
   });
 
   it('injects only an exact w1-m3 draft delta and ignores settings or hint writes', () => {
@@ -322,5 +350,18 @@ describe('storage fault adapters', () => {
     storeCurrent(storage, success, 'fail-bajie-completion'); expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: completion })).toMatch(/fault/i);
     const badCompletion = structuredClone(completion); badCompletion.missions['w3-m4']!.stars = 4 as never; storeCurrent(storage, success, 'fail-bajie-completion'); expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: badCompletion })).toBeNull();
     const current = serializeProgress(completion); storage.setItem(CURRENT_KEY, current); storage.setItem(MODE_KEY, 'corrupt-bajie-current'); e2eStorageFaultAdapter.beforeProgressLoad(storage); expect(storage.getItem(SNAPSHOT_KEY)).toBe(current); expect(storage.getItem(CURRENT_KEY)).toBe('{broken w3-m4 current');
+  });
+
+  it('injects only exact W3-M5 draft, run, observation, completion, and corrupt deltas', () => {
+    const storage = new MemoryStorage(); const base = createInitialProgress(); const draft = withBossDraft(base);
+    storeCurrent(storage, base, 'fail-week-three-boss-draft'); expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: draft })).toBe('regalia storage fault');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: { ...draft, learnerName: 'unrelated' } })).toBeNull();
+    const failed = withFailedBossRun(draft); storeCurrent(storage, draft, 'fail-week-three-boss-run'); expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: failed })).toBe('regalia storage fault');
+    const observed = { ...failed, sessions: { ...failed.sessions, 'w3-m5': recordConditionObservationUse(failed.sessions['w3-m5']!, failed.sessions['w3-m5']!.failureSnapshot!.snapshotId, '2026-08-30T00:02:00.000Z') }, savedAt: '2026-08-30T00:02:00.000Z' };
+    storeCurrent(storage, failed, 'fail-week-three-boss-observation'); expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: observed })).toBe('regalia storage fault');
+    const successful = withSuccessfulBossRun(withBossDraft(withFormalW3M4())); const completed = completeMission(successful, 'w3-m5', { stars: 3, hintsUsed: 0 });
+    storeCurrent(storage, successful, 'fail-week-three-boss-completion'); expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: completed })).toBe('regalia storage fault');
+    const current = serializeProgress(completed); storage.setItem(CURRENT_KEY, current); storage.setItem(MODE_KEY, 'corrupt-week-three-boss-current'); e2eStorageFaultAdapter.beforeProgressLoad(storage);
+    expect(storage.getItem(SNAPSHOT_KEY)).toBe(current); expect(storage.getItem(CURRENT_KEY)).toBe('{broken w3-m5 current'); expect(storage.getItem(MODE_KEY)).toBe('off');
   });
 });

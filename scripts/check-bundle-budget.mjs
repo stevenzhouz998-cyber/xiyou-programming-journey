@@ -10,10 +10,11 @@ import {
   PHASER_RAW_LIMIT,
   WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES,
   WEEK_THREE_BAJIE_JOINING_COLD_LOAD_MAX_BYTES,
+  WEEK_THREE_BOSS_COLD_LOAD_MAX_BYTES,
   WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES,
   WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES,
 } from './budget-limits.mjs';
-export { WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES, WEEK_THREE_BAJIE_JOINING_COLD_LOAD_MAX_BYTES, WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES, WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES };
+export { WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES, WEEK_THREE_BAJIE_JOINING_COLD_LOAD_MAX_BYTES, WEEK_THREE_BOSS_COLD_LOAD_MAX_BYTES, WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES, WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES };
 export {
   DRAGON_PALACE_COLD_LOAD_MAX_BYTES,
   DRAGON_PALACE_COLD_BYTES,
@@ -45,17 +46,25 @@ export const COLD_LOAD_ROUTE_CLOSURE_BUDGETS = Object.freeze({
   'src/components/WeekThreeCuilanBooleanExperience.tsx': WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES,
   'src/components/WeekThreeYunzhanDialogueExperience.tsx': WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES,
   'src/components/WeekThreeBajieJoiningExperience.tsx': WEEK_THREE_BAJIE_JOINING_COLD_LOAD_MAX_BYTES,
+  'src/components/WeekThreeBossExperience.tsx': WEEK_THREE_BOSS_COLD_LOAD_MAX_BYTES,
 });
 const COLD_LOAD_ROUTE_STATIC_ISOLATION = Object.freeze({
   'src/components/WeekThreeBajieJoiningExperience.tsx': [
     'src/components/WeekThreeBajieJoiningBlocklyWorkspace.tsx',
     'src/components/WeekThreeBajieJoiningScene.tsx',
   ],
+  'src/components/WeekThreeBossExperience.tsx': [
+    'src/components/WeekThreeBossBlocklyWorkspace.tsx',
+    'src/components/WeekThreeBossScene.tsx',
+  ],
 });
 const WEEK_THREE_BAJIE_JOINING_ENTRY_FORBIDDEN = new Set([
   'src/components/WeekThreeBajieJoiningExperience.tsx',
   'src/components/WeekThreeBajieJoiningBlocklyWorkspace.tsx',
   'src/components/WeekThreeBajieJoiningScene.tsx',
+  'src/components/WeekThreeBossExperience.tsx',
+  'src/components/WeekThreeBossBlocklyWorkspace.tsx',
+  'src/components/WeekThreeBossScene.tsx',
 ]);
 const STATIC_SOURCE_EXTENSIONS = ['.tsx', '.ts', '.mts', '.jsx', '.js'];
 const MAX_STATIC_SOURCE_CLOSURE_FILES = 500;

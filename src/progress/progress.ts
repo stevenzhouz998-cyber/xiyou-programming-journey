@@ -8,6 +8,8 @@ import type {
   YunzhanDialogueMissionSession,
   BajieJoiningCompletionEvidence,
   BajieJoiningMissionSession,
+  WeekThreeBossMissionSession,
+  WeekThreeBossCompletionEvidence,
   ProgressV3,
 } from './types';
 
@@ -30,6 +32,7 @@ export type {
   CuilanBooleanMissionSession,
   YunzhanDialogueMissionSession,
   BajieJoiningMissionSession,
+  WeekThreeBossMissionSession,
   ProgressDocument,
   ProgressSettings,
   LearningAbilitiesV1,
@@ -37,6 +40,7 @@ export type {
   CuilanBooleanCompletionEvidence,
   YunzhanDialogueCompletionEvidence,
   BajieJoiningCompletionEvidence,
+  WeekThreeBossCompletionEvidence,
   MissionCompletionEvidenceV1,
   ProgressV1,
   ProgressV2,
@@ -53,6 +57,8 @@ import { compileManorHelpDraft, runManorHelp } from '../blockly/weekThreeManorHe
 import { compileCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract';
 import { compileYunzhanDialogueDraft, runYunzhanDialogueForDraft } from '../blockly/weekThreeYunzhanDialogueContract';
 import { compileBajieJoiningDraft, runBajieJoiningForDraft } from '../blockly/weekThreeBajieJoiningContract';
+import { compileWeekThreeBossDraft } from '../blockly/weekThreeBossCompiler';
+import { runWeekThreeBossDraft } from '../blockly/weekThreeBossContract';
 
 export interface CompletionInput {
   stars: number;
@@ -74,6 +80,14 @@ export interface WeeklyReport {
     observations: number;
     proof: 'formal-v3' | 'legacy-preformal' | 'none';
     completedAt: string | null;
+  };
+  weekThreeBoss?: {
+    runs: number;
+    successfulFullRuns: number;
+    conceptFailures: { manorHelpSpecificity: number; disguiseIdentity: number; yunzhanBranch: number; joiningOperator: number };
+    firstBlocker: string | null;
+    observations: number;
+    proof: 'formal-v3' | 'legacy-replay-only' | 'none';
   };
 }
 
@@ -180,6 +194,14 @@ function formalBajieJoiningCompletionEvidence(session: BajieJoiningMissionSessio
   return { kind: 'formal-v3', completedAt, verifiedAt, workspace: structuredClone(session.workspace), trace: structuredClone(trace), run: structuredClone(run) };
 }
 
+function formalWeekThreeBossCompletionEvidence(session: WeekThreeBossMissionSession | undefined, completedAt: string, verifiedAt: string): Extract<WeekThreeBossCompletionEvidence, { kind: 'formal-v3' }> | null {
+  if (!session || session.lastRun === null) return null;
+  const compiled = compileWeekThreeBossDraft(session.workspace); if (!compiled.ok) return null;
+  const run = runWeekThreeBossDraft(session.workspace);
+  if (!deeplyEqual(session.lastTrace, compiled.trace) || !deeplyEqual(session.lastRun, run) || !run.completed || run.finalState !== 'week-three-recap-complete' || run.failure !== null || run.penalty.livesLost !== 0 || run.penalty.resourcesLost !== 0 || run.penalty.starsLost !== 0) return null;
+  return { kind: 'formal-v3', completedAt, verifiedAt, workspace: structuredClone(session.workspace), trace: structuredClone(compiled.trace), run: structuredClone(run) };
+}
+
 export function completeMission(progress: ProgressV3, missionId: string, input: CompletionInput): ProgressV3 {
   if (!allMissionOutlines.some((mission) => mission.id === missionId)) throw new Error('任务编号无效');
   const previous = progress.missions[missionId];
@@ -198,17 +220,26 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
   const bajieEvidence = missionId === 'w3-m4'
     ? formalBajieJoiningCompletionEvidence(progress.sessions['w3-m4'], previous?.completedAt ?? now, now)
     : null;
+  const weekThreeBossEvidence = missionId === 'w3-m5'
+    ? formalWeekThreeBossCompletionEvidence(progress.sessions['w3-m5'], previous?.completedAt ?? now, now)
+    : null;
+  if (missionId === 'w3-m5') {
+    const previousMission = progress.missions['w3-m4'];
+    const previousEvidence = progress.missionCompletionEvidence['w3-m4'];
+    if (previousMission?.status !== 'completed' || previousEvidence?.kind !== 'formal-v3') throw new Error('W3-M5完成需要W3-M4已完成且具有formal-v3正式证明');
+  }
   if (previous) {
     safeCount(previous.attempts, 1);
     safeCount(previous.hintsUsed, normalizedHints);
-    const existingEvidence = missionId === 'w3-m1' ? progress.missionCompletionEvidence['w3-m1'] : missionId === 'w3-m2' ? progress.missionCompletionEvidence['w3-m2'] : missionId === 'w3-m3' ? progress.missionCompletionEvidence['w3-m3'] : missionId === 'w3-m4' ? progress.missionCompletionEvidence['w3-m4'] : undefined;
+    const existingEvidence = missionId === 'w3-m1' ? progress.missionCompletionEvidence['w3-m1'] : missionId === 'w3-m2' ? progress.missionCompletionEvidence['w3-m2'] : missionId === 'w3-m3' ? progress.missionCompletionEvidence['w3-m3'] : missionId === 'w3-m4' ? progress.missionCompletionEvidence['w3-m4'] : missionId === 'w3-m5' ? progress.missionCompletionEvidence['w3-m5'] : undefined;
     const upgradeLegacyW3 = missionId === 'w3-m1'
       && existingEvidence?.kind === 'legacy-preformal'
       && formalEvidence !== null;
     const upgradeLegacyCuilan = missionId === 'w3-m2' && existingEvidence?.kind === 'legacy-preformal' && cuilanEvidence !== null;
     const upgradeLegacyYunzhan = missionId === 'w3-m3' && existingEvidence?.kind === 'legacy-preformal' && yunzhanEvidence !== null;
     const upgradeLegacyBajie = missionId === 'w3-m4' && existingEvidence?.kind === 'legacy-preformal' && bajieEvidence !== null;
-    if (previous.stars >= stars && !upgradeLegacyW3 && !upgradeLegacyCuilan && !upgradeLegacyYunzhan && !upgradeLegacyBajie) return progress;
+    const upgradeLegacyBoss = missionId === 'w3-m5' && existingEvidence?.kind === 'legacy-replay-only' && weekThreeBossEvidence !== null;
+    if (previous.stars >= stars && !upgradeLegacyW3 && !upgradeLegacyCuilan && !upgradeLegacyYunzhan && !upgradeLegacyBajie && !upgradeLegacyBoss) return progress;
     const missions = {
       ...progress.missions,
       [missionId]: previous.stars >= stars ? previous : { ...previous, stars },
@@ -221,6 +252,7 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
         : upgradeLegacyCuilan ? { ...progress.missionCompletionEvidence, 'w3-m2': cuilanEvidence! }
         : upgradeLegacyYunzhan ? { ...progress.missionCompletionEvidence, 'w3-m3': yunzhanEvidence! }
         : upgradeLegacyBajie ? { ...progress.missionCompletionEvidence, 'w3-m4': bajieEvidence! }
+        : upgradeLegacyBoss ? { ...progress.missionCompletionEvidence, 'w3-m5': weekThreeBossEvidence! }
         : progress.missionCompletionEvidence,
       savedAt: now,
     };
@@ -231,6 +263,7 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
   if (missionId === 'w3-m2' && cuilanEvidence === null) throw new Error('W3-M2完成需要当前保存workspace的正式Blockly成功证明');
   if (missionId === 'w3-m3' && yunzhanEvidence === null) throw new Error('W3-M3完成需要当前保存workspace的双轮对话成功证明');
   if (missionId === 'w3-m4' && bajieEvidence === null) throw new Error('W3-M4完成需要当前保存workspace的三张陈述卡成功证明');
+  if (missionId === 'w3-m5' && weekThreeBossEvidence === null) throw new Error('W3-M5完成需要当前保存workspace的完整状态机成功证明');
   const attempts = safeCount(0, 1);
   const hintsUsed = safeCount(0, normalizedHints);
   const completedAt = now;
@@ -253,6 +286,7 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
       : missionId === 'w3-m2' ? { ...progress.missionCompletionEvidence, 'w3-m2': cuilanEvidence! }
       : missionId === 'w3-m3' ? { ...progress.missionCompletionEvidence, 'w3-m3': yunzhanEvidence! }
       : missionId === 'w3-m4' ? { ...progress.missionCompletionEvidence, 'w3-m4': bajieEvidence! }
+      : missionId === 'w3-m5' ? { ...progress.missionCompletionEvidence, 'w3-m5': weekThreeBossEvidence! }
       : progress.missionCompletionEvidence,
     savedAt: now,
   };
@@ -279,6 +313,9 @@ export function isMissionUnlocked(progress: ProgressV3, missionId: string): bool
     return evidence?.kind === 'formal-v3'
       || (progress.missions['w3-m5']?.status === 'completed' && progress.missionCompletionEvidence['w3-m5']?.kind === 'legacy-replay-only');
   }
+  if (missionId === 'w4-m1') {
+    return progress.missions['w3-m5']?.status === 'completed' && progress.missionCompletionEvidence['w3-m5']?.kind === 'formal-v3';
+  }
   return progress.missions[allMissionOutlines[index - 1].id]?.status === 'completed';
 }
 
@@ -302,6 +339,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
   const cuilanBooleanSession = week === 3 ? progress.sessions['w3-m2'] : undefined;
   const yunzhanDialogueSession = week === 3 ? progress.sessions['w3-m3'] : undefined;
   const bajieJoiningSession = week === 3 ? progress.sessions['w3-m4'] : undefined;
+  const weekThreeBossSession = week === 3 ? progress.sessions['w3-m5'] : undefined;
   const sessionSupport = [
     ...(dragonSession ? getSessionSupport(dragonSession, 'w1-m1') : []),
     ...(ruyiSession ? getSessionSupport(ruyiSession, 'w1-m2') : []),
@@ -317,8 +355,9 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
     ...(cuilanBooleanSession ? getSessionSupport(cuilanBooleanSession, 'w3-m2') : []),
     ...(yunzhanDialogueSession ? getSessionSupport(yunzhanDialogueSession, 'w3-m3') : []),
     ...(bajieJoiningSession ? getSessionSupport(bajieJoiningSession, 'w3-m4') : []),
+    ...(weekThreeBossSession ? getSessionSupport(weekThreeBossSession, 'w3-m5') : []),
   ];
-  const sessionRecords = [dragonSession, ruyiSession, fourSeasSession, underworldSession, bossSession, horseCareSession, monkeyKingSession, peachElixirSession, furnaceConditionSession, heavenlyBossSession, manorHelpSession, cuilanBooleanSession, yunzhanDialogueSession, bajieJoiningSession].filter(
+  const sessionRecords = [dragonSession, ruyiSession, fourSeasSession, underworldSession, bossSession, horseCareSession, monkeyKingSession, peachElixirSession, furnaceConditionSession, heavenlyBossSession, manorHelpSession, cuilanBooleanSession, yunzhanDialogueSession, bajieJoiningSession, weekThreeBossSession].filter(
     (session): session is NonNullable<typeof session> => session !== undefined,
   );
   const sessionRuns = sessionRecords.reduce(
@@ -348,6 +387,14 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
         observations: bajieJoiningSession?.conditionObservationUses.length ?? 0,
         proof: progress.missionCompletionEvidence['w3-m4']?.kind ?? 'none',
         completedAt: progress.missions['w3-m4']?.completedAt ?? null,
+      },
+      weekThreeBoss: {
+        runs: weekThreeBossSession?.totalRuns ?? 0,
+        successfulFullRuns: weekThreeBossSession?.successfulFullRuns ?? 0,
+        conceptFailures: weekThreeBossSession?.conceptFailures ?? { manorHelpSpecificity: 0, disguiseIdentity: 0, yunzhanBranch: 0, joiningOperator: 0, programStructure: 0 },
+        firstBlocker: weekThreeBossSession?.firstBlockingConcept ?? null,
+        observations: weekThreeBossSession?.conditionObservationUses.length ?? 0,
+        proof: progress.missionCompletionEvidence['w3-m5']?.kind ?? 'none',
       },
     }),
   };

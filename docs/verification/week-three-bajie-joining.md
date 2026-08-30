@@ -6,7 +6,7 @@ W3-M4「八戒归队」达到 **One-level playable**。
 
 该结论只覆盖一关完整的真实浏览器闭环：孩子在同一张可见 Blockly 图中经历默认 OR 的第二卡失败、保存失败证据并使用不泄题的火眼金睛，把真实可见的 operator 改为 AND，依次通过 TT、TF、FT 三张卡，播放准确原著结局，并验证刷新、恢复、导出导入与故障路径。
 
-W3-M5 仍为 legacy；第三周 `System loop complete`、30 关、`Full-content verified`、`Commercial production complete` 与 public deployment 均为 **not complete**。
+这份 W3-M4 记录的实现已于提交 `021b551` 落地；文中提到“W3-M5 仍为 legacy”的内容是当时的历史边界，不描述当前工作树。第三周 `System loop complete`、30 关、`Full-content verified`、`Commercial production complete` 与 public deployment 仍为 **not complete**，须以 W3-M5 的新鲜专项与统一矩阵证据重新判断。
 
 ## 现场与授权边界
 
@@ -66,7 +66,7 @@ W3-M5 仍为 legacy；第三周 `System loop complete`、30 关、`Full-content 
 
 | 相关行 | 已有证据 | 结论与未验证范围 |
 | --- | --- | --- |
-| Course / 30 levels | W3-M4 已走 formal Blockly 路径，无 `expectedSequence`；W3-M5 仍 legacy。 | W3-M4 单关满足；第三周系统、30 关 **not complete**。 |
+| Course / 30 levels | W3-M4 已走 formal Blockly 路径，无 `expectedSequence`；后续实现已 commit/push 为 `021b551`，原命令与数字均为提交前历史证据。 | W3-M4 单关满足；第三周系统、30 关 **not complete**。 |
 | Blockly | 真实可见图生成 trace；默认失败、AND 成功、非法结构、防伪、刷新、键盘/触控及五项目浏览器路径均有证据。 | 满足本关 `One-level playable`；不能外推为全站 Blockly loop。 |
 | Parent / saves | revision 6、session/proof 绑定、四类 save fault、CAS、corrupt、parent clear、export-import、迁移和 proof replay 均有自动/浏览器证据。 | 满足本关依赖路径；本地 proof 不等同服务端签名或账号同步。 |
 | UI / release | 1440/768/390/320、Chromium/WebKit/Firefox、reduced motion、mute、lazy/asset failure、404、预算、素材和视觉 QA 有本关证据。 | 本关 UI loop 满足；未验证公开部署，release/commercial **not complete**。 |
@@ -74,6 +74,6 @@ W3-M5 仍为 legacy；第三周 `System loop complete`、30 关、`Full-content 
 ## 残余风险与下一阻塞
 
 - 本地 Progress proof 是确定性一致性与防伪机制，不是服务端签名或账号同步。
-- W3-M5 仍是 legacy，第三周 system loop 尚未完成。
+- 本记录中的 W3-M5 legacy 说明为 `021b551` 前后的历史现场；当前 W3-M5 正式化验证另见 `week-three-boss-story-state-machine.md`，第三周 system loop 仍尚未完成。
 - 全站仍有上述 24 项 unexpected E2E 失败，故全站/30关 `Full-content verified` 与 `Commercial production complete` 均未达到。
 - public deployment 未运行；部署后的真实浏览器、保存恢复和运行健康也尚未验证。

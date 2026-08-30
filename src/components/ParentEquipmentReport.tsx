@@ -1,6 +1,7 @@
 import type { ProgressV3 } from '../progress/types'
 import { EQUIPMENT_CATALOGUE, type EquipmentEffect, type EquipmentItemId, type EquipmentSlot } from '../progress/equipment'
 import { EQUIPMENT_PRESENTATION } from '../progress/equipmentPresentation'
+import { getWeeklyReport } from '../progress/progress'
 import './ParentEquipmentReport.css'
 
 const itemOrder: EquipmentItemId[] = ['ruyi-staff', 'phoenix-crown', 'golden-chain-armor', 'cloud-walking-boots']
@@ -28,7 +29,8 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   const cuilanSession = progress.sessions['w3-m2']
   const yunzhanSession = progress.sessions['w3-m3']
   const bajieSession = progress.sessions['w3-m4']
-  const allObservationUses = [...(manorSession?.conditionObservationUses ?? []), ...(cuilanSession?.conditionObservationUses ?? []), ...(yunzhanSession?.conditionObservationUses ?? []), ...(bajieSession?.conditionObservationUses ?? [])]
+  const weekThreeBossSession = progress.sessions['w3-m5']
+  const allObservationUses = [...(manorSession?.conditionObservationUses ?? []), ...(cuilanSession?.conditionObservationUses ?? []), ...(yunzhanSession?.conditionObservationUses ?? []), ...(bajieSession?.conditionObservationUses ?? []), ...(weekThreeBossSession?.conditionObservationUses ?? [])]
   const observationUses = new Map(allObservationUses.map((use) => [use.snapshotId, use])).size
   const latestObservationUse = [...allObservationUses]
     .sort((left, right) => right.usedAt.localeCompare(left.usedAt))[0]
@@ -46,6 +48,15 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   const cuilanEvidence = progress.missionCompletionEvidence['w3-m2']
   const yunzhanEvidence = progress.missionCompletionEvidence['w3-m3']
   const bajieEvidence = progress.missionCompletionEvidence['w3-m4']
+  const weekThree = getWeeklyReport(progress, 3)
+  const boss = weekThree.weekThreeBoss ?? { runs: 0, successfulFullRuns: 0, conceptFailures: { manorHelpSpecificity: 0, disguiseIdentity: 0, yunzhanBranch: 0, joiningOperator: 0, programStructure: 0 }, firstBlocker: null, observations: 0, proof: 'none' as const }
+  const bossEvidence = progress.missionCompletionEvidence['w3-m5']
+  const blockerLabels = {
+    'manor-help-specificity': '庄口求助判断过宽',
+    'disguise-identity': '外形与身份判断',
+    'yunzhan-branch': '云栈洞分支',
+    'joining-operator': '两个条件组合',
+  } as const
   return <><section className="parent-equipment-report" role="region" aria-label="装备与跨关学习工具">
     <div className="parent-equipment-heading"><span className="eyebrow">真实通关奖励</span><h2>装备与跨关学习工具</h2><p>这里只记录已安全保存的获得、装备和主动使用证据。</p></div>
     <div className="parent-equipment-columns">
@@ -74,6 +85,15 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     {bajieSession ? <p>八戒归队：已运行 {bajieSession.totalRuns} 次，组合错误 {bajieSession.conceptFailures.booleanComposition} 次，观察 {bajieSession.conditionObservationUses.length} 次。</p> : null}
     {bajieEvidence?.kind === 'formal-v3' ? <p>八戒归队正式 Blockly 证明已保存</p> : null}
     {bajieEvidence?.kind === 'legacy-preformal' ? <p>八戒归队历史兼容完成记录，尚非正式 Blockly 证明</p> : null}
+  </section>
+  <section className="parent-equipment-report" role="region" aria-label="第三周总试炼学习摘要">
+    <div className="parent-equipment-heading"><span className="eyebrow">第三周综合练习</span><h2>第三周总试炼学习摘要</h2><p>只汇总已保存的运行次数、概念类别和证明状态，不展示积木连接或答案。</p></div>
+    <p>{`已运行 ${boss.runs} 次，其中完整走通 ${boss.successfulFullRuns} 次。`}</p>
+    <p>{boss.firstBlocker ? `第一次运行的首个阻塞：${blockerLabels[boss.firstBlocker as keyof typeof blockerLabels]}。` : '尚未出现运行阻塞。'}</p>
+    <ul><li>{`庄口求助判断过宽 ${boss.conceptFailures.manorHelpSpecificity} 次`}</li><li>{`外形与身份判断 ${boss.conceptFailures.disguiseIdentity} 次`}</li><li>{`云栈洞分支 ${boss.conceptFailures.yunzhanBranch} 次`}</li><li>{`两个条件组合 ${boss.conceptFailures.joiningOperator} 次`}</li></ul>
+    <p>{`主动观察 ${boss.observations} 次`}</p>
+    {boss.proof === 'formal-v3' ? <p>第三周总试炼正式 Blockly 证明已保存</p> : null}
+    {boss.proof === 'legacy-replay-only' ? <p>第三周总试炼历史兼容完成记录，尚非正式 Blockly 证明</p> : null}
   </section></>
 }
 

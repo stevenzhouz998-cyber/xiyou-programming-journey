@@ -24,6 +24,9 @@ import { parseManorHelpSession } from './manorHelpSessionSchema';
 import { parseCuilanBooleanSession, parseCuilanBooleanWorkspace } from './cuilanBooleanSessionSchema';
 import { parseYunzhanDialogueSession, parseYunzhanDialogueWorkspace } from './yunzhanDialogueSessionSchema';
 import { parseBajieJoiningSession, parseBajieJoiningWorkspace, sameBajieJoiningData } from './bajieJoiningSessionSchema';
+import { parseWeekThreeBossSession, parseWeekThreeBossWorkspace } from './weekThreeBossSessionSchema';
+import { compileWeekThreeBossDraft } from '../blockly/weekThreeBossCompiler';
+import { runWeekThreeBossDraft, type WeekThreeBossInstruction, type WeekThreeBossRunResult } from '../blockly/weekThreeBossContract';
 import { compileCuilanBooleanDraft, runCuilanBooleanForDraft, type CuilanBooleanInstruction, type CuilanBooleanRunResult, type CuilanBooleanWorkspaceDraftV1 } from '../blockly/weekThreeCuilanBooleanContract';
 import { compileYunzhanDialogueDraft, runYunzhanDialogueForDraft } from '../blockly/weekThreeYunzhanDialogueContract';
 import { compileBajieJoiningDraft, runBajieJoiningForDraft, type BajieJoiningInstruction, type BajieJoiningRunResult, type BajieJoiningWorkspaceDraftV1 } from '../blockly/weekThreeBajieJoiningContract';
@@ -102,7 +105,7 @@ const utf8Encoder = new TextEncoder();
 
 export const createInitialProgress = (): ProgressV3 => ({
   version: 3,
-  schemaRevision: 6,
+  schemaRevision: 7,
   learnerName: '小行者',
   missions: {},
   settings: { muted: false, reducedMotion: false, reducedMotionOverride: false, parentPin: 'unset' },
@@ -1641,6 +1644,9 @@ function sessions(value: unknown): MissionSessions {
       } catch {
         invalid('sessions.w3-m4无效');
       }
+    } else if (missionId === 'w3-m5') {
+      try { result['w3-m5'] = parseWeekThreeBossSession(rawSession); }
+      catch { invalid('sessions.w3-m5无效'); }
     } else {
       invalid(`任务 ${missionId} 尚不支持可执行会话`);
     }
@@ -1936,23 +1942,27 @@ function missionCompletionEvidence(
     }
   }
   const m5Mission = parsedMissions['w3-m5']; const rawM5 = source['w3-m5'];
-  if (!m5Mission) {
-    if (rawM5 !== undefined) invalid('missionCompletionEvidence.w3-m5没有对应完成任务');
-  } else if (rawM5 === undefined && legacyBeforeSix) {
-    if (legacyM4Source === null) invalid('missionCompletionEvidence.w3-m5缺少历史来源');
-    result['w3-m5'] = { kind: 'legacy-replay-only', completedAt: m5Mission.completedAt, ...legacyM4Source } as MissionCompletionEvidenceV1['w3-m5'];
+  if (!m5Mission) { if (rawM5 !== undefined) invalid('missionCompletionEvidence.w3-m5没有对应完成任务'); }
+  else if (rawM5 === undefined && legacyBeforeSix) {
+    result['w3-m5'] = { kind: 'legacy-replay-only', completedAt: m5Mission.completedAt, sourceVersion: 3, sourceSchemaRevision: 6 };
   } else {
-    if (rawM5 === undefined && result['w3-m4']?.kind === 'formal-v3') {
-      // Current legacy W3-M5 completion follows a formal W3-M4 proof and is
-      // not historical replay data, so it must not invent a replay marker.
-    } else if (rawM5 === undefined) invalid('missionCompletionEvidence.w3-m5缺少历史重玩标记');
-    else {
-    const marker = object(rawM5, 'missionCompletionEvidence.w3-m5');
-    exactKeys(marker, 'missionCompletionEvidence.w3-m5', ['kind', 'completedAt', 'sourceVersion', 'sourceSchemaRevision']);
-    if (marker.kind !== 'legacy-replay-only' || date(marker.completedAt, 'missionCompletionEvidence.w3-m5.completedAt') !== m5Mission.completedAt) invalid('missionCompletionEvidence.w3-m5旧标记无效');
-    const valid = (marker.sourceVersion === 1 && marker.sourceSchemaRevision === null) || (marker.sourceVersion === 2 && marker.sourceSchemaRevision === 1) || (marker.sourceVersion === 3 && (marker.sourceSchemaRevision === 1 || marker.sourceSchemaRevision === 2 || marker.sourceSchemaRevision === 3 || marker.sourceSchemaRevision === 4 || marker.sourceSchemaRevision === 5));
-    if (!valid) invalid('missionCompletionEvidence.w3-m5来源版本组合无效');
-    result['w3-m5'] = { kind: 'legacy-replay-only', completedAt: m5Mission.completedAt, sourceVersion: marker.sourceVersion, sourceSchemaRevision: marker.sourceSchemaRevision } as MissionCompletionEvidenceV1['w3-m5'];
+    if (rawM5 === undefined) invalid('missionCompletionEvidence.w3-m5缺少完成证明');
+    const evidence = object(rawM5, 'missionCompletionEvidence.w3-m5');
+    if (evidence.kind === 'legacy-replay-only') {
+      exactKeys(evidence, 'missionCompletionEvidence.w3-m5', ['kind', 'completedAt', 'sourceVersion', 'sourceSchemaRevision']);
+      if (date(evidence.completedAt, 'missionCompletionEvidence.w3-m5.completedAt') !== m5Mission.completedAt || evidence.sourceVersion !== 3 || evidence.sourceSchemaRevision !== 6) invalid('missionCompletionEvidence.w3-m5旧标记无效');
+      result['w3-m5'] = { kind: 'legacy-replay-only', completedAt: m5Mission.completedAt, sourceVersion: 3, sourceSchemaRevision: 6 };
+    } else {
+      exactKeys(evidence, 'missionCompletionEvidence.w3-m5', ['kind', 'completedAt', 'verifiedAt', 'workspace', 'trace', 'run']);
+      if (evidence.kind !== 'formal-v3' || result['w3-m4']?.kind !== 'formal-v3' || date(evidence.completedAt, 'missionCompletionEvidence.w3-m5.completedAt') !== m5Mission.completedAt) invalid('missionCompletionEvidence.w3-m5没有正式前置');
+      try {
+        const workspace = parseWeekThreeBossWorkspace(evidence.workspace, 'missionCompletionEvidence.w3-m5.workspace'); const compiled = compileWeekThreeBossDraft(workspace);
+        if (!compiled.ok) invalid('missionCompletionEvidence.w3-m5必须重放');
+        const run = runWeekThreeBossDraft(workspace);
+        const session = parsedSessions['w3-m5']; const verifiedAt = date(evidence.verifiedAt, 'missionCompletionEvidence.w3-m5.verifiedAt');
+        if (!deeplyEqual(evidence.trace, compiled.trace) || !deeplyEqual(evidence.run, run) || !run.completed || run.finalState !== 'week-three-recap-complete' || run.failure !== null || run.penalty.livesLost !== 0 || run.penalty.resourcesLost !== 0 || run.penalty.starsLost !== 0 || !session || !session.lastRun?.completed || !deeplyEqual(session.workspace, workspace) || !deeplyEqual(session.lastTrace, compiled.trace) || !deeplyEqual(session.lastRun, run)) invalid('missionCompletionEvidence.w3-m5必须绑定当前成功session');
+        result['w3-m5'] = { kind: 'formal-v3', completedAt: m5Mission.completedAt, verifiedAt, workspace, trace: compiled.trace as WeekThreeBossInstruction[], run: run as WeekThreeBossRunResult };
+      } catch { invalid('missionCompletionEvidence.w3-m5必须重放'); }
     }
   }
   return result;
@@ -1976,39 +1986,39 @@ function migratedLegacyMissionCompletionEvidence(
     ...(cuilan === undefined ? {} : { 'w3-m2': { kind: 'legacy-preformal' as const, completedAt: cuilan.completedAt, sourceVersion: 3 as const, sourceSchemaRevision: 3 as const } }),
     ...(parsedMissions['w3-m3'] === undefined ? {} : { 'w3-m3': { kind: 'legacy-preformal' as const, completedAt: parsedMissions['w3-m3']!.completedAt, sourceVersion: 3 as const, sourceSchemaRevision: 4 as const } }),
     ...(parsedMissions['w3-m4'] === undefined ? {} : { 'w3-m4': { kind: 'legacy-preformal' as const, completedAt: parsedMissions['w3-m4']!.completedAt, sourceVersion, sourceSchemaRevision } as MissionCompletionEvidenceV1['w3-m4'] }),
-    ...(parsedMissions['w3-m5'] === undefined ? {} : { 'w3-m5': { kind: 'legacy-replay-only' as const, completedAt: parsedMissions['w3-m5']!.completedAt, sourceVersion, sourceSchemaRevision } as MissionCompletionEvidenceV1['w3-m5'] }),
+    ...(parsedMissions['w3-m5'] === undefined ? {} : { 'w3-m5': { kind: 'legacy-replay-only' as const, completedAt: parsedMissions['w3-m5']!.completedAt, sourceVersion: 3 as const, sourceSchemaRevision: 6 as const } }),
   };
 }
 
 function parseV3(source: Record<string, unknown>): ProgressV3 {
   const legacyRevision = source.schemaRevision === 1;
-  const currentRevision = source.schemaRevision === 3 || source.schemaRevision === 4 || source.schemaRevision === 5 || source.schemaRevision === 6;
+  const currentRevision = source.schemaRevision === 3 || source.schemaRevision === 4 || source.schemaRevision === 5 || source.schemaRevision === 6 || source.schemaRevision === 7;
   const revisionThree = source.schemaRevision === 3;
   exactKeys(source, '顶层', [
     'version', 'schemaRevision', 'learnerName', 'missions', 'settings', 'privacy', 'recovery', 'sessions',
     ...(legacyRevision ? [] : ['equipment']), ...(currentRevision ? ['abilities', 'missionCompletionEvidence'] : []), 'savedAt',
   ]);
-  if (source.schemaRevision !== 1 && source.schemaRevision !== 2 && source.schemaRevision !== 3 && source.schemaRevision !== 4 && source.schemaRevision !== 5 && source.schemaRevision !== 6) {
-    invalid('schemaRevision必须是1、2、3、4、5或6');
+  if (source.schemaRevision !== 1 && source.schemaRevision !== 2 && source.schemaRevision !== 3 && source.schemaRevision !== 4 && source.schemaRevision !== 5 && source.schemaRevision !== 6 && source.schemaRevision !== 7) {
+    invalid('schemaRevision必须是1至7');
   }
   const parsedCommon = common(source, true);
   const parsedSessions = sessions(source.sessions);
   const parsedAbilities = currentRevision
     ? learningAbilities(source.abilities, parsedCommon.missions)
     : { conditionObservation: deriveConditionObservation(parsedCommon.missions) };
-  const observationUses = [...(parsedSessions['w3-m1']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m2']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m3']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m4']?.conditionObservationUses ?? [])];
+  const observationUses = [...(parsedSessions['w3-m1']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m2']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m3']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m4']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m5']?.conditionObservationUses ?? [])];
   if (observationUses.length > 0
     && (parsedAbilities.conditionObservation.acquiredAt === null
       || parsedAbilities.conditionObservation.stableUnlockedAt === null)) {
     invalid('conditionObservationUses需要已获得且已稳定的火眼金睛能力');
   }
   const parsedEvidence = currentRevision
-      ? missionCompletionEvidence(source.missionCompletionEvidence, parsedCommon.missions, parsedSessions, revisionThree, source.schemaRevision !== 6, { sourceVersion: 3, sourceSchemaRevision: source.schemaRevision as 1 | 2 | 3 | 4 | 5 })
+      ? missionCompletionEvidence(source.missionCompletionEvidence, parsedCommon.missions, parsedSessions, revisionThree, source.schemaRevision !== 7, { sourceVersion: 3, sourceSchemaRevision: (source.schemaRevision === 6 ? 5 : source.schemaRevision) as 1 | 2 | 3 | 4 | 5 })
     : migratedLegacyMissionCompletionEvidence(parsedCommon.missions, 3, source.schemaRevision as 1 | 2);
   if (parsedCommon.missions['w3-m5'] && parsedEvidence['w3-m4']?.kind !== 'formal-v3' && parsedEvidence['w3-m5']?.kind !== 'legacy-replay-only') invalid('W3-M5历史完成缺少重玩标记');
   return {
     version: 3,
-    schemaRevision: 6,
+    schemaRevision: 7,
     ...parsedCommon,
     ...privacyAndRecovery(source),
     sessions: parsedSessions,
@@ -2030,7 +2040,7 @@ export function migrateProgress(value: unknown): ProgressV3 {
   if (legacy.version === 2) return {
     ...legacy,
     version: 3,
-    schemaRevision: 6,
+    schemaRevision: 7,
     sessions: {},
     equipment: equipmentFromMissions(legacy.missions),
     abilities: { conditionObservation: deriveConditionObservation(legacy.missions) },
@@ -2038,7 +2048,7 @@ export function migrateProgress(value: unknown): ProgressV3 {
   };
   return {
     version: 3,
-    schemaRevision: 6,
+    schemaRevision: 7,
     learnerName: legacy.learnerName,
     missions: legacy.missions,
     settings: { ...legacy.settings, reducedMotionOverride: false },

@@ -20,6 +20,7 @@ import {
   verifyRequiredWeekThreeCuilanBooleanInventory,
   verifyRequiredWeekThreeYunzhanDialogueInventory,
   verifyRequiredWeekThreeBajieJoiningInventory,
+  verifyRequiredWeekThreeBossInventory,
   verifyAssetManifest,
 } from './check-asset-manifest.mjs';
 
@@ -273,6 +274,32 @@ test('requires the exact W3-M4 Bajie-joining inventory, safe provenance, and two
   assert.throws(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: files, promptRecords: promptRecords.map((record) => ({ ...record, prompt: record.prompt.replace('no pseudo-text; ', '') })), source }), /pseudo-text/i);
   assert.throws(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: [{ ...files[0], bytes: 512 * 1024 + 1 }, files[1]], promptRecords, source }), /512 KiB/i);
   assert.throws(() => verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows: rows, publicFiles: [files[0], { ...files[1], alphaEdgeMismatch: { inspectedPixels: 400, mismatchRatio: 0.041 } }], promptRecords, source }), /alpha-edge/i);
+});
+
+test('requires the exact two W3-M5 WebP assets, live assetUrl scene slots, and complete provenance', () => {
+  const background = 'assets/week-three-boss/week-three-boss-background.webp';
+  const states = 'assets/week-three-boss/week-three-boss-states.webp';
+  const source = `import { assetUrl } from '../utils/assets';
+    const BACKGROUND = '${background}'; const STATES = '${states}';
+    export function WeekThreeBossScene() { const source = (path) => assetUrl(path); return <><img src={source(BACKGROUND)} /><span data-frame="0"><img src={source(STATES)} /></span></>; }`;
+  const rows = [
+    row({ assetId: background, purpose: 'Gao family story-state-machine background', promptOrSourceReference: '[Prompt W3M5-001](#prompt-w3m5-001-week-three-boss-background)', dimensions: '1280x720', screenSlots: 'w3-m5 WeekThreeBossScene', qaStatus: 'visual-qa-passed' }),
+    row({ assetId: states, purpose: 'Transparent four-state Gao family story sprites', promptOrSourceReference: '[Prompt W3M5-002](#prompt-w3m5-002-week-three-boss-states)', dimensions: '1024x1024', screenSlots: 'w3-m5 WeekThreeBossScene', qaStatus: 'visual-qa-passed' }),
+  ];
+  const files = [
+    file({ path: background, bytes: 93_974, width: 1280, height: 720 }),
+    file({ path: states, bytes: 290_648, width: 1024, height: 1024, hasAlpha: true, alphaEdgeMismatch: { inspectedPixels: 400, mismatchRatio: 0 } }),
+  ];
+  const promptRecords = [
+    promptRecord({ heading: 'Prompt W3M5-001 week-three-boss-background', anchor: '#prompt-w3m5-001-week-three-boss-background', prompt: "Style/medium: polished 3D Chinese children's storybook illustration" }),
+    promptRecord({ heading: 'Prompt W3M5-002 week-three-boss-states', anchor: '#prompt-w3m5-002-week-three-boss-states', prompt: "Style/medium: polished bright 3D Chinese children's storybook illustration" }),
+  ];
+  assert.doesNotThrow(() => verifyRequiredWeekThreeBossInventory({ manifestRows: rows, publicFiles: files, promptRecords, source, mode: 'verify' }));
+  assert.throws(() => verifyRequiredWeekThreeBossInventory({ manifestRows: rows, publicFiles: [...files, file({ path: 'assets/week-three-boss/extra.webp' })], promptRecords, source }), /exactly|unexpected/i);
+  assert.throws(() => verifyRequiredWeekThreeBossInventory({ manifestRows: rows.map((item) => ({ ...item, screenSlots: 'wrong' })), publicFiles: files, promptRecords, source }), /screen slots/i);
+  assert.throws(() => verifyRequiredWeekThreeBossInventory({ manifestRows: rows.map((item) => ({ ...item, qaStatus: 'generated' })), publicFiles: files, promptRecords, source, mode: 'verify' }), /visual-qa-passed/i);
+  assert.throws(() => verifyRequiredWeekThreeBossInventory({ manifestRows: rows, publicFiles: [files[0], { ...files[1], bytes: 512 * 1024 + 1 }], promptRecords, source }), /512 KiB/i);
+  assert.throws(() => verifyRequiredWeekThreeBossInventory({ manifestRows: rows, publicFiles: files, promptRecords, source: source.replace('assetUrl(path)', "'/not-live.webp'") }), /assetUrl|source/i);
 });
 
 test('rejects W3-M4 scene-slot bypasses that discard, shadow, or dead-code the imported assetUrl binding', () => {

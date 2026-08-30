@@ -265,6 +265,29 @@ test('enforces the exact W3-M4 3 MiB cold-load closure and keeps its Blockly and
   assert.throws(() => analyzeManifest({ ...manifest, 'src/main.tsx': { ...base['src/main.tsx'], imports: ['vendor.js', scene] } }, sizes, sizes), /WeekThreeBajieJoiningScene must stay outside the application entry static closure/);
 });
 
+test('enforces the exact W3-M5 3 MiB cold-load closure and keeps its Blockly and scene chunks out of the entry', () => {
+  const root = 'src/components/WeekThreeBossExperience.tsx';
+  const workspace = 'src/components/WeekThreeBossBlocklyWorkspace.tsx';
+  const scene = 'src/components/WeekThreeBossScene.tsx';
+  assert.equal(bundleBudget.WEEK_THREE_BOSS_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.COLD_LOAD_ROUTE_CLOSURE_BUDGETS[root], bundleBudget.WEEK_THREE_BOSS_COLD_LOAD_MAX_BYTES);
+  const manifest = {
+    ...base,
+    [root]: { file: 'assets/week-three-boss.js', isDynamicEntry: true, imports: [], dynamicImports: [workspace, scene] },
+    [workspace]: { file: 'assets/week-three-boss-workspace.js', isDynamicEntry: true, imports: [] },
+    [scene]: { file: 'assets/week-three-boss-scene.js', isDynamicEntry: true, imports: [] },
+  };
+  const sizes = {
+    'assets/main.js': 1, 'assets/vendor.js': 1,
+    'assets/week-three-boss.js': bundleBudget.WEEK_THREE_BOSS_COLD_LOAD_MAX_BYTES - 2,
+    'assets/week-three-boss-workspace.js': 1, 'assets/week-three-boss-scene.js': 1,
+  };
+  assert.equal(analyzeManifest(manifest, sizes, sizes).closures[root].rawBytes, bundleBudget.WEEK_THREE_BOSS_COLD_LOAD_MAX_BYTES);
+  assert.throws(() => analyzeManifest(manifest, sizes, { ...sizes, 'assets/week-three-boss-scene.js': 2 }), /WeekThreeBossExperience closure exceeds its 3 MiB cold-load budget/);
+  assert.throws(() => analyzeManifest({ ...manifest, 'src/main.tsx': { ...base['src/main.tsx'], imports: ['vendor.js', workspace] } }, sizes, sizes), /WeekThreeBossBlocklyWorkspace must stay outside the application entry static closure/);
+  assert.throws(() => analyzeManifest({ ...manifest, 'src/main.tsx': { ...base['src/main.tsx'], imports: ['vendor.js', scene] } }, sizes, sizes), /WeekThreeBossScene must stay outside the application entry static closure/);
+});
+
 test('keeps the W3-M4 route, scene, and Blockly workspace dynamically split from homepage static imports', () => {
   const routeSource = readFileSync(new URL('../src/components/MissionPageContent.tsx', import.meta.url), 'utf8');
   const experienceSource = readFileSync(new URL('../src/components/WeekThreeBajieJoiningExperience.tsx', import.meta.url), 'utf8');
@@ -272,6 +295,15 @@ test('keeps the W3-M4 route, scene, and Blockly workspace dynamically split from
   assert.match(routeSource, /mission\.id\s*===\s*['"]w3-m4['"][\s\S]{0,900}<WeekThreeBajieJoiningRouteBoundary\b/);
   assert.match(experienceSource, /import\(['"]\.\/WeekThreeBajieJoiningBlocklyWorkspace['"]\)/);
   assert.match(experienceSource, /import\(['"]\.\/WeekThreeBajieJoiningScene['"]\)/);
+});
+
+test('keeps the W3-M5 route, scene, and Blockly workspace dynamically split from homepage static imports', () => {
+  const routeSource = readFileSync(new URL('../src/components/MissionPageContent.tsx', import.meta.url), 'utf8');
+  const experienceSource = readFileSync(new URL('../src/components/WeekThreeBossExperience.tsx', import.meta.url), 'utf8');
+  assert.match(routeSource, /import\(\s*['"]\.\/WeekThreeBossExperience['"]\s*\)/);
+  assert.match(routeSource, /mission\.id\s*===\s*['"]w3-m5['"][\s\S]{0,900}<WeekThreeBossRouteBoundary\b/);
+  assert.match(experienceSource, /import\(['"]\.\/WeekThreeBossBlocklyWorkspace['"]\)/);
+  assert.match(experienceSource, /import\(['"]\.\/WeekThreeBossScene['"]\)/);
 });
 
 test('rejects W3-M4 static entry reachability even when Vite erases the source-module manifest keys', () => {

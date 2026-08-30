@@ -50,7 +50,7 @@ const REQUIRED_METADATA = [
 ];
 
 const QA_STATUSES = new Set(['planned', 'generated', 'provenance-verified', 'visual-qa-passed', 'rejected']);
-const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/', 'assets/week-three-yunzhan-dialogue/', 'assets/week-three-bajie-joining/'];
+const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/', 'assets/week-three-yunzhan-dialogue/', 'assets/week-three-bajie-joining/', 'assets/week-three-boss/'];
 
 const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
   ['assets/dragon-palace/background.webp', [
@@ -135,6 +135,8 @@ const WEEK_THREE_YUNZHAN_SOURCE_PATH = 'src/components/WeekThreeYunzhanDialogueS
 const REQUIRED_WEEK_THREE_YUNZHAN_ASSETS = ['assets/week-three-yunzhan-dialogue/yunzhan-dialogue-background.webp', 'assets/week-three-yunzhan-dialogue/yunzhan-dialogue-states.webp'];
 const WEEK_THREE_BAJIE_JOINING_SOURCE_PATH = 'src/components/WeekThreeBajieJoiningScene.tsx';
 const REQUIRED_WEEK_THREE_BAJIE_JOINING_ASSETS = ['assets/week-three-bajie-joining/bajie-joining-background.webp', 'assets/week-three-bajie-joining/bajie-joining-states.webp'];
+const WEEK_THREE_BOSS_SOURCE_PATH = 'src/components/WeekThreeBossScene.tsx';
+const REQUIRED_WEEK_THREE_BOSS_ASSETS = ['assets/week-three-boss/week-three-boss-background.webp', 'assets/week-three-boss/week-three-boss-states.webp'];
 const REQUIRED_BAJIE_JOINING_ART_DIRECTION = "polished bright 3D Chinese children's storybook game";
 const REQUIRED_BAJIE_JOINING_PROMPT_SAFETY = ['no text', 'no pseudo-text', 'no binding', 'no ear pulling', 'no attack', 'no adult marriage', 'no humiliating pose'];
 
@@ -645,6 +647,8 @@ function verifyPromptRecords(promptRecords, manifestRows) {
       ? 'polished bright 3D'
       : row.assetId.startsWith('assets/week-three-cuilan/')
       ? REQUIRED_CUILAN_ART_DIRECTION
+      : row.assetId.startsWith('assets/week-three-boss/')
+      ? "3D Chinese children's storybook"
       : row.assetId.startsWith('assets/week-one-advanced/') || row.assetId.startsWith('assets/week-two-heaven/') || row.assetId.startsWith('assets/week-two-great-sage/') || row.assetId.startsWith('assets/week-two-peach-elixir/') || row.assetId.startsWith('assets/week-two-furnace/') || row.assetId.startsWith('assets/week-two-heavenly-boss/') || row.assetId.startsWith('assets/week-three-manor-help/') || row.assetId.startsWith('assets/week-three-yunzhan-dialogue/')
       ? REQUIRED_ADVANCED_ART_DIRECTION
       : REQUIRED_ART_DIRECTION;
@@ -1313,6 +1317,19 @@ export function verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows, pub
   return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
 }
 
+export function verifyRequiredWeekThreeBossInventory({ manifestRows, publicFiles, promptRecords = [], sourcePath = WEEK_THREE_BOSS_SOURCE_PATH, source, mode = 'check' }) {
+  const directory = 'assets/week-three-boss/';
+  const rows = familyRows(manifestRows, directory);
+  const files = familyFiles(publicFiles, directory);
+  requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: REQUIRED_WEEK_THREE_BOSS_ASSETS, label: 'Week Three boss' });
+  for (const row of rows) if (row.screenSlots !== 'w3-m5 WeekThreeBossScene') throw new Error(`Asset manifest: ${row.assetId} screen slots must be exactly w3-m5 WeekThreeBossScene.`);
+  if (typeof source !== 'string') throw new Error(`Asset manifest: ${sourcePath} source text is required for WeekThreeBossScene slot verification.`);
+  const literals = source.match(/assets\/week-three-boss\/[a-z0-9-]+\.webp/g) ?? [];
+  if (literals.length !== 2 || new Set(literals).size !== 2 || REQUIRED_WEEK_THREE_BOSS_ASSETS.some((path) => !literals.includes(path))) throw new Error(`Asset manifest: ${sourcePath} must contain exactly the two approved Week Three boss image paths.`);
+  if (!source.includes("import { assetUrl } from '../utils/assets'") || (source.match(/<img\b/g) ?? []).length !== 2 || !/const source\s*=\s*\(path(?:\s*:[^)]+)?\)\s*=>[\s\S]{0,180}assetUrl\(path\)/.test(source) || !/src=\{source\((?:BACKGROUND|background)\)\}/.test(source) || !/src=\{source\((?:STATES|states)\)\}/.test(source) || !source.includes('data-frame')) throw new Error(`Asset manifest: ${sourcePath} must render both approved assets through live assetUrl scene slots.`);
+  return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
+}
+
 export function verifyRequiredDragonPalaceInventory({
   manifestRows,
   publicFiles,
@@ -1543,6 +1560,7 @@ async function main() {
   const weekThreeCuilanRoot = join(root, 'public', 'assets', 'week-three-cuilan');
   const weekThreeYunzhanRoot = join(root, 'public', 'assets', 'week-three-yunzhan-dialogue');
   const weekThreeBajieJoiningRoot = join(root, 'public', 'assets', 'week-three-bajie-joining');
+  const weekThreeBossRoot = join(root, 'public', 'assets', 'week-three-boss');
   const { manifestRows, promptRecords } = parseAssetManifest(await readFile(manifestPath, 'utf8'));
   const publicFiles = [
     ...await collectAssetFiles(dragonPalaceRoot),
@@ -1556,6 +1574,7 @@ async function main() {
     ...await collectAssetFiles(weekThreeCuilanRoot, 'assets/week-three-cuilan'),
     ...await collectAssetFiles(weekThreeYunzhanRoot, 'assets/week-three-yunzhan-dialogue'),
     ...await collectAssetFiles(weekThreeBajieJoiningRoot, 'assets/week-three-bajie-joining'),
+    ...await collectAssetFiles(weekThreeBossRoot, 'assets/week-three-boss'),
   ];
   const sourceFiles = new Map(await Promise.all([
     'src/components/GameScene.tsx',
@@ -1598,6 +1617,7 @@ async function main() {
   const weekThreeCuilanResult = verifyRequiredWeekThreeCuilanBooleanInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_CUILAN_SOURCE_PATH), 'utf8'), mode });
   const weekThreeYunzhanResult = verifyRequiredWeekThreeYunzhanDialogueInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_YUNZHAN_SOURCE_PATH), 'utf8'), mode });
   const weekThreeBajieJoiningResult = verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_BAJIE_JOINING_SOURCE_PATH), 'utf8'), mode });
+  const weekThreeBossResult = verifyRequiredWeekThreeBossInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_BOSS_SOURCE_PATH), 'utf8'), mode });
   console.log(`Dragon Palace assets: ${dragonResult.assetCount} files, ${dragonResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Advanced Week One assets: ${advancedResult.assetCount} files, ${advancedResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Two horse-care assets: ${weekTwoHorseResult.assetCount} files, ${weekTwoHorseResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
@@ -1609,6 +1629,7 @@ async function main() {
   console.log(`Week Three Cuilan assets: ${weekThreeCuilanResult.assetCount} files, ${weekThreeCuilanResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Three Yunzhan assets: ${weekThreeYunzhanResult.assetCount} files, ${weekThreeYunzhanResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Three Bajie-joining assets: ${weekThreeBajieJoiningResult.assetCount} files, ${weekThreeBajieJoiningResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
+  console.log(`Week Three boss assets: ${weekThreeBossResult.assetCount} files, ${weekThreeBossResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

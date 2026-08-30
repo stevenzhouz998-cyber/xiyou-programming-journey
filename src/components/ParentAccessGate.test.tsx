@@ -89,6 +89,52 @@ describe('ParentAccessGate', () => {
     }
   });
 
+  it('relocks immediately when the saved parent access record is cleared', async () => {
+    const record = await createParentAccessRecord('4826', 'ABCDEFGHJKLM');
+    const view = render(<ParentAccessGate record={record} saveRecord={() => true}><p>家长数据</p></ParentAccessGate>);
+    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '4826' } });
+    fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
+    await screen.findByText('家长数据');
+
+    view.rerender(<ParentAccessGate record="unset" saveRecord={() => true}><p>家长数据</p></ParentAccessGate>);
+
+    expect(await screen.findByRole('heading', { name: '创建家长 PIN' })).toBeVisible();
+    expect(screen.queryByText('家长数据')).not.toBeInTheDocument();
+  });
+
+  it('relocks and clears the active parent session when another valid access record arrives', async () => {
+    const first = await createParentAccessRecord('4826', 'ABCDEFGHJKLM');
+    const rotated = await createParentAccessRecord('7319', 'MNOPQRSTUVWX');
+    const view = render(<ParentAccessGate record={first} saveRecord={() => true}><p>家长数据</p></ParentAccessGate>);
+    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '4826' } });
+    fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
+    await screen.findByText('家长数据');
+    fireEvent.change(screen.getByLabelText('当前 PIN'), { target: { value: '0000' } });
+    fireEvent.change(screen.getByLabelText('新 PIN'), { target: { value: '1357' } });
+    fireEvent.change(screen.getByLabelText('确认新 PIN'), { target: { value: '1357' } });
+    fireEvent.click(screen.getByRole('button', { name: '修改 PIN 并轮换恢复码' }));
+    await screen.findByText('当前 PIN 不正确，设置没有改变。');
+
+    view.rerender(<ParentAccessGate record={rotated} saveRecord={() => true}><p>家长数据</p></ParentAccessGate>);
+
+    expect(await screen.findByRole('heading', { name: '家长周报' })).toBeVisible();
+    expect(screen.getByLabelText('家长 PIN')).toHaveValue('');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText('家长数据')).not.toBeInTheDocument();
+  });
+
+  it('keeps an allowed session for the same serialized access record', async () => {
+    const record = await createParentAccessRecord('4826', 'ABCDEFGHJKLM');
+    const view = render(<ParentAccessGate record={record} saveRecord={() => true}><p>家长数据</p></ParentAccessGate>);
+    fireEvent.change(screen.getByLabelText('家长 PIN'), { target: { value: '4826' } });
+    fireEvent.click(screen.getByRole('button', { name: '进入周报' }));
+    await screen.findByText('家长数据');
+
+    view.rerender(<ParentAccessGate record={String(record)} saveRecord={() => true}><p>家长数据</p></ParentAccessGate>);
+
+    expect(screen.getByText('家长数据')).toBeVisible();
+  });
+
   it('keeps the old PIN and recovery valid when a PIN change is abandoned before confirmation', async () => {
     const record = await createParentAccessRecord('4826', 'ABCDEFGHJKLM');
     const saveRecord = vi.fn(() => true);

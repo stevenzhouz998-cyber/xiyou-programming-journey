@@ -77,6 +77,9 @@ export function ParentAccessGate({ record, saveRecord, children }: {
   const [pending, setPending] = useState<PendingAccess | null>(null);
   const [error, setError] = useState('');
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const authorizedRecordRef = useRef<string | null>(null);
+  const locallySavedSourceRecordRef = useRef<string | null>(null);
+  const observedRecordRef = useRef(record);
 
   useEffect(() => { if (!pending) headingRef.current?.focus(); }, [mode, allowed, pending]);
 
@@ -87,6 +90,33 @@ export function ParentAccessGate({ record, saveRecord, children }: {
     setConfirmPin('');
     setRecoveryCode('');
   };
+
+  const authorize = (authorizedRecord: string) => {
+    authorizedRecordRef.current = authorizedRecord;
+    locallySavedSourceRecordRef.current = record;
+    setAllowed(true);
+  };
+
+  const relock = (nextMode: AccessMode) => {
+    authorizedRecordRef.current = null;
+    locallySavedSourceRecordRef.current = null;
+    clearSecrets();
+    setError('');
+    setPending(null);
+    setAllowed(false);
+    setMode(nextMode);
+  };
+
+  useEffect(() => {
+    const previousRecord = observedRecordRef.current;
+    observedRecordRef.current = record;
+    const matchesAuthorizedRecord = record === authorizedRecordRef.current || record === locallySavedSourceRecordRef.current;
+    if (isParentAccessUnset(record)) {
+      if (!allowed || previousRecord !== record || !matchesAuthorizedRecord) relock('setup');
+      return;
+    }
+    if (allowed && !matchesAuthorizedRecord) relock('login');
+  }, [record, allowed]);
 
   const newPinError = (value: string) => {
     if (!validPin(value)) return '请设置 4 位数字 PIN。';
@@ -115,7 +145,7 @@ export function ParentAccessGate({ record, saveRecord, children }: {
     setError('');
     setPending(null);
     setMode('login');
-    setAllowed(true);
+    authorize(pending.record);
   };
 
   const setup = async (event: FormEvent) => {
@@ -139,7 +169,7 @@ export function ParentAccessGate({ record, saveRecord, children }: {
     }
     clearSecrets();
     setError('');
-    setAllowed(true);
+    authorize(record);
   };
 
   const recover = async (event: FormEvent) => {
@@ -228,7 +258,7 @@ export function ParentAccessGate({ record, saveRecord, children }: {
       <div className="parent-security-field"><label htmlFor="changed-parent-pin">新 PIN</label><input id="changed-parent-pin" aria-label="新 PIN" type="password" autoComplete="new-password" inputMode="numeric" maxLength={4} value={newPin} onChange={(event) => setNewPin(event.target.value)} /></div>
       <div className="parent-security-field"><label htmlFor="changed-parent-confirm">确认新 PIN</label><input id="changed-parent-confirm" aria-label="确认新 PIN" type="password" autoComplete="new-password" inputMode="numeric" maxLength={4} value={confirmPin} onChange={(event) => setConfirmPin(event.target.value)} /></div>
       {error && <p className="form-error" role="alert">{error}</p>}
-      <div className="parent-security-actions"><button type="submit" className="button button-primary">修改 PIN 并轮换恢复码</button><button type="button" className="button button-ghost" onClick={() => { clearSecrets(); setError(''); setAllowed(false); setMode('login'); }}>退出家长周报</button></div>
+      <div className="parent-security-actions"><button type="submit" className="button button-primary">修改 PIN 并轮换恢复码</button><button type="button" className="button button-ghost" onClick={() => relock('login')}>退出家长周报</button></div>
     </form>
   </section></>;
 }
