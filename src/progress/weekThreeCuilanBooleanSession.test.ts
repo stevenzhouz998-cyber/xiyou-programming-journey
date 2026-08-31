@@ -15,7 +15,7 @@ describe('W3-M2 revision 5 session', () => {
       'w3-m2': { status: 'completed' as const, stars: 3 as const, attempts: 1, hintsUsed: 0, completedAt: NOW },
     } };
     const migrated = migrateProgress(old);
-    expect(migrated.schemaRevision).toBe(8);
+    expect(migrated.schemaRevision).toBe(9);
     expect(migrated.missionCompletionEvidence['w3-m2']).toMatchObject({ kind: 'legacy-preformal' });
     expect(migrated.sessions['w3-m2']).toBeUndefined();
   });

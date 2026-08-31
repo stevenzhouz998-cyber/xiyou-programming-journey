@@ -36,8 +36,10 @@ This manifest gates the formal Dragon Palace media in `public/assets/dragon-pala
 | assets/week-three-bajie-joining/bajie-joining-states.webp | 408a52ad14ee571c4f3d2ce2b30ba88d06ef5078e44de0feba40f7c3774dc2ec | Transparent three-state Zhu Wuneng explanation, Bajie naming, and westward luggage-departure sheet | OpenAI built-in image_gen | [Prompt W3M4-002](#prompt-w3m4-002-bajie-joining-states) | 1500x500 | generated in-project with built-in image_gen; provenance verified | w3-m4 WeekThreeBajieJoiningScene | visual-qa-passed |
 | assets/week-three-boss/week-three-boss-background.webp | 62de44e39f0978dc03933629e65942cf29c2b06c09bd3d73e79a3ce9edae481e | Bright Gao Village, Yunzhai cave, and westward-road panorama for the single W3-M5 story stage | OpenAI built-in image_gen | [Prompt W3M5-001](#prompt-w3m5-001-boss-background) | 1280x720 | generated in-project with built-in image_gen; provenance verified | w3-m5 WeekThreeBossScene | visual-qa-passed |
 | assets/week-three-boss/week-three-boss-states.webp | dc3905b48fa147da497b7260e22f62beed3b617de31dd3dd757a31116f03a4f1 | Four nonviolent 3D storybook state vignettes for the W3-M5 recap | OpenAI built-in image_gen | [Prompt W3M5-002](#prompt-w3m5-002-boss-states) | 1024x1024 | generated in-project with built-in image_gen; provenance verified | w3-m5 WeekThreeBossScene | visual-qa-passed |
-| assets/week-four-mapping/white-tiger-ridge-background.webp | be1e3a53a62a22f9154f385b548c37e446e1f6a4e1f946dab87332483809e266 | Bright, child-safe White Tiger Ridge entrance background for the Blockly-to-Python mapping stage | OpenAI built-in image_gen | [Prompt W4M1-001](#prompt-w4m1-001-white-tiger-ridge-background) | 1280x720 | generated in-project with built-in image_gen; provenance verified | w4-m1 WeekFourMappingScene | visual-qa-passed |
+| assets/week-four-mapping/white-tiger-ridge-background.webp | be1e3a53a62a22f9154f385b548c37e446e1f6a4e1f946dab87332483809e266 | Bright, child-safe White Tiger Ridge entrance background for the Blockly-to-Python mapping stage | OpenAI built-in image_gen | [Prompt W4M1-001](#prompt-w4m1-001-white-tiger-ridge-background) | 1280x720 | generated in-project with built-in image_gen; provenance verified | w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene | visual-qa-passed |
 | assets/week-four-mapping/mapping-states.webp | 65ef2327d5a25d1b5349fcbfaad32f59412dea7ad89ed55025dbc7d9cfa4d247 | Transparent three-cell waiting, mismatch, and mapping-proven state sprite for the Blockly-to-Python stage | OpenAI built-in image_gen | [Prompt W4M1-002](#prompt-w4m1-002-mapping-states) | 1536x512 | generated in-project with built-in image_gen; provenance verified | w4-m1 WeekFourMappingScene | visual-qa-passed |
+| assets/week-four-variables/woman-with-offering.webp | bc9b20b40b3dab82b0b072fb891a9c5d4cc5a552f88e8caadc55faee35b1172c | Transparent, child-safe adult mountain woman carrying a green food vessel and vegetarian offering basket for the public ordinary-observation evidence | OpenAI built-in image_gen | [Prompt W4M2-001](#prompt-w4m2-001-woman-with-offering) | 1024x1024 | generated in-project with built-in image_gen; provenance verified | w4-m2 WeekFourVariableEvidenceScene | visual-qa-passed |
+| assets/week-four-variables/variable-record-states.webp | a1893d53f93e2c6ee260bca91c9decb8398dbc416d8ec390bc4e5971c8786ac0 | Transparent three-cell sheet for waiting evidence, overwritten appearance with empty identity, and separately sealed evidence records | OpenAI built-in image_gen | [Prompt W4M2-002](#prompt-w4m2-002-variable-record-states) | 1536x512 | generated in-project with built-in image_gen; provenance verified | w4-m2 WeekFourVariableEvidenceScene | visual-qa-passed |
 
 ## Prompt records
 
@@ -138,7 +140,7 @@ Style/medium: polished bright 3D Chinese children's storybook game environment, 
 Composition/framing: 16:9 landscape, intended final crop 1280x720, readable at phone width, generous clear foreground, no UI frame.
 Lighting/mood: clear hopeful morning, curious and thoughtful, never frightening.
 Constraints: no text, no letters, no Chinese characters, no pseudo-writing, no logo, no watermark, no UI, no combat, no attack, no injury, no corpse, no skeleton, no horror, no people, no weapons.
-Processing: accepted OpenAI built-in image_gen source `exec-dca4ab00-baef-407d-bd71-ef43d6b0420f.png` (1672x941 RGB) was original-size inspected by the generation owner. Sharp only center-cropped the near-16:9 source to 1280x720 and encoded WebP (`quality: 82`, `effort: 6`, `smartSubsample: true`); no redraw, compositing, alpha processing, or content edits. The source remains under `.codex/generated_images` outside this repository. The recorded W4-M1 five-project visual QA covers 320, 390, 768 and 1440 layouts, crop clarity, readable states, focus, reduced motion and mute; the manifest status is `visual-qa-passed`.
+Processing: accepted OpenAI built-in image_gen source `exec-dca4ab00-baef-407d-bd71-ef43d6b0420f.png` (1672x941 RGB) was original-size inspected by the generation owner. Sharp only center-cropped the near-16:9 source to 1280x720 and encoded WebP (`quality: 82`, `effort: 6`, `smartSubsample: true`); no redraw, compositing, alpha processing, or content edits. The source remains under `.codex/generated_images` outside this repository. W4-M1 five-project visual QA remains valid at 320, 390, 768 and 1440 layouts. W4-M2 then received fresh five-project default and sealed-state screenshot QA at 1440 Chromium, 768 WebKit, 390 Chromium, 1440 Firefox and 320 Chromium: the background stayed clear, the two-column desktop layout had no empty review gap, and narrow layouts had no horizontal overflow. The shared manifest row is therefore `visual-qa-passed`.
 ```
 
 ### Prompt W4M1-002 mapping-states
@@ -153,6 +155,34 @@ Composition/framing: exact 3:1 horizontal strip, three non-overlapping equal 512
 Lighting/mood: patient learning, gentle discovery, confident success.
 Constraints: genuine transparent background, no text, no letters, no Chinese characters, no pseudo-writing, no emoji, no logo, no watermark, no UI frame, no combat, no weapon, no injury, no corpse, no skeleton, no horror, no specific woman, old woman or old man disguise.
 Processing: accepted OpenAI built-in image_gen source `exec-d4e244e1-cc94-4515-bbae-f248a490255d.png` (2172x724 RGBA, exact 3:1) was original-size inspected by the generation owner. Sharp only proportionally resized it to 1536x512 and encoded WebP (`quality: 90`, `alphaQuality: 100`, `effort: 6`, `smartSubsample: true`), preserving alpha without chroma keying, background removal, redraw, crop, compositing, or content edits. The three source and shipping cells therefore remain exactly 0–511, 512–1023, and 1024–1535. The source remains under `.codex/generated_images` outside this repository. The recorded W4-M1 five-project visual QA covers all three cells at 320, 390, 768 and 1440 widths, alpha clarity, focus, reduced motion and mute; the manifest status is `visual-qa-passed`.
+```
+
+### Prompt W4M2-001 woman-with-offering
+
+```text
+Use case: illustration-story
+Asset type: W4-M2 第一次变化儿童 Python 变量关卡的透明人物素材
+Primary request: 明亮精致的3D中国儿童绘本风格，一位端庄成年的山中女子，双手携带绿色食物器皿和素斋篮，作为白虎岭公开“普通观察”证据。
+Subject: 全身或接近全身的三分之四视角，衣着完整朴素、神情平和，器皿清楚但没有可读文字；不表现妖怪本相。
+Style/medium: polished bright 3D Chinese children's storybook game character, jade green, warm ivory, soft gold, restrained cinnabar accents, rounded readable forms.
+Composition/framing: square 1:1 transparent canvas, centered subject, generous transparent padding, readable at mobile size.
+Lighting/mood: gentle daylight, curious but safe, never seductive or frightening.
+Constraints: RGBA transparent background, no text, no letters, no pseudo-writing, no logo, no watermark, no UI, no weapon, no attack, no injury, no corpse, no skeleton, no horror, no sexualized pose, no exposed chest, no child character, no old woman, no old man.
+Processing: accepted built-in image_gen result `exec-53035132-c114-452a-baab-6a42dfb82b63.png` (1254x1254 RGBA) was original-size inspected by the generation owner. The source remains outside this repository in the environment-owned generated-image store. Sharp 0.35.3 performed only proportional contain placement on a transparent 1024x1024 canvas and WebP encoding (`quality: 78`, `alphaQuality: 90`, `effort: 6`, `smartSubsample: true`); no crop, redraw, compositing, chroma key, background removal, or content edit. Shipping output is 1024x1024 true-alpha WebP, 119,994 bytes, SHA-256 `bc9b20b40b3dab82b0b072fb891a9c5d4cc5a552f88e8caadc55faee35b1172c`, for `w4-m2 WeekFourVariableEvidenceScene`. Fresh W4-M2 default and sealed-state screenshot QA at 1440 Chromium, 768 WebKit, 390 Chromium, 1440 Firefox and 320 Chromium confirmed the entire head, torso, offering vessel and basket remain visible with `contain`, without overlap or horizontal overflow; this record is `visual-qa-passed`.
+```
+
+### Prompt W4M2-002 variable-record-states
+
+```text
+Use case: illustration-story
+Asset type: W4-M2 等待记录、覆盖失败、分别封存三态透明横向 sprite
+Primary request: 明亮精致的3D中国儿童绘本风格，一张精确3:1透明横向三格状态图，左中右各一个互不重叠的方形单元：两只空的证据匣等待记录；同一只外形匣被两束光连续写入而另一只匣为空；两只匣分别封存一束证据光并形成完整记录。
+Subject: 使用两只造型不同但无文字的玉石证据匣、普通观察暖金光和火眼核验朱金光；不能出现代码、变量名或答案文字。
+Style/medium: polished bright 3D Chinese children's storybook game props, jade green, warm ivory, soft gold, restrained cinnabar.
+Composition/framing: exact 3:1 transparent strip, three equal non-overlapping cells, identical camera and scale, generous alpha padding, readable when CSS crops one cell on mobile.
+Lighting/mood: patient learning, clear mistake, confident completion.
+Constraints: RGBA transparent background, no text, no letters, no Chinese characters, no pseudo-writing, no emoji, no logo, no watermark, no character, no weapon, no attack, no injury, no corpse, no skeleton, no horror.
+Processing: accepted built-in image_gen result `exec-3a0e5937-dd36-4de6-9eae-3b1b3c4459d1.png` (2172x724 RGBA, exact 3:1) was original-size inspected by the generation owner. The source remains outside this repository in the environment-owned generated-image store. Sharp 0.35.3 only proportionally resized it to 1536x512 and encoded WebP (`quality: 78`, `alphaQuality: 90`, `effort: 6`, `smartSubsample: true`), preserving alpha without crop, redraw, compositing, chroma key, background removal, or content edit. The source and shipping cell boundaries remain exactly 0–511, 512–1023, and 1024–1535. Shipping output is 1536x512 true-alpha WebP, 178,420 bytes, SHA-256 `a1893d53f93e2c6ee260bca91c9decb8398dbc416d8ec390bc4e5971c8786ac0`, for `w4-m2 WeekFourVariableEvidenceScene`. Fresh W4-M2 default and sealed-state screenshot QA at 1440 Chromium, 768 WebKit, 390 Chromium, 1440 Firefox and 320 Chromium confirmed exactly one square state cell is clipped at a time, the default/failure/sealed states are clear, and the sealed overlay remains readable without overflow; this record is `visual-qa-passed`.
 ```
 
 ### Prompt W3M2-001 cuilan disguise background

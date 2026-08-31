@@ -20,7 +20,7 @@ import {
 import type { FormalMissionSpec, MissionSpec } from "../course/types";
 import { useProgress } from "../context/ProgressContext";
 import { validateSequence } from "../engine/validation";
-import { isMissionUnlocked } from "../progress/progress";
+import { getWeekFourVariableAccess, isMissionUnlocked, type WeekFourVariableAccess } from "../progress/progress";
 import { isExecutableMissionId } from "../progress/executableMissionIds";
 import { assetUrl } from "../utils/assets";
 import { downloadTextFile } from "../utils/download";
@@ -38,7 +38,12 @@ import type { WeekThreeYunzhanDialogueExperienceProps } from './WeekThreeYunzhan
 import type { WeekThreeBajieJoiningExperienceProps } from './WeekThreeBajieJoiningExperience';
 import type { WeekThreeBossExperienceProps } from './WeekThreeBossExperience';
 import type { WeekFourMappingExperienceProps } from './WeekFourMappingExperience';
-import { WeekFourMappingWorkReview } from './WeekFourMappingWorkReview';
+import type { WeekFourVariableEvidenceExperienceProps } from './WeekFourVariableEvidenceExperience';
+import { WeekFourVariableAccessNotice } from './WeekFourVariableAccessNotice';
+
+export function weekFourVariableRouteBranch(access: WeekFourVariableAccess): WeekFourVariableAccess['kind'] {
+  return access.kind;
+}
 
 const ArrowLeft = lazy(() =>
   import("@phosphor-icons/react/dist/icons/ArrowLeft").then((module) => ({
@@ -106,6 +111,7 @@ const loadWeekThreeYunzhanDialogueExperience = () => import('./WeekThreeYunzhanD
 const loadWeekThreeBajieJoiningExperience = () => import('./WeekThreeBajieJoiningExperience').then((module) => ({ default: module.WeekThreeBajieJoiningExperience }));
 const loadWeekThreeBossExperience = () => import('./WeekThreeBossExperience').then((module) => ({ default: module.WeekThreeBossExperience }));
 const loadWeekFourMappingExperience = () => import('./WeekFourMappingExperience').then((module) => ({ default: module.WeekFourMappingExperience }));
+const loadWeekFourVariableEvidenceExperience = () => import('./WeekFourVariableEvidenceExperience').then((module) => ({ default: module.WeekFourVariableEvidenceExperience }));
 
 export function FourSeasRegaliaRouteBoundary({
   loader = loadFourSeasRegaliaExperience,
@@ -333,6 +339,14 @@ export function WeekFourMappingRouteBoundary({ loader = loadWeekFourMappingExper
   const Experience = useMemo(() => lazy(loader), [loader, retryGeneration]);
   const retry = loader === loadWeekFourMappingExperience ? (reloadPage ?? reloadSectionPage) : () => setRetryGeneration((generation) => generation + 1);
   return <LazySectionBoundary key={retryGeneration} label="积木变代码体验" reloadPage={retry}><Suspense fallback={<p className="mission-tools-loading" role="status">积木变代码体验加载中，请稍候……</p>}><Experience {...props} /></Suspense></LazySectionBoundary>;
+}
+export function WeekFourVariableRouteBoundary({ loader = loadWeekFourVariableEvidenceExperience, reloadPage, ...props }: WeekFourVariableEvidenceExperienceProps & { loader?: () => Promise<{ default: ComponentType<WeekFourVariableEvidenceExperienceProps> }>; reloadPage?: () => void }) {
+  const [retryGeneration, setRetryGeneration] = useState(0);
+  const Experience = useMemo(() => lazy(loader), [loader, retryGeneration]);
+  const retry = loader === loadWeekFourVariableEvidenceExperience
+    ? (reloadPage ?? reloadSectionPage)
+    : () => setRetryGeneration((generation) => generation + 1);
+  return <LazySectionBoundary key={retryGeneration} label="变量取证体验" reloadPage={retry}><Suspense fallback={<p className="mission-tools-loading" role="status">变量取证体验加载中，请稍候……</p>}><Experience {...props} /></Suspense></LazySectionBoundary>;
 }
 
 function playAudio(path: string, muted: boolean) {
@@ -582,6 +596,9 @@ function MissionPageForId({
         <Link to="/">返回成长地图</Link>
       </main>
     );
+  const weekFourVariableAccess = mission.id === 'w4-m2' ? getWeekFourVariableAccess(progress) : null;
+  if (weekFourVariableAccess && weekFourVariableAccess.kind !== 'formal')
+    return <WeekFourVariableAccessNotice access={weekFourVariableAccess} />;
   if (!isMissionUnlocked(progress, mission.id))
     return (
       <main className="not-found">
@@ -814,9 +831,6 @@ function MissionPageForId({
               <h2>{mission.objective}</h2>
               <p>知识法宝：{mission.knowledge}</p>
             </div>
-            {mission.id === 'w4-m2' ? (
-              <WeekFourMappingWorkReview work={progress.works['w4-m1-first-python-mapping']} />
-            ) : null}
             {mission.id === 'w1-m1' ? (
               <LazySectionBoundary label="龙宫求兵任务">
                 <Suspense
@@ -996,6 +1010,16 @@ function MissionPageForId({
                 reducedMotion={reducedMotion}
                 muted={progress.settings.muted}
                 locked={completionSave !== null}
+                onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)}
+                onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
+                onInteractionLockChange={setBattleInteractionLocked}
+              />
+            ) : mission.id === 'w4-m2' ? (
+              <WeekFourVariableRouteBoundary
+                reducedMotion={reducedMotion}
+                muted={progress.settings.muted}
+                locked={completionSave !== null}
+                work={progress.works['w4-m1-first-python-mapping']}
                 onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)}
                 onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
                 onInteractionLockChange={setBattleInteractionLocked}

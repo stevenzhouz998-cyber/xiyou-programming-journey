@@ -22,6 +22,10 @@ import {
   verifyRequiredWeekThreeBajieJoiningInventory,
   verifyRequiredWeekThreeBossInventory,
   verifyRequiredWeekFourMappingInventory,
+  verifyRequiredWeekFourVariableInventory,
+  WEEK_FOUR_VARIABLE_REQUIRED_ASSETS,
+  WEEK_FOUR_VARIABLE_SCENE_SLOT,
+  WEEK_FOUR_SHARED_BACKGROUND_SLOT,
   verifyAssetManifest,
 } from './check-asset-manifest.mjs';
 
@@ -309,7 +313,7 @@ test('requires the exact two W4-M1 assets, 1536x512 alpha state cells, and two l
   const source = `import { assetUrl } from '../utils/assets';
     export function WeekFourMappingScene() { return <><img src={assetUrl('/${background}')} /><img src={assetUrl('/${states}')} /></>; }`;
   const rows = [
-    row({ assetId: background, purpose: 'White Tiger Ridge entry background', promptOrSourceReference: '[Prompt W4M1-001](#prompt-w4m1-001-white-tiger-ridge-background)', dimensions: '1280x720', screenSlots: 'w4-m1 WeekFourMappingScene', qaStatus: 'provenance-verified' }),
+    row({ assetId: background, purpose: 'White Tiger Ridge entry background', promptOrSourceReference: '[Prompt W4M1-001](#prompt-w4m1-001-white-tiger-ridge-background)', dimensions: '1280x720', screenSlots: WEEK_FOUR_SHARED_BACKGROUND_SLOT, qaStatus: 'provenance-verified' }),
     row({ assetId: states, purpose: 'Transparent three-cell Blockly to Python mapping state sheet', promptOrSourceReference: '[Prompt W4M1-002](#prompt-w4m1-002-mapping-states)', dimensions: '1536x512', screenSlots: 'w4-m1 WeekFourMappingScene', qaStatus: 'provenance-verified' }),
   ];
   const files = [
@@ -1029,6 +1033,66 @@ test('rejects a raster over 512 KiB', () => {
 
 test('rejects Dragon Palace mission media over 1.25 MiB', () => {
   assert.throws(() => verifyAssetManifest(numberedScenario(3, 450 * 1024)), /1\.25 MiB/i);
+});
+
+test('requires exactly the two W4-M2 variable-evidence assets and the shared White Tiger Ridge scene slot', () => {
+  const required = [
+    'assets/week-four-variables/woman-with-offering.webp',
+    'assets/week-four-variables/variable-record-states.webp',
+  ];
+  assert.deepEqual(WEEK_FOUR_VARIABLE_REQUIRED_ASSETS, required);
+  assert.equal(WEEK_FOUR_VARIABLE_SCENE_SLOT, 'w4-m2 WeekFourVariableEvidenceScene');
+  assert.equal(WEEK_FOUR_SHARED_BACKGROUND_SLOT, 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene');
+  assert.equal(typeof verifyRequiredWeekFourVariableInventory, 'function');
+});
+
+test('requires W4-M2 woman and three-state assets with alpha, exact dimensions, 512 KiB per-file and 1.25 MiB shared-media limits', () => {
+  const required = [
+    'assets/week-four-variables/woman-with-offering.webp',
+    'assets/week-four-variables/variable-record-states.webp',
+  ];
+  const promptRecordsByAsset = [
+    { id: 'W4M2-001', heading: 'Prompt W4M2-001 woman-with-offering', anchor: '#prompt-w4m2-001-woman-with-offering' },
+    { id: 'W4M2-002', heading: 'Prompt W4M2-002 variable-record-states', anchor: '#prompt-w4m2-002-variable-record-states' },
+  ];
+  const rows = required.map((assetId, index) => row({
+    assetId,
+    promptOrSourceReference: `[Prompt ${promptRecordsByAsset[index].id}](${promptRecordsByAsset[index].anchor})`,
+    dimensions: index === 0 ? '1024x1024' : '1536x512',
+    screenSlots: 'w4-m2 WeekFourVariableEvidenceScene',
+  }));
+  const files = [
+    file({ path: required[0], width: 1024, height: 1024, hasAlpha: true, transparentPixelCount: 128, bytes: 512 * 1024 }),
+    file({ path: required[1], width: 1536, height: 512, hasAlpha: true, transparentPixelCount: 128, bytes: 512 * 1024 }),
+  ];
+  const records = rows.map((_, index) => promptRecord({ ...promptRecordsByAsset[index], prompt: "Style/medium: polished bright 3D Chinese children's storybook game." }));
+  const source = `import { assetUrl } from '../utils/assets';\nexport function WeekFourVariableEvidenceScene() { return <><img src={assetUrl('assets/week-four-mapping/white-tiger-ridge-background.webp')} /><img src={assetUrl('${required[0]}')} /><img src={assetUrl('${required[1]}')} /></>; }`;
+  assert.doesNotThrow(() => verifyRequiredWeekFourVariableInventory({ manifestRows: rows, publicFiles: files, promptRecords: records, source, sharedBackgroundBytes: 128 * 1024 }));
+  assert.throws(() => verifyRequiredWeekFourVariableInventory({ manifestRows: rows.slice(0, 1), publicFiles: files.slice(0, 1), promptRecords: records, source, sharedBackgroundBytes: 128 * 1024 }), /exactly|required/i);
+  assert.throws(() => verifyRequiredWeekFourVariableInventory({ manifestRows: rows, publicFiles: [{ ...files[0], hasAlpha: false }, files[1]], promptRecords: records, source, sharedBackgroundBytes: 128 * 1024 }), /alpha/i);
+  assert.throws(() => verifyRequiredWeekFourVariableInventory({ manifestRows: rows, publicFiles: [{ ...files[0], transparentPixelCount: 0 }, files[1]], promptRecords: records, source, sharedBackgroundBytes: 128 * 1024 }), /transparent pixels/i);
+  assert.throws(() => verifyRequiredWeekFourVariableInventory({ manifestRows: rows, publicFiles: [{ ...files[0], transparentPixelCount: 1024 * 1024 }, files[1]], promptRecords: records, source, sharedBackgroundBytes: 128 * 1024 }), /transparent pixels/i);
+  assert.throws(() => verifyRequiredWeekFourVariableInventory({ manifestRows: [{ ...rows[0], sha256: 'b'.repeat(64) }, rows[1]], publicFiles: files, promptRecords: records, source, sharedBackgroundBytes: 128 * 1024 }), /hash mismatch/i);
+  assert.throws(() => verifyRequiredWeekFourVariableInventory({ manifestRows: rows, publicFiles: [{ ...files[0], width: 1023 }, files[1]], promptRecords: records, source, sharedBackgroundBytes: 128 * 1024 }), /1024x1024/i);
+  assert.throws(() => verifyRequiredWeekFourVariableInventory({ manifestRows: rows, publicFiles: [{ ...files[0], bytes: 512 * 1024 + 1 }, files[1]], promptRecords: records, source, sharedBackgroundBytes: 128 * 1024 }), /512 KiB/i);
+  assert.throws(() => verifyRequiredWeekFourVariableInventory({ manifestRows: rows, publicFiles: files, promptRecords: records, source, sharedBackgroundBytes: 300 * 1024 }), /1\.25 MiB/i);
+  assert.throws(() => verifyRequiredWeekFourVariableInventory({ manifestRows: [{ ...rows[0], screenSlots: 'wrong slot' }, rows[1]], publicFiles: files, promptRecords: records, source, sharedBackgroundBytes: 128 * 1024 }), /screen slots/i);
+  assert.throws(() => verifyRequiredWeekFourVariableInventory({ manifestRows: rows, publicFiles: files, promptRecords: records, source, sharedBackgroundBytes: 128 * 1024, sharedBackgroundScreenSlots: 'w4-m1 WeekFourMappingScene' }), /shared background screen slots/i);
+  assert.throws(() => verifyRequiredWeekFourVariableInventory({ manifestRows: rows, publicFiles: files, promptRecords: records, source: `${source}\nconst unused = assetUrl('assets/week-four-variables/unused.webp');`, sharedBackgroundBytes: 128 * 1024 }), /exactly three imported assetUrl/i);
+  assert.throws(() => verifyRequiredWeekFourVariableInventory({ manifestRows: rows, publicFiles: files, promptRecords: records, source: source.replace(`assetUrl('${required[1]}')`, `assetUrl('assets/week-four-variables/other.webp')`), sharedBackgroundBytes: 128 * 1024 }), /exactly three imported assetUrl/i);
+  assert.throws(() => verifyRequiredWeekFourVariableInventory({ manifestRows: rows, publicFiles: files, promptRecords: records, source: source.replace(`<img src={assetUrl('${required[1]}')} />`, `{/* <img src={assetUrl('${required[1]}')} /> */}`), sharedBackgroundBytes: 128 * 1024 }), /exactly three imported assetUrl/i);
+});
+
+test('collects real W4-M2 alpha pixels rather than accepting an opaque alpha-capable container', async () => {
+  const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const publicFiles = await collectAssetFiles(join(sourceRoot, 'public', 'assets', 'week-four-variables'), 'assets/week-four-variables');
+  assert.equal(publicFiles.length, 2);
+  for (const publicFile of publicFiles) {
+    assert.equal(publicFile.hasAlpha, true);
+    assert.equal(Number.isInteger(publicFile.transparentPixelCount), true);
+    assert.ok(publicFile.transparentPixelCount > 0);
+    assert.ok(publicFile.transparentPixelCount < publicFile.width * publicFile.height);
+  }
 });
 
 test('rejects missing required metadata and dimension mismatches', () => {

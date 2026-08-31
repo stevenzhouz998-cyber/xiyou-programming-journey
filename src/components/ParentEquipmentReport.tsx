@@ -55,6 +55,10 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     runs: 0, mappingDifferences: 0, validationFailures: 0, infrastructureFailures: 0,
     observations: 0, workSaved: false, proof: 'none' as const, completedAt: null,
   }
+  const weekFourVariables = getWeeklyReport(progress, 4).weekFourVariables ?? {
+    runs: 0, overwriteFailures: 0, validationFailures: 0, infrastructureFailures: 0,
+    observations: 0, workSaved: false, proof: 'none' as const, completedAt: null,
+  }
   const blockerLabels = {
     'manor-help-specificity': '庄口求助判断过宽',
     'disguise-identity': '外形与身份判断',
@@ -107,6 +111,16 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     {weekFour.proof === 'formal-v3' && weekFour.workSaved ? <p>正式双轨证明与对照作品已保存</p> : null}
     {weekFour.proof === 'legacy-replay-only' ? <p>第四周历史兼容完成记录，尚非正式双轨证明</p> : null}
     {weekFour.proof === 'formal-v3' && !weekFour.workSaved ? <p>正式证明记录异常：尚未发现已保存作品</p> : null}
+  </section>
+
+  <section className="parent-equipment-report" role="region" aria-label="第四周变量学习摘要">
+    <div className="parent-equipment-heading"><span className="eyebrow">第四周变量练习</span><h2>第四周变量学习摘要</h2><p>只汇总已保存的学习次数与证明状态，不展示代码、故事答案或内部记录。</p></div>
+    <p>{`已运行 ${weekFourVariables.runs} 次，变量覆盖 ${weekFourVariables.overwriteFailures} 次。`}</p>
+    <p>{`安全验证拒绝 ${weekFourVariables.validationFailures} 次；基础设施故障 ${weekFourVariables.infrastructureFailures} 次（不计入学习困难）。`}</p>
+    <p>{`主动观察 ${weekFourVariables.observations} 次。`}</p>
+    {weekFourVariables.proof === 'formal-v3' && weekFourVariables.workSaved ? <p>正式变量证明与取证作品已保存</p> : null}
+    {weekFourVariables.proof === 'legacy-replay-only' ? <p>第四周历史兼容完成记录，尚非正式变量证明</p> : null}
+    {weekFourVariables.proof === 'formal-v3' && !weekFourVariables.workSaved ? <p>正式证明记录异常：尚未发现已保存作品</p> : null}
   </section></>
 }
 

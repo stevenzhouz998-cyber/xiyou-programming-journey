@@ -47,7 +47,10 @@ export function importProgressTransaction(raw: string, storage: Storage = localS
   return { ...result, sourceVersion, storageMayHaveChanged: false };
 }
 
-export function clearProgressTransaction(storage: Storage = localStorage, transactionKeys?: readonly string[]): ClearResult {
+export function clearProgressTransaction(
+  storage: Storage = localStorage,
+  transactionKeys?: readonly string[],
+): ClearResult {
   const target = createInitialProgress();
   const targetRaw = JSON.stringify(target, null, 2);
   let keys: readonly string[] = CLEAR_PROGRESS_KEYS;

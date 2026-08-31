@@ -50,7 +50,7 @@ const REQUIRED_METADATA = [
 ];
 
 const QA_STATUSES = new Set(['planned', 'generated', 'provenance-verified', 'visual-qa-passed', 'rejected']);
-const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/', 'assets/week-three-yunzhan-dialogue/', 'assets/week-three-bajie-joining/', 'assets/week-three-boss/', 'assets/week-four-mapping/'];
+const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/', 'assets/week-three-yunzhan-dialogue/', 'assets/week-three-bajie-joining/', 'assets/week-three-boss/', 'assets/week-four-mapping/', 'assets/week-four-variables/'];
 
 const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
   ['assets/dragon-palace/background.webp', [
@@ -139,6 +139,13 @@ const WEEK_THREE_BOSS_SOURCE_PATH = 'src/components/WeekThreeBossScene.tsx';
 const REQUIRED_WEEK_THREE_BOSS_ASSETS = ['assets/week-three-boss/week-three-boss-background.webp', 'assets/week-three-boss/week-three-boss-states.webp'];
 const WEEK_FOUR_MAPPING_SOURCE_PATH = 'src/components/WeekFourMappingScene.tsx';
 const REQUIRED_WEEK_FOUR_MAPPING_ASSETS = ['assets/week-four-mapping/white-tiger-ridge-background.webp', 'assets/week-four-mapping/mapping-states.webp'];
+export const WEEK_FOUR_VARIABLE_REQUIRED_ASSETS = Object.freeze([
+  'assets/week-four-variables/woman-with-offering.webp',
+  'assets/week-four-variables/variable-record-states.webp',
+]);
+export const WEEK_FOUR_VARIABLE_SCENE_SLOT = 'w4-m2 WeekFourVariableEvidenceScene';
+export const WEEK_FOUR_SHARED_BACKGROUND_SLOT = 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene';
+const WEEK_FOUR_VARIABLE_SOURCE_PATH = 'src/components/WeekFourVariableEvidenceScene.tsx';
 const REQUIRED_BAJIE_JOINING_ART_DIRECTION = "polished bright 3D Chinese children's storybook game";
 const REQUIRED_BAJIE_JOINING_PROMPT_SAFETY = ['no text', 'no pseudo-text', 'no binding', 'no ear pulling', 'no attack', 'no adult marriage', 'no humiliating pose'];
 
@@ -649,7 +656,7 @@ function verifyPromptRecords(promptRecords, manifestRows) {
       ? 'polished bright 3D'
       : row.assetId.startsWith('assets/week-three-cuilan/')
       ? REQUIRED_CUILAN_ART_DIRECTION
-      : row.assetId.startsWith('assets/week-three-boss/') || row.assetId.startsWith('assets/week-four-mapping/')
+      : row.assetId.startsWith('assets/week-three-boss/') || row.assetId.startsWith('assets/week-four-mapping/') || row.assetId.startsWith('assets/week-four-variables/')
       ? "3D Chinese children's storybook"
       : row.assetId.startsWith('assets/week-one-advanced/') || row.assetId.startsWith('assets/week-two-heaven/') || row.assetId.startsWith('assets/week-two-great-sage/') || row.assetId.startsWith('assets/week-two-peach-elixir/') || row.assetId.startsWith('assets/week-two-furnace/') || row.assetId.startsWith('assets/week-two-heavenly-boss/') || row.assetId.startsWith('assets/week-three-manor-help/') || row.assetId.startsWith('assets/week-three-yunzhan-dialogue/')
       ? REQUIRED_ADVANCED_ART_DIRECTION
@@ -1122,6 +1129,12 @@ function countAlphaZeroRgbPixels(rgba) {
   return count;
 }
 
+function countTransparentPixels(rgba) {
+  let count = 0;
+  for (let offset = 0; offset < rgba.length; offset += 4) if (rgba[offset + 3] === 0) count += 1;
+  return count;
+}
+
 function verifyWeekThreeManorHelpSceneSource(sourcePath, source) {
   const { sourceFile } = createBoundSource(sourcePath, source);
   if (sourceFile.parseDiagnostics.length > 0) throw new Error(`Asset manifest: ${sourcePath} cannot be parsed as TypeScript for WeekThreeManorHelpScene slot verification.`);
@@ -1337,7 +1350,12 @@ export function verifyRequiredWeekFourMappingInventory({ manifestRows, publicFil
   const rows = familyRows(manifestRows, directory);
   const files = familyFiles(publicFiles, directory);
   requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: REQUIRED_WEEK_FOUR_MAPPING_ASSETS, label: 'Week Four mapping' });
-  for (const row of rows) if (row.screenSlots !== 'w4-m1 WeekFourMappingScene') throw new Error(`Asset manifest: ${row.assetId} screen slots must be exactly w4-m1 WeekFourMappingScene.`);
+  for (const row of rows) {
+    const expectedScreenSlots = row.assetId === 'assets/week-four-mapping/white-tiger-ridge-background.webp'
+      ? WEEK_FOUR_SHARED_BACKGROUND_SLOT
+      : 'w4-m1 WeekFourMappingScene';
+    if (row.screenSlots !== expectedScreenSlots) throw new Error(`Asset manifest: ${row.assetId} screen slots must be exactly ${expectedScreenSlots}.`);
+  }
   const states = files.find((file) => file.path === 'assets/week-four-mapping/mapping-states.webp');
   if (states?.hasAlpha !== true) throw new Error('Asset manifest: Week Four mapping states must preserve a true alpha channel.');
   if (states?.width !== 1536 || states?.height !== 512) throw new Error('Asset manifest: Week Four mapping state sheet must be exactly 1536x512 with three equal 512x512 cells.');
@@ -1369,6 +1387,78 @@ export function verifyRequiredWeekFourMappingInventory({ manifestRows, publicFil
   };
   visit(sourceFile);
   if (!assetUrlSymbol || livePaths.length !== 2 || new Set(livePaths).size !== 2 || REQUIRED_WEEK_FOUR_MAPPING_ASSETS.some((assetId) => !livePaths.includes(assetId))) throw new Error(`Asset manifest: ${sourcePath} must render exactly two live approved image assetUrl scene slots.`);
+  return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
+}
+
+export function verifyRequiredWeekFourVariableInventory({
+  manifestRows,
+  publicFiles,
+  promptRecords = [],
+  sourcePath = WEEK_FOUR_VARIABLE_SOURCE_PATH,
+  source,
+  sharedBackgroundBytes,
+  sharedBackgroundScreenSlots,
+  mode = 'check',
+}) {
+  const directory = 'assets/week-four-variables/';
+  const rows = familyRows(manifestRows, directory);
+  const files = familyFiles(publicFiles, directory);
+  requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: WEEK_FOUR_VARIABLE_REQUIRED_ASSETS, label: 'Week Four variable evidence' });
+  for (const row of rows) {
+    if (row.screenSlots !== WEEK_FOUR_VARIABLE_SCENE_SLOT) throw new Error(`Asset manifest: ${row.assetId} screen slots must be exactly ${WEEK_FOUR_VARIABLE_SCENE_SLOT}.`);
+  }
+  const woman = files.find((file) => file.path === 'assets/week-four-variables/woman-with-offering.webp');
+  const states = files.find((file) => file.path === 'assets/week-four-variables/variable-record-states.webp');
+  if (woman?.hasAlpha !== true || states?.hasAlpha !== true) throw new Error('Asset manifest: W4-M2 woman and states assets must preserve true alpha channels.');
+  if (woman.width !== 1024 || woman.height !== 1024) throw new Error('Asset manifest: W4-M2 woman asset must be exactly 1024x1024.');
+  if (states.width !== 1536 || states.height !== 512) throw new Error('Asset manifest: W4-M2 states asset must be exactly 1536x512.');
+  for (const asset of [woman, states]) {
+    const pixels = asset?.width * asset?.height;
+    if (!Number.isInteger(asset?.transparentPixelCount) || !Number.isInteger(pixels) || asset.transparentPixelCount <= 0 || asset.transparentPixelCount >= pixels) {
+      throw new Error(`Asset manifest: ${asset?.path ?? 'W4-M2 asset'} must contain both real transparent pixels and visible non-transparent artwork.`);
+    }
+  }
+  if (!Number.isFinite(sharedBackgroundBytes) || sharedBackgroundBytes < 0) throw new Error('Asset manifest: W4-M2 shared background bytes are required.');
+  if (sharedBackgroundBytes + files.reduce((sum, file) => sum + file.bytes, 0) > MAX_MISSION_MEDIA_BYTES) throw new Error('Asset manifest: W4-M2 shared background plus two new assets exceeds 1.25 MiB.');
+  if (sharedBackgroundScreenSlots !== undefined && sharedBackgroundScreenSlots !== WEEK_FOUR_SHARED_BACKGROUND_SLOT) throw new Error(`Asset manifest: White Tiger Ridge shared background screen slots must be exactly ${WEEK_FOUR_SHARED_BACKGROUND_SLOT}.`);
+  if (typeof source !== 'string') throw new Error(`Asset manifest: ${sourcePath} source text is required for W4-M2 scene slot verification.`);
+  const expectedLivePaths = ['assets/week-four-mapping/white-tiger-ridge-background.webp', ...WEEK_FOUR_VARIABLE_REQUIRED_ASSETS];
+  const { sourceFile, checker } = createBoundSource(sourcePath, source);
+  if (sourceFile.parseDiagnostics.length > 0) throw new Error(`Asset manifest: ${sourcePath} cannot be parsed as TypeScript for W4-M2 scene slot verification.`);
+  let assetUrlSymbol = null;
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || statement.moduleSpecifier.getText(sourceFile) !== "'../utils/assets'") continue;
+    const named = statement.importClause?.namedBindings;
+    if (!named || !ts.isNamedImports(named)) continue;
+    const imported = named.elements.find((item) => !item.isTypeOnly && !item.propertyName && item.name.text === 'assetUrl');
+    if (imported) assetUrlSymbol = checker.getSymbolAtLocation(imported.name) ?? null;
+  }
+  const assetCalls = [];
+  const imagePaths = [];
+  const readAssetPath = (node) => {
+    if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression)
+      || checker.getSymbolAtLocation(node.expression) !== assetUrlSymbol || node.arguments.length !== 1
+      || !ts.isStringLiteral(node.arguments[0])) return null;
+    return node.arguments[0].text.replace(/^\//, '');
+  };
+  const visit = (node) => {
+    const assetPath = readAssetPath(node);
+    if (assetPath !== null) assetCalls.push(assetPath);
+    if ((ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) && node.tagName.getText(sourceFile) === 'img') {
+      const src = node.attributes.properties.find((attribute) => ts.isJsxAttribute(attribute) && attribute.name.text === 'src');
+      const expression = src?.initializer && ts.isJsxExpression(src.initializer) ? src.initializer.expression : null;
+      const inspectImageSource = (candidate) => {
+        const imagePath = readAssetPath(candidate);
+        if (imagePath !== null) imagePaths.push(imagePath);
+        ts.forEachChild(candidate, inspectImageSource);
+      };
+      if (expression) inspectImageSource(expression);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  const exactThree = (paths) => paths.length === 3 && new Set(paths).size === 3 && expectedLivePaths.every((assetId) => paths.includes(assetId));
+  if (!assetUrlSymbol || !exactThree(assetCalls) || !exactThree(imagePaths)) throw new Error(`Asset manifest: ${sourcePath} must use exactly three imported assetUrl(literal) calls as live img src slots for the shared background and two W4-M2 assets.`);
   return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
 }
 
@@ -1560,6 +1650,7 @@ export async function collectAssetFiles(assetRoot, assetDirectory = 'assets/drag
       let alphaEdgeMismatch;
       let alphaZeroRgbPixels;
       let lowAlphaResidue;
+      let transparentPixelCount;
       let webpLossless;
       if ((assetDirectory === 'assets/week-three-manor-help' && relativePath === 'manor-message-states.webp') || (assetDirectory === 'assets/week-three-cuilan' && relativePath === 'cuilan-boolean-states.webp') || (assetDirectory === 'assets/week-three-yunzhan-dialogue' && relativePath === 'yunzhan-dialogue-states.webp') || (assetDirectory === 'assets/week-three-bajie-joining' && relativePath === 'bajie-joining-states.webp')) {
         const { data, info } = await sharp(bytes, { failOn: 'error', limitInputPixels: 20_000_000 }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -1570,6 +1661,10 @@ export async function collectAssetFiles(assetRoot, assetDirectory = 'assets/drag
           webpLossless = bytes.includes(Buffer.from('VP8L'));
         }
       }
+      if (assetDirectory === 'assets/week-four-variables') {
+        const { data } = await sharp(bytes, { failOn: 'error', limitInputPixels: 20_000_000 }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+        transparentPixelCount = countTransparentPixels(data);
+      }
       publicFiles.push({
         path: posix.join(assetDirectory, relativePath),
         sha256: createHash('sha256').update(bytes).digest('hex'),
@@ -1578,6 +1673,7 @@ export async function collectAssetFiles(assetRoot, assetDirectory = 'assets/drag
         ...(alphaEdgeMismatch ? { alphaEdgeMismatch } : {}),
         ...(alphaZeroRgbPixels !== undefined ? { alphaZeroRgbPixels } : {}),
         ...(lowAlphaResidue ? { lowAlphaResidue } : {}),
+        ...(transparentPixelCount !== undefined ? { transparentPixelCount } : {}),
         ...(webpLossless !== undefined ? { webpLossless } : {}),
         ...decodedDimensions,
       });
@@ -1604,6 +1700,7 @@ async function main() {
   const weekThreeBajieJoiningRoot = join(root, 'public', 'assets', 'week-three-bajie-joining');
   const weekThreeBossRoot = join(root, 'public', 'assets', 'week-three-boss');
   const weekFourMappingRoot = join(root, 'public', 'assets', 'week-four-mapping');
+  const weekFourVariableRoot = join(root, 'public', 'assets', 'week-four-variables');
   const { manifestRows, promptRecords } = parseAssetManifest(await readFile(manifestPath, 'utf8'));
   const publicFiles = [
     ...await collectAssetFiles(dragonPalaceRoot),
@@ -1619,6 +1716,7 @@ async function main() {
     ...await collectAssetFiles(weekThreeBajieJoiningRoot, 'assets/week-three-bajie-joining'),
     ...await collectAssetFiles(weekThreeBossRoot, 'assets/week-three-boss'),
     ...await collectAssetFiles(weekFourMappingRoot, 'assets/week-four-mapping'),
+    ...await collectAssetFiles(weekFourVariableRoot, 'assets/week-four-variables'),
   ];
   const sourceFiles = new Map(await Promise.all([
     'src/components/GameScene.tsx',
@@ -1663,6 +1761,17 @@ async function main() {
   const weekThreeBajieJoiningResult = verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_BAJIE_JOINING_SOURCE_PATH), 'utf8'), mode });
   const weekThreeBossResult = verifyRequiredWeekThreeBossInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_THREE_BOSS_SOURCE_PATH), 'utf8'), mode });
   const weekFourMappingResult = verifyRequiredWeekFourMappingInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, WEEK_FOUR_MAPPING_SOURCE_PATH), 'utf8'), mode });
+  const sharedBackground = publicFiles.find((file) => file.path === 'assets/week-four-mapping/white-tiger-ridge-background.webp');
+  const sharedBackgroundManifest = manifestRows.find((row) => row.assetId === 'assets/week-four-mapping/white-tiger-ridge-background.webp');
+  const weekFourVariableResult = verifyRequiredWeekFourVariableInventory({
+    manifestRows,
+    publicFiles,
+    promptRecords,
+    source: await readFile(join(root, WEEK_FOUR_VARIABLE_SOURCE_PATH), 'utf8'),
+    sharedBackgroundBytes: sharedBackground?.bytes,
+    sharedBackgroundScreenSlots: sharedBackgroundManifest?.screenSlots,
+    mode,
+  });
   console.log(`Dragon Palace assets: ${dragonResult.assetCount} files, ${dragonResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Advanced Week One assets: ${advancedResult.assetCount} files, ${advancedResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Two horse-care assets: ${weekTwoHorseResult.assetCount} files, ${weekTwoHorseResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
@@ -1676,6 +1785,7 @@ async function main() {
   console.log(`Week Three Bajie-joining assets: ${weekThreeBajieJoiningResult.assetCount} files, ${weekThreeBajieJoiningResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Three boss assets: ${weekThreeBossResult.assetCount} files, ${weekThreeBossResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Four mapping assets: ${weekFourMappingResult.assetCount} files, ${weekFourMappingResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
+  console.log(`Week Four variable evidence assets: ${weekFourVariableResult.assetCount} files plus shared background, ${weekFourVariableResult.totalBytes + sharedBackground.bytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

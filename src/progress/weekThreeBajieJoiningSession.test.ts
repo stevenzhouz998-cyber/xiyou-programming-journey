@@ -52,7 +52,7 @@ describe('W3-M4 八戒归队 Progress V3', () => {
     const legacy = oldV3(5);
     legacy.missions['w3-m4'] = { status: 'completed', stars: 2, attempts: 1, hintsUsed: 0, completedAt: NOW };
     const migrated = migrateProgress(legacy);
-    expect(migrated.schemaRevision).toBe(8);
+    expect(migrated.schemaRevision).toBe(9);
     expect((migrated as any).missionCompletionEvidence['w3-m4']).toMatchObject({ kind: 'legacy-preformal', completedAt: NOW });
     expect(isMissionUnlocked(migrated, 'w3-m5')).toBe(false);
   });

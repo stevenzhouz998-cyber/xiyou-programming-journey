@@ -118,6 +118,94 @@ function exactW4CompletionDelta(previous: ProgressV3, next: ProgressV3) {
   });
 }
 
+function hasNoW4VariablePublication(progress: ProgressV3) {
+  return progress.missions['w4-m2'] === undefined
+    && progress.missionCompletionEvidence['w4-m2'] === undefined
+    && progress.works['w4-m2-variable-evidence-record'] === undefined;
+}
+
+function exactW4VariableDraftDelta(previous: ProgressV3, next: ProgressV3) {
+  const prior = previous.sessions['w4-m2']; const candidate = next.sessions['w4-m2'];
+  if (!candidate || !hasNoW4VariablePublication(next) || candidate.lastRun !== null) return false;
+  if (!prior) return exactAfterAllowedDelta(previous, next, (expected) => { expected.sessions['w4-m2'] = structuredClone(candidate); });
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    const session = expected.sessions['w4-m2']!;
+    session.pythonCode = candidate.pythonCode;
+    session.pythonSourceSpan = structuredClone(candidate.pythonSourceSpan);
+    session.lastCanonicalTrace = [];
+    session.lastWorkerTrace = [];
+    session.lastRun = null;
+    session.failureSnapshot = null;
+    session.lastRunAt = null;
+    session.savedAt = candidate.savedAt;
+  });
+}
+
+function exactW4VariableRunDelta(previous: ProgressV3, next: ProgressV3) {
+  const prior = previous.sessions['w4-m2']; const candidate = next.sessions['w4-m2'];
+  if (!prior || !candidate || !hasNoW4VariablePublication(next)) return false;
+  if (candidate.validationFailures === prior.validationFailures + 1) {
+    return exactAfterAllowedDelta(previous, next, (expected) => {
+      const session = expected.sessions['w4-m2']!;
+      session.validationFailures = candidate.validationFailures;
+      session.conceptFailures = structuredClone(candidate.conceptFailures);
+      session.savedAt = candidate.savedAt;
+    });
+  }
+  if (candidate.runnerInfrastructureFailures === prior.runnerInfrastructureFailures + 1) {
+    return exactAfterAllowedDelta(previous, next, (expected) => {
+      const session = expected.sessions['w4-m2']!;
+      session.runnerInfrastructureFailures = candidate.runnerInfrastructureFailures;
+      session.totalRuns = candidate.totalRuns;
+      session.savedAt = candidate.savedAt;
+    });
+  }
+  if (!candidate.lastRun) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    const session = expected.sessions['w4-m2']!;
+    session.lastCanonicalTrace = structuredClone(candidate.lastCanonicalTrace);
+    session.lastWorkerTrace = structuredClone(candidate.lastWorkerTrace);
+    session.lastRun = structuredClone(candidate.lastRun);
+    session.failureSnapshot = structuredClone(candidate.failureSnapshot);
+    session.totalRuns = candidate.totalRuns;
+    session.overwriteFailures = candidate.overwriteFailures;
+    session.conceptFailures = structuredClone(candidate.conceptFailures);
+    session.lastRunAt = candidate.lastRunAt;
+    session.savedAt = candidate.savedAt;
+  });
+}
+
+function exactW4VariableObservationDelta(previous: ProgressV3, next: ProgressV3) {
+  const prior = previous.sessions['w4-m2']; const candidate = next.sessions['w4-m2'];
+  const observation = candidate?.conditionObservationUses.at(-1);
+  if (!prior || !candidate || !observation || !prior.failureSnapshot || !hasNoW4VariablePublication(next)
+    || candidate.conditionObservationUses.length !== prior.conditionObservationUses.length + 1
+    || canonicalJson(candidate.conditionObservationUses.slice(0, -1)) !== canonicalJson(prior.conditionObservationUses)
+    || prior.conditionObservationUses.some((use) => use.snapshotId === observation.snapshotId)
+    || observation.snapshotId !== prior.failureSnapshot.snapshotId
+    || observation.pythonCode !== prior.pythonCode
+    || observation.usedAt !== candidate.savedAt) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    const session = expected.sessions['w4-m2']!;
+    session.conditionObservationUses.push(structuredClone(observation));
+    session.savedAt = candidate.savedAt;
+  });
+}
+
+function exactW4VariableCompletionDelta(previous: ProgressV3, next: ProgressV3) {
+  const completion = next.missions['w4-m2']; const evidence = next.missionCompletionEvidence['w4-m2']; const work = next.works['w4-m2-variable-evidence-record'];
+  const oldEvidence = previous.missionCompletionEvidence['w4-m2'];
+  const initial = previous.missions['w4-m2'] === undefined && oldEvidence === undefined && previous.works['w4-m2-variable-evidence-record'] === undefined;
+  const upgrade = previous.missions['w4-m2'] !== undefined && oldEvidence?.kind === 'legacy-replay-only' && previous.works['w4-m2-variable-evidence-record'] === undefined;
+  if (!completion || evidence?.kind !== 'formal-v3' || !work || (!initial && !upgrade)) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    if (initial) expected.missions['w4-m2'] = structuredClone(completion);
+    expected.missionCompletionEvidence['w4-m2'] = structuredClone(evidence);
+    expected.works['w4-m2-variable-evidence-record'] = structuredClone(work);
+    expected.abilities = structuredClone(next.abilities);
+  });
+}
+
 function exactDraftDelta(previous: ProgressV3, next: ProgressV3) {
   const candidate = next.sessions['w1-m3'];
   if (!candidate || candidate.lastRun !== null || next.missions['w1-m3'] !== undefined) return false;
@@ -638,16 +726,21 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-w4-m1-observation' && exactW4ObservationDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m1-work' && exactW4CompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m1-completion' && exactW4CompletionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w4-m2-draft' && exactW4VariableDraftDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w4-m2-run' && exactW4VariableRunDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w4-m2-observation' && exactW4VariableObservationDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w4-m2-work' && exactW4VariableCompletionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w4-m2-completion' && exactW4VariableCompletionDelta(previous, progress)) return FAILURE;
     const advancedFailure = advancedStorageFaultHandler({ storage, progress });
     if (advancedFailure !== null) return advancedFailure;
     return null;
   },
   beforeProgressLoad: (storage) => {
     const mode = storage.getItem(MODE_KEY);
-    if (mode !== 'corrupt-regalia-current' && mode !== 'corrupt-advanced-current' && mode !== 'corrupt-horse-current' && mode !== 'corrupt-monkey-current' && mode !== 'corrupt-peach-current' && mode !== 'corrupt-boss-current' && mode !== 'corrupt-manor-current' && mode !== 'corrupt-cuilan-current' && mode !== 'corrupt-yunzhan-current' && mode !== 'corrupt-bajie-current' && mode !== 'corrupt-week-three-boss-current' && mode !== 'corrupt-week-four-mapping-current') return;
+    if (mode !== 'corrupt-regalia-current' && mode !== 'corrupt-advanced-current' && mode !== 'corrupt-horse-current' && mode !== 'corrupt-monkey-current' && mode !== 'corrupt-peach-current' && mode !== 'corrupt-boss-current' && mode !== 'corrupt-manor-current' && mode !== 'corrupt-cuilan-current' && mode !== 'corrupt-yunzhan-current' && mode !== 'corrupt-bajie-current' && mode !== 'corrupt-week-three-boss-current' && mode !== 'corrupt-week-four-mapping-current' && mode !== 'corrupt-w4-variable-current') return;
     const legal = storage.getItem(CURRENT_KEY);
     if (legal !== null) storage.setItem(SNAPSHOT_KEY, legal);
-    storage.setItem(CURRENT_KEY, mode === 'corrupt-regalia-current' ? '{broken w1-m3 current' : mode === 'corrupt-advanced-current' ? '{broken advanced current' : mode === 'corrupt-horse-current' ? '{broken w2-m1 current' : mode === 'corrupt-monkey-current' ? '{broken w2-m2 current' : mode === 'corrupt-peach-current' ? '{broken w2-m3 current' : mode === 'corrupt-boss-current' ? '{broken w2-m5 current' : mode === 'corrupt-manor-current' ? '{broken w3-m1 current' : mode === 'corrupt-cuilan-current' ? '{broken w3-m2 current' : mode === 'corrupt-yunzhan-current' ? '{broken w3-m3 current' : mode === 'corrupt-bajie-current' ? '{broken w3-m4 current' : mode === 'corrupt-week-three-boss-current' ? '{broken w3-m5 current' : '{broken w4-m1 current');
+    storage.setItem(CURRENT_KEY, mode === 'corrupt-regalia-current' ? '{broken w1-m3 current' : mode === 'corrupt-advanced-current' ? '{broken advanced current' : mode === 'corrupt-horse-current' ? '{broken w2-m1 current' : mode === 'corrupt-monkey-current' ? '{broken w2-m2 current' : mode === 'corrupt-peach-current' ? '{broken w2-m3 current' : mode === 'corrupt-boss-current' ? '{broken w2-m5 current' : mode === 'corrupt-manor-current' ? '{broken w3-m1 current' : mode === 'corrupt-cuilan-current' ? '{broken w3-m2 current' : mode === 'corrupt-yunzhan-current' ? '{broken w3-m3 current' : mode === 'corrupt-bajie-current' ? '{broken w3-m4 current' : mode === 'corrupt-week-three-boss-current' ? '{broken w3-m5 current' : mode === 'corrupt-w4-variable-current' ? '{broken w4-m2 current' : '{broken w4-m1 current');
     storage.setItem(MODE_KEY, 'off');
   },
 };

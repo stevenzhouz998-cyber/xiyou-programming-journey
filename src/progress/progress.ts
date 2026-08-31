@@ -13,6 +13,9 @@ import type {
   WeekFourMappingCompletionEvidence,
   WeekFourMappingMissionSession,
   WeekFourMappingWorkV1,
+  WeekFourVariableCompletionEvidence,
+  WeekFourVariableMissionSession,
+  WeekFourVariableWorkV1,
   ProgressV3,
 } from './types';
 
@@ -44,6 +47,12 @@ export type {
   YunzhanDialogueCompletionEvidence,
   BajieJoiningCompletionEvidence,
   WeekThreeBossCompletionEvidence,
+  WeekFourMappingCompletionEvidence,
+  WeekFourMappingMissionSession,
+  WeekFourMappingWorkV1,
+  WeekFourVariableCompletionEvidence,
+  WeekFourVariableMissionSession,
+  WeekFourVariableWorkV1,
   MissionCompletionEvidenceV1,
   ProgressV1,
   ProgressV2,
@@ -65,6 +74,7 @@ import { runWeekThreeBossDraft } from '../blockly/weekThreeBossContract';
 import { compileWeekFourMappingDraft } from '../blockly/weekFourMappingDraft';
 import { compareWeekFourMappingTraces } from '../blockly/weekFourMappingContract';
 import { parseWeekFourMappingPython } from '../engine/weekFourPythonMappingGrammar';
+import { parseWeekFourVariablePython } from '../engine/weekFourVariablePythonGrammar';
 
 export interface CompletionInput {
   stars: number;
@@ -80,6 +90,35 @@ function formalWeekFourMappingCompletionEvidence(session: WeekFourMappingMission
     if (!run.completed || JSON.stringify(blocklyTrace) !== JSON.stringify(session.lastBlocklyTrace) || JSON.stringify(python.trace) !== JSON.stringify(session.lastPythonTrace) || JSON.stringify(run) !== JSON.stringify(session.lastRun)) return null;
     const work: WeekFourMappingWorkV1 = { kind: 'blockly-python-mapping-v1', workId: 'w4-m1-first-python-mapping', missionId: 'w4-m1', title: '第一份积木与 Python 对照经卷', workspace: structuredClone(session.workspace), pythonCode: session.pythonCode, blocklyTrace: structuredClone(blocklyTrace), pythonTrace: structuredClone(python.trace), run: structuredClone(run), createdAt: completedAt, verifiedAt };
     return { evidence: { kind: 'formal-v3', completedAt, verifiedAt, workspace: structuredClone(session.workspace), pythonCode: session.pythonCode, blocklyTrace: structuredClone(blocklyTrace), pythonTrace: structuredClone(python.trace), run: structuredClone(run), workId: work.workId }, work };
+  } catch { return null; }
+}
+
+function formalWeekFourVariableCompletionEvidence(
+  session: WeekFourVariableMissionSession | undefined,
+  completedAt: string,
+  verifiedAt: string,
+): { evidence: Extract<WeekFourVariableCompletionEvidence, { kind: 'formal-v3' }>; work: WeekFourVariableWorkV1 } | null {
+  if (!session || session.lastRun === null || session.lastRunAt === null) return null;
+  try {
+    const parsed = parseWeekFourVariablePython(session.pythonCode);
+    if (!parsed.run.completed || parsed.run.finalState !== 'evidence-sealed' || parsed.run.failureSnapshot !== null || session.failureSnapshot !== null
+      || !deeplyEqual(session.lastCanonicalTrace, parsed.trace)
+      || !deeplyEqual(session.lastWorkerTrace, parsed.trace)
+      || !deeplyEqual(session.lastRun, parsed.run)) return null;
+    const work: WeekFourVariableWorkV1 = {
+      kind: 'python-variable-evidence-v1', workId: 'w4-m2-variable-evidence-record', missionId: 'w4-m2',
+      title: '第一次变化变量取证记录', pythonCode: session.pythonCode,
+      canonicalTrace: structuredClone(parsed.trace), workerTrace: structuredClone(parsed.trace), run: structuredClone(parsed.run),
+      createdAt: completedAt, verifiedAt,
+    };
+    return {
+      evidence: {
+        kind: 'formal-v3', completedAt, verifiedAt, pythonCode: session.pythonCode,
+        canonicalTrace: structuredClone(parsed.trace), workerTrace: structuredClone(parsed.trace), run: structuredClone(parsed.run),
+        workId: work.workId,
+      },
+      work,
+    };
   } catch { return null; }
 }
 
@@ -110,6 +149,16 @@ export interface WeeklyReport {
   weekFourMapping?: {
     runs: number;
     mappingDifferences: number;
+    validationFailures: number;
+    infrastructureFailures: number;
+    observations: number;
+    workSaved: boolean;
+    proof: 'formal-v3' | 'legacy-replay-only' | 'none';
+    completedAt: string | null;
+  };
+  weekFourVariables?: {
+    runs: number;
+    overwriteFailures: number;
     validationFailures: number;
     infrastructureFailures: number;
     observations: number;
@@ -254,6 +303,9 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
   const weekFourMapping = missionId === 'w4-m1'
     ? formalWeekFourMappingCompletionEvidence(progress.sessions['w4-m1'], previous?.completedAt ?? now, now)
     : null;
+  const weekFourVariables = missionId === 'w4-m2'
+    ? formalWeekFourVariableCompletionEvidence(progress.sessions['w4-m2'], previous?.completedAt ?? now, now)
+    : null;
   if (missionId === 'w3-m5') {
     const previousMission = progress.missions['w3-m4'];
     const previousEvidence = progress.missionCompletionEvidence['w3-m4'];
@@ -263,10 +315,13 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
     const prerequisite = progress.missionCompletionEvidence['w3-m5'];
     if (prerequisite?.kind !== 'formal-v3') throw new Error('W4-M1完成需要W3-M5 formal-v3正式证明');
   }
+  if (missionId === 'w4-m2' && progress.missionCompletionEvidence['w4-m1']?.kind !== 'formal-v3') {
+    throw new Error('W4-M2完成需要W4-M1 formal-v3正式证明');
+  }
   if (previous) {
     safeCount(previous.attempts, 1);
     safeCount(previous.hintsUsed, normalizedHints);
-    const existingEvidence = missionId === 'w3-m1' ? progress.missionCompletionEvidence['w3-m1'] : missionId === 'w3-m2' ? progress.missionCompletionEvidence['w3-m2'] : missionId === 'w3-m3' ? progress.missionCompletionEvidence['w3-m3'] : missionId === 'w3-m4' ? progress.missionCompletionEvidence['w3-m4'] : missionId === 'w3-m5' ? progress.missionCompletionEvidence['w3-m5'] : missionId === 'w4-m1' ? progress.missionCompletionEvidence['w4-m1'] : undefined;
+    const existingEvidence = missionId === 'w3-m1' ? progress.missionCompletionEvidence['w3-m1'] : missionId === 'w3-m2' ? progress.missionCompletionEvidence['w3-m2'] : missionId === 'w3-m3' ? progress.missionCompletionEvidence['w3-m3'] : missionId === 'w3-m4' ? progress.missionCompletionEvidence['w3-m4'] : missionId === 'w3-m5' ? progress.missionCompletionEvidence['w3-m5'] : missionId === 'w4-m1' ? progress.missionCompletionEvidence['w4-m1'] : missionId === 'w4-m2' ? progress.missionCompletionEvidence['w4-m2'] : undefined;
     const upgradeLegacyW3 = missionId === 'w3-m1'
       && existingEvidence?.kind === 'legacy-preformal'
       && formalEvidence !== null;
@@ -275,10 +330,11 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
     const upgradeLegacyBajie = missionId === 'w3-m4' && existingEvidence?.kind === 'legacy-preformal' && bajieEvidence !== null;
     const upgradeLegacyBoss = missionId === 'w3-m5' && existingEvidence?.kind === 'legacy-replay-only' && weekThreeBossEvidence !== null;
     const upgradeLegacyW4 = missionId === 'w4-m1' && existingEvidence?.kind === 'legacy-replay-only' && weekFourMapping !== null;
-    if (previous.stars >= stars && !upgradeLegacyW3 && !upgradeLegacyCuilan && !upgradeLegacyYunzhan && !upgradeLegacyBajie && !upgradeLegacyBoss && !upgradeLegacyW4) return progress;
+    const upgradeLegacyW4Variables = missionId === 'w4-m2' && existingEvidence?.kind === 'legacy-replay-only' && weekFourVariables !== null;
+    if (previous.stars >= stars && !upgradeLegacyW3 && !upgradeLegacyCuilan && !upgradeLegacyYunzhan && !upgradeLegacyBajie && !upgradeLegacyBoss && !upgradeLegacyW4 && !upgradeLegacyW4Variables) return progress;
     const missions = {
       ...progress.missions,
-      [missionId]: previous.stars >= stars ? previous : { ...previous, stars },
+      [missionId]: upgradeLegacyW4Variables || previous.stars >= stars ? previous : { ...previous, stars },
     };
     return {
       ...progress,
@@ -290,8 +346,11 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
         : upgradeLegacyBajie ? { ...progress.missionCompletionEvidence, 'w3-m4': bajieEvidence! }
         : upgradeLegacyBoss ? { ...progress.missionCompletionEvidence, 'w3-m5': weekThreeBossEvidence! }
         : upgradeLegacyW4 ? { ...progress.missionCompletionEvidence, 'w4-m1': weekFourMapping!.evidence }
+        : upgradeLegacyW4Variables ? { ...progress.missionCompletionEvidence, 'w4-m2': weekFourVariables!.evidence }
         : progress.missionCompletionEvidence,
-      works: upgradeLegacyW4 ? { ...(progress.works ?? {}), [weekFourMapping!.work.workId]: weekFourMapping!.work } : progress.works,
+      works: upgradeLegacyW4 ? { ...(progress.works ?? {}), [weekFourMapping!.work.workId]: weekFourMapping!.work }
+        : upgradeLegacyW4Variables ? { ...(progress.works ?? {}), [weekFourVariables!.work.workId]: weekFourVariables!.work }
+          : progress.works,
       savedAt: now,
     };
   }
@@ -303,6 +362,7 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
   if (missionId === 'w3-m4' && bajieEvidence === null) throw new Error('W3-M4完成需要当前保存workspace的三张陈述卡成功证明');
   if (missionId === 'w3-m5' && weekThreeBossEvidence === null) throw new Error('W3-M5完成需要当前保存workspace的完整状态机成功证明');
   if (missionId === 'w4-m1' && weekFourMapping === null) throw new Error('W4-M1完成需要当前保存的双轨一致运行和作品证据');
+  if (missionId === 'w4-m2' && weekFourVariables === null) throw new Error('W4-M2完成需要当前保存Python的封存成功运行和作品证据');
   const attempts = safeCount(0, 1);
   const hintsUsed = safeCount(0, normalizedHints);
   const completedAt = now;
@@ -319,7 +379,7 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
   return {
     ...progress,
     missions,
-    equipment: grantMissionRewards(progress.equipment, missionId, completedAt),
+    equipment: missionId === 'w4-m2' ? progress.equipment : grantMissionRewards(progress.equipment, missionId, completedAt),
     abilities: { conditionObservation: deriveConditionObservation(missions) },
     missionCompletionEvidence: missionId === 'w3-m1' ? { ...progress.missionCompletionEvidence, 'w3-m1': formalEvidence! }
       : missionId === 'w3-m2' ? { ...progress.missionCompletionEvidence, 'w3-m2': cuilanEvidence! }
@@ -327,8 +387,11 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
       : missionId === 'w3-m4' ? { ...progress.missionCompletionEvidence, 'w3-m4': bajieEvidence! }
       : missionId === 'w3-m5' ? { ...progress.missionCompletionEvidence, 'w3-m5': weekThreeBossEvidence! }
       : missionId === 'w4-m1' ? { ...progress.missionCompletionEvidence, 'w4-m1': weekFourMapping!.evidence }
+      : missionId === 'w4-m2' ? { ...progress.missionCompletionEvidence, 'w4-m2': weekFourVariables!.evidence }
       : progress.missionCompletionEvidence,
-    works: missionId === 'w4-m1' ? { ...(progress.works ?? {}), [weekFourMapping!.work.workId]: weekFourMapping!.work } : progress.works,
+    works: missionId === 'w4-m1' ? { ...(progress.works ?? {}), [weekFourMapping!.work.workId]: weekFourMapping!.work }
+      : missionId === 'w4-m2' ? { ...(progress.works ?? {}), [weekFourVariables!.work.workId]: weekFourVariables!.work }
+        : progress.works,
     savedAt: now,
   };
 }
@@ -357,7 +420,32 @@ export function isMissionUnlocked(progress: ProgressV3, missionId: string): bool
   if (missionId === 'w4-m1') {
     return progress.missions['w3-m5']?.status === 'completed' && progress.missionCompletionEvidence['w3-m5']?.kind === 'formal-v3';
   }
+  if (missionId === 'w4-m2') {
+    return progress.missionCompletionEvidence['w4-m1']?.kind === 'formal-v3'
+      || (progress.missions['w4-m2']?.status === 'completed' && progress.missionCompletionEvidence['w4-m2']?.kind === 'legacy-replay-only');
+  }
+  if (missionId === 'w4-m3') {
+    const evidence = progress.missionCompletionEvidence['w4-m2'];
+    return progress.missions['w4-m2']?.status === 'completed'
+      && (evidence?.kind === 'formal-v3' || evidence?.kind === 'legacy-replay-only');
+  }
   return progress.missions[allMissionOutlines[index - 1].id]?.status === 'completed';
+}
+
+export type WeekFourVariableAccess =
+  | { kind: 'locked' }
+  | { kind: 'historical-read-only' }
+  | { kind: 'formal'; upgradingLegacy: boolean };
+
+export function getWeekFourVariableAccess(progress: ProgressV3): WeekFourVariableAccess {
+  const evidence = progress.missionCompletionEvidence['w4-m2'];
+  if (progress.missionCompletionEvidence['w4-m1']?.kind === 'formal-v3') {
+    return { kind: 'formal', upgradingLegacy: evidence?.kind === 'legacy-replay-only' };
+  }
+  if (progress.missions['w4-m2']?.status === 'completed' && evidence?.kind === 'legacy-replay-only') {
+    return { kind: 'historical-read-only' };
+  }
+  return { kind: 'locked' };
 }
 
 export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyReport {
@@ -382,6 +470,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
   const bajieJoiningSession = week === 3 ? progress.sessions['w3-m4'] : undefined;
   const weekThreeBossSession = week === 3 ? progress.sessions['w3-m5'] : undefined;
   const weekFourMappingSession = week === 4 ? progress.sessions['w4-m1'] : undefined;
+  const weekFourVariableSession = week === 4 ? progress.sessions['w4-m2'] : undefined;
   const sessionSupport = [
     ...(dragonSession ? getSessionSupport(dragonSession, 'w1-m1') : []),
     ...(ruyiSession ? getSessionSupport(ruyiSession, 'w1-m2') : []),
@@ -399,7 +488,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
     ...(bajieJoiningSession ? getSessionSupport(bajieJoiningSession, 'w3-m4') : []),
     ...(weekThreeBossSession ? getSessionSupport(weekThreeBossSession, 'w3-m5') : []),
   ];
-  const sessionRecords = [dragonSession, ruyiSession, fourSeasSession, underworldSession, bossSession, horseCareSession, monkeyKingSession, peachElixirSession, furnaceConditionSession, heavenlyBossSession, manorHelpSession, cuilanBooleanSession, yunzhanDialogueSession, bajieJoiningSession, weekThreeBossSession, weekFourMappingSession].filter(
+  const sessionRecords = [dragonSession, ruyiSession, fourSeasSession, underworldSession, bossSession, horseCareSession, monkeyKingSession, peachElixirSession, furnaceConditionSession, heavenlyBossSession, manorHelpSession, cuilanBooleanSession, yunzhanDialogueSession, bajieJoiningSession, weekThreeBossSession, weekFourMappingSession, weekFourVariableSession].filter(
     (session): session is NonNullable<typeof session> => session !== undefined,
   );
   const sessionRuns = sessionRecords.reduce(
@@ -449,6 +538,16 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
         workSaved: progress.works['w4-m1-first-python-mapping'] !== undefined,
         proof: progress.missionCompletionEvidence['w4-m1']?.kind ?? 'none',
         completedAt: progress.missions['w4-m1']?.completedAt ?? null,
+      },
+      weekFourVariables: {
+        runs: weekFourVariableSession?.totalRuns ?? 0,
+        overwriteFailures: weekFourVariableSession?.overwriteFailures ?? 0,
+        validationFailures: weekFourVariableSession?.validationFailures ?? 0,
+        infrastructureFailures: weekFourVariableSession?.runnerInfrastructureFailures ?? 0,
+        observations: weekFourVariableSession?.conditionObservationUses.length ?? 0,
+        workSaved: progress.works['w4-m2-variable-evidence-record'] !== undefined,
+        proof: progress.missionCompletionEvidence['w4-m2']?.kind ?? 'none',
+        completedAt: progress.missions['w4-m2']?.completedAt ?? null,
       },
     }),
   };

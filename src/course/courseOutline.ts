@@ -53,7 +53,7 @@ export const allMissionOutlines = courseOutline.weeks.flatMap((week) => week.mis
 
 type MissionPresentationExtension = Omit<MissionSpec, keyof CourseOutlineMission | 'hints' | 'expectedSequence'>;
 export type MissionExtension = MissionPresentationExtension & Pick<MissionSpec, 'expectedSequence'>;
-export type FormalMissionExtension = MissionPresentationExtension;
+export type FormalMissionExtension = MissionPresentationExtension & { hints?: HintSet };
 export type CourseWeekExtension = Omit<CourseWeek, keyof CourseOutlineWeek | 'missions'> & { missions: CourseMissionSpec[] };
 
 export function getMissionOutline(id: string): CourseOutlineMission | undefined {
@@ -61,7 +61,7 @@ export function getMissionOutline(id: string): CourseOutlineMission | undefined 
 }
 
 export function isFormalMissionOutline(outline: CourseOutlineMission | undefined): boolean {
-  return outline?.week === 1 || outline?.id === 'w2-m1' || outline?.id === 'w2-m2' || outline?.id === 'w2-m3' || outline?.id === 'w2-m4' || outline?.id === 'w2-m5' || outline?.id === 'w3-m1' || outline?.id === 'w3-m2' || outline?.id === 'w3-m3' || outline?.id === 'w3-m4' || outline?.id === 'w3-m5' || outline?.id === 'w4-m1';
+  return outline?.week === 1 || outline?.id === 'w2-m1' || outline?.id === 'w2-m2' || outline?.id === 'w2-m3' || outline?.id === 'w2-m4' || outline?.id === 'w2-m5' || outline?.id === 'w3-m1' || outline?.id === 'w3-m2' || outline?.id === 'w3-m3' || outline?.id === 'w3-m4' || outline?.id === 'w3-m5' || outline?.id === 'w4-m1' || outline?.id === 'w4-m2';
 }
 
 function deriveHints(extension: MissionPresentationExtension, stepCount: number): HintSet {
@@ -85,7 +85,7 @@ export function deriveMissionFromOutline(id: string, extension: MissionExtension
 export function deriveFormalMissionFromOutline(id: string, extension: FormalMissionExtension): FormalMissionSpec {
   const outline = getMissionOutline(id);
   if (!outline || !isFormalMissionOutline(outline)) throw new Error(`Unknown formal course outline mission: ${id}`);
-  return { ...outline, ...extension, hints: deriveHints(extension, extension.storyBeats.length) };
+  return { ...outline, ...extension, hints: extension.hints ?? deriveHints(extension, extension.storyBeats.length) };
 }
 
 export function deriveWeekFromOutline(id: string, extension: CourseWeekExtension): CourseWeek {

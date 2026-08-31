@@ -48,7 +48,7 @@ describe('W3-M3 session 保存合同', () => {
     legacy.schemaRevision = 4;
     legacy.missions['w3-m3'] = { status: 'completed', stars: 2, attempts: 1, hintsUsed: 0, completedAt: NOW };
     const migrated = migrateProgress(legacy);
-    expect(migrated.schemaRevision).toBe(8);
+    expect(migrated.schemaRevision).toBe(9);
     expect(migrated.missionCompletionEvidence['w3-m3']).toMatchObject({ kind: 'legacy-preformal', completedAt: NOW });
   });
 });

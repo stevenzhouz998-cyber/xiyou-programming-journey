@@ -16,7 +16,9 @@ import { compileWeekFourMappingDraft } from '../blockly/weekFourMappingCompiler'
 import { compareWeekFourMappingTraces } from '../blockly/weekFourMappingContract';
 import { SOLVED_WEEK_FOUR_MAPPING_PYTHON, parseWeekFourMappingPython } from '../engine/weekFourPythonMappingGrammar';
 import { createWeekFourMappingSession, recordWeekFourMappingObservation, recordWeekFourMappingRun, updateWeekFourMappingCode } from './weekFourMappingSession';
-import { WEEK_FOUR_MAPPING_STORAGE_FAULT_MODES, WEEK_THREE_BOSS_STORAGE_FAULT_MODES, storageFaultAdapter as productionStorageFaultAdapter } from './storageFaultAdapter';
+import { parseWeekFourVariablePython } from '../engine/weekFourVariablePythonGrammar';
+import { createWeekFourVariableSession, recordWeekFourVariableObservation, recordWeekFourVariableRun } from './weekFourVariableSession';
+import { WEEK_FOUR_MAPPING_STORAGE_FAULT_MODES, WEEK_FOUR_VARIABLE_STORAGE_FAULT_MODES, WEEK_THREE_BOSS_STORAGE_FAULT_MODES, storageFaultAdapter as productionStorageFaultAdapter } from './storageFaultAdapter';
 import type { ProgressV3 } from './types';
 
 const CURRENT_KEY = 'xiyou-programming-progress-v3';
@@ -185,6 +187,12 @@ describe('storage fault adapters', () => {
     ]);
   });
 
+  it('declares the exact five isolated W4-M2 write faults without enabling them in production', () => {
+    expect(WEEK_FOUR_VARIABLE_STORAGE_FAULT_MODES).toEqual([
+      'fail-w4-m2-draft', 'fail-w4-m2-run', 'fail-w4-m2-observation', 'fail-w4-m2-work', 'fail-w4-m2-completion',
+    ]);
+  });
+
   it('injects only exact W4 draft, run, and atomic work/completion deltas', () => {
     const storage = new MemoryStorage();
     const base = createInitialProgress(); const draft = withW4Draft(base); const run = withW4Run(draft);
@@ -205,6 +213,41 @@ describe('storage fault adapters', () => {
     const observed = { ...failed, sessions: { ...failed.sessions, 'w4-m1': observedSession }, savedAt: observedSession.savedAt };
     storeCurrent(storage, failed, 'fail-w4-m1-observation');
     expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: observed })).toMatch(/fault/i);
+  });
+
+  it('accepts only one current W4-M2 observation and rejects batched, repeated, or forged snapshots', () => {
+    const storage = new MemoryStorage();
+    const base = createInitialProgress();
+    const initial = createWeekFourVariableSession(NOW);
+    const parsed = parseWeekFourVariablePython(initial.pythonCode);
+    const failedSession = recordWeekFourVariableRun(initial, {
+      canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run,
+    }, '2026-08-31T00:00:01.000Z');
+    const failed = { ...base, sessions: { ...base.sessions, 'w4-m2': failedSession }, savedAt: failedSession.savedAt };
+    const observedSession = recordWeekFourVariableObservation(failedSession, '2026-08-31T00:00:02.000Z');
+    const observed = { ...failed, sessions: { ...failed.sessions, 'w4-m2': observedSession }, savedAt: observedSession.savedAt };
+
+    storeCurrent(storage, failed, 'fail-w4-m2-observation');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: observed })).toMatch(/fault/i);
+
+    const batched = structuredClone(observed);
+    batched.sessions['w4-m2']!.conditionObservationUses.push({
+      ...batched.sessions['w4-m2']!.conditionObservationUses[0]!, snapshotId: 'w4-m2:another-snapshot' as never, usedAt: '2026-08-31T00:00:03.000Z',
+    });
+    batched.sessions['w4-m2']!.savedAt = '2026-08-31T00:00:03.000Z'; batched.savedAt = '2026-08-31T00:00:03.000Z';
+    storeCurrent(storage, failed, 'fail-w4-m2-observation');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: batched })).toBeNull();
+
+    const repeated = structuredClone(observed);
+    repeated.sessions['w4-m2']!.conditionObservationUses.push({ ...repeated.sessions['w4-m2']!.conditionObservationUses[0]!, usedAt: '2026-08-31T00:00:03.000Z' });
+    repeated.sessions['w4-m2']!.savedAt = '2026-08-31T00:00:03.000Z'; repeated.savedAt = '2026-08-31T00:00:03.000Z';
+    storeCurrent(storage, observed, 'fail-w4-m2-observation');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: repeated })).toBeNull();
+
+    const forged = structuredClone(observed);
+    forged.sessions['w4-m2']!.conditionObservationUses[0]!.snapshotId = 'w4-m2:forged' as never;
+    storeCurrent(storage, failed, 'fail-w4-m2-observation');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: forged })).toBeNull();
   });
 
   it('injects only an exact w1-m3 draft delta and ignores settings or hint writes', () => {

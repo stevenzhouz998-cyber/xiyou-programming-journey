@@ -85,6 +85,16 @@ import {
 } from '../blockly/weekThreeBossContract';
 import { createWeekFourMappingSession } from './weekFourMappingSession';
 import type { WeekFourMappingMissionSession } from './weekFourMappingSession';
+import {
+  createWeekFourVariableSession,
+  recordWeekFourVariableHint,
+  recordWeekFourVariableInfrastructureFailure,
+  recordWeekFourVariableObservation,
+  recordWeekFourVariableRun,
+  recordWeekFourVariableValidationFailure,
+  updateWeekFourVariableCode,
+} from './weekFourVariableSession';
+import type { WeekFourVariableMissionSession } from './weekFourVariableSession';
 import type {
   DragonPalaceMissionSession,
   ExecutableMissionId,
@@ -108,6 +118,16 @@ import type {
 import { isExecutableMissionId } from './executableMissionIds';
 
 type HintTier = MissionSession['usedHintTiers'][number];
+type WorkspaceMissionSession = Exclude<AnyMissionSession, WeekFourVariableMissionSession>;
+
+export {
+  recordWeekFourVariableHint,
+  recordWeekFourVariableInfrastructureFailure,
+  recordWeekFourVariableObservation,
+  recordWeekFourVariableRun,
+  recordWeekFourVariableValidationFailure,
+  updateWeekFourVariableCode,
+};
 
 function assertCanonicalIso(now: string): void {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(now)) {
@@ -158,6 +178,7 @@ export function createMissionSession(missionId: 'w3-m4', now: string): BajieJoin
 export function createMissionSession(missionId: 'w3-m5', now: string): WeekThreeBossMissionSession;
 export function createMissionSession(missionId: 'w3-m3', now: string): YunzhanDialogueMissionSession;
 export function createMissionSession(missionId: 'w4-m1', now: string): WeekFourMappingMissionSession;
+export function createMissionSession(missionId: 'w4-m2', now: string): WeekFourVariableMissionSession;
 export function createMissionSession(missionId: 'w3-m2', now: string): CuilanBooleanMissionSession;
 export function createMissionSession(
   missionIdOrNow: ExecutableMissionId | string,
@@ -170,6 +191,7 @@ export function createMissionSession(
   }
   assertCanonicalIso(now);
   if (missionIdOrNow === 'w4-m1') return createWeekFourMappingSession(now) as AnyMissionSession;
+  if (missionIdOrNow === 'w4-m2') return createWeekFourVariableSession(now) as AnyMissionSession;
   const session = {
     workspace: missionIdOrNow === 'w3-m5'
       ? createDefaultWeekThreeBossDraft()
@@ -261,10 +283,10 @@ export function updateWorkspaceDraft(session: YunzhanDialogueMissionSession, wor
 export function updateWorkspaceDraft(session: BajieJoiningMissionSession, workspace: BajieJoiningWorkspaceDraftV1, now: string): BajieJoiningMissionSession;
 export function updateWorkspaceDraft(session: WeekThreeBossMissionSession, workspace: WeekThreeBossWorkspaceDraftV1, now: string): WeekThreeBossMissionSession;
 export function updateWorkspaceDraft(
-  session: AnyMissionSession,
+  session: WorkspaceMissionSession,
   workspace: WorkspaceDraftV1 | RuyiWorkspaceDraftV1 | FourSeasWorkspaceDraftV1 | AdvancedWeekOneWorkspaceDraftV1 | HorseCareWorkspaceDraftV1 | MonkeyKingWorkspaceDraftV1 | PeachElixirWorkspaceDraftV1 | FurnaceConditionWorkspaceDraftV1 | HeavenlySignalBossWorkspaceDraftV1 | ManorHelpWorkspaceDraftV1 | CuilanBooleanWorkspaceDraftV1 | YunzhanDialogueWorkspaceDraftV1 | BajieJoiningWorkspaceDraftV1 | WeekThreeBossWorkspaceDraftV1,
   now: string,
-): AnyMissionSession {
+): WorkspaceMissionSession {
   assertCanonicalIso(now);
   const next = cloneSession(session);
   Object.assign(next, { workspace: structuredClone(workspace), savedAt: now });
@@ -347,11 +369,11 @@ export function recordRun(session: YunzhanDialogueMissionSession, result: Yunzha
 export function recordRun(session: BajieJoiningMissionSession, result: BajieJoiningRunResult, trace: BajieJoiningInstruction[], now: string): BajieJoiningMissionSession;
 export function recordRun(session: WeekThreeBossMissionSession, result: WeekThreeBossRunResult, trace: WeekThreeBossInstruction[], now: string): WeekThreeBossMissionSession;
 export function recordRun(
-  session: AnyMissionSession,
+  session: WorkspaceMissionSession,
   result: BattleRunResult | RuyiStaffBattleRunResult | FourSeasBattleRunResult | AdvancedWeekOneRunResult | HorseCareRunResult | MonkeyKingRunResult | PeachElixirRunResult | FurnaceConditionRunResult | HeavenlySignalBossRunResult | ManorHelpRunResult | CuilanBooleanRunResult | YunzhanDialogueRunResult | BajieJoiningRunResult | WeekThreeBossRunResult,
   trace: DragonPalaceInstruction[] | RuyiStaffInstruction[] | FourSeasInstruction[] | AdvancedWeekOneInstruction[] | HorseCareInstruction[] | MonkeyKingInstruction[] | PeachElixirInstruction[] | FurnaceConditionInstruction[] | HeavenlySignalBossInstruction[] | ManorHelpInstruction[] | CuilanBooleanInstruction[] | YunzhanDialogueInstruction[] | BajieJoiningInstruction[] | WeekThreeBossInstruction[],
   now: string,
-): AnyMissionSession {
+): WorkspaceMissionSession {
   assertCanonicalIso(now);
   const next = cloneSession(session);
   if ('missionId' in next.workspace && next.workspace.missionId === 'w3-m5') {
@@ -569,7 +591,7 @@ export function getSessionSupport(
   missionId: 'w1-m3',
 ): string[];
 export function getSessionSupport(
-  session: MissionSession,
+  session: WorkspaceMissionSession,
   missionId: ExecutableMissionId = 'w1-m1',
 ): string[] {
   const support: string[] = [];

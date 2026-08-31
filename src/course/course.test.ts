@@ -77,7 +77,7 @@ describe('course manifest', () => {
     expect(formalWeekTwoMissions).toHaveLength(5);
     expect(formalWeekThreeMissions).toHaveLength(5);
     for (const mission of formalWeekOneMissions) expect(mission).not.toHaveProperty('expectedSequence');
-    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5', 'w2-m1', 'w2-m2', 'w2-m3', 'w2-m4', 'w2-m5', 'w3-m1', 'w3-m2', 'w3-m3', 'w3-m4', 'w3-m5', 'w4-m1']);
+    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5', 'w2-m1', 'w2-m2', 'w2-m3', 'w2-m4', 'w2-m5', 'w3-m1', 'w3-m2', 'w3-m3', 'w3-m4', 'w3-m5', 'w4-m1', 'w4-m2']);
     for (const mission of course.weeks.flatMap((week) => week.missions)) {
       if (formalIds.has(mission.id)) expect(mission).not.toHaveProperty('expectedSequence');
       else expect(mission).toHaveProperty('expectedSequence', expect.any(Array));
@@ -146,9 +146,62 @@ describe('course manifest', () => {
     expect(mission).not.toHaveProperty('expectedSequence');
     expect(mission).not.toHaveProperty('expectedOutput');
     expect(mission).not.toHaveProperty('starterCode');
-    for (const id of ['w4-m2', 'w4-m3', 'w4-m4', 'w4-m5']) {
+    for (const id of ['w4-m3', 'w4-m4', 'w4-m5']) {
       expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
       expect(isExecutableMissionId(id)).toBe(false);
+    }
+  });
+
+  it('registers W4-M2 as a formal Python variable task without legacy answers', () => {
+    const mission = getMission('w4-m2');
+    expect(mission).toBeDefined();
+    expect(isFormalMissionOutline(getMissionOutline('w4-m2'))).toBe(true);
+    expect(isExecutableMissionId('w4-m2')).toBe(true);
+    expect(mission?.mode).toBe('python');
+    expect(mission?.canon).toEqual(formalWeekFourCanon);
+    const story = mission?.storyBeats.map((beat) => beat.summary).join('\n') ?? '';
+    expect(story).toContain('送斋女子');
+    expect(story).toContain('悟空以火眼金睛识破；变化者借法脱身，山岭疑云仍未散去。');
+    expect(story).not.toMatch(/老妇|老翁|骷髅|贬书/);
+    expect(story).not.toMatch(/攻击|尸体|蛆虫|青蛙|羞辱|惩罚/);
+    expect(mission?.hints).toEqual({
+      observe: '看看两次核验分别写进了哪只证据匣，哪一只后来没有留下记录。',
+      think: '同一个变量再次赋值会覆盖旧值；两种事实需要各自保存。',
+      partial: '检查第二行写入的目标变量，是否和这次火眼核验的事实类型相符。',
+    });
+    expect(mission).not.toHaveProperty('expectedSequence');
+    expect(mission).not.toHaveProperty('expectedOutput');
+    expect(mission).not.toHaveProperty('starterCode');
+    for (const id of ['w4-m3', 'w4-m4', 'w4-m5']) {
+      expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
+      expect(isExecutableMissionId(id)).toBe(false);
+    }
+  });
+
+  it('keeps W4-M3 through W4-M5 as the exact legacy Python snapshots while W4-M2 is formalized', () => {
+    expect(getMission('w4-m1')?.mode).toBe('blockly');
+    expect(getMission('w4-m3')).toMatchObject({
+      expectedSequence: ['appearance_old_woman', 'if_identity_demon'],
+      expectedOutput: '识破变化',
+      starterCode: "appearance = '老妇'\nidentity = '白骨精'\nif identity == '白骨精':\n    print('识破变化')",
+    });
+    expect(getMission('w4-m4')).toMatchObject({
+      expectedSequence: ['woman', 'old_woman', 'old_man', 'banish_wukong'],
+      expectedOutput: '女子\n老妇\n老翁',
+      starterCode: "appearances = ['女子', '老妇', '老翁']\nfor item in appearances:\n    print(item)",
+    });
+    expect(getMission('w4-m5')).toMatchObject({
+      expectedSequence: ['woman_is_demon', 'old_woman_is_demon', 'old_man_is_demon', 'canon_ending'],
+      expectedOutput: '女子: 识破\n老妇: 识破\n老翁: 识破',
+      starterCode: "records = [('女子', '白骨精'), ('老妇', '白骨精'), ('老翁', '白骨精')]\nfor appearance, identity in records:\n    if identity == '白骨精':\n        print(appearance + ': 识破')",
+    });
+    for (const id of ['w4-m3', 'w4-m4', 'w4-m5']) {
+      const mission = getMission(id);
+      expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
+      expect(isExecutableMissionId(id)).toBe(false);
+      expect(mission).toHaveProperty('expectedSequence');
+      expect(mission).toHaveProperty('expectedOutput');
+      expect(mission).toHaveProperty('starterCode');
     }
   });
 

@@ -31,6 +31,10 @@ const formalMission = (id: string, extension: Omit<FormalMissionExtension, 'mode
   deriveFormalMissionFromOutline(id, { ...extension, mode: 'blockly' })
 );
 
+const formalPythonMission = (id: string, extension: Omit<FormalMissionExtension, 'mode'>): FormalMissionSpec => (
+  deriveFormalMissionFromOutline(id, { ...extension, mode: 'python' })
+);
+
 export const formalWeekOneMissions: FormalMissionSpec[] = [
   formalMission('w1-m1', { subtitle: '按先后试遍兵器', objective: '排列求兵的正确步骤', canon: formalWeekOneCanon, storyBeats: [beat('入东海龙宫', '悟空来到东海龙宫求一件趁手兵器。'), beat('试用兵器', '龙王先后命人抬出兵器，悟空都嫌太轻。')] }),
   formalMission('w1-m2', { subtitle: '找到称心的如意兵器', objective: '比较兵器重量并选出金箍棒', canon: formalWeekOneCanon, storyBeats: [beat('神珍放光', '海藏中的定海神珍铁放出霞光。'), beat('随心变化', '神珍依悟空心意变小，成为如意金箍棒。')] }),
@@ -145,6 +149,20 @@ export const formalWeekFourMissions: FormalMissionSpec[] = [
       beat('白虎岭前核验身份', '外形可能改变，身份需要核验。'),
       beat('积木映射为 Python', '把同一条条件判断准确写成 Python。'),
     ],
+  }),
+  formalPythonMission('w4-m2', {
+    subtitle: '两只证据匣，别让变量被覆盖',
+    objective: '让外形和身份分别保存在正确的 Python 变量中',
+    canon: formalWeekFourCanon,
+    storyBeats: [
+      beat('送斋女子来到白虎岭', '白骨精第一次变作送斋女子，携香米饭与炒面筋接近师徒。'),
+      beat('悟空识破第一次变化', '悟空以火眼金睛识破；变化者借法脱身，山岭疑云仍未散去。'),
+    ],
+    hints: {
+      observe: '看看两次核验分别写进了哪只证据匣，哪一只后来没有留下记录。',
+      think: '同一个变量再次赋值会覆盖旧值；两种事实需要各自保存。',
+      partial: '检查第二行写入的目标变量，是否和这次火眼核验的事实类型相符。',
+    },
   }),
 ];
 

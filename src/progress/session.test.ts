@@ -17,6 +17,7 @@ import type {
   FourSeasRegaliaMissionSession,
   MissionSession,
   RuyiStaffMissionSession,
+  WeekFourVariableMissionSession,
 } from './types';
 import {
   createMissionSession,
@@ -24,8 +25,10 @@ import {
   recordCompileFailure,
   recordHint,
   recordRun,
+  updateWeekFourVariableCode,
   updateWorkspaceDraft,
 } from './session';
+import { SOLVED_WEEK_FOUR_VARIABLE_PYTHON } from '../engine/weekFourVariablePythonGrammar';
 import { recordEquipmentEffectUse } from './equipmentEffectSession';
 
 const NOW = '2026-07-15T06:00:00.000Z';
@@ -85,6 +88,18 @@ function realFourSeasFixture(): { draft: FourSeasWorkspaceDraftV1; trace: FourSe
 }
 
 describe('mission session rules', () => {
+  it('routes W4-M2 creation through the isolated Python variable session without a Blockly draft API', () => {
+    const session = createMissionSession('w4-m2', NOW);
+    expectTypeOf(session).toEqualTypeOf<WeekFourVariableMissionSession>();
+    expect(session).toMatchObject({
+      pythonCode: expect.stringContaining('ordinary_eyes'),
+      lastRun: null,
+      totalRuns: 0,
+      overwriteFailures: 0,
+    });
+    expect(updateWeekFourVariableCode(session, SOLVED_WEEK_FOUR_VARIABLE_PYTHON, LATER).pythonSourceSpan).toEqual({ line: 2, from: 0, to: 8 });
+  });
+
   it('records each manually invoked advanced equipment effect once without changing run evidence', () => {
     const initial = createMissionSession('w1-m5', NOW)
     const first = recordEquipmentEffectUse(initial, 'weight-reference', LATER)

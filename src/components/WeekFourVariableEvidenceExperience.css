@@ -1,0 +1,26 @@
+.week-four-variable-evidence-experience { min-width: 0; display: grid; gap: 1rem; }
+.week-four-variable-layout { min-width: 0; display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 1rem; }
+.week-four-variable-layout > .week-four-variable-evidence-scene { grid-column: 1; grid-row: 1 / span 2; align-self: start; }
+.week-four-variable-layout > .week-four-mapping-work-review { grid-column: 2; grid-row: 1; align-self: start; }
+.week-four-variable-layout > .week-four-variable-python-panel { grid-column: 2; grid-row: 2; align-self: start; }
+.week-four-variable-evidence-scene, .week-four-variable-python-panel, .week-four-variable-feedback, .week-four-variable-observation { min-width: 0; border: 1px solid var(--ink-200, #c8d0d4); border-radius: 16px; padding: 1rem; background: var(--paper, #fffdf6); }
+.week-four-variable-evidence-scene img { display: block; max-width: 100%; height: auto; border-radius: 12px; }
+.week-four-variable-evidence-scene > img:first-child { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.week-four-variable-scene-props { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: .75rem; margin-top: .75rem; }
+.week-four-variable-scene-props > img { width: 100%; aspect-ratio: 1 / 1; max-height: none; object-fit: contain; object-position: center; }
+.week-four-variable-state-sprite { min-width: 0; width: 100%; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 12px; }
+.week-four-variable-state-sprite-image { display: block; width: 300% !important; max-width: none !important; height: 100%; max-height: none !important; object-fit: fill; border-radius: 0 !important; transition: transform 180ms ease-out; }
+.week-four-variable-codemirror { min-width: 0; min-height: 180px; overflow: auto; border-radius: 8px; background: #142321; color: #f5eed9; padding: .75rem; }
+.week-four-variable-codemirror .cm-content, .week-four-variable-codemirror .cm-scroller { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: .8rem; line-height: 1.45; }
+.week-four-variable-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.week-four-variable-feedback p { width: 100%; margin: 0; }
+.week-four-variable-evidence-experience :focus-visible { outline: 3px solid #b85f22; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .week-four-variable-evidence-experience *, .week-four-variable-evidence-experience *::before, .week-four-variable-evidence-experience *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+@media (max-width: 900px) {
+  .week-four-variable-layout { grid-template-columns: minmax(0, 1fr); }
+  .week-four-variable-layout > .week-four-variable-evidence-scene { grid-column: 1; grid-row: auto; order: 1; }
+  .week-four-variable-layout > .week-four-mapping-work-review { grid-column: 1; grid-row: auto; order: 2; }
+  .week-four-variable-layout > .week-four-variable-python-panel { grid-column: 1; grid-row: auto; order: 3; }
+}
+@media (max-width: 520px) { .week-four-variable-scene-props { grid-template-columns: minmax(0, 1fr); }.week-four-variable-state-sprite { width: min(100%, 320px); } }
+@media (max-width: 390px) { .week-four-variable-evidence-scene, .week-four-variable-python-panel, .week-four-variable-feedback, .week-four-variable-observation { border-radius: 10px; padding: .75rem; } }

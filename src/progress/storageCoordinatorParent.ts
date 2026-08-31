@@ -33,7 +33,10 @@ export function importProgressCoordinated(raw: string, expected: number, options
     (result): result is ImportResult & CoordinatedSuccess => result.status === 'saved') as Promise<CoordinatedImportResult>;
 }
 
-export function clearProgressCoordinated(expected: number, options: CoordinatorOptions = {}) {
+export function clearProgressCoordinated(
+  expected: number,
+  options: CoordinatorOptions = {},
+) {
   const progress = createInitialProgress();
   return coordinateProgressWrite(progress, expected, options, getClearProgressKeys,
     (storage, transactionKeys) => clearProgressTransaction(storage, transactionKeys),

@@ -13,6 +13,8 @@ import { compileWeekFourMappingDraft } from '../blockly/weekFourMappingCompiler'
 import { compareWeekFourMappingTraces } from '../blockly/weekFourMappingContract'
 import { SOLVED_WEEK_FOUR_MAPPING_PYTHON, parseWeekFourMappingPython } from '../engine/weekFourPythonMappingGrammar'
 import { createWeekFourMappingSession, recordWeekFourMappingRun, updateWeekFourMappingCode } from '../progress/weekFourMappingSession'
+import { SOLVED_WEEK_FOUR_VARIABLE_PYTHON, parseWeekFourVariablePython } from '../engine/weekFourVariablePythonGrammar'
+import { createWeekFourVariableSession, recordWeekFourVariableRun, updateWeekFourVariableCode } from '../progress/weekFourVariableSession'
 import { ParentEquipmentReport } from './ParentEquipmentReport'
 
 describe('ParentEquipmentReport', () => {
@@ -152,5 +154,23 @@ describe('ParentEquipmentReport', () => {
     expect(report).toHaveTextContent('基础设施故障 0 次')
     expect(report).toHaveTextContent('正式双轨证明与对照作品已保存')
     expect(report).not.toHaveTextContent(/if identity|appearance|mapping-condition|w4-m1-first-python-mapping|白骨精/)
+  })
+
+  it('summarizes W4 variable learning without exposing code, answer terms, source data, traces, or work IDs', () => {
+    let progress = createInitialProgress()
+    const session = updateWeekFourVariableCode(createWeekFourVariableSession('2026-08-31T00:00:00.000Z'), SOLVED_WEEK_FOUR_VARIABLE_PYTHON, '2026-08-31T00:00:01.000Z')
+    const parsed = parseWeekFourVariablePython(session.pythonCode)
+    progress.sessions['w4-m2'] = recordWeekFourVariableRun(session, { canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run }, '2026-08-31T00:00:02.000Z')
+    progress.missionCompletionEvidence['w4-m1'] = { kind: 'formal-v3' } as never
+    progress = completeMission(progress, 'w4-m2', { stars: 3, hintsUsed: 0 })
+
+    render(<ParentEquipmentReport progress={progress} />)
+    const report = screen.getByRole('region', { name: '第四周变量学习摘要' })
+    expect(report).toHaveTextContent('已运行 1 次')
+    expect(report).toHaveTextContent('变量覆盖 0 次')
+    expect(report).toHaveTextContent('安全验证拒绝 0 次')
+    expect(report).toHaveTextContent('基础设施故障 0 次')
+    expect(report).toHaveTextContent('正式变量证明与取证作品已保存')
+    expect(report).not.toHaveTextContent(/code|appearance|identity|source|trace|workId|ordinary_eyes|白骨精|女子/)
   })
 })

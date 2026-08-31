@@ -4,6 +4,7 @@ import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import {
   completeMission,
   createInitialProgress,
+  getWeekFourVariableAccess,
   getWeeklyReport,
   importProgress,
   isMissionUnlocked,
@@ -29,6 +30,8 @@ import { compareWeekFourMappingTraces } from '../blockly/weekFourMappingContract
 import { SOLVED_WEEK_FOUR_MAPPING_PYTHON, parseWeekFourMappingPython } from '../engine/weekFourPythonMappingGrammar';
 import { createWeekFourMappingSession, recordWeekFourMappingRun, updateWeekFourMappingCode } from './weekFourMappingSession';
 import { migrateProgress } from './schema';
+import { SOLVED_WEEK_FOUR_VARIABLE_PYTHON, parseWeekFourVariablePython } from '../engine/weekFourVariablePythonGrammar';
+import { createWeekFourVariableSession, recordWeekFourVariableRun, updateWeekFourVariableCode } from './weekFourVariableSession';
 
 const NOW = '2026-07-15T06:00:00.000Z';
 const wrongWeaponTrace: RuyiStaffInstruction[] = [
@@ -84,7 +87,84 @@ function successfulWeekFourMappingSession() {
   return recordWeekFourMappingRun(draft, { blocklyTrace, pythonTrace, run: compareWeekFourMappingTraces(blocklyTrace, pythonTrace) }, '2026-08-30T00:00:02.000Z');
 }
 
+function successfulWeekFourVariableSession() {
+  const draft = updateWeekFourVariableCode(createWeekFourVariableSession(NOW), SOLVED_WEEK_FOUR_VARIABLE_PYTHON, '2026-08-31T00:00:01.000Z');
+  const canonical = parseWeekFourVariablePython(draft.pythonCode);
+  return recordWeekFourVariableRun(draft, {
+    canonicalTrace: canonical.trace,
+    workerTrace: canonical.trace,
+    run: canonical.run,
+  }, '2026-08-31T00:00:02.000Z');
+}
+
 describe('progress rules', () => {
+  it('publishes W4-M2 mission, sealed proof, and evidence work atomically without granting rewards', () => {
+    const progress = createInitialProgress();
+    progress.missionCompletionEvidence['w4-m1'] = { kind: 'formal-v3' } as never;
+    progress.sessions['w4-m2'] = successfulWeekFourVariableSession();
+    const beforeEquipment = structuredClone(progress.equipment);
+
+    const completed = completeMission(progress, 'w4-m2', { stars: 3, hintsUsed: 0 });
+
+    expect(completed.missions['w4-m2']).toMatchObject({ status: 'completed', attempts: 1, stars: 3 });
+    expect(completed.missionCompletionEvidence['w4-m2']).toMatchObject({
+      kind: 'formal-v3', workId: 'w4-m2-variable-evidence-record', run: { completed: true, finalState: 'evidence-sealed' },
+    });
+    expect(completed.works['w4-m2-variable-evidence-record']).toMatchObject({
+      kind: 'python-variable-evidence-v1', missionId: 'w4-m2', run: { completed: true, finalState: 'evidence-sealed' },
+    });
+    expect(completed.equipment).toEqual(beforeEquipment);
+    expect(isMissionUnlocked(completed, 'w4-m3')).toBe(true);
+    expect(getWeekFourVariableAccess(completed)).toEqual({ kind: 'formal', upgradingLegacy: false });
+  });
+
+  it('fails closed for missing, stale, unsealed, or forged W4-M2 session evidence', () => {
+    const base = createInitialProgress();
+    base.missionCompletionEvidence['w4-m1'] = { kind: 'formal-v3' } as never;
+    expect(() => completeMission(base, 'w4-m2', { stars: 3, hintsUsed: 0 })).toThrow(/W4-M2.*session|运行|封存/);
+
+    const stale = structuredClone(base);
+    stale.sessions['w4-m2'] = successfulWeekFourVariableSession();
+    stale.sessions['w4-m2']!.lastWorkerTrace = [];
+    expect(() => completeMission(stale, 'w4-m2', { stars: 3, hintsUsed: 0 })).toThrow(/W4-M2.*session|运行|封存/);
+
+    const failed = structuredClone(base);
+    failed.sessions['w4-m2'] = createWeekFourVariableSession(NOW);
+    const parsed = parseWeekFourVariablePython(failed.sessions['w4-m2']!.pythonCode);
+    failed.sessions['w4-m2'] = recordWeekFourVariableRun(failed.sessions['w4-m2']!, { canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run }, '2026-08-31T00:00:02.000Z');
+    expect(() => completeMission(failed, 'w4-m2', { stars: 3, hintsUsed: 0 })).toThrow(/W4-M2.*session|运行|封存/);
+  });
+
+  it('keeps a W4-M2 legacy completion immutable while upgrading only its proof and one evidence work', () => {
+    const progress = createInitialProgress();
+    progress.missions['w4-m2'] = { status: 'completed', stars: 3, attempts: 8, hintsUsed: 2, completedAt: NOW };
+    progress.missionCompletionEvidence['w4-m1'] = { kind: 'formal-v3' } as never;
+    progress.missionCompletionEvidence['w4-m2'] = { kind: 'legacy-replay-only', completedAt: NOW, sourceVersion: 3, sourceSchemaRevision: 8 };
+    progress.sessions['w4-m2'] = successfulWeekFourVariableSession();
+
+    const upgraded = completeMission(progress, 'w4-m2', { stars: 1, hintsUsed: 0 });
+    expect(upgraded.missions['w4-m2']).toEqual(progress.missions['w4-m2']);
+    expect(upgraded.missionCompletionEvidence['w4-m2']).toMatchObject({ kind: 'formal-v3', completedAt: NOW });
+    expect(upgraded.works['w4-m2-variable-evidence-record']?.createdAt).toBe(NOW);
+    expect(completeMission(upgraded, 'w4-m2', { stars: 1, hintsUsed: 0 })).toBe(upgraded);
+  });
+
+  it('gates W4-M2 access by formal M1 or its own history, and gates W4-M3 by proof rather than a bare flag', () => {
+    const locked = createInitialProgress();
+    expect(getWeekFourVariableAccess(locked)).toEqual({ kind: 'locked' });
+    expect(isMissionUnlocked(locked, 'w4-m2')).toBe(false);
+
+    const historical = createInitialProgress();
+    historical.missions['w4-m2'] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: NOW };
+    historical.missionCompletionEvidence['w4-m2'] = { kind: 'legacy-replay-only', completedAt: NOW, sourceVersion: 3, sourceSchemaRevision: 8 };
+    expect(getWeekFourVariableAccess(historical)).toEqual({ kind: 'historical-read-only' });
+    expect(isMissionUnlocked(historical, 'w4-m2')).toBe(true);
+    expect(isMissionUnlocked(historical, 'w4-m3')).toBe(true);
+
+    const bare = createInitialProgress();
+    bare.missions['w4-m2'] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: NOW };
+    expect(isMissionUnlocked(bare, 'w4-m3')).toBe(false);
+  });
   it('publishes the W4 proof and work atomically, reports only safe summary fields, and unlocks W4-M2', () => {
     const progress = createInitialProgress();
     progress.missionCompletionEvidence['w3-m5'] = { kind: 'formal-v3' } as never;
@@ -369,7 +449,7 @@ describe('progress rules', () => {
     expect(progress.missions['w1-m1']).toMatchObject({ stars: 3, attempts: 1, hintsUsed: 0, status: 'completed' });
     expect(progress).toMatchObject({
       version: 3,
-      schemaRevision: 8,
+      schemaRevision: 9,
       sessions: {},
       privacy: { localDataNoticeSeen: true },
       recovery: { lastRecoveredAt: '2026-07-12T00:00:00.000Z', source: 'snapshot' },
@@ -379,7 +459,7 @@ describe('progress rules', () => {
   it('publishes the derived condition-observation ability with w2 completion and keeps it idempotent', () => {
     let progress = createInitialProgress();
     expect(progress).toMatchObject({
-      schemaRevision: 8,
+      schemaRevision: 9,
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
     });
 

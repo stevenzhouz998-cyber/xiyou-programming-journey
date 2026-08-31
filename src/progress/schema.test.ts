@@ -143,7 +143,7 @@ type ValidV3 = Omit<ProgressV3, 'sessions'> & {
 const validV3 = (): ValidV3 => ({
   ...validV2,
   version: 3 as const,
-  schemaRevision: 8 as const,
+  schemaRevision: 9 as const,
   missions: structuredClone(validV2.missions),
   sessions: { 'w1-m1': validSession() },
   equipment: initialEquipment(),
@@ -532,7 +532,7 @@ describe('progress schema', () => {
     const progress = createInitialProgress();
     expect(progress).toMatchObject({
       version: 3,
-      schemaRevision: 8,
+      schemaRevision: 9,
       sessions: {},
       equipment: initialEquipment(),
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
@@ -551,7 +551,7 @@ describe('progress schema', () => {
     const migrated = migrateProgress(legacy);
     expect(migrated).toMatchObject({
       version: 3,
-      schemaRevision: 8,
+      schemaRevision: 9,
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
     });
     expect(migrated.equipment).toEqual({
@@ -736,7 +736,7 @@ describe('progress schema', () => {
     expect(migrateProgress(validV1)).toEqual({
       ...validV1,
       version: 3,
-      schemaRevision: 8,
+      schemaRevision: 9,
       works: {},
       settings: { ...validV1.settings, reducedMotionOverride: false },
       privacy: { localDataNoticeSeen: false },
@@ -752,7 +752,7 @@ describe('progress schema', () => {
     expect(migrateProgress(validV2)).toEqual({
       ...validV2,
       version: 3,
-      schemaRevision: 8,
+      schemaRevision: 9,
       works: {},
       sessions: {},
       equipment: initialEquipment(),
@@ -776,7 +776,7 @@ describe('progress schema', () => {
 
     expect(migrated).toMatchObject({
       version: 3,
-      schemaRevision: 8,
+      schemaRevision: 9,
       missions,
       settings: legacy.settings,
       privacy: legacy.privacy,

@@ -21,7 +21,7 @@ it('migrates an old W4 completion only to legacy replay without inventing sessio
   const { works: _works, ...oldBase } = createInitialProgress();
   const old = { ...oldBase, schemaRevision: 7 as const, missions: { 'w4-m1': { status: 'completed' as const, stars: 3 as const, attempts: 1, hintsUsed: 0, completedAt: '2026-08-30T00:00:00.000Z' } } };
   const migrated = migrateProgress(old);
-  expect(migrated.schemaRevision).toBe(8);
+  expect(migrated.schemaRevision).toBe(9);
   expect(migrated.missionCompletionEvidence['w4-m1']).toMatchObject({ kind: 'legacy-replay-only' });
   expect(migrated.sessions['w4-m1']).toBeUndefined();
   expect(migrated.works).toEqual({});
@@ -94,7 +94,7 @@ it('rejects unknown or forged W4 work instead of accepting it as a raw clone', (
   expect(() => parseWeekFourMappingWork({ ...work, pythonTrace: structuredClone(blocklyTrace) })).toThrow(/trace|Python/);
 });
 
-it('rejects an orphan W4 work during the rev8 progress import', () => {
+it('rejects an orphan W4 work during the rev9 progress import', () => {
   const now = '2026-08-30T00:00:00.000Z';
   const session = updateWeekFourMappingCode(createWeekFourMappingSession(now), SOLVED_WEEK_FOUR_MAPPING_PYTHON, '2026-08-30T00:00:01.000Z');
   const blocklyTrace = compileWeekFourMappingDraft(session.workspace).trace;

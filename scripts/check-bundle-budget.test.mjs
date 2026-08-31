@@ -192,6 +192,7 @@ test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
   assert.equal(bundleBudget.WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
   assert.equal(bundleBudget.WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
   assert.equal(bundleBudget.WEEK_FOUR_MAPPING_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.WEEK_FOUR_VARIABLE_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
   assert.equal(bundleBudget.PYTHON_RUNTIME_TRANSFER_MAX_BYTES, 15 * 1024 * 1024);
   assert.equal(bundleBudget.ENTRY_GZIP_LIMIT, 180 * 1024);
   assert.equal(bundleBudget.HOME_TOTAL_LIMIT, 650 * 1024);
@@ -201,6 +202,36 @@ test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
   assert.equal(bundleBudget.RUYI_STAFF_COLD_BYTES, 2.5 * 1024 * 1024);
   assert.equal(bundleBudget.DRAGON_PALACE_MEDIA_BYTES, 1.25 * 1024 * 1024);
   assert.equal(bundleBudget.SINGLE_RASTER_BYTES, 512 * 1024);
+});
+
+test('reserves an isolated 3 MiB W4-M2 Python variable evidence cold-load closure', () => {
+  const root = 'src/components/WeekFourVariableEvidenceExperience.tsx';
+  assert.equal(bundleBudget.COLD_LOAD_ROUTE_CLOSURE_BUDGETS[root], 3 * 1024 * 1024);
+});
+
+test('enforces the W4-M2 3 MiB lazy Experience closure and keeps editor and scene chunks out of the entry', () => {
+  const root = 'src/components/WeekFourVariableEvidenceExperience.tsx';
+  const editor = 'src/components/WeekFourVariableEvidencePythonEditor.tsx';
+  const scene = 'src/components/WeekFourVariableEvidenceScene.tsx';
+  assert.equal(bundleBudget.WEEK_FOUR_VARIABLE_COLD_LOAD_MAX_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.COLD_LOAD_ROUTE_CLOSURE_BUDGETS[root], bundleBudget.WEEK_FOUR_VARIABLE_COLD_LOAD_MAX_BYTES);
+  const manifest = {
+    ...base,
+    [root]: { file: 'assets/week-four-variable-experience.js', isDynamicEntry: true, imports: [], dynamicImports: [editor, scene] },
+    [editor]: { file: 'assets/week-four-variable-editor.js', isDynamicEntry: true, imports: [] },
+    [scene]: { file: 'assets/week-four-variable-scene.js', isDynamicEntry: true, imports: [] },
+  };
+  const sizes = {
+    'assets/main.js': 1, 'assets/vendor.js': 1,
+    'assets/week-four-variable-experience.js': bundleBudget.WEEK_FOUR_VARIABLE_COLD_LOAD_MAX_BYTES - 2,
+    'assets/week-four-variable-editor.js': 1, 'assets/week-four-variable-scene.js': 1,
+  };
+  assert.equal(analyzeManifest(manifest, sizes, sizes).closures[root].rawBytes, bundleBudget.WEEK_FOUR_VARIABLE_COLD_LOAD_MAX_BYTES);
+  assert.throws(() => analyzeManifest(manifest, sizes, { ...sizes, 'assets/week-four-variable-scene.js': 2 }), /WeekFourVariableEvidenceExperience closure exceeds its 3 MiB cold-load budget/);
+  const staticEntrySizes = { ...sizes, 'assets/week-four-variable-experience.js': 1 };
+  assert.throws(() => analyzeManifest({ ...manifest, 'src/main.tsx': { ...base['src/main.tsx'], imports: ['vendor.js', root] } }, staticEntrySizes, sizes), /WeekFourVariableEvidenceExperience must stay outside the application entry static closure/);
+  assert.throws(() => analyzeManifest({ ...manifest, 'src/main.tsx': { ...base['src/main.tsx'], imports: ['vendor.js', editor] } }, sizes, sizes), /WeekFourVariableEvidencePythonEditor must stay outside the application entry static closure/);
+  assert.throws(() => analyzeManifest({ ...manifest, 'src/main.tsx': { ...base['src/main.tsx'], imports: ['vendor.js', scene] } }, sizes, sizes), /WeekFourVariableEvidenceScene must stay outside the application entry static closure/);
 });
 
 test('enforces the exact W3-M1 cold-load budget on its dedicated lazy route closure', () => {
@@ -320,6 +351,15 @@ test('keeps the W3-M4 route, scene, and Blockly workspace dynamically split from
   assert.match(routeSource, /mission\.id\s*===\s*['"]w3-m4['"][\s\S]{0,900}<WeekThreeBajieJoiningRouteBoundary\b/);
   assert.match(experienceSource, /import\(['"]\.\/WeekThreeBajieJoiningBlocklyWorkspace['"]\)/);
   assert.match(experienceSource, /import\(['"]\.\/WeekThreeBajieJoiningScene['"]\)/);
+});
+
+test('ignores local exports without a module specifier while preserving static relative export scanning', () => {
+  const sources = new Map([
+    ['src/main.tsx', "import App from './App'; export { App };"],
+    ['src/App.tsx', "const localName = 1; export { localName }; export { helper } from './helper';"],
+    ['src/helper.ts', 'export const helper = 2;'],
+  ]);
+  assert.doesNotThrow(() => assertNoWeekThreeBajieJoiningEntryStaticImports(sources));
 });
 
 test('keeps the W3-M5 route, scene, and Blockly workspace dynamically split from homepage static imports', () => {
