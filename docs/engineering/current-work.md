@@ -6,4 +6,4 @@
 
 当前入口：`/Users/macmini-zz/.codex/worktrees/5806/少儿编程学习网页`，分支 `codex/w4-m3-branch-structure`。W4-M3 提交 `b8b7abe` 和工程优化提交 `db21884` 均已推送，继续前重新核实 HEAD。此指针不是合并、清理或覆盖授权。
 
-注意：本目录分支 `codex/xiyou-programming` 的推送会触发 `.github/workflows/deploy-pages.yml` 自动部署 GitHub Pages。历史提交已包含在较新的远端开发分支中；同步本旧分支仍须确认部署影响，不能将代码备份与上线混为一谈。
+部署规则：本目录分支的 `.github/workflows/deploy-pages.yml` 仅保留 `workflow_dispatch` 手动触发，普通推送不再自动部署 GitHub Pages。手动部署仍需明确授权，且必须选择经过验收的版本。其他分支可能保留旧配置，合并或部署前应重新核实。历史提交已包含在较新的远端开发分支中，不能将代码备份与上线混为一谈。
