@@ -164,6 +164,20 @@ export const formalWeekFourMissions: FormalMissionSpec[] = [
       partial: '检查第二行写入的目标变量，是否和这次火眼核验的事实类型相符。',
     },
   }),
+  formalPythonMission('w4-m3', {
+    subtitle: '分支归位，只走一条路线',
+    objective: '用 else: 和正确缩进让每张公开卡只走一条路线',
+    canon: formalWeekFourCanon,
+    storyBeats: [
+      beat('第二次变化', '白骨精在第二次变化中变作老妇来寻女儿；外形变了，公开身份不变。'),
+      beat('两条安全路线', '悟空保持距离，安全地再次核验；同为“老妇”外形的练习卡不是原著情节。'),
+    ],
+    hints: {
+      observe: '看看每张卡实际亮起了几条路线。',
+      think: '`if` 结束后，没有归入其它分支的语句仍会继续执行。',
+      partial: '检查礼貌帮助这一行属于条件内、条件外，还是应该属于另一条互斥路线。',
+    },
+  }),
 ];
 
 export function getFormalMission(id: string): FormalMissionSpec | undefined {

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { course, getMission, validateCourse } from './course';
 import { courseOutline, getMissionOutline, isFormalMissionOutline } from './courseOutline';
 import { commandLabel } from '../engine/commandLabels';
-import { formalWeekFourCanon, formalWeekOneMissions, formalWeekThreeMissions, formalWeekTwoMissions } from './formalCourse';
+import { formalWeekFourCanon, formalWeekFourMissions, formalWeekOneMissions, formalWeekThreeMissions, formalWeekTwoMissions, getFormalMission } from './formalCourse';
 import { isExecutableMissionId } from '../progress/executableMissionIds';
 
 describe('course manifest', () => {
@@ -77,7 +77,7 @@ describe('course manifest', () => {
     expect(formalWeekTwoMissions).toHaveLength(5);
     expect(formalWeekThreeMissions).toHaveLength(5);
     for (const mission of formalWeekOneMissions) expect(mission).not.toHaveProperty('expectedSequence');
-    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5', 'w2-m1', 'w2-m2', 'w2-m3', 'w2-m4', 'w2-m5', 'w3-m1', 'w3-m2', 'w3-m3', 'w3-m4', 'w3-m5', 'w4-m1', 'w4-m2']);
+    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5', 'w2-m1', 'w2-m2', 'w2-m3', 'w2-m4', 'w2-m5', 'w3-m1', 'w3-m2', 'w3-m3', 'w3-m4', 'w3-m5', 'w4-m1', 'w4-m2', 'w4-m3']);
     for (const mission of course.weeks.flatMap((week) => week.missions)) {
       if (formalIds.has(mission.id)) expect(mission).not.toHaveProperty('expectedSequence');
       else expect(mission).toHaveProperty('expectedSequence', expect.any(Array));
@@ -146,7 +146,7 @@ describe('course manifest', () => {
     expect(mission).not.toHaveProperty('expectedSequence');
     expect(mission).not.toHaveProperty('expectedOutput');
     expect(mission).not.toHaveProperty('starterCode');
-    for (const id of ['w4-m3', 'w4-m4', 'w4-m5']) {
+    for (const id of ['w4-m4', 'w4-m5']) {
       expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
       expect(isExecutableMissionId(id)).toBe(false);
     }
@@ -172,19 +172,44 @@ describe('course manifest', () => {
     expect(mission).not.toHaveProperty('expectedSequence');
     expect(mission).not.toHaveProperty('expectedOutput');
     expect(mission).not.toHaveProperty('starterCode');
-    for (const id of ['w4-m3', 'w4-m4', 'w4-m5']) {
+    for (const id of ['w4-m4', 'w4-m5']) {
       expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
       expect(isExecutableMissionId(id)).toBe(false);
     }
   });
 
-  it('keeps W4-M3 through W4-M5 as the exact legacy Python snapshots while W4-M2 is formalized', () => {
-    expect(getMission('w4-m1')?.mode).toBe('blockly');
-    expect(getMission('w4-m3')).toMatchObject({
-      expectedSequence: ['appearance_old_woman', 'if_identity_demon'],
-      expectedOutput: '识破变化',
-      starterCode: "appearance = '老妇'\nidentity = '白骨精'\nif identity == '白骨精':\n    print('识破变化')",
+  it('registers W4-M3 as a formal Python branch task without legacy answers', () => {
+    const mission = getMission('w4-m3');
+    expect(mission).toBeDefined();
+    expect(isFormalMissionOutline(getMissionOutline('w4-m3'))).toBe(true);
+    expect(isExecutableMissionId('w4-m3')).toBe(true);
+    expect(formalWeekFourMissions.some((formalMission) => formalMission.id === 'w4-m3')).toBe(true);
+    expect(getFormalMission('w4-m3')).toMatchObject({ id: 'w4-m3', mode: 'python' });
+    expect(mission?.mode).toBe('python');
+    expect(mission?.subtitle).toBe('分支归位，只走一条路线');
+    expect(mission?.objective).toMatch(/else/i);
+    expect(mission?.objective).toContain('缩进');
+    const story = mission?.storyBeats.map((beat) => beat.summary).join('\n') ?? '';
+    expect(story).toContain('第二次变化');
+    expect(story).toContain('公开身份不变');
+    expect(story).toContain('安全地再次核验');
+    expect(story).not.toMatch(/攻击|尸体|骷髅|逐走/);
+    expect(mission?.hints).toEqual({
+      observe: '看看每张卡实际亮起了几条路线。',
+      think: '`if` 结束后，没有归入其它分支的语句仍会继续执行。',
+      partial: '检查礼貌帮助这一行属于条件内、条件外，还是应该属于另一条互斥路线。',
     });
+    expect(mission).not.toHaveProperty('expectedSequence');
+    expect(mission).not.toHaveProperty('expectedOutput');
+    expect(mission).not.toHaveProperty('starterCode');
+    for (const id of ['w4-m4', 'w4-m5']) {
+      expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
+      expect(isExecutableMissionId(id)).toBe(false);
+    }
+  });
+
+  it('keeps W4-M4 and W4-M5 as the exact legacy Python snapshots while W4-M3 is formalized', () => {
+    expect(getMission('w4-m1')?.mode).toBe('blockly');
     expect(getMission('w4-m4')).toMatchObject({
       expectedSequence: ['woman', 'old_woman', 'old_man', 'banish_wukong'],
       expectedOutput: '女子\n老妇\n老翁',
@@ -195,7 +220,7 @@ describe('course manifest', () => {
       expectedOutput: '女子: 识破\n老妇: 识破\n老翁: 识破',
       starterCode: "records = [('女子', '白骨精'), ('老妇', '白骨精'), ('老翁', '白骨精')]\nfor appearance, identity in records:\n    if identity == '白骨精':\n        print(appearance + ': 识破')",
     });
-    for (const id of ['w4-m3', 'w4-m4', 'w4-m5']) {
+    for (const id of ['w4-m4', 'w4-m5']) {
       const mission = getMission(id);
       expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
       expect(isExecutableMissionId(id)).toBe(false);

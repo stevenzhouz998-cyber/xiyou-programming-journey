@@ -15,6 +15,8 @@ import { SOLVED_WEEK_FOUR_MAPPING_PYTHON, parseWeekFourMappingPython } from '../
 import { createWeekFourMappingSession, recordWeekFourMappingRun, updateWeekFourMappingCode } from '../progress/weekFourMappingSession'
 import { SOLVED_WEEK_FOUR_VARIABLE_PYTHON, parseWeekFourVariablePython } from '../engine/weekFourVariablePythonGrammar'
 import { createWeekFourVariableSession, recordWeekFourVariableRun, updateWeekFourVariableCode } from '../progress/weekFourVariableSession'
+import { SOLVED_WEEK_FOUR_BRANCH_PYTHON, parseWeekFourBranchPython } from '../engine/weekFourBranchPythonGrammar'
+import { createWeekFourBranchSession, recordWeekFourBranchRun, updateWeekFourBranchCode } from '../progress/weekFourBranchSession'
 import { ParentEquipmentReport } from './ParentEquipmentReport'
 
 describe('ParentEquipmentReport', () => {
@@ -172,5 +174,33 @@ describe('ParentEquipmentReport', () => {
     expect(report).toHaveTextContent('基础设施故障 0 次')
     expect(report).toHaveTextContent('正式变量证明与取证作品已保存')
     expect(report).not.toHaveTextContent(/code|appearance|identity|source|trace|workId|ordinary_eyes|白骨精|女子/)
+  })
+
+  it('summarizes W4 branch learning separately from infrastructure without exposing code or answer-bearing internals', () => {
+    let progress = createInitialProgress()
+    let variable = updateWeekFourVariableCode(createWeekFourVariableSession('2026-08-31T00:00:00.000Z'), SOLVED_WEEK_FOUR_VARIABLE_PYTHON, '2026-08-31T00:00:01.000Z')
+    const variableParsed = parseWeekFourVariablePython(variable.pythonCode)
+    variable = recordWeekFourVariableRun(variable, { canonicalTrace: variableParsed.trace, workerTrace: variableParsed.trace, run: variableParsed.run }, '2026-08-31T00:00:02.000Z')
+    progress.missionCompletionEvidence['w4-m1'] = { kind: 'formal-v3' } as never
+    progress.sessions['w4-m2'] = variable
+    progress = completeMission(progress, 'w4-m2', { stars: 3, hintsUsed: 0 })
+
+    let branch = updateWeekFourBranchCode(createWeekFourBranchSession('2026-08-31T01:00:00.000Z'), SOLVED_WEEK_FOUR_BRANCH_PYTHON, '2026-08-31T01:00:01.000Z')
+    const branchParsed = parseWeekFourBranchPython(branch.pythonCode)
+    if ('state' in branchParsed) throw new Error('expected solved W4-M3 fixture')
+    branch = recordWeekFourBranchRun(branch, { canonicalTrace: branchParsed.trace, workerTrace: branchParsed.trace, run: branchParsed.run }, '2026-08-31T01:00:02.000Z')
+    progress.sessions['w4-m3'] = branch
+    progress = completeMission(progress, 'w4-m3', { stars: 3, hintsUsed: 0 })
+    progress.sessions['w4-m3'] = { ...branch, totalRuns: 6, branchConflictFailures: 2, branchMissingFailures: 1, validationFailures: 3, runnerInfrastructureFailures: 4 }
+
+    render(<ParentEquipmentReport progress={progress} />)
+    const report = screen.getByRole('region', { name: '第四周分支结构学习摘要' })
+    expect(report).toHaveTextContent('已运行 6 次')
+    expect(report).toHaveTextContent('分支同时执行 2 次')
+    expect(report).toHaveTextContent('分支没有执行 1 次')
+    expect(report).toHaveTextContent('结构验证未通过 3 次')
+    expect(report).toHaveTextContent('运行环境故障 4 次（不计入学习困难）')
+    expect(report).toHaveTextContent('正式分支结构证明与作品已保存')
+    expect(report).not.toHaveTextContent(/if identity|else:|indent|pythonCode|source|trace|workId|snapshotId|cardId|w4-m3-branch-structure-record|白骨精/)
   })
 })

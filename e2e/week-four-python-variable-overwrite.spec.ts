@@ -484,7 +484,7 @@ test.describe("W4-M2 Python 变量覆盖真实浏览器证据", () => {
       ).toBeVisible({ timeout: 25_000 });
       expect(await stored(page)).toEqual(importedBeforeReplay);
       await page.goto("./#/mission/w4-m3");
-      await expect(page.getByText("老妇外形，条件不变")).toBeVisible();
+      await expect(page.getByText("同样的外形，一次只走一条路线")).toBeVisible();
   });
   test("@w4-m2-keyboard @w4-m2-accessibility keyboard selects the visible identity field and keeps focus feedback usable", async ({
     page,
@@ -685,7 +685,7 @@ test.describe("W4-M2 Python 变量覆盖真实浏览器证据", () => {
     expect(workAfterRetry.missionCompletionEvidence["w4-m2"]).toBeDefined();
     expect(workAfterRetry.missions["w4-m3"]).toBeUndefined();
     await page.goto("./#/mission/w4-m3");
-    await expect(page.getByText("老妇外形，条件不变")).toBeVisible();
+    await expect(page.getByText("同样的外形，一次只走一条路线")).toBeVisible();
   });
   test("@w4-m2-storage completion storage retry atomically publishes proof and W4-M3", async ({
     page,
@@ -716,7 +716,7 @@ test.describe("W4-M2 Python 变量覆盖真实浏览器证据", () => {
     ).toBeDefined();
     expect(completionAfterRetry.missions["w4-m3"]).toBeUndefined();
     await page.goto("./#/mission/w4-m3");
-    await expect(page.getByText("老妇外形，条件不变")).toBeVisible();
+    await expect(page.getByText("同样的外形，一次只走一条路线")).toBeVisible();
   });
 
   test("@w4-m2-external @w4-m2-corrupt cas explicit cross-tab reload preserves the externalCodeBackup and currentRevision", async ({
@@ -825,7 +825,7 @@ test.describe("W4-M2 Python 变量覆盖真实浏览器证据", () => {
     expect(recoveredCurrent).not.toBeNull();
     expect(corruptBytes).not.toBeNull();
     const recovered = JSON.parse(recoveredCurrent!);
-    expect(recovered.schemaRevision).toBe(9);
+    expect(recovered.schemaRevision).toBe(10);
     expect(recovered.recovery).toMatchObject({ source: "snapshot" });
     expect(recovered.sessions["w4-m2"].lastCanonicalTrace).toEqual(
       legal.sessions["w4-m2"].lastCanonicalTrace,
@@ -896,7 +896,7 @@ test.describe("W4-M2 Python 变量覆盖真实浏览器证据", () => {
     await expect(page.getByRole("button", { name: "我知道了", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "我知道了", exact: true }).click();
     await page.goto("./#/mission/w4-m3");
-    await expect(page.getByRole("heading", { name: "这一关还没有解锁" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "先完成上一关的正式验证" })).toBeVisible();
     await page.goto("./#/");
     await expect(page.getByRole("button", { name: "第一次变化，未解锁", exact: true })).toBeDisabled();
   });
@@ -1034,7 +1034,7 @@ test.describe("W4-M2 Python 变量覆盖真实浏览器证据", () => {
     expect(retried.works["w4-m2-variable-evidence-record"]).toBeUndefined();
     expect(retried.missionCompletionEvidence["w4-m2"]).toBeUndefined();
     await page.goto("./#/mission/w4-m3");
-    await expect(page.getByRole("heading", { name: "这一关还没有解锁" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "先完成上一关的正式验证" })).toBeVisible();
   });
   test("@w4-m2-runtime-fault timeout worker timeout counts one run then retries", async ({
     page,
@@ -1081,7 +1081,7 @@ test.describe("W4-M2 Python 变量覆盖真实浏览器证据", () => {
     expect(retried.works["w4-m2-variable-evidence-record"]).toBeUndefined();
     expect(retried.missionCompletionEvidence["w4-m2"]).toBeUndefined();
     await page.goto("./#/mission/w4-m3");
-    await expect(page.getByRole("heading", { name: "这一关还没有解锁" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "先完成上一关的正式验证" })).toBeVisible();
   });
   test("@w4-m2-asset-fault local asset retry has no playback, completion, or duplicate worker run", async ({
     page,

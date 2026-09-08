@@ -183,8 +183,14 @@ export function parseWeekFourVariableEvidence(
     const validLegacy = (version === 1 && revision === null)
       || (version === 2 && revision === 1)
       || (version === 3 && typeof revision === 'number' && Number.isInteger(revision) && revision >= 1 && revision <= 8);
-    if (iso(source.completedAt, 'W4-M2历史完成时间') !== input.mission.completedAt || !validLegacy) throw new Error('W4-M2历史证明无效。');
-    if (input.session || input.work) throw new Error('W4-M2历史证明不能伪造 session 或作品。');
+    const completedAt = iso(source.completedAt, 'W4-M2历史完成时间');
+    if (completedAt !== input.mission.completedAt || !validLegacy) throw new Error('W4-M2历史证明无效。');
+    if (input.work) throw new Error('W4-M2历史证明不能伪造作品。');
+    if (input.session && !input.formalWeekFourMapping) throw new Error('W4-M2历史重玩 session 需要正式 W4-M1 前置。');
+    if (input.session && (timestamp(input.session.savedAt) < timestamp(completedAt)
+      || (input.session.lastRunAt !== null && timestamp(input.session.lastRunAt) < timestamp(completedAt)))) {
+      throw new Error('W4-M2历史重玩 session 不能早于历史完成时间。');
+    }
     return structuredClone(source) as WeekFourVariableCompletionEvidence;
   }
   if (source.kind !== 'formal-v3') throw new Error('W4-M2证明类型无效。');

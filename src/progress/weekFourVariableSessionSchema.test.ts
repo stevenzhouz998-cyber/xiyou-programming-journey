@@ -89,7 +89,7 @@ it.each([
     learnerName: '小行者', missions: { 'w4-m2': mission }, savedAt: NOW,
   });
   expect(migrated).toMatchObject({
-    schemaRevision: 9,
+    schemaRevision: 10,
     missionCompletionEvidence: { 'w4-m2': { kind: 'legacy-replay-only', sourceVersion, sourceSchemaRevision } },
     sessions: {}, works: {},
   });
@@ -141,6 +141,33 @@ it('rejects pre-r9 W4-M2 work or proof and revision-9 orphan work', () => {
     ...createInitialProgress(),
     works: { 'w4-m2-variable-evidence-record': work },
   })).toThrow(/W4-M2|作品/);
+});
+
+it('allows a legal active W4-M2 replay session beside legacy completion when W4-M1 is formal', () => {
+  const mission = { status: 'completed' as const, stars: 3 as const, attempts: 4, hintsUsed: 1, completedAt: NOW };
+  const evidence = { kind: 'legacy-replay-only' as const, completedAt: NOW, sourceVersion: 3 as const, sourceSchemaRevision: 8 as const };
+  const session = updateWeekFourVariableCode(createWeekFourVariableSession(NOW), SOLVED_WEEK_FOUR_VARIABLE_PYTHON, VERIFIED);
+  expect(parseWeekFourVariableEvidence(evidence, {
+    mission, formalWeekFourMapping: true, session, work: undefined,
+  })).toEqual(evidence);
+  expect(() => parseWeekFourVariableEvidence(evidence, {
+    mission, formalWeekFourMapping: false, session, work: undefined,
+  })).toThrow(/W4-M1|前置|正式/);
+  expect(() => parseWeekFourVariableEvidence(evidence, {
+    mission, formalWeekFourMapping: true, session, work: solvedWork(),
+  })).toThrow(/作品|work|历史/);
+});
+
+it('rejects a W4-M2 legacy replay session saved or run before the historical completion', () => {
+  const completedAt = '2026-09-01T00:00:00.000Z';
+  const mission = { status: 'completed' as const, stars: 3 as const, attempts: 4, hintsUsed: 1, completedAt };
+  const evidence = { kind: 'legacy-replay-only' as const, completedAt, sourceVersion: 3 as const, sourceSchemaRevision: 8 as const };
+  const draft = updateWeekFourVariableCode(createWeekFourVariableSession(NOW), SOLVED_WEEK_FOUR_VARIABLE_PYTHON, VERIFIED);
+  const parsed = parseWeekFourVariablePython(draft.pythonCode);
+  const session = recordWeekFourVariableRun(draft, { canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run }, VERIFIED);
+  expect(() => parseWeekFourVariableEvidence(evidence, {
+    mission, formalWeekFourMapping: true, session, work: undefined,
+  })).toThrow(/历史完成|时间|completedAt|session/);
 });
 
 it('rejects forged zero counters and non-plain serialized data before replaying W4-M2 evidence', () => {

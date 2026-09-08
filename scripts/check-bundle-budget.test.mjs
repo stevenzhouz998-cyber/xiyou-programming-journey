@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { dirname, extname, resolve } from 'node:path';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
+import { tmpdir } from 'node:os';
+import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import * as bundleBudget from './check-bundle-budget.mjs';
@@ -204,9 +206,129 @@ test('exports the fixed Dragon Palace cold-load and raster budgets', () => {
   assert.equal(bundleBudget.SINGLE_RASTER_BYTES, 512 * 1024);
 });
 
+test('reserves the fixed W4-M3 3 MiB lazy and 1.25 MiB media budgets', () => {
+  assert.equal(bundleBudget.WEEK_FOUR_BRANCH_MAX_LAZY_BYTES, 3 * 1024 * 1024);
+  assert.equal(bundleBudget.WEEK_FOUR_BRANCH_MAX_MEDIA_BYTES, 1.25 * 1024 * 1024);
+});
+
 test('reserves an isolated 3 MiB W4-M2 Python variable evidence cold-load closure', () => {
   const root = 'src/components/WeekFourVariableEvidenceExperience.tsx';
   assert.equal(bundleBudget.COLD_LOAD_ROUTE_CLOSURE_BUDGETS[root], 3 * 1024 * 1024);
+});
+
+test('reserves the W4-M3 branch route as a 3 MiB lazy closure', () => {
+  const root = 'src/components/WeekFourBranchExperience.tsx';
+  const routeSource = readFileSync('src/components/MissionPageContent.tsx', 'utf8');
+  assert.equal(bundleBudget.COLD_LOAD_ROUTE_CLOSURE_BUDGETS[root], bundleBudget.WEEK_FOUR_BRANCH_MAX_LAZY_BYTES);
+  assert.match(routeSource, /WeekFourBranchRouteBoundary/);
+  assert.match(routeSource, /import\(['"]\.\/WeekFourBranchExperience['"]\)/);
+  assert.equal(bundleBudget.COLD_LOAD_ROUTE_CLOSURE_BUDGETS[`${root}?retry=1`], bundleBudget.WEEK_FOUR_BRANCH_MAX_LAZY_BYTES);
+  assert.match(routeSource, /import\(['"]\.\/WeekFourBranchExperience\?retry=1['"]\)/);
+});
+
+test('enforces the W4-M3 Editor, Scene, and Worker closure while excluding Blockly and Phaser from entry', () => {
+  const root = 'src/components/WeekFourBranchExperience.tsx';
+  const editor = 'src/components/WeekFourBranchPythonEditor.tsx';
+  const scene = 'src/components/WeekFourBranchScene.tsx';
+  const worker = 'src/workers/weekFourBranchPython.worker.ts';
+  const manifest = {
+    ...base,
+    [root]: { file: 'assets/week-four-branch.js', isDynamicEntry: true, imports: [], dynamicImports: [editor, scene, worker] },
+    [`${root}?retry=1`]: { file: 'assets/week-four-branch-retry.js', isDynamicEntry: true, imports: [], dynamicImports: [editor, scene, worker] },
+    [editor]: { file: 'assets/week-four-branch-editor.js', isDynamicEntry: true, imports: [] },
+    [scene]: { file: 'assets/week-four-branch-scene.js', isDynamicEntry: true, imports: [] },
+    [worker]: { file: 'assets/week-four-branch-worker.js', isDynamicEntry: true, imports: [] },
+  };
+  const sizes = {
+    'assets/main.js': 1,
+    'assets/vendor.js': 1,
+    'assets/week-four-branch.js': bundleBudget.WEEK_FOUR_BRANCH_MAX_LAZY_BYTES - 3,
+    'assets/week-four-branch-retry.js': 1,
+    'assets/week-four-branch-editor.js': 1,
+    'assets/week-four-branch-scene.js': 1,
+    'assets/week-four-branch-worker.js': 1,
+  };
+  const result = analyzeManifest(manifest, sizes, sizes);
+  assert.equal(result.closures[root].rawBytes, bundleBudget.WEEK_FOUR_BRANCH_MAX_LAZY_BYTES);
+  assert.deepEqual(new Set(result.closures[root].files), new Set([
+    'assets/week-four-branch.js',
+    'assets/week-four-branch-editor.js',
+    'assets/week-four-branch-scene.js',
+    'assets/week-four-branch-worker.js',
+  ]));
+  assert.throws(
+    () => analyzeManifest(manifest, sizes, { ...sizes, 'assets/week-four-branch-worker.js': 2 }),
+    /WeekFourBranchExperience closure exceeds its 3 MiB cold-load budget/,
+  );
+  const staticEntrySizes = {
+    ...sizes,
+    'assets/week-four-branch.js': 1,
+    'assets/week-four-branch-editor.js': 1,
+    'assets/week-four-branch-scene.js': 1,
+    'assets/week-four-branch-worker.js': 1,
+  };
+  for (const isolated of [root, editor, scene, worker]) {
+    assert.throws(
+      () => analyzeManifest({ ...manifest, 'src/main.tsx': { ...base['src/main.tsx'], imports: ['vendor.js', isolated] } }, staticEntrySizes, sizes),
+      /must stay outside the application entry static closure|entered the application entry static import closure/,
+    );
+  }
+  const routeSource = readFileSync('src/components/MissionPageContent.tsx', 'utf8');
+  const experienceSource = readFileSync('src/components/WeekFourBranchExperience.tsx', 'utf8');
+  assert.match(routeSource, /import\(['"]\.\/WeekFourBranchExperience['"]\)/);
+  assert.match(experienceSource, /import\(['"]\.\/WeekFourBranchPythonEditor['"]\)/);
+  assert.match(experienceSource, /import\(['"]\.\/WeekFourBranchScene['"]\)/);
+  assert.match(readFileSync('src/engine/weekFourBranchPythonRunner.ts', 'utf8'), /new URL\(['"]\.\.\/workers\/weekFourBranchPython\.worker\.ts['"]/);
+  assert.doesNotMatch(experienceSource, /blockly|phaser/i);
+});
+
+test('counts the unique real built W4-M3 Worker in its closure and fails closed on missing, duplicate, or oversized output', () => {
+  const manifest = JSON.parse(readFileSync('dist/.vite/manifest.json', 'utf8'));
+  const emittedFiles = readdirSync('dist/assets').map((name) => `assets/${name}`);
+  const manifestFiles = Object.values(manifest).map((chunk) => chunk.file).filter((file) => file?.endsWith('.js'));
+  const workerFiles = emittedFiles.filter((file) => /^assets\/weekFourBranchPython\.worker-[A-Za-z0-9_-]+\.js$/.test(file));
+  assert.equal(workerFiles.length, 1);
+  const files = [...new Set([...manifestFiles, ...workerFiles])];
+  const rawSizes = Object.fromEntries(files.map((file) => [file, statSync(fileURLToPath(new URL(`../dist/${file}`, import.meta.url))).size]));
+  const gzipSizes = Object.fromEntries(files.map((file) => [file, gzipSync(readFileSync(fileURLToPath(new URL(`../dist/${file}`, import.meta.url)))).byteLength]));
+  const result = analyzeManifest(manifest, gzipSizes, rawSizes, emittedFiles);
+  const closure = result.closures['src/components/WeekFourBranchExperience.tsx'];
+  assert.ok(closure.files.includes(workerFiles[0]));
+  assert.equal(closure.workerFile, workerFiles[0]);
+  const retryRoot = 'src/components/WeekFourBranchExperience.tsx?retry=1';
+  const retryClosure = result.closures[retryRoot];
+  assert.ok(retryClosure.files.includes(workerFiles[0]));
+  assert.equal(retryClosure.workerFile, workerFiles[0]);
+  const sharedFiles = manifest[retryRoot].imports.map((key) => manifest[key].file);
+  assert.ok(sharedFiles.length > 0, 'retry must include its real shared dependencies');
+  for (const file of sharedFiles) assert.ok(retryClosure.files.includes(file));
+  for (const root of ['src/components/WeekFourBranchExperience.tsx', retryRoot]) {
+    const missing = { ...manifest };
+    delete missing[root];
+    assert.throws(() => analyzeManifest(missing, gzipSizes, rawSizes, emittedFiles), /missing/i);
+    assert.throws(() => analyzeManifest(manifest, gzipSizes, { ...rawSizes, [manifest[root].file]: bundleBudget.WEEK_FOUR_BRANCH_MAX_LAZY_BYTES }, emittedFiles), /WeekFourBranchExperience.*closure exceeds its 3 MiB cold-load budget/);
+  }
+  const missingBoth = Object.fromEntries(Object.entries(manifest).filter(([key]) => !key.startsWith('src/components/WeekFourBranchExperience.tsx')));
+  assert.throws(() => analyzeManifest(missingBoth, gzipSizes, rawSizes, emittedFiles), /missing/i);
+  assert.throws(() => analyzeManifest(manifest, gzipSizes, rawSizes, emittedFiles.filter((file) => file !== workerFiles[0])), /W4-M3 Worker.*missing|exactly one/i);
+  const duplicate = 'assets/weekFourBranchPython.worker-duplicate.js';
+  assert.throws(() => analyzeManifest(manifest, { ...gzipSizes, [duplicate]: 1 }, { ...rawSizes, [duplicate]: 1 }, [...emittedFiles, duplicate]), /W4-M3 Worker.*duplicate|exactly one/i);
+  assert.throws(() => analyzeManifest(manifest, gzipSizes, { ...rawSizes, [workerFiles[0]]: bundleBudget.WEEK_FOUR_BRANCH_MAX_LAZY_BYTES }, emittedFiles), /WeekFourBranchExperience closure exceeds its 3 MiB cold-load budget/);
+});
+
+test('rejects a single matching W4-M3 Worker output when it is a symbolic link', async (context) => {
+  const root = mkdtempSync(join(tmpdir(), 'w4-m3-worker-symlink-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const assets = join(root, 'assets');
+  mkdirSync(assets);
+  const target = join(root, 'outside-worker.js');
+  writeFileSync(target, 'worker bytes');
+  const worker = 'assets/weekFourBranchPython.worker-symlink.js';
+  symlinkSync(target, join(root, worker));
+  await assert.rejects(
+    () => bundleBudget.assertWeekFourBranchWorkerOutput(root, [worker]),
+    /W4-M3 Worker.*symbolic link|symlink/i,
+  );
 });
 
 test('enforces the W4-M2 3 MiB lazy Experience closure and keeps editor and scene chunks out of the entry', () => {

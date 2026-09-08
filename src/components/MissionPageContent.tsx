@@ -20,7 +20,7 @@ import {
 import type { FormalMissionSpec, MissionSpec } from "../course/types";
 import { useProgress } from "../context/ProgressContext";
 import { validateSequence } from "../engine/validation";
-import { getWeekFourVariableAccess, isMissionUnlocked, type WeekFourVariableAccess } from "../progress/progress";
+import { getWeekFourBranchAccess, getWeekFourVariableAccess, isMissionUnlocked, type WeekFourBranchAccess, type WeekFourVariableAccess } from "../progress/progress";
 import { isExecutableMissionId } from "../progress/executableMissionIds";
 import { assetUrl } from "../utils/assets";
 import { downloadTextFile } from "../utils/download";
@@ -39,9 +39,15 @@ import type { WeekThreeBajieJoiningExperienceProps } from './WeekThreeBajieJoini
 import type { WeekThreeBossExperienceProps } from './WeekThreeBossExperience';
 import type { WeekFourMappingExperienceProps } from './WeekFourMappingExperience';
 import type { WeekFourVariableEvidenceExperienceProps } from './WeekFourVariableEvidenceExperience';
+import type { WeekFourBranchExperienceProps } from './WeekFourBranchExperience';
+import { WeekFourBranchAccessNotice } from './WeekFourBranchAccessNotice';
 import { WeekFourVariableAccessNotice } from './WeekFourVariableAccessNotice';
 
 export function weekFourVariableRouteBranch(access: WeekFourVariableAccess): WeekFourVariableAccess['kind'] {
+  return access.kind;
+}
+
+export function weekFourBranchRouteBranch(access: WeekFourBranchAccess): WeekFourBranchAccess['kind'] {
   return access.kind;
 }
 
@@ -112,6 +118,10 @@ const loadWeekThreeBajieJoiningExperience = () => import('./WeekThreeBajieJoinin
 const loadWeekThreeBossExperience = () => import('./WeekThreeBossExperience').then((module) => ({ default: module.WeekThreeBossExperience }));
 const loadWeekFourMappingExperience = () => import('./WeekFourMappingExperience').then((module) => ({ default: module.WeekFourMappingExperience }));
 const loadWeekFourVariableEvidenceExperience = () => import('./WeekFourVariableEvidenceExperience').then((module) => ({ default: module.WeekFourVariableEvidenceExperience }));
+const loadWeekFourBranchExperience = () => import('./WeekFourBranchExperience').then((module) => ({ default: module.WeekFourBranchExperience }));
+const loadWeekFourBranchExperienceRetry: () => Promise<{ default: ComponentType<WeekFourBranchExperienceProps> }> = () =>
+  // @ts-expect-error Vite treats this literal query as a second statically bundled module URL.
+  import('./WeekFourBranchExperience?retry=1').then((module) => ({ default: module.WeekFourBranchExperience }));
 
 export function FourSeasRegaliaRouteBoundary({
   loader = loadFourSeasRegaliaExperience,
@@ -348,6 +358,15 @@ export function WeekFourVariableRouteBoundary({ loader = loadWeekFourVariableEvi
     : () => setRetryGeneration((generation) => generation + 1);
   return <LazySectionBoundary key={retryGeneration} label="变量取证体验" reloadPage={retry}><Suspense fallback={<p className="mission-tools-loading" role="status">变量取证体验加载中，请稍候……</p>}><Experience {...props} /></Suspense></LazySectionBoundary>;
 }
+export function WeekFourBranchRouteBoundary({ loader = loadWeekFourBranchExperience, reloadPage: _reloadPage, ...props }: WeekFourBranchExperienceProps & { loader?: () => Promise<{ default: ComponentType<WeekFourBranchExperienceProps> }>; reloadPage?: () => void }) {
+  const [retryGeneration, setRetryGeneration] = useState(0);
+  const selectedLoader = loader === loadWeekFourBranchExperience && retryGeneration > 0
+    ? loadWeekFourBranchExperienceRetry
+    : loader;
+  const Experience = useMemo(() => lazy(selectedLoader), [selectedLoader, retryGeneration]);
+  const retry = () => setRetryGeneration((generation) => generation + 1);
+  return <LazySectionBoundary key={retryGeneration} label="分支归位体验" reloadPage={retry}><Suspense fallback={<p className="mission-tools-loading" role="status">分支归位体验加载中，请稍候……</p>}><Experience {...props} /></Suspense></LazySectionBoundary>;
+}
 
 function playAudio(path: string, muted: boolean) {
   if (muted || typeof Audio === "undefined") return;
@@ -523,14 +542,18 @@ interface MissionPageProps {
   reducedMotion: boolean;
   onGlobalModalOpenChange: (open: boolean) => void;
   onCompletionPersistenceActiveChange: (active: boolean) => void;
+  weekFourBranchLoader?: () => Promise<{ default: ComponentType<WeekFourBranchExperienceProps> }>;
+  weekFourBranchRuntimeFactory?: WeekFourBranchExperienceProps['runtimeFactory'];
 }
 
-function MissionPageForId({
+export function MissionPageForId({
   id,
   mission,
   reducedMotion,
   onGlobalModalOpenChange,
   onCompletionPersistenceActiveChange,
+  weekFourBranchLoader,
+  weekFourBranchRuntimeFactory,
 }: MissionPageProps & {
   id: string;
   mission: MissionSpec | FormalMissionSpec | undefined;
@@ -599,6 +622,9 @@ function MissionPageForId({
   const weekFourVariableAccess = mission.id === 'w4-m2' ? getWeekFourVariableAccess(progress) : null;
   if (weekFourVariableAccess && weekFourVariableAccess.kind !== 'formal')
     return <WeekFourVariableAccessNotice access={weekFourVariableAccess} />;
+  const weekFourBranchAccess = mission.id === 'w4-m3' ? getWeekFourBranchAccess(progress) : null;
+  if (weekFourBranchAccess && weekFourBranchAccess.kind !== 'formal')
+    return <WeekFourBranchAccessNotice access={weekFourBranchAccess} />;
   if (!isMissionUnlocked(progress, mission.id))
     return (
       <main className="not-found">
@@ -659,6 +685,21 @@ function MissionPageForId({
     completionSaveRef.current = failed;
     setCompletionSave(failed);
     return false;
+  };
+  const revealPersistedWeekFourBranchCompletion = async (
+    earnedStars: number,
+    completionHints: number,
+  ): Promise<boolean> => {
+    if (mission.id !== 'w4-m3' || successRef.current || completionSaveRef.current !== null) return false;
+    const request: CompletionSave = {
+      requestId: ++requestGenerationRef.current,
+      stars: earnedStars,
+      hintsUsed: completionHints,
+      status: 'pending',
+    };
+    onCompletionPersistenceActiveChange(true);
+    completionSaveRef.current = request;
+    return revealSuccess(request, earnedStars);
   };
   const retryCompletionSave = async () => {
     const failed = completionSaveRef.current;
@@ -1021,6 +1062,18 @@ function MissionPageForId({
                 locked={completionSave !== null}
                 work={progress.works['w4-m1-first-python-mapping']}
                 onComplete={({ stars: earnedStars, hintsUsed: used }) => pass(earnedStars, used)}
+                onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
+                onInteractionLockChange={setBattleInteractionLocked}
+              />
+            ) : mission.id === 'w4-m3' ? (
+              <WeekFourBranchRouteBoundary
+                loader={weekFourBranchLoader}
+                runtimeFactory={weekFourBranchRuntimeFactory}
+                reducedMotion={reducedMotion}
+                muted={progress.settings.muted}
+                locked={completionSave !== null}
+                work={progress.works['w4-m2-variable-evidence-record']}
+                onComplete={({ stars: earnedStars, hintsUsed: used }) => revealPersistedWeekFourBranchCompletion(earnedStars, used)}
                 onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
                 onInteractionLockChange={setBattleInteractionLocked}
               />

@@ -16,7 +16,10 @@ import type {
   ExecutableMissionId,
   FourSeasRegaliaMissionSession,
   MissionSession,
+  MissionSessionById,
+  MissionSessions,
   RuyiStaffMissionSession,
+  WeekFourBranchMissionSession,
   WeekFourVariableMissionSession,
 } from './types';
 import {
@@ -88,6 +91,24 @@ function realFourSeasFixture(): { draft: FourSeasWorkspaceDraftV1; trace: FourSe
 }
 
 describe('mission session rules', () => {
+  it('routes W4-M3 creation through the isolated Python branch session', () => {
+    const mappedMissionId: keyof MissionSessionById = 'w4-m3';
+    const session = createMissionSession('w4-m3', NOW);
+    const byId: MissionSessionById['w4-m3'] = session;
+    const sessions: MissionSessions = { 'w4-m3': byId };
+    expectTypeOf(session).toEqualTypeOf<WeekFourBranchMissionSession>();
+    expect(mappedMissionId).toBe('w4-m3');
+    expect(sessions['w4-m3']).toBe(byId);
+    expect(session).toMatchObject({
+      kind: 'python-branch-structure-v1',
+      pythonCode: expect.stringContaining('if identity'),
+      lastRun: null,
+      totalRuns: 0,
+      branchConflictFailures: 0,
+      branchMissingFailures: 0,
+    });
+  });
+
   it('routes W4-M2 creation through the isolated Python variable session without a Blockly draft API', () => {
     const session = createMissionSession('w4-m2', NOW);
     expectTypeOf(session).toEqualTypeOf<WeekFourVariableMissionSession>();

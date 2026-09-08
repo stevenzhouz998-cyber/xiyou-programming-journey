@@ -38,6 +38,27 @@ import {
   runManorHelp,
 } from '../blockly/weekThreeManorHelpContract';
 import { compileCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract';
+import { compileYunzhanDialogueDraft, runYunzhanDialogueForDraft } from '../blockly/weekThreeYunzhanDialogueContract';
+import { compileBajieJoiningDraft, runBajieJoiningForDraft } from '../blockly/weekThreeBajieJoiningContract';
+import { runWeekThreeBossDraft } from '../blockly/weekThreeBossContract';
+import { createSolvedWeekThreeBossDraftForTest } from '../blockly/weekThreeBossTestHelpers';
+import { compileWeekFourMappingDraft } from '../blockly/weekFourMappingCompiler';
+import { compareWeekFourMappingTraces } from '../blockly/weekFourMappingContract';
+import { SOLVED_WEEK_FOUR_MAPPING_PYTHON, parseWeekFourMappingPython } from '../engine/weekFourPythonMappingGrammar';
+import { createWeekFourMappingSession, recordWeekFourMappingRun, updateWeekFourMappingCode } from './weekFourMappingSession';
+import { SOLVED_WEEK_FOUR_VARIABLE_PYTHON, parseWeekFourVariablePython } from '../engine/weekFourVariablePythonGrammar';
+import { createWeekFourVariableSession, recordWeekFourVariableRun, updateWeekFourVariableCode } from './weekFourVariableSession';
+import {
+  DEFAULT_WEEK_FOUR_BRANCH_PYTHON,
+  SOLVED_WEEK_FOUR_BRANCH_PYTHON,
+  parseWeekFourBranchPython,
+} from '../engine/weekFourBranchPythonGrammar';
+import {
+  createWeekFourBranchSession,
+  recordWeekFourBranchObservation,
+  recordWeekFourBranchRun,
+  updateWeekFourBranchCode,
+} from './weekFourBranchSession';
 
 const fourSeasDraft = (): FourSeasWorkspaceDraftV1 => ({
   version: 1,
@@ -143,7 +164,7 @@ type ValidV3 = Omit<ProgressV3, 'sessions'> & {
 const validV3 = (): ValidV3 => ({
   ...validV2,
   version: 3 as const,
-  schemaRevision: 9 as const,
+  schemaRevision: 10 as const,
   missions: structuredClone(validV2.missions),
   sessions: { 'w1-m1': validSession() },
   equipment: initialEquipment(),
@@ -174,6 +195,68 @@ function formalManorHelpEvidence(completedAt = NOW) {
     trace,
     run: runManorHelp(trace),
   };
+}
+
+function revisionNineWithFormalWeekFourM1M2() {
+  let progress = createInitialProgress();
+
+  const manorDraft = createDefaultManorHelpDraft();
+  manorDraft.blocks.find((block) => block.id === 'manor-condition')!.type = 'w3_manor_condition_explicit_demon_help';
+  const manorTrace = compileManorHelpDraft(manorDraft);
+  progress.sessions['w3-m1'] = recordRun(
+    updateWorkspaceDraft(createMissionSession('w3-m1', NOW), manorDraft, NOW),
+    runManorHelp(manorTrace), manorTrace, NOW,
+  );
+  progress = completeMission(progress, 'w3-m1', { stars: 3, hintsUsed: 0 });
+
+  const cuilanSession = createMissionSession('w3-m2', NOW);
+  const cuilanDraft = structuredClone(cuilanSession.workspace);
+  cuilanDraft.blocks.find((block) => block.id === 'cuilan-identity-condition')!.type = 'w3_cuilan_condition_identity_is_cuilan';
+  const cuilanTrace = compileCuilanBooleanDraft(cuilanDraft);
+  progress.sessions['w3-m2'] = recordRun(updateWorkspaceDraft(cuilanSession, cuilanDraft, NOW), runCuilanBooleanForDraft(cuilanDraft, cuilanTrace), cuilanTrace, NOW);
+  progress = completeMission(progress, 'w3-m2', { stars: 3, hintsUsed: 0 });
+
+  const yunzhanSession = createMissionSession('w3-m3', NOW);
+  const yunzhanDraft = structuredClone(yunzhanSession.workspace);
+  yunzhanDraft.blocks.find((block) => block.id === 'yunzhan-condition')!.type = 'w3_yunzhan_condition_pilgrimage_explicit';
+  yunzhanDraft.blocks.find((block) => block.id === 'yunzhan-then-action')!.type = 'w3_yunzhan_explain_guanyin_origin';
+  yunzhanDraft.blocks.find((block) => block.id === 'yunzhan-else-action')!.type = 'w3_yunzhan_guard_cave';
+  const yunzhanTrace = compileYunzhanDialogueDraft(yunzhanDraft);
+  progress.sessions['w3-m3'] = recordRun(updateWorkspaceDraft(yunzhanSession, yunzhanDraft, NOW), runYunzhanDialogueForDraft(yunzhanDraft, yunzhanTrace), yunzhanTrace, NOW);
+  progress = completeMission(progress, 'w3-m3', { stars: 3, hintsUsed: 0 });
+
+  const bajieSession = createMissionSession('w3-m4', NOW);
+  const bajieDraft = structuredClone(bajieSession.workspace);
+  bajieDraft.blocks.find((block) => block.type === 'w3_bajie_boolean_operation')!.operator = 'and';
+  const bajieTrace = compileBajieJoiningDraft(bajieDraft);
+  progress.sessions['w3-m4'] = recordRun(updateWorkspaceDraft(bajieSession, bajieDraft, NOW), runBajieJoiningForDraft(bajieDraft, bajieTrace), bajieTrace, NOW);
+  progress = completeMission(progress, 'w3-m4', { stars: 3, hintsUsed: 0 });
+
+  const bossSession = createMissionSession('w3-m5', NOW);
+  const bossDraft = createSolvedWeekThreeBossDraftForTest();
+  const bossRun = runWeekThreeBossDraft(bossDraft);
+  progress.sessions['w3-m5'] = recordRun(updateWorkspaceDraft(bossSession, bossDraft, NOW), bossRun, bossRun.trace, NOW);
+  progress = completeMission(progress, 'w3-m5', { stars: 3, hintsUsed: 0 });
+
+  let mappingSession = updateWeekFourMappingCode(createWeekFourMappingSession(NOW), SOLVED_WEEK_FOUR_MAPPING_PYTHON, NOW);
+  const blocklyTrace = compileWeekFourMappingDraft(mappingSession.workspace).trace;
+  const pythonTrace = parseWeekFourMappingPython(mappingSession.pythonCode).trace;
+  mappingSession = recordWeekFourMappingRun(mappingSession, {
+    blocklyTrace, pythonTrace, run: compareWeekFourMappingTraces(blocklyTrace, pythonTrace),
+  }, NOW);
+  progress.sessions['w4-m1'] = mappingSession;
+  progress = completeMission(progress, 'w4-m1', { stars: 3, hintsUsed: 0 });
+
+  let variableSession = updateWeekFourVariableCode(createWeekFourVariableSession(NOW), SOLVED_WEEK_FOUR_VARIABLE_PYTHON, NOW);
+  const variable = parseWeekFourVariablePython(variableSession.pythonCode);
+  variableSession = recordWeekFourVariableRun(variableSession, {
+    canonicalTrace: variable.trace, workerTrace: variable.trace, run: variable.run,
+  }, NOW);
+  progress.sessions['w4-m2'] = variableSession;
+  progress = completeMission(progress, 'w4-m2', { stars: 3, hintsUsed: 0 });
+  progress.missions['w4-m1']!.attempts = 7;
+  progress.missions['w4-m2']!.attempts = 9;
+  return { ...progress, schemaRevision: 9 as const };
 }
 
 const ruyiTrace: RuyiStaffInstruction[] = [
@@ -532,7 +615,7 @@ describe('progress schema', () => {
     const progress = createInitialProgress();
     expect(progress).toMatchObject({
       version: 3,
-      schemaRevision: 9,
+      schemaRevision: 10,
       sessions: {},
       equipment: initialEquipment(),
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
@@ -551,7 +634,7 @@ describe('progress schema', () => {
     const migrated = migrateProgress(legacy);
     expect(migrated).toMatchObject({
       version: 3,
-      schemaRevision: 9,
+      schemaRevision: 10,
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
     });
     expect(migrated.equipment).toEqual({
@@ -736,7 +819,7 @@ describe('progress schema', () => {
     expect(migrateProgress(validV1)).toEqual({
       ...validV1,
       version: 3,
-      schemaRevision: 9,
+      schemaRevision: 10,
       works: {},
       settings: { ...validV1.settings, reducedMotionOverride: false },
       privacy: { localDataNoticeSeen: false },
@@ -752,7 +835,7 @@ describe('progress schema', () => {
     expect(migrateProgress(validV2)).toEqual({
       ...validV2,
       version: 3,
-      schemaRevision: 9,
+      schemaRevision: 10,
       works: {},
       sessions: {},
       equipment: initialEquipment(),
@@ -776,7 +859,7 @@ describe('progress schema', () => {
 
     expect(migrated).toMatchObject({
       version: 3,
-      schemaRevision: 9,
+      schemaRevision: 10,
       missions,
       settings: legacy.settings,
       privacy: legacy.privacy,
@@ -1398,5 +1481,182 @@ describe('progress schema', () => {
     expect(() => migrateProgress({ ...validV2, unexpected: true })).toThrow(/未知字段/);
     expect(() => migrateProgress({ ...validV2, settings: { ...validV2.settings, theme: 'dark' } })).toThrow(/未知字段/);
     expect(() => migrateProgress({ ...validV2, schemaRevision: 2 })).toThrow(/schemaRevision/);
+  });
+
+  it('creates and round-trips only revision 10 for new progress documents', () => {
+    const progress = createInitialProgress();
+    expect(progress.schemaRevision).toBe(10);
+    expect(parseProgress(JSON.stringify(progress))).toEqual(progress);
+  });
+
+  it.each([
+    { version: 1 as const, sourceVersion: 1, sourceSchemaRevision: null, settings: { muted: false, reducedMotion: false, parentPin: 'unset' } },
+    { version: 2 as const, schemaRevision: 1 as const, sourceVersion: 2, sourceSchemaRevision: 1, settings: { muted: false, reducedMotion: false, reducedMotionOverride: false, parentPin: 'unset' }, privacy: { localDataNoticeSeen: false }, recovery: { lastRecoveredAt: null, source: null } },
+  ])('migrates V$version W4-M3 completion to exact legacy replay provenance', (legacy) => {
+    const { sourceVersion, sourceSchemaRevision, ...source } = legacy;
+    const mission = { ...validMission, completedAt: NOW };
+    const migrated = migrateProgress({ ...source, learnerName: '小行者', missions: { 'w4-m3': mission }, savedAt: NOW });
+    expect(migrated).toMatchObject({
+      schemaRevision: 10,
+      sessions: {}, works: {},
+      missionCompletionEvidence: {
+        'w4-m3': { kind: 'legacy-replay-only', completedAt: NOW, sourceVersion, sourceSchemaRevision },
+      },
+    });
+  });
+
+  it('migrates V3 revisions 1 through 9 without inventing W4-M3 state', () => {
+    for (const revision of [1, 2, 3, 4, 5, 6, 7, 8, 9] as const) {
+      const current = createInitialProgress() as any;
+      let legacy: any = { ...current, schemaRevision: revision, missions: { 'w4-m3': validMission }, sessions: {} };
+      if (revision === 1) {
+        const { equipment: _equipment, abilities: _abilities, missionCompletionEvidence: _evidence, works: _works, ...rest } = legacy;
+        legacy = rest;
+      } else if (revision === 2) {
+        const { abilities: _abilities, missionCompletionEvidence: _evidence, works: _works, ...rest } = legacy;
+        legacy = rest;
+      } else if (revision < 8) {
+        const { works: _works, ...rest } = legacy;
+        legacy = rest;
+      } else {
+        legacy.missionCompletionEvidence = {};
+        legacy.works = {};
+      }
+      const migrated = migrateProgress(legacy);
+      expect(migrated.schemaRevision).toBe(10);
+      expect(migrated.sessions).toEqual({});
+      expect(migrated.works).toEqual({});
+      expect(migrated.missionCompletionEvidence['w4-m3']).toEqual({
+        kind: 'legacy-replay-only', completedAt: NOW, sourceVersion: 3, sourceSchemaRevision: revision,
+      });
+    }
+  });
+
+  it('migrates a real revision-9 formal W4-M1/M2 chain without rewriting durable evidence', () => {
+    const revisionNine = revisionNineWithFormalWeekFourM1M2();
+    const before = structuredClone(revisionNine);
+    const migrated = migrateProgress(revisionNine);
+
+    expect(migrated.schemaRevision).toBe(10);
+    expect(migrated.savedAt).toBe(before.savedAt);
+    expect(migrated.sessions['w4-m1']).toEqual(before.sessions['w4-m1']);
+    expect(migrated.sessions['w4-m2']).toEqual(before.sessions['w4-m2']);
+    expect(migrated.works['w4-m1-first-python-mapping']).toEqual(before.works['w4-m1-first-python-mapping']);
+    expect(migrated.works['w4-m2-variable-evidence-record']).toEqual(before.works['w4-m2-variable-evidence-record']);
+    expect(migrated.missionCompletionEvidence['w4-m1']).toEqual(before.missionCompletionEvidence['w4-m1']);
+    expect(migrated.missionCompletionEvidence['w4-m2']).toEqual(before.missionCompletionEvidence['w4-m2']);
+    expect(migrated.missions['w4-m1']).toEqual(before.missions['w4-m1']);
+    expect(migrated.missions['w4-m2']).toEqual(before.missions['w4-m2']);
+    expect(migrated.missions['w4-m1']?.attempts).toBe(7);
+    expect(migrated.missions['w4-m2']?.attempts).toBe(9);
+    expect(migrateProgress(migrated)).toEqual(migrated);
+  });
+
+  it.each([
+    ['draft', createWeekFourBranchSession(NOW)],
+    ['invalid draft', updateWeekFourBranchCode(createWeekFourBranchSession(NOW), 'if identity == "白骨精":\n    keep_observing()\nelse:\npolite_help()', NOW)],
+    ['failed run', (() => {
+      const session = createWeekFourBranchSession(NOW); const parsed = parseWeekFourBranchPython(session.pythonCode);
+      if ('state' in parsed) throw new Error('expected runnable branch fixture');
+      return recordWeekFourBranchRun(session, { canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run }, NOW);
+    })()],
+    ['successful run', (() => {
+      const session = updateWeekFourBranchCode(createWeekFourBranchSession(NOW), SOLVED_WEEK_FOUR_BRANCH_PYTHON, NOW);
+      const parsed = parseWeekFourBranchPython(session.pythonCode); if ('state' in parsed) throw new Error('expected solved branch fixture');
+      return recordWeekFourBranchRun(session, { canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run }, NOW);
+    })()],
+  ])('round-trips a legal active W4-M3 %s session beside legacy completion', (_label, session) => {
+    const progress = migrateProgress(revisionNineWithFormalWeekFourM1M2());
+    const legacyCompletedAt = '2026-07-01T00:00:00.000Z';
+    progress.missions['w4-m3'] = { status: 'completed', stars: 3, attempts: 5, hintsUsed: 1, completedAt: legacyCompletedAt };
+    progress.missionCompletionEvidence['w4-m3'] = {
+      kind: 'legacy-replay-only', completedAt: legacyCompletedAt, sourceVersion: 3, sourceSchemaRevision: 9,
+    };
+    progress.sessions['w4-m3'] = session;
+    progress.savedAt = session.savedAt;
+    expect(parseProgress(JSON.stringify(progress))).toEqual(progress);
+  });
+
+  it('rejects an active revision-10 W4-M3 session saved after the progress document', () => {
+    const current = migrateProgress(revisionNineWithFormalWeekFourM1M2());
+    current.savedAt = '2026-08-31T00:00:03.000Z';
+    current.sessions['w4-m3'] = createWeekFourBranchSession('2099-01-01T00:00:00.000Z');
+    expect(() => parseProgress(JSON.stringify(current))).toThrow(/W4-M3|session|savedAt|保存时间/);
+  });
+
+  it('round-trips a complete revision-10 formal W4-M3 tree with exact W4-M2 prerequisite', () => {
+    const progress = migrateProgress(revisionNineWithFormalWeekFourM1M2());
+    const runAt = '2026-08-31T00:00:01.000Z';
+    const completedAt = '2026-08-31T00:00:02.000Z';
+    const verifiedAt = '2026-08-31T00:00:03.000Z';
+    const parsed = parseWeekFourBranchPython(SOLVED_WEEK_FOUR_BRANCH_PYTHON);
+    if ('state' in parsed) throw new Error('expected solved W4-M3 fixture');
+    const session = recordWeekFourBranchRun(
+      updateWeekFourBranchCode(createWeekFourBranchSession(NOW), SOLVED_WEEK_FOUR_BRANCH_PYTHON, NOW),
+      { canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run }, runAt,
+    );
+    const work = {
+      kind: 'python-branch-structure-v1' as const,
+      workId: 'w4-m3-branch-structure-record' as const,
+      missionId: 'w4-m3' as const,
+      title: '第一次 Python 分支结构记录',
+      pythonCode: session.pythonCode,
+      canonicalTrace: session.lastCanonicalTrace,
+      workerTrace: session.lastWorkerTrace,
+      run: session.lastRun!,
+      createdAt: completedAt,
+      verifiedAt,
+    };
+    progress.sessions['w4-m3'] = session;
+    progress.missions['w4-m3'] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt };
+    progress.works['w4-m3-branch-structure-record'] = work;
+    progress.missionCompletionEvidence['w4-m3'] = {
+      kind: 'formal-v3', completedAt, verifiedAt, pythonCode: work.pythonCode,
+      canonicalTrace: work.canonicalTrace, workerTrace: work.workerTrace, run: work.run, workId: work.workId,
+    };
+    progress.savedAt = verifiedAt;
+
+    expect(parseProgress(JSON.stringify(progress))).toEqual(progress);
+  });
+
+  it('rejects every W4-M3 future field in revisions before 10', () => {
+    const parsed = parseWeekFourBranchPython(SOLVED_WEEK_FOUR_BRANCH_PYTHON);
+    if ('state' in parsed) throw new Error('expected solved branch fixture');
+    const session = recordWeekFourBranchRun(
+      updateWeekFourBranchCode(createWeekFourBranchSession(NOW), SOLVED_WEEK_FOUR_BRANCH_PYTHON, NOW),
+      { canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run }, NOW,
+    );
+    const work = {
+      kind: 'python-branch-structure-v1', workId: 'w4-m3-branch-structure-record', missionId: 'w4-m3', title: '第一次 Python 分支结构记录',
+      pythonCode: session.pythonCode, canonicalTrace: session.lastCanonicalTrace, workerTrace: session.lastWorkerTrace,
+      run: session.lastRun, createdAt: NOW, verifiedAt: NOW,
+    };
+    const proof = { kind: 'formal-v3', completedAt: NOW, verifiedAt: NOW, pythonCode: session.pythonCode, canonicalTrace: session.lastCanonicalTrace, workerTrace: session.lastWorkerTrace, run: session.lastRun, workId: work.workId };
+    const revisionNine = { ...createInitialProgress(), schemaRevision: 9 as const } as any;
+    expect(() => migrateProgress({ ...revisionNine, sessions: { 'w4-m3': session } })).toThrow(/revision 10|W4-M3|session/);
+    expect(() => migrateProgress({ ...revisionNine, works: { 'w4-m3-branch-structure-record': work } })).toThrow(/revision 10|W4-M3|作品/);
+    expect(() => migrateProgress({ ...revisionNine, missions: { 'w4-m3': validMission }, missionCompletionEvidence: { 'w4-m3': proof } })).toThrow(/revision 10|W4-M3|证明/);
+  });
+
+  it('rejects revision-10 unknown and orphan W4-M3 state', () => {
+    const current = createInitialProgress() as any;
+    current.savedAt = NOW;
+    const session = createWeekFourBranchSession(NOW);
+    expect(() => migrateProgress({ ...current, sessions: { 'w4-m3': { ...session, extra: true } } })).toThrow(/W4-M3|session|未知字段/);
+    expect(() => migrateProgress({ ...current, sessions: { 'w4-m3': session } })).toThrow(/W4-M2|前置|orphan|孤立/);
+    expect(() => migrateProgress({ ...current, works: { 'w4-m3-branch-structure-record': {} } })).toThrow(/W4-M3|作品|work/);
+    expect(() => migrateProgress({ ...current, missionCompletionEvidence: { 'w4-m3': {} } })).toThrow(/W4-M3|证明|完成任务/);
+  });
+
+  it('requires stable condition-observation capability for W4-M3 observation history', () => {
+    const parsed = parseWeekFourBranchPython(DEFAULT_WEEK_FOUR_BRANCH_PYTHON);
+    if ('state' in parsed) throw new Error('expected default branch fixture');
+    const failed = recordWeekFourBranchRun(createWeekFourBranchSession(NOW), {
+      canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run,
+    }, NOW);
+    const observed = recordWeekFourBranchObservation(failed, NOW);
+    const current = createInitialProgress() as any;
+    current.savedAt = NOW;
+    expect(() => migrateProgress({ ...current, sessions: { 'w4-m3': observed } })).toThrow(/火眼金睛|conditionObservation|W4-M2|前置/);
   });
 });

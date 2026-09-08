@@ -59,6 +59,10 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     runs: 0, overwriteFailures: 0, validationFailures: 0, infrastructureFailures: 0,
     observations: 0, workSaved: false, proof: 'none' as const, completedAt: null,
   }
+  const weekFourBranches = getWeeklyReport(progress, 4).weekFourBranches ?? {
+    runs: 0, conflicts: 0, missing: 0, validation: 0, infrastructure: 0,
+    observations: 0, workSaved: false, proof: 'none' as const, completedAt: null,
+  }
   const blockerLabels = {
     'manor-help-specificity': '庄口求助判断过宽',
     'disguise-identity': '外形与身份判断',
@@ -121,6 +125,16 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     {weekFourVariables.proof === 'formal-v3' && weekFourVariables.workSaved ? <p>正式变量证明与取证作品已保存</p> : null}
     {weekFourVariables.proof === 'legacy-replay-only' ? <p>第四周历史兼容完成记录，尚非正式变量证明</p> : null}
     {weekFourVariables.proof === 'formal-v3' && !weekFourVariables.workSaved ? <p>正式证明记录异常：尚未发现已保存作品</p> : null}
+  </section>
+
+  <section className="parent-equipment-report" role="region" aria-label="第四周分支结构学习摘要">
+    <div className="parent-equipment-heading"><span className="eyebrow">第四周分支练习</span><h2>第四周分支结构学习摘要</h2><p>只汇总已保存的学习结果与证明状态，不展示代码、答案或内部记录。</p></div>
+    <p>{`已运行 ${weekFourBranches.runs} 次；分支同时执行 ${weekFourBranches.conflicts} 次，分支没有执行 ${weekFourBranches.missing} 次。`}</p>
+    <p>{`结构验证未通过 ${weekFourBranches.validation} 次；运行环境故障 ${weekFourBranches.infrastructure} 次（不计入学习困难）。`}</p>
+    <p>{`主动观察 ${weekFourBranches.observations} 次。`}</p>
+    {weekFourBranches.proof === 'formal-v3' && weekFourBranches.workSaved ? <p>正式分支结构证明与作品已保存</p> : null}
+    {weekFourBranches.proof === 'legacy-replay-only' ? <p>第四周历史兼容完成记录，尚非正式分支结构证明</p> : null}
+    {weekFourBranches.proof === 'formal-v3' && !weekFourBranches.workSaved ? <p>正式证明记录异常：尚未发现已保存作品</p> : null}
   </section></>
 }
 

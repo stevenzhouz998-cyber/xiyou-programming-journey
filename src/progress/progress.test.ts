@@ -4,6 +4,7 @@ import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import {
   completeMission,
   createInitialProgress,
+  getWeekFourBranchAccess,
   getWeekFourVariableAccess,
   getWeeklyReport,
   importProgress,
@@ -32,6 +33,8 @@ import { createWeekFourMappingSession, recordWeekFourMappingRun, updateWeekFourM
 import { migrateProgress } from './schema';
 import { SOLVED_WEEK_FOUR_VARIABLE_PYTHON, parseWeekFourVariablePython } from '../engine/weekFourVariablePythonGrammar';
 import { createWeekFourVariableSession, recordWeekFourVariableRun, updateWeekFourVariableCode } from './weekFourVariableSession';
+import { SOLVED_WEEK_FOUR_BRANCH_PYTHON, parseWeekFourBranchPython } from '../engine/weekFourBranchPythonGrammar';
+import { createWeekFourBranchSession, recordWeekFourBranchRun, updateWeekFourBranchCode } from './weekFourBranchSession';
 
 const NOW = '2026-07-15T06:00:00.000Z';
 const wrongWeaponTrace: RuyiStaffInstruction[] = [
@@ -97,7 +100,186 @@ function successfulWeekFourVariableSession() {
   }, '2026-08-31T00:00:02.000Z');
 }
 
+function formalWeekFourVariableProgress() {
+  const progress = createInitialProgress();
+  progress.missionCompletionEvidence['w4-m1'] = { kind: 'formal-v3' } as never;
+  progress.sessions['w4-m2'] = successfulWeekFourVariableSession();
+  return completeMission(progress, 'w4-m2', { stars: 3, hintsUsed: 0 });
+}
+
+function successfulWeekFourBranchSession() {
+  const draft = updateWeekFourBranchCode(
+    createWeekFourBranchSession('2026-08-31T01:00:00.000Z'),
+    SOLVED_WEEK_FOUR_BRANCH_PYTHON,
+    '2026-08-31T01:00:01.000Z',
+  );
+  const parsed = parseWeekFourBranchPython(draft.pythonCode);
+  if ('state' in parsed) throw new Error('expected solved W4-M3 fixture');
+  return recordWeekFourBranchRun(draft, {
+    canonicalTrace: parsed.trace,
+    workerTrace: parsed.trace,
+    run: parsed.run,
+  }, '2026-08-31T01:00:02.000Z');
+}
+
 describe('progress rules', () => {
+  it('gates W4-M3 formal access by the complete bound W4-M2 proof and preserves history read-only without creating a session', () => {
+    const locked = createInitialProgress();
+    expect(getWeekFourBranchAccess(locked)).toEqual({ kind: 'locked' });
+    expect(locked.sessions['w4-m3']).toBeUndefined();
+
+    const historical = createInitialProgress();
+    historical.missions['w4-m2'] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: NOW };
+    historical.missionCompletionEvidence['w4-m2'] = { kind: 'legacy-replay-only', completedAt: NOW, sourceVersion: 3, sourceSchemaRevision: 8 };
+    expect(getWeekFourBranchAccess(historical)).toEqual({ kind: 'historical-read-only', completed: false });
+    historical.missions['w4-m3'] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: NOW };
+    historical.missionCompletionEvidence['w4-m3'] = { kind: 'legacy-replay-only', completedAt: NOW, sourceVersion: 3, sourceSchemaRevision: 9 };
+    expect(getWeekFourBranchAccess(historical)).toEqual({ kind: 'historical-read-only', completed: true });
+
+    const formal = formalWeekFourVariableProgress();
+    expect(getWeekFourBranchAccess(formal)).toEqual({ kind: 'formal', upgradingLegacy: false });
+    expect(formal.sessions['w4-m3']).toBeUndefined();
+
+    const forged = createInitialProgress();
+    forged.missions['w4-m2'] = formal.missions['w4-m2'];
+    forged.missionCompletionEvidence['w4-m2'] = formal.missionCompletionEvidence['w4-m2'];
+    expect(getWeekFourBranchAccess(forged)).toEqual({ kind: 'locked' });
+  });
+
+  it('publishes W4-M3 mission, formal proof, and work in one timestamp without rewards or ability changes', () => {
+    const progress = formalWeekFourVariableProgress();
+    progress.sessions['w4-m3'] = successfulWeekFourBranchSession();
+    const equipment = structuredClone(progress.equipment);
+    const abilities = structuredClone(progress.abilities);
+
+    const completed = completeMission(progress, 'w4-m3', { stars: 3, hintsUsed: 1 });
+
+    expect(completed.missions['w4-m3']).toMatchObject({ status: 'completed', stars: 3, attempts: 1, hintsUsed: 1 });
+    expect(completed.missionCompletionEvidence['w4-m3']).toMatchObject({
+      kind: 'formal-v3', workId: 'w4-m3-branch-structure-record', run: { completed: true, state: 'branch-proven' },
+    });
+    expect(completed.works['w4-m3-branch-structure-record']).toMatchObject({
+      kind: 'python-branch-structure-v1', missionId: 'w4-m3', title: '分支归位证明记录',
+      run: { completed: true, state: 'branch-proven' },
+    });
+    expect(completed.works['w4-m3-branch-structure-record']!.createdAt).toBe(completed.missions['w4-m3'].completedAt);
+    expect(completed.works['w4-m3-branch-structure-record']!.verifiedAt).toBe((completed.missionCompletionEvidence['w4-m3'] as Extract<NonNullable<typeof completed.missionCompletionEvidence['w4-m3']>, { kind: 'formal-v3' }>).verifiedAt);
+    expect(completed.equipment).toEqual(equipment);
+    expect(completed.abilities).toEqual(abilities);
+    expect(completeMission(completed, 'w4-m3', { stars: 1, hintsUsed: 9 })).toBe(completed);
+  });
+
+  it('upgrades W4-M3 legacy proof while preserving its completion and replacing no unrelated state', () => {
+    const progress = formalWeekFourVariableProgress();
+    progress.missions['w4-m3'] = { status: 'completed', stars: 2, attempts: 7, hintsUsed: 3, completedAt: NOW };
+    progress.missionCompletionEvidence['w4-m3'] = { kind: 'legacy-replay-only', completedAt: NOW, sourceVersion: 3, sourceSchemaRevision: 9 };
+    progress.sessions['w4-m3'] = successfulWeekFourBranchSession();
+    const equipment = structuredClone(progress.equipment);
+    const abilities = structuredClone(progress.abilities);
+
+    const upgraded = completeMission(progress, 'w4-m3', { stars: 3, hintsUsed: 0 });
+
+    expect(upgraded.missions['w4-m3']).toEqual(progress.missions['w4-m3']);
+    expect(upgraded.missionCompletionEvidence['w4-m3']).toMatchObject({ kind: 'formal-v3', completedAt: NOW });
+    expect(upgraded.works['w4-m3-branch-structure-record']!.createdAt).not.toBe(NOW);
+    expect(upgraded.equipment).toEqual(equipment);
+    expect(upgraded.abilities).toEqual(abilities);
+    expect(completeMission(upgraded, 'w4-m3', { stars: 3, hintsUsed: 0 })).toBe(upgraded);
+  });
+
+  it.each([
+    ['formal evidence', (progress: ReturnType<typeof formalWeekFourVariableProgress>) => {
+      const evidence = progress.missionCompletionEvidence['w4-m3'];
+      if (evidence?.kind !== 'formal-v3') throw new Error('expected formal W4-M3 evidence fixture');
+      evidence.workerTrace = [];
+    }],
+    ['formal work', (progress: ReturnType<typeof formalWeekFourVariableProgress>) => { progress.works['w4-m3-branch-structure-record']!.workerTrace = []; }],
+    ['current session', (progress: ReturnType<typeof formalWeekFourVariableProgress>) => { progress.sessions['w4-m3']!.lastWorkerTrace = []; }],
+    ['formal prerequisite', (progress: ReturnType<typeof formalWeekFourVariableProgress>) => { progress.works['w4-m2-variable-evidence-record']!.workerTrace = []; }],
+  ])('rejects an existing forged W4-M3 %s without mutating the supplied progress', (_label, forge) => {
+    const progress = formalWeekFourVariableProgress();
+    progress.sessions['w4-m3'] = successfulWeekFourBranchSession();
+    const completed = completeMission(progress, 'w4-m3', { stars: 3, hintsUsed: 0 });
+    const forged = structuredClone(completed);
+    forge(forged);
+    const before = structuredClone(forged);
+
+    expect(() => completeMission(forged, 'w4-m3', { stars: 3, hintsUsed: 0 })).toThrow(/W4-M3|formal|proof|证明|伪造|无效/);
+    expect(forged).toEqual(before);
+  });
+
+  it.each([
+    ['stars', (progress: ReturnType<typeof formalWeekFourVariableProgress>) => { progress.missions['w4-m3']!.stars = 0 as never; }],
+    ['attempts', (progress: ReturnType<typeof formalWeekFourVariableProgress>) => { progress.missions['w4-m3']!.attempts = 1.5; }],
+    ['hints', (progress: ReturnType<typeof formalWeekFourVariableProgress>) => { progress.missions['w4-m3']!.hintsUsed = -1; }],
+    ['completedAt', (progress: ReturnType<typeof formalWeekFourVariableProgress>) => { progress.missions['w4-m3']!.completedAt = '2026-08-31'; }],
+    ['verifiedAt', (progress: ReturnType<typeof formalWeekFourVariableProgress>) => {
+      const evidence = progress.missionCompletionEvidence['w4-m3'];
+      if (evidence?.kind !== 'formal-v3') throw new Error('expected formal evidence');
+      evidence.verifiedAt = '2026-08-31';
+      progress.works['w4-m3-branch-structure-record']!.verifiedAt = '2026-08-31';
+    }],
+  ])('rejects forged W4-M3 formal mission/time field %s', (_label, forge) => {
+    const progress = formalWeekFourVariableProgress();
+    progress.sessions['w4-m3'] = successfulWeekFourBranchSession();
+    const completed = completeMission(progress, 'w4-m3', { stars: 3, hintsUsed: 0 });
+    const forged = structuredClone(completed);
+    forge(forged);
+    expect(() => completeMission(forged, 'w4-m3', { stars: 3, hintsUsed: 0 })).toThrow(/W4-M3|formal|时间|证明/);
+  });
+
+  it('rejects W4-M3 completion without a formal prerequisite or a current exact solved session', () => {
+    const noPrerequisite = createInitialProgress();
+    noPrerequisite.sessions['w4-m3'] = successfulWeekFourBranchSession();
+    expect(() => completeMission(noPrerequisite, 'w4-m3', { stars: 3, hintsUsed: 0 })).toThrow(/W4-M3.*W4-M2|formal/);
+
+    const missing = formalWeekFourVariableProgress();
+    expect(() => completeMission(missing, 'w4-m3', { stars: 3, hintsUsed: 0 })).toThrow(/W4-M3.*session|run|运行/);
+
+    const forged = formalWeekFourVariableProgress();
+    forged.sessions['w4-m3'] = successfulWeekFourBranchSession();
+    forged.sessions['w4-m3']!.lastWorkerTrace = [];
+    expect(() => completeMission(forged, 'w4-m3', { stars: 3, hintsUsed: 0 })).toThrow(/W4-M3.*session|trace|运行/);
+  });
+
+  it('unlocks W4-M4 only from W4-M3 formal proof while retaining already completed historical access', () => {
+    const formal = formalWeekFourVariableProgress();
+    formal.sessions['w4-m3'] = successfulWeekFourBranchSession();
+    const completed = completeMission(formal, 'w4-m3', { stars: 3, hintsUsed: 0 });
+    expect(isMissionUnlocked(completed, 'w4-m4')).toBe(true);
+
+    const historical = createInitialProgress();
+    historical.missions['w4-m3'] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: NOW };
+    historical.missionCompletionEvidence['w4-m3'] = { kind: 'legacy-replay-only', completedAt: NOW, sourceVersion: 3, sourceSchemaRevision: 9 };
+    expect(isMissionUnlocked(historical, 'w4-m4')).toBe(true);
+
+    const bare = createInitialProgress();
+    bare.missions['w4-m3'] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: NOW };
+    expect(isMissionUnlocked(bare, 'w4-m4')).toBe(false);
+    historical.missions['w4-m4'] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: NOW };
+    expect(isMissionUnlocked(historical, 'w4-m4')).toBe(true);
+  });
+
+  it('reports W4-M3 branch learning separately from infrastructure without leaking answer-bearing data', () => {
+    const progress = formalWeekFourVariableProgress();
+    const session = successfulWeekFourBranchSession();
+    progress.sessions['w4-m3'] = {
+      ...session,
+      totalRuns: 5,
+      branchConflictFailures: 2,
+      branchMissingFailures: 1,
+      validationFailures: 3,
+      runnerInfrastructureFailures: 4,
+      conditionObservationUses: [],
+    };
+    const report = getWeeklyReport(progress, 4).weekFourBranches;
+    expect(report).toEqual({
+      runs: 5, conflicts: 2, missing: 1, validation: 3, infrastructure: 4,
+      observations: 0, workSaved: false, proof: 'none', completedAt: null,
+    });
+    expect(JSON.stringify(report)).not.toMatch(/pythonCode|else:|indent|source|snapshot|cardId|trace|identity/);
+  });
+
   it('publishes W4-M2 mission, sealed proof, and evidence work atomically without granting rewards', () => {
     const progress = createInitialProgress();
     progress.missionCompletionEvidence['w4-m1'] = { kind: 'formal-v3' } as never;
@@ -146,6 +328,7 @@ describe('progress rules', () => {
     expect(upgraded.missions['w4-m2']).toEqual(progress.missions['w4-m2']);
     expect(upgraded.missionCompletionEvidence['w4-m2']).toMatchObject({ kind: 'formal-v3', completedAt: NOW });
     expect(upgraded.works['w4-m2-variable-evidence-record']?.createdAt).toBe(NOW);
+    expect(getWeekFourBranchAccess(upgraded)).toEqual({ kind: 'formal', upgradingLegacy: false });
     expect(completeMission(upgraded, 'w4-m2', { stars: 1, hintsUsed: 0 })).toBe(upgraded);
   });
 
@@ -449,7 +632,7 @@ describe('progress rules', () => {
     expect(progress.missions['w1-m1']).toMatchObject({ stars: 3, attempts: 1, hintsUsed: 0, status: 'completed' });
     expect(progress).toMatchObject({
       version: 3,
-      schemaRevision: 9,
+      schemaRevision: 10,
       sessions: {},
       privacy: { localDataNoticeSeen: true },
       recovery: { lastRecoveredAt: '2026-07-12T00:00:00.000Z', source: 'snapshot' },
@@ -459,7 +642,7 @@ describe('progress rules', () => {
   it('publishes the derived condition-observation ability with w2 completion and keeps it idempotent', () => {
     let progress = createInitialProgress();
     expect(progress).toMatchObject({
-      schemaRevision: 9,
+      schemaRevision: 10,
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
     });
 

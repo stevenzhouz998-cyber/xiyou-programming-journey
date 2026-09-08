@@ -95,12 +95,21 @@ import {
   updateWeekFourVariableCode,
 } from './weekFourVariableSession';
 import type { WeekFourVariableMissionSession } from './weekFourVariableSession';
+import {
+  createWeekFourBranchSession,
+  recordWeekFourBranchHint,
+  recordWeekFourBranchInfrastructureFailure,
+  recordWeekFourBranchObservation,
+  recordWeekFourBranchRun,
+  recordWeekFourBranchValidationFailure,
+  updateWeekFourBranchCode,
+} from './weekFourBranchSession';
+import type { WeekFourBranchMissionSession } from './weekFourBranchSession';
 import type {
   DragonPalaceMissionSession,
   ExecutableMissionId,
   FourSeasRegaliaMissionSession,
   MissionSession,
-  AnyMissionSession,
   MissionSessionById,
   RuyiStaffMissionSession,
   AdvancedWeekOneMissionSession,
@@ -118,7 +127,8 @@ import type {
 import { isExecutableMissionId } from './executableMissionIds';
 
 type HintTier = MissionSession['usedHintTiers'][number];
-type WorkspaceMissionSession = Exclude<AnyMissionSession, WeekFourVariableMissionSession>;
+type WorkspaceMissionSession = Exclude<MissionSession, WeekFourVariableMissionSession | WeekFourBranchMissionSession>;
+type CompileFailureMissionSession = Exclude<MissionSession, WeekFourBranchMissionSession>;
 
 export {
   recordWeekFourVariableHint,
@@ -127,6 +137,12 @@ export {
   recordWeekFourVariableRun,
   recordWeekFourVariableValidationFailure,
   updateWeekFourVariableCode,
+  recordWeekFourBranchHint,
+  recordWeekFourBranchInfrastructureFailure,
+  recordWeekFourBranchObservation,
+  recordWeekFourBranchRun,
+  recordWeekFourBranchValidationFailure,
+  updateWeekFourBranchCode,
 };
 
 function assertCanonicalIso(now: string): void {
@@ -146,11 +162,11 @@ function increment(value: number): number {
   return value + 1;
 }
 
-function cloneSession<TSession extends AnyMissionSession>(session: TSession): TSession {
+function cloneSession<TSession extends MissionSession>(session: TSession): TSession {
   return structuredClone(session);
 }
 
-export function createMissionSession<TMissionId extends ExecutableMissionId>(
+export function createMissionSession<TMissionId extends keyof MissionSessionById>(
   missionId: TMissionId,
 ): MissionSessionById[TMissionId];
 export function createMissionSession(now: string): DragonPalaceMissionSession;
@@ -179,19 +195,24 @@ export function createMissionSession(missionId: 'w3-m5', now: string): WeekThree
 export function createMissionSession(missionId: 'w3-m3', now: string): YunzhanDialogueMissionSession;
 export function createMissionSession(missionId: 'w4-m1', now: string): WeekFourMappingMissionSession;
 export function createMissionSession(missionId: 'w4-m2', now: string): WeekFourVariableMissionSession;
+export function createMissionSession<TMissionId extends keyof MissionSessionById>(
+  missionId: TMissionId,
+  now: string,
+): MissionSessionById[TMissionId];
 export function createMissionSession(missionId: 'w3-m2', now: string): CuilanBooleanMissionSession;
 export function createMissionSession(
-  missionIdOrNow: ExecutableMissionId | string,
+  missionIdOrNow: keyof MissionSessionById | string,
   suppliedNow?: string,
-): AnyMissionSession {
+): MissionSession {
   const missionIdOnly = suppliedNow === undefined && isExecutableMissionId(missionIdOrNow);
   const now = suppliedNow ?? (missionIdOnly ? new Date(0).toISOString() : missionIdOrNow);
   if (suppliedNow !== undefined && !isExecutableMissionId(missionIdOrNow)) {
     throw new Error('任务编号无效');
   }
   assertCanonicalIso(now);
-  if (missionIdOrNow === 'w4-m1') return createWeekFourMappingSession(now) as AnyMissionSession;
-  if (missionIdOrNow === 'w4-m2') return createWeekFourVariableSession(now) as AnyMissionSession;
+  if (missionIdOrNow === 'w4-m1') return createWeekFourMappingSession(now);
+  if (missionIdOrNow === 'w4-m2') return createWeekFourVariableSession(now);
+  if (missionIdOrNow === 'w4-m3') return createWeekFourBranchSession(now);
   const session = {
     workspace: missionIdOrNow === 'w3-m5'
       ? createDefaultWeekThreeBossDraft()
@@ -234,7 +255,7 @@ export function createMissionSession(
       : { programStructure: 0, sequencePrecondition: 0, completeness: 0 },
     lastRunAt: null,
     savedAt: now,
-  } as AnyMissionSession;
+  } as MissionSession;
   if (missionIdOrNow === 'w1-m4' || missionIdOrNow === 'w1-m5') {
     Object.assign(session, { equipmentEffectsUsed: [] });
   }
@@ -317,7 +338,7 @@ export function updateWorkspaceDraft(
   return next;
 }
 
-export function recordCompileFailure<TSession extends AnyMissionSession>(
+export function recordCompileFailure<TSession extends CompileFailureMissionSession>(
   session: TSession,
   concept: 'program-structure',
   now: string,
@@ -548,7 +569,7 @@ export function recordCuilanConditionObservationUse(
   return recordConditionObservationUse(session, snapshotId, now);
 }
 
-export function recordHint<TSession extends AnyMissionSession>(
+export function recordHint<TSession extends MissionSession>(
   session: TSession,
   tier: HintTier,
   now: string,
@@ -560,7 +581,7 @@ export function recordHint<TSession extends AnyMissionSession>(
   return next;
 }
 
-function sequencePrecondition(session: MissionSession): number {
+function sequencePrecondition(session: WorkspaceMissionSession): number {
   return 'sequencePrecondition' in session.conceptFailures
     ? session.conceptFailures.sequencePrecondition
     : 0;
@@ -637,7 +658,7 @@ export function getSessionSupport(
     if (new Set(boss.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
     return support;
   }
-  const common = session as Exclude<MissionSession, WeekThreeBossMissionSession>;
+  const common = session as Exclude<WorkspaceMissionSession, WeekThreeBossMissionSession>;
   if (missionId === 'w2-m3') {
     if (common.conceptFailures.programStructure >= 2 || sequencePrecondition(common) >= 2 || common.conceptFailures.completeness >= 2) support.push('顺序调试');
     if (new Set(common.usedHintTiers).size >= 2) support.push('使用了多个提示层级');

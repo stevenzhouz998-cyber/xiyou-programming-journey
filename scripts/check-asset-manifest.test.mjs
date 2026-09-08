@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as assetManifestModule from './check-asset-manifest.mjs';
 import {
   collectAssetFiles,
   decodeWebpDimensions,
@@ -1042,8 +1043,157 @@ test('requires exactly the two W4-M2 variable-evidence assets and the shared Whi
   ];
   assert.deepEqual(WEEK_FOUR_VARIABLE_REQUIRED_ASSETS, required);
   assert.equal(WEEK_FOUR_VARIABLE_SCENE_SLOT, 'w4-m2 WeekFourVariableEvidenceScene');
-  assert.equal(WEEK_FOUR_SHARED_BACKGROUND_SLOT, 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene');
+  assert.equal(WEEK_FOUR_SHARED_BACKGROUND_SLOT, 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene; w4-m3 WeekFourBranchScene');
   assert.equal(typeof verifyRequiredWeekFourVariableInventory, 'function');
+});
+
+test('reserves the exact two W4-M3 branch assets and extends the shared White Tiger Ridge scene slot', () => {
+  const required = [
+    'assets/week-four-branches/old-woman-visitor.webp',
+    'assets/week-four-branches/branch-route-states.webp',
+  ];
+  assert.deepEqual(assetManifestModule.WEEK_FOUR_BRANCH_REQUIRED_ASSETS, required);
+  assert.equal(assetManifestModule.WEEK_FOUR_BRANCH_SCENE_SLOT, 'w4-m3 WeekFourBranchScene');
+  assert.equal(typeof assetManifestModule.verifyRequiredWeekFourBranchInventory, 'function');
+  assert.equal(WEEK_FOUR_SHARED_BACKGROUND_SLOT, 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene; w4-m3 WeekFourBranchScene');
+  const verify = assetManifestModule.verifyRequiredWeekFourBranchInventory;
+  if (typeof verify !== 'function') return;
+  const promptRows = [
+    { id: 'W4M3-001', heading: 'Prompt W4M3-001 old-woman-visitor', anchor: '#prompt-w4m3-001-old-woman-visitor' },
+    { id: 'W4M3-002', heading: 'Prompt W4M3-002 branch-route-states', anchor: '#prompt-w4m3-002-branch-route-states' },
+  ];
+  const rows = required.map((assetId, index) => row({
+    assetId,
+    promptOrSourceReference: `[Prompt ${promptRows[index].id}](${promptRows[index].anchor})`,
+    dimensions: index === 0 ? '1024x1024' : '1536x512',
+    screenSlots: 'w4-m3 WeekFourBranchScene',
+  }));
+  const cleanVisitorMetrics = {
+    transparentPixelCount: 866_152,
+    partialAlphaPixelCount: 0,
+    opaquePixelCount: 182_424,
+    alphaEdgeMismatch: { inspectedPixels: 0, mismatchedPixels: 0, mismatchRatio: 0 },
+    lowAlphaResidue: { inspectedPixels: 0, orphanPixels: 0, longLineRuns: 0 },
+    visibleAlphaBounds: { minX: 357, minY: 76, maxX: 673, maxY: 945, visiblePixelCount: 182_424, padding: { left: 357, top: 76, right: 350, bottom: 78 } },
+    outerBorderNonTransparentPixelCount: 0,
+    webpLossless: true,
+  };
+  const cleanStateMetrics = {
+    transparentPixelCount: 263_693,
+    partialAlphaPixelCount: 521_517,
+    opaquePixelCount: 1_222,
+    alphaEdgeMismatch: { inspectedPixels: 16_144, mismatchedPixels: 897, mismatchRatio: 0.0556 },
+    lowAlphaResidue: { inspectedPixels: 12_589, orphanPixels: 5_076, longLineRuns: 17 },
+    visibleAlphaBounds: { minX: 24, minY: 15, maxX: 1513, maxY: 494, visiblePixelCount: 460_000, padding: { left: 24, top: 15, right: 22, bottom: 17 } },
+    outerBorderNonTransparentPixelCount: 0,
+    cellVisiblePixelCounts: [174_392, 174_208, 174_139],
+    separatorNonTransparentPixelCounts: [0, 0, 0, 0],
+  };
+  const files = [
+    file({ path: required[0], width: 1024, height: 1024, hasAlpha: true, bytes: 512 * 1024, ...cleanVisitorMetrics }),
+    file({ path: required[1], width: 1536, height: 512, hasAlpha: true, bytes: 512 * 1024, ...cleanStateMetrics }),
+  ];
+  const safety = 'Constraints: transparent RGBA; no text, logo, watermark, weapon, attack, injury, corpse, skeleton, or horror.';
+  const records = [
+    promptRecord({ ...promptRows[0], prompt: `Use case: illustration-story\nStyle/medium: polished bright 3D Chinese children's storybook game character.\n${safety}\nProcessing: accepted OpenAI built-in image_gen result exec-11271c73-0f39-4c9c-8767-89297ceb3d2f.png (1254x1254 RGBA). Sharp 0.35.3 aligned alpha-edge RGB to the nearest opaque neighbour within 2px, resized to 880x880, repeated alpha cleanup, made alpha greater than or equal to 96 binary, removed 8-neighbor islands smaller than 16 pixels, added 72px transparent padding, and encoded a lossless WebP. Opaque artwork is unchanged, with no crop, no art redraw, and no chroma key.` }),
+    promptRecord({ ...promptRows[1], prompt: `Use case: illustration-story\nStyle/medium: polished bright 3D Chinese children's storybook game props.\nComposition: exact 3:1 transparent sprite.\n${safety}\nProcessing: accepted OpenAI built-in image_gen result exec-3db5b776-fe8f-468b-a6fe-18639f813614.png (2172x724 RGBA, exact 3:1). Sharp 0.35.3 proportionally resized alpha to 1536x512, preserving alpha without crop, redraw, compositing, or chroma key.` }),
+  ];
+  const source = `import { assetUrl } from '../utils/assets';
+export function WeekFourBranchScene() {
+  const backgroundUrl = \`${'${'}assetUrl('assets/week-four-mapping/white-tiger-ridge-background.webp')}?retry=0\`;
+  const visitorUrl = \`${'${'}assetUrl('${required[0]}')}?retry=0\`;
+  const statesUrl = \`${'${'}assetUrl('${required[1]}')}?retry=0\`;
+  return <><img src={backgroundUrl} /><img src={visitorUrl} /><div style={{ backgroundImage: \`url("${'${'}statesUrl}")\` }}><img src={statesUrl} hidden /></div></>;
+}`;
+  const scenario = { manifestRows: rows, publicFiles: files, promptRecords: records, source, sharedBackgroundBytes: 128 * 1024, sharedBackgroundScreenSlots: 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene; w4-m3 WeekFourBranchScene' };
+  assert.doesNotThrow(() => verify(scenario));
+  assert.throws(() => verify({ ...scenario, manifestRows: rows.slice(0, 1), publicFiles: files.slice(0, 1) }), /exactly|required/i);
+  assert.throws(() => verify({ ...scenario, manifestRows: [...rows, row({ assetId: 'assets/week-four-branches/extra.webp', screenSlots: 'w4-m3 WeekFourBranchScene' })] }), /exactly|required/i);
+  assert.throws(() => verify({ ...scenario, manifestRows: [{ ...rows[0], screenSlots: 'wrong slot' }, rows[1]] }), /screen slots/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [{ ...files[0], width: 1023 }, files[1]] }), /1024x1024/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [files[0], { ...files[1], width: 1535 }] }), /1536x512/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [{ ...files[0], hasAlpha: false }, files[1]] }), /alpha/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [{ ...files[0], transparentPixelCount: 0 }, files[1]] }), /transparent pixels/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [{ ...files[0], transparentPixelCount: 1 }, files[1]] }), /substantial real transparency/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [{ ...files[0], partialAlphaPixelCount: 1, alphaEdgeMismatch: { inspectedPixels: 100, mismatchedPixels: 5, mismatchRatio: 0.05 } }, files[1]] }), /alpha-edge mismatch/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [{ ...files[0], visibleAlphaBounds: { ...files[0].visibleAlphaBounds, padding: { ...files[0].visibleAlphaBounds.padding, top: 47 } } }, files[1]] }), /48px transparent padding/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [{ ...files[0], lowAlphaResidue: { inspectedPixels: 1, orphanPixels: 1, longLineRuns: 0 } }, files[1]] }), /zero low-alpha orphan/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [{ ...files[0], lowAlphaResidue: { inspectedPixels: 24, orphanPixels: 24, longLineRuns: 1 } }, files[1]] }), /zero low-alpha orphan/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [{ ...files[0], webpLossless: false }, files[1]] }), /lossless WebP/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [files[0], { ...files[1], transparentPixelCount: 1 }] }), /substantial real transparency/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [files[0], { ...files[1], alphaEdgeMismatch: { inspectedPixels: 1000, mismatchedPixels: 81, mismatchRatio: 0.081 } }] }), /8% glow allowance/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [files[0], { ...files[1], outerBorderNonTransparentPixelCount: 1 }] }), /outer border/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [files[0], { ...files[1], cellVisiblePixelCounts: [174_392, 0, 174_139] }] }), /all three cells/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [files[0], { ...files[1], separatorNonTransparentPixelCounts: [0, 1, 0, 0] }] }), /no cross-cell artwork/i);
+  assert.throws(() => verify({ ...scenario, manifestRows: [{ ...rows[0], promptOrSourceReference: '' }, rows[1]] }), /prompt|provenance/i);
+  assert.throws(() => verify({ ...scenario, promptRecords: [promptRecord({ ...promptRows[0], prompt: "Style/medium: polished bright 3D Chinese children's storybook game." }), records[1]] }), /provenance|built-in result|transparent/i);
+  assert.throws(() => verify({ ...scenario, publicFiles: [{ ...files[0], bytes: 512 * 1024 + 1 }, files[1]] }), /512 KiB/i);
+  assert.throws(() => verify({ ...scenario, sharedBackgroundBytes: 300 * 1024 }), /1\.25 MiB/i);
+  assert.throws(() => verify({ ...scenario, sharedBackgroundScreenSlots: 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene' }), /shared background screen slots/i);
+  assert.throws(() => verify({ ...scenario, source: source.replace('<img src={backgroundUrl} />', '<img src={backgroundUrl} hidden />') }), /visible img/i);
+  assert.throws(() => verify({ ...scenario, source: source.replace('<img src={visitorUrl} />', '{true && <img src={visitorUrl} />}') }), /visible img/i);
+  assert.throws(() => verify({ ...scenario, source: source.replace('backgroundImage:', 'backgroundColor:') }), /backgroundImage/i);
+  assert.throws(() => verify({ ...scenario, source: source.replace('backgroundImage:', "'--branch-bg':") }), /CSS custom properties|backgroundImage/i);
+  assert.throws(() => verify({ ...scenario, source: source.replace('backgroundImage: \`url("${statesUrl}")\`', "backgroundImage: statesUrl && 'none'") }), /exact.*backgroundImage|single-interpolation|live slot/i);
+  assert.throws(() => verify({ ...scenario, source: source.replace('backgroundImage: \`url("${statesUrl}")\`', "backgroundImage: statesUrl ? 'none' : 'none'") }), /exact.*backgroundImage|single-interpolation|live slot/i);
+  assert.throws(() => verify({ ...scenario, source: source.replace('backgroundImage: \`url("${statesUrl}")\`', 'backgroundImage: makeUrl(statesUrl)') }), /exact.*backgroundImage|single-interpolation|live slot/i);
+  assert.throws(() => verify({ ...scenario, source: source.replace('backgroundImage: \`url("${statesUrl}")\`', "backgroundImage: 'url(' + statesUrl + ')'") }), /exact.*backgroundImage|single-interpolation|live slot/i);
+  const aliasSource = source.replace(`const statesUrl =`, 'const stateAlias = statesUrl;\n  const statesUrl =').replace('backgroundImage: \`url("${statesUrl}")\`', 'backgroundImage: \`url("${stateAlias}")\`');
+  assert.throws(() => verify({ ...scenario, source: aliasSource }), /backgroundImage|live slot/i);
+  const deadSource = source.replace('const backgroundUrl =', 'const deadBackground = () =>').replace('const visitorUrl =', "const backgroundUrl = 'dead';\n  const visitorUrl =");
+  assert.throws(() => verify({ ...scenario, source: deadSource }), /bind.*backgroundUrl|top-level const/i);
+  assert.throws(() => verify({ ...scenario, source: `${source}\nconst unused = assetUrl('assets/week-four-branches/extra.webp');` }), /exactly three imported assetUrl/i);
+  assert.throws(() => verify({ ...scenario, source: source.replace(`assetUrl('${required[1]}')`, `assetUrl('assets/week-four-branches/other.webp')`) }), /exactly three imported assetUrl/i);
+  assert.throws(() => verify({ ...scenario, source: source.replace('return <>', 'return <') }), /parse|TypeScript/i);
+});
+
+test('W4-M3 visual QA requires a controlled complete evidence index', () => {
+  const projects = ['desktop-chromium-1440x1024', 'desktop-firefox-1440x1024', 'tablet-webkit-768x1024', 'mobile-chromium-390x844', 'narrow-chromium-320x844'];
+  const link = '../verification/week-four-python-branch-structure-visual-evidence.md';
+  const rows = [{ qaStatus: 'visual-qa-passed', purpose: `[Visual evidence](${link})` }];
+  const entries = projects.flatMap((project) => ['default', 'proven'].map((state) => ({ project, state, path: `visual-results/week-four-python-branch-st-0c553-rt-parent-summary-and-W4-M4-${project}/w4m3-${state}-${project}.png`, sha256: 'a'.repeat(64), width: Number(project.match(/-(\d+)x/)[1]), height: 4000 })));
+  const document = (items) => `# Visual evidence\n\n\`\`\`json\n${JSON.stringify({ capturedAt: '2026-09-01', reviewedAt: '2026-09-08', command: 'npx playwright test e2e/week-four-python-branch-structure.spec.ts', entries: items })}\n\`\`\``;
+  const verify = assetManifestModule.verifyWeekFourBranchVisualEvidence;
+  assert.equal(typeof verify, 'function');
+  assert.doesNotThrow(() => verify(rows, document(entries)));
+  assert.throws(() => verify(rows), /evidence index/i);
+  assert.throws(() => verify([{ ...rows[0], purpose: 'no link' }], document(entries)), /evidence link/i);
+  assert.throws(() => verify(rows, document(entries.map((entry, index) => index ? entry : { ...entry, sha256: 'bad' }))), /hash/i);
+  assert.throws(() => verify(rows, document(entries.slice(2))), /ten|10/i);
+  assert.throws(() => verify(rows, document(entries.map((entry, index) => index === 0 ? entries[1] : entry))), /duplicate/i);
+  assert.throws(() => verify(rows, document(entries.map((entry, index) => index ? entry : { ...entry, width: 1 }))), /dimension/i);
+});
+
+test('requires the W4-M3 branch asset inventory to exist before the manifest can claim the scene slot', async () => {
+  const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const directory = join(sourceRoot, 'public', 'assets', 'week-four-branches');
+  let publicFiles;
+  try {
+    publicFiles = await collectAssetFiles(directory, 'assets/week-four-branches');
+  } catch (error) {
+    assert.fail(`W4-M3 branch asset directory is required: ${directory} (${error instanceof Error ? error.code ?? error.message : String(error)})`);
+  }
+  assert.equal(Array.isArray(assetManifestModule.WEEK_FOUR_BRANCH_REQUIRED_ASSETS), true);
+  assert.deepEqual(publicFiles.map((file) => file.path).sort(), [...assetManifestModule.WEEK_FOUR_BRANCH_REQUIRED_ASSETS].sort());
+  for (const publicFile of publicFiles) {
+    assert.equal(publicFile.hasAlpha, true);
+    assert.equal(Number.isInteger(publicFile.transparentPixelCount), true);
+    assert.equal(publicFile.transparentPixelCount > 0, true);
+    assert.equal(publicFile.transparentPixelCount < publicFile.width * publicFile.height, true);
+    assert.equal(typeof publicFile.alphaEdgeMismatch?.mismatchRatio, 'number');
+    assert.equal(Number.isInteger(publicFile.lowAlphaResidue?.orphanPixels), true);
+  }
+  const visitor = publicFiles.find((file) => file.path.endsWith('/old-woman-visitor.webp'));
+  const states = publicFiles.find((file) => file.path.endsWith('/branch-route-states.webp'));
+  assert.deepEqual(visitor.visibleAlphaBounds.padding, { left: 357, top: 76, right: 350, bottom: 78 });
+  assert.equal(visitor.partialAlphaPixelCount, 0);
+  assert.equal(visitor.alphaEdgeMismatch.mismatchRatio, 0);
+  assert.deepEqual(visitor.lowAlphaResidue, { inspectedPixels: 0, orphanPixels: 0, longLineRuns: 0 });
+  assert.equal(visitor.webpLossless, true);
+  assert.equal(states.alphaEdgeMismatch.mismatchRatio <= 0.08, true);
+  assert.equal(states.outerBorderNonTransparentPixelCount, 0);
+  assert.equal(states.cellVisiblePixelCounts.every((count) => count > 1000), true);
+  assert.deepEqual(states.separatorNonTransparentPixelCounts, [0, 0, 0, 0]);
 });
 
 test('requires W4-M2 woman and three-state assets with alpha, exact dimensions, 512 KiB per-file and 1.25 MiB shared-media limits', () => {

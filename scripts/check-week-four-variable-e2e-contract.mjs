@@ -349,8 +349,8 @@ function assertPostRetryProbes(file) {
     }
   }
   const faultRequirements = [
-    ['@w4-m2-runtime-fault load', ['fail-w4-m2-runtime-load', 'runnerInfrastructureFailures', 'totalRuns).toBe(0)', 'evidence-unsealed', 'totalRuns).toBe(1)', 'overwriteFailures).toBe(1)', 'missions["w4-m2"]', 'w4-m2-variable-evidence-record', '这一关还没有解锁']],
-    ['@w4-m2-runtime-fault timeout', ['fail-w4-m2-runtime-timeout', 'runnerInfrastructureFailures', 'totalRuns).toBe(1)', 'evidence-unsealed', 'totalRuns).toBe(2)', 'overwriteFailures).toBe(1)', 'missions["w4-m2"]', 'w4-m2-variable-evidence-record', '这一关还没有解锁']],
+    ['@w4-m2-runtime-fault load', ['fail-w4-m2-runtime-load', 'runnerInfrastructureFailures', 'totalRuns).toBe(0)', 'evidence-unsealed', 'totalRuns).toBe(1)', 'overwriteFailures).toBe(1)', 'missions["w4-m2"]', 'w4-m2-variable-evidence-record', '先完成上一关的正式验证']],
+    ['@w4-m2-runtime-fault timeout', ['fail-w4-m2-runtime-timeout', 'runnerInfrastructureFailures', 'totalRuns).toBe(1)', 'evidence-unsealed', 'totalRuns).toBe(2)', 'overwriteFailures).toBe(1)', 'missions["w4-m2"]', 'w4-m2-variable-evidence-record', '先完成上一关的正式验证']],
     ['@w4-m2-asset-fault', ['fail-w4-m2-assets', 'lastRun?.finalState', 'evidence-sealed', 'workerRunCount', 'formal-v3', 'totalRuns).toBe(workerRunCount)', 'runnerInfrastructureFailures', 'overwriteFailures', 'attempts).toBe(1)']],
     ['@w4-m2-lazy', ['WeekFourVariableEvidenceExperience-', 'lastRun?.finalState', 'evidence-sealed', 'workerRunCount', 'formal-v3', 'totalRuns).toBe(workerRunCount)', 'runnerInfrastructureFailures', 'overwriteFailures', 'attempts).toBe(1)']],
     ['@w4-m2-corrupt current', ['corrupt-w4-variable-current', 'corruptBytes', 'downloadedBytes', 'lastLegalSnapshot', 'recoveredCurrent', 'lastCanonicalTrace', 'lastWorkerTrace', 'w4-m2-variable-evidence-record', 'replayBefore', '{broken w4-m2 current']],
@@ -383,7 +383,7 @@ function assertAccessibilityProbe(file) {
 
 function assertClearAndRealCasProbes(file) {
   const [clear] = testTexts(file, '@w4-m2-clear');
-  const clearMarkers = ['清空学习数据', '输入“清空”以确认', '备份并清空', 'download', 'clearBefore', 'clearBackupBytes', 'JSON.parse(clearBackupBytes)', 'toEqual(clearBefore)', 'sessions["w4-m2"]', 'w4-m2-variable-evidence-record', 'missionCompletionEvidence["w4-m2"]', 'missions["w4-m2"]', 'createInitialProgress().settings', 'createInitialProgress().privacy', '这一关还没有解锁'];
+  const clearMarkers = ['清空学习数据', '输入“清空”以确认', '备份并清空', 'download', 'clearBefore', 'clearBackupBytes', 'JSON.parse(clearBackupBytes)', 'toEqual(clearBefore)', 'sessions["w4-m2"]', 'w4-m2-variable-evidence-record', 'missionCompletionEvidence["w4-m2"]', 'missions["w4-m2"]', 'createInitialProgress().settings', 'createInitialProgress().privacy', '先完成上一关的正式验证'];
   if (!clear || !clearMarkers.every((marker) => clear.includes(marker))) throw new Error('w4-m2 source contract: clear probe must visibly back up, clear every W4-M2 record, restore exact initial settings/privacy, and relock W4-M3.');
   const [cas] = testTexts(file, '@w4-m2-external');
   const casMarkers = ['stale.route', 'await run(stale)', 'await chooseIdentity(page)', 'currentRevision', 'currentCode', '其他标签页已有新的学习进度', '载入其他标签页进度'];

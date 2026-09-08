@@ -5,6 +5,14 @@ const MODE_KEY = 'xiyou-test-storage-mode';
 const CURRENT_KEY = 'xiyou-programming-progress-v3';
 const SNAPSHOT_KEY = 'xiyou-programming-progress-snapshot-v3';
 const FAILURE = 'regalia storage fault';
+export const WEEK_FOUR_BRANCH_LATER_SETUP_MODES = [
+  'fail-w4-m3-runtime-load',
+  'fail-w4-m3-runtime-timeout',
+  'fail-w4-m3-assets',
+  'fail-w4-m3-lazy',
+  'fail-w4-m3-cas-stale-writer',
+  'fail-w4-m3-corrupt-current',
+] as const;
 let advancedStorageFaultHandler: StorageFaultAdapter['beforeProgressWrite'] = () => null;
 
 export function registerAdvancedStorageFaultHandler(handler: StorageFaultAdapter['beforeProgressWrite']): void {
@@ -203,6 +211,99 @@ function exactW4VariableCompletionDelta(previous: ProgressV3, next: ProgressV3) 
     expected.missionCompletionEvidence['w4-m2'] = structuredClone(evidence);
     expected.works['w4-m2-variable-evidence-record'] = structuredClone(work);
     expected.abilities = structuredClone(next.abilities);
+  });
+}
+
+function hasNoW4BranchPublication(progress: ProgressV3) {
+  return progress.missions['w4-m3'] === undefined
+    && progress.missionCompletionEvidence['w4-m3'] === undefined
+    && progress.works['w4-m3-branch-structure-record'] === undefined;
+}
+
+function exactW4BranchDraftDelta(previous: ProgressV3, next: ProgressV3) {
+  const prior = previous.sessions['w4-m3']; const candidate = next.sessions['w4-m3'];
+  if (!candidate || !hasNoW4BranchPublication(next) || candidate.lastRun !== null) return false;
+  if (!prior) return exactAfterAllowedDelta(previous, next, (expected) => { expected.sessions['w4-m3'] = structuredClone(candidate); });
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    const session = expected.sessions['w4-m3']!;
+    session.pythonCode = candidate.pythonCode;
+    session.lastCanonicalTrace = [];
+    session.lastWorkerTrace = [];
+    session.lastRun = null;
+    session.failureSnapshot = null;
+    session.conditionObservationUses = [];
+    session.lastRunAt = null;
+    session.savedAt = candidate.savedAt;
+  });
+}
+
+function exactW4BranchRunDelta(previous: ProgressV3, next: ProgressV3) {
+  const prior = previous.sessions['w4-m3']; const candidate = next.sessions['w4-m3'];
+  if (!prior || !candidate || !hasNoW4BranchPublication(next)) return false;
+  if (candidate.validationFailures === prior.validationFailures + 1) {
+    return exactAfterAllowedDelta(previous, next, (expected) => {
+      const session = expected.sessions['w4-m3']!;
+      session.validationFailures = candidate.validationFailures;
+      session.firstBlockingConcept = candidate.firstBlockingConcept;
+      session.savedAt = candidate.savedAt;
+    });
+  }
+  if (candidate.runnerInfrastructureFailures === prior.runnerInfrastructureFailures + 1
+    && (candidate.totalRuns === prior.totalRuns || candidate.totalRuns === prior.totalRuns + 1)) {
+    return exactAfterAllowedDelta(previous, next, (expected) => {
+      const session = expected.sessions['w4-m3']!;
+      session.runnerInfrastructureFailures = candidate.runnerInfrastructureFailures;
+      session.totalRuns = candidate.totalRuns;
+      session.savedAt = candidate.savedAt;
+    });
+  }
+  if (!candidate.lastRun || candidate.totalRuns !== prior.totalRuns + 1) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    const session = expected.sessions['w4-m3']!;
+    session.lastCanonicalTrace = structuredClone(candidate.lastCanonicalTrace);
+    session.lastWorkerTrace = structuredClone(candidate.lastWorkerTrace);
+    session.lastRun = structuredClone(candidate.lastRun);
+    session.failureSnapshot = structuredClone(candidate.failureSnapshot);
+    session.conditionObservationUses = [];
+    session.totalRuns = candidate.totalRuns;
+    session.branchConflictFailures = candidate.branchConflictFailures;
+    session.branchMissingFailures = candidate.branchMissingFailures;
+    session.firstBlockingConcept = candidate.firstBlockingConcept;
+    session.lastRunAt = candidate.lastRunAt;
+    session.savedAt = candidate.savedAt;
+  });
+}
+
+function exactW4BranchObservationDelta(previous: ProgressV3, next: ProgressV3) {
+  const prior = previous.sessions['w4-m3']; const candidate = next.sessions['w4-m3'];
+  const observation = candidate?.conditionObservationUses.at(-1);
+  if (!prior || !candidate || !observation || !prior.failureSnapshot || !hasNoW4BranchPublication(next)
+    || candidate.conditionObservationUses.length !== prior.conditionObservationUses.length + 1
+    || canonicalJson(candidate.conditionObservationUses.slice(0, -1)) !== canonicalJson(prior.conditionObservationUses)
+    || prior.conditionObservationUses.some((use) => use.snapshotId === observation.snapshotId)
+    || observation.snapshotId !== prior.failureSnapshot.snapshotId
+    || observation.pythonCode !== prior.pythonCode || observation.usedAt !== candidate.savedAt) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    const session = expected.sessions['w4-m3']!;
+    session.conditionObservationUses.push(structuredClone(observation));
+    session.savedAt = candidate.savedAt;
+  });
+}
+
+function exactW4BranchCompletionDelta(previous: ProgressV3, next: ProgressV3) {
+  const completion = next.missions['w4-m3'];
+  const evidence = next.missionCompletionEvidence['w4-m3'];
+  const work = next.works['w4-m3-branch-structure-record'];
+  const oldEvidence = previous.missionCompletionEvidence['w4-m3'];
+  const initial = previous.missions['w4-m3'] === undefined && oldEvidence === undefined
+    && previous.works['w4-m3-branch-structure-record'] === undefined;
+  const upgrade = previous.missions['w4-m3'] !== undefined && oldEvidence?.kind === 'legacy-replay-only'
+    && previous.works['w4-m3-branch-structure-record'] === undefined;
+  if (!completion || evidence?.kind !== 'formal-v3' || !work || (!initial && !upgrade)) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    if (initial) expected.missions['w4-m3'] = structuredClone(completion);
+    expected.missionCompletionEvidence['w4-m3'] = structuredClone(evidence);
+    expected.works['w4-m3-branch-structure-record'] = structuredClone(work);
   });
 }
 
@@ -731,16 +832,21 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-w4-m2-observation' && exactW4VariableObservationDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m2-work' && exactW4VariableCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m2-completion' && exactW4VariableCompletionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w4-m3-draft' && exactW4BranchDraftDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w4-m3-run' && exactW4BranchRunDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w4-m3-observation' && exactW4BranchObservationDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w4-m3-work' && exactW4BranchCompletionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w4-m3-completion' && exactW4BranchCompletionDelta(previous, progress)) return FAILURE;
     const advancedFailure = advancedStorageFaultHandler({ storage, progress });
     if (advancedFailure !== null) return advancedFailure;
     return null;
   },
   beforeProgressLoad: (storage) => {
     const mode = storage.getItem(MODE_KEY);
-    if (mode !== 'corrupt-regalia-current' && mode !== 'corrupt-advanced-current' && mode !== 'corrupt-horse-current' && mode !== 'corrupt-monkey-current' && mode !== 'corrupt-peach-current' && mode !== 'corrupt-boss-current' && mode !== 'corrupt-manor-current' && mode !== 'corrupt-cuilan-current' && mode !== 'corrupt-yunzhan-current' && mode !== 'corrupt-bajie-current' && mode !== 'corrupt-week-three-boss-current' && mode !== 'corrupt-week-four-mapping-current' && mode !== 'corrupt-w4-variable-current') return;
+    if (mode !== 'corrupt-regalia-current' && mode !== 'corrupt-advanced-current' && mode !== 'corrupt-horse-current' && mode !== 'corrupt-monkey-current' && mode !== 'corrupt-peach-current' && mode !== 'corrupt-boss-current' && mode !== 'corrupt-manor-current' && mode !== 'corrupt-cuilan-current' && mode !== 'corrupt-yunzhan-current' && mode !== 'corrupt-bajie-current' && mode !== 'corrupt-week-three-boss-current' && mode !== 'corrupt-week-four-mapping-current' && mode !== 'corrupt-w4-variable-current' && mode !== 'fail-w4-m3-corrupt-current') return;
     const legal = storage.getItem(CURRENT_KEY);
     if (legal !== null) storage.setItem(SNAPSHOT_KEY, legal);
-    storage.setItem(CURRENT_KEY, mode === 'corrupt-regalia-current' ? '{broken w1-m3 current' : mode === 'corrupt-advanced-current' ? '{broken advanced current' : mode === 'corrupt-horse-current' ? '{broken w2-m1 current' : mode === 'corrupt-monkey-current' ? '{broken w2-m2 current' : mode === 'corrupt-peach-current' ? '{broken w2-m3 current' : mode === 'corrupt-boss-current' ? '{broken w2-m5 current' : mode === 'corrupt-manor-current' ? '{broken w3-m1 current' : mode === 'corrupt-cuilan-current' ? '{broken w3-m2 current' : mode === 'corrupt-yunzhan-current' ? '{broken w3-m3 current' : mode === 'corrupt-bajie-current' ? '{broken w3-m4 current' : mode === 'corrupt-week-three-boss-current' ? '{broken w3-m5 current' : mode === 'corrupt-w4-variable-current' ? '{broken w4-m2 current' : '{broken w4-m1 current');
+    storage.setItem(CURRENT_KEY, mode === 'corrupt-regalia-current' ? '{broken w1-m3 current' : mode === 'corrupt-advanced-current' ? '{broken advanced current' : mode === 'corrupt-horse-current' ? '{broken w2-m1 current' : mode === 'corrupt-monkey-current' ? '{broken w2-m2 current' : mode === 'corrupt-peach-current' ? '{broken w2-m3 current' : mode === 'corrupt-boss-current' ? '{broken w2-m5 current' : mode === 'corrupt-manor-current' ? '{broken w3-m1 current' : mode === 'corrupt-cuilan-current' ? '{broken w3-m2 current' : mode === 'corrupt-yunzhan-current' ? '{broken w3-m3 current' : mode === 'corrupt-bajie-current' ? '{broken w3-m4 current' : mode === 'corrupt-week-three-boss-current' ? '{broken w3-m5 current' : mode === 'corrupt-w4-variable-current' ? '{broken w4-m2 current' : mode === 'fail-w4-m3-corrupt-current' ? '{broken w4-m3 current' : '{broken w4-m1 current');
     storage.setItem(MODE_KEY, 'off');
   },
 };

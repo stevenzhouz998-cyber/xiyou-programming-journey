@@ -50,7 +50,7 @@ const REQUIRED_METADATA = [
 ];
 
 const QA_STATUSES = new Set(['planned', 'generated', 'provenance-verified', 'visual-qa-passed', 'rejected']);
-const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/', 'assets/week-three-yunzhan-dialogue/', 'assets/week-three-bajie-joining/', 'assets/week-three-boss/', 'assets/week-four-mapping/', 'assets/week-four-variables/'];
+const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/', 'assets/week-three-yunzhan-dialogue/', 'assets/week-three-bajie-joining/', 'assets/week-three-boss/', 'assets/week-four-mapping/', 'assets/week-four-variables/', 'assets/week-four-branches/'];
 
 const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
   ['assets/dragon-palace/background.webp', [
@@ -144,8 +144,14 @@ export const WEEK_FOUR_VARIABLE_REQUIRED_ASSETS = Object.freeze([
   'assets/week-four-variables/variable-record-states.webp',
 ]);
 export const WEEK_FOUR_VARIABLE_SCENE_SLOT = 'w4-m2 WeekFourVariableEvidenceScene';
-export const WEEK_FOUR_SHARED_BACKGROUND_SLOT = 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene';
+export const WEEK_FOUR_BRANCH_REQUIRED_ASSETS = Object.freeze([
+  'assets/week-four-branches/old-woman-visitor.webp',
+  'assets/week-four-branches/branch-route-states.webp',
+]);
+export const WEEK_FOUR_BRANCH_SCENE_SLOT = 'w4-m3 WeekFourBranchScene';
+export const WEEK_FOUR_SHARED_BACKGROUND_SLOT = 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene; w4-m3 WeekFourBranchScene';
 const WEEK_FOUR_VARIABLE_SOURCE_PATH = 'src/components/WeekFourVariableEvidenceScene.tsx';
+const WEEK_FOUR_BRANCH_SOURCE_PATH = 'src/components/WeekFourBranchScene.tsx';
 const REQUIRED_BAJIE_JOINING_ART_DIRECTION = "polished bright 3D Chinese children's storybook game";
 const REQUIRED_BAJIE_JOINING_PROMPT_SAFETY = ['no text', 'no pseudo-text', 'no binding', 'no ear pulling', 'no attack', 'no adult marriage', 'no humiliating pose'];
 
@@ -656,6 +662,8 @@ function verifyPromptRecords(promptRecords, manifestRows) {
       ? 'polished bright 3D'
       : row.assetId.startsWith('assets/week-three-cuilan/')
       ? REQUIRED_CUILAN_ART_DIRECTION
+      : row.assetId.startsWith('assets/week-four-branches/')
+      ? '3D Chinese'
       : row.assetId.startsWith('assets/week-three-boss/') || row.assetId.startsWith('assets/week-four-mapping/') || row.assetId.startsWith('assets/week-four-variables/')
       ? "3D Chinese children's storybook"
       : row.assetId.startsWith('assets/week-one-advanced/') || row.assetId.startsWith('assets/week-two-heaven/') || row.assetId.startsWith('assets/week-two-great-sage/') || row.assetId.startsWith('assets/week-two-peach-elixir/') || row.assetId.startsWith('assets/week-two-furnace/') || row.assetId.startsWith('assets/week-two-heavenly-boss/') || row.assetId.startsWith('assets/week-three-manor-help/') || row.assetId.startsWith('assets/week-three-yunzhan-dialogue/')
@@ -1050,6 +1058,11 @@ const LOW_ALPHA_RESIDUE_THRESHOLD = 16;
 const LOW_ALPHA_FOREGROUND_RADIUS = 4;
 const MAX_LOW_ALPHA_ORPHAN_PIXELS = 48;
 const MIN_LOW_ALPHA_LINE_RESIDUE_LENGTH = 24;
+const MAX_WEEK_FOUR_VISITOR_ALPHA_EDGE_MISMATCH_RATIO = 0.04;
+const MAX_WEEK_FOUR_BRANCH_STATE_ALPHA_EDGE_MISMATCH_RATIO = 0.08;
+const WEEK_FOUR_VISITOR_MIN_ALPHA_PADDING = 48;
+const WEEK_FOUR_BRANCH_MIN_VISIBLE_PIXELS_PER_CELL = 1024;
+const WEEK_FOUR_BRANCH_SEPARATOR_COLUMNS = Object.freeze([511, 512, 1023, 1024]);
 
 export function measureAlphaEdgeMismatch(rgba, width, height) {
   if (!(rgba instanceof Uint8Array) || !Number.isInteger(width) || !Number.isInteger(height)
@@ -1133,6 +1146,55 @@ function countTransparentPixels(rgba) {
   let count = 0;
   for (let offset = 0; offset < rgba.length; offset += 4) if (rgba[offset + 3] === 0) count += 1;
   return count;
+}
+
+function measureAlphaInventory(rgba, width, height) {
+  let transparentPixelCount = 0;
+  let partialAlphaPixelCount = 0;
+  let opaquePixelCount = 0;
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  let visiblePixelCount = 0;
+  let outerBorderNonTransparentPixelCount = 0;
+  const separatorNonTransparentPixelCounts = WEEK_FOUR_BRANCH_SEPARATOR_COLUMNS.map(() => 0);
+  const cellVisiblePixelCounts = width === 1536 && height === 512 ? [0, 0, 0] : [];
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+    const alpha = rgba[(y * width + x) * 4 + 3];
+    if (alpha === 0) transparentPixelCount += 1;
+    else if (alpha === 255) opaquePixelCount += 1;
+    else partialAlphaPixelCount += 1;
+    if (alpha > 128) {
+      visiblePixelCount += 1;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+    if (alpha > 0 && (x === 0 || y === 0 || x === width - 1 || y === height - 1)) outerBorderNonTransparentPixelCount += 1;
+    if (alpha > 0 && cellVisiblePixelCounts.length === 3) cellVisiblePixelCounts[Math.floor(x / 512)] += 1;
+    if (alpha > 0) {
+      const separatorIndex = WEEK_FOUR_BRANCH_SEPARATOR_COLUMNS.indexOf(x);
+      if (separatorIndex >= 0) separatorNonTransparentPixelCounts[separatorIndex] += 1;
+    }
+  }
+  const visibleAlphaBounds = visiblePixelCount === 0 ? null : {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    visiblePixelCount,
+    padding: { left: minX, top: minY, right: width - 1 - maxX, bottom: height - 1 - maxY },
+  };
+  return {
+    transparentPixelCount,
+    partialAlphaPixelCount,
+    opaquePixelCount,
+    visibleAlphaBounds,
+    outerBorderNonTransparentPixelCount,
+    ...(cellVisiblePixelCounts.length === 3 ? { cellVisiblePixelCounts, separatorNonTransparentPixelCounts } : {}),
+  };
 }
 
 function verifyWeekThreeManorHelpSceneSource(sourcePath, source) {
@@ -1462,6 +1524,256 @@ export function verifyRequiredWeekFourVariableInventory({
   return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
 }
 
+function verifyWeekFourBranchPromptProvenance(promptRecords) {
+  if (!Array.isArray(promptRecords) || promptRecords.length !== 2) throw new Error('Asset manifest: W4-M3 requires exactly two complete provenance prompt records.');
+  const byHeading = new Map(promptRecords.map((record) => [record.heading, record]));
+  const visitor = byHeading.get('Prompt W4M3-001 old-woman-visitor');
+  const states = byHeading.get('Prompt W4M3-002 branch-route-states');
+  if (!visitor || !states) throw new Error('Asset manifest: W4-M3 provenance prompt headings are incomplete.');
+  const safetyTerms = ['text', 'logo', 'watermark', 'weapon', 'attack', 'injury', 'corpse', 'skeleton', 'horror'];
+  for (const record of [visitor, states]) {
+    const prompt = record.prompt;
+    const processing = prompt.split('Processing:')[1] ?? '';
+    if (!prompt.includes('Use case: illustration-story') || !prompt.includes('3D Chinese') || !prompt.includes('transparent')) throw new Error(`Asset manifest: ${record.heading} must preserve the approved W4-M3 transparent 3D Chinese storybook brief.`);
+    if (!processing.includes('OpenAI built-in image_gen result') || !/exec-[a-f0-9-]+\.png/.test(processing) || !processing.includes('RGBA')) throw new Error(`Asset manifest: ${record.heading} must record its accepted built-in result exec reference and RGBA source.`);
+    if (!processing.includes('Sharp 0.35.3') || !processing.includes('alpha') || !processing.includes('resize')) throw new Error(`Asset manifest: ${record.heading} must record the exact Sharp alpha/resize processing.`);
+    if (!/(?:no|without)[^.\n]{0,160}crop/.test(processing) || !/(?:no|without)[^.\n]{0,160}redraw/.test(processing) || !/(?:no|without)[^.\n]{0,200}chroma key/.test(processing)) throw new Error(`Asset manifest: ${record.heading} must state no crop, no art redraw, and no chroma key processing.`);
+    for (const term of safetyTerms) if (!prompt.toLowerCase().includes(term)) throw new Error(`Asset manifest: ${record.heading} is missing the complete child-safe constraint ${term}.`);
+  }
+  const visitorProcessing = visitor.prompt.split('Processing:')[1];
+  const normalizedVisitorProcessing = visitorProcessing.toLowerCase();
+  for (const phrase of ['nearest opaque neighbour within 2px', '880x880', 'greater than or equal to 96', '8-neighbor', 'smaller than 16 pixels', '72px', 'lossless webp', 'opaque artwork is unchanged']) {
+    if (!normalizedVisitorProcessing.includes(phrase)) throw new Error(`Asset manifest: ${visitor.heading} must record its reproducible technical matting phrase ${phrase}.`);
+  }
+  const statesProcessing = states.prompt.split('Processing:')[1];
+  for (const phrase of ['exact 3:1', 'proportionally resized', '1536x512', 'preserving alpha']) {
+    if (!states.prompt.includes(phrase) && !statesProcessing.includes(phrase)) throw new Error(`Asset manifest: ${states.heading} must record its exact sprite processing phrase ${phrase}.`);
+  }
+}
+
+export const WEEK_FOUR_BRANCH_VISUAL_EVIDENCE_PATH = 'docs/verification/week-four-python-branch-structure-visual-evidence.md';
+
+export function verifyWeekFourBranchVisualEvidence(rows, evidenceIndex) {
+  const passed = rows.filter((row) => row.qaStatus === 'visual-qa-passed');
+  if (!passed.length) return;
+  if (passed.some((row) => !row.purpose?.includes('](../verification/week-four-python-branch-structure-visual-evidence.md)'))) throw new Error('Asset manifest: W4-M3 visual QA requires an evidence link in every passed asset row.');
+  const blocks = typeof evidenceIndex === 'string' ? [...evidenceIndex.matchAll(/```json\s*\n([\s\S]*?)\n```/g)] : [];
+  if (blocks.length !== 1) throw new Error('Asset manifest: W4-M3 requires one controlled visual evidence index.');
+  let index;
+  try { index = JSON.parse(blocks[0][1]); } catch { throw new Error('Asset manifest: W4-M3 visual evidence index must be valid JSON.'); }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(index.capturedAt ?? '') || !/^\d{4}-\d{2}-\d{2}$/.test(index.reviewedAt ?? '') || !index.command?.includes('playwright test e2e/week-four-python-branch-structure.spec.ts')) throw new Error('Asset manifest: W4-M3 visual evidence index requires capture/review dates and source command.');
+  const projects = new Map([['desktop-chromium-1440x1024', 1440], ['desktop-firefox-1440x1024', 1440], ['tablet-webkit-768x1024', 768], ['mobile-chromium-390x844', 390], ['narrow-chromium-320x844', 320]]);
+  if (!Array.isArray(index.entries) || index.entries.length !== 10) throw new Error('Asset manifest: W4-M3 visual evidence index requires exactly ten screenshots.');
+  const seen = new Set();
+  for (const entry of index.entries) {
+    if (!entry || !projects.has(entry.project) || !['default', 'proven'].includes(entry.state)) throw new Error('Asset manifest: W4-M3 visual evidence project/state is invalid.');
+    const key = `${entry.project}/${entry.state}`;
+    if (seen.has(key)) throw new Error('Asset manifest: W4-M3 visual evidence has a duplicate project/state.');
+    seen.add(key);
+    if (entry.path !== `visual-results/week-four-python-branch-st-0c553-rt-parent-summary-and-W4-M4-${entry.project}/w4m3-${entry.state}-${entry.project}.png`) throw new Error('Asset manifest: W4-M3 visual evidence screenshot path does not match its project/state.');
+    if (!/^[a-f0-9]{64}$/.test(entry.sha256 ?? '')) throw new Error('Asset manifest: W4-M3 visual evidence hash must be SHA-256.');
+    if (entry.width !== projects.get(entry.project) || !Number.isSafeInteger(entry.height) || entry.height < Number(entry.project.split('x').at(-1))) throw new Error('Asset manifest: W4-M3 visual evidence dimensions are invalid.');
+  }
+}
+
+export function verifyRequiredWeekFourBranchInventory({
+  manifestRows,
+  publicFiles,
+  promptRecords = [],
+  sourcePath = WEEK_FOUR_BRANCH_SOURCE_PATH,
+  source,
+  sharedBackgroundBytes,
+  sharedBackgroundScreenSlots,
+  visualEvidenceIndex,
+  mode = 'check',
+}) {
+  const directory = 'assets/week-four-branches/';
+  const rows = familyRows(manifestRows, directory);
+  verifyWeekFourBranchVisualEvidence(rows, visualEvidenceIndex);
+  const files = familyFiles(publicFiles, directory);
+  requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: WEEK_FOUR_BRANCH_REQUIRED_ASSETS, label: 'Week Four branch' });
+  for (const row of rows) {
+    if (row.screenSlots !== WEEK_FOUR_BRANCH_SCENE_SLOT) throw new Error(`Asset manifest: ${row.assetId} screen slots must be exactly ${WEEK_FOUR_BRANCH_SCENE_SLOT}.`);
+  }
+
+  const visitor = files.find((file) => file.path === 'assets/week-four-branches/old-woman-visitor.webp');
+  const states = files.find((file) => file.path === 'assets/week-four-branches/branch-route-states.webp');
+  if (visitor?.hasAlpha !== true || states?.hasAlpha !== true) throw new Error('Asset manifest: W4-M3 visitor and branch-state assets must preserve true alpha channels.');
+  if (visitor.width !== 1024 || visitor.height !== 1024) throw new Error('Asset manifest: W4-M3 visitor asset must be exactly 1024x1024.');
+  if (states.width !== 1536 || states.height !== 512) throw new Error('Asset manifest: W4-M3 branch-state asset must be exactly 1536x512 with three equal 512x512 cells.');
+  for (const asset of [visitor, states]) {
+    const pixels = asset?.width * asset?.height;
+    if (!Number.isInteger(asset?.transparentPixelCount) || !Number.isInteger(pixels) || asset.transparentPixelCount <= 0 || asset.transparentPixelCount >= pixels) {
+      throw new Error(`Asset manifest: ${asset?.path ?? 'W4-M3 asset'} must contain both real transparent pixels and visible non-transparent artwork.`);
+    }
+  }
+  if (visitor.transparentPixelCount < 180_000) throw new Error('Asset manifest: W4-M3 visitor must contain substantial real transparency, not a one-transparent-pixel token.');
+  if (!Number.isInteger(visitor.partialAlphaPixelCount) || !Number.isInteger(visitor.opaquePixelCount) || visitor.opaquePixelCount <= 0) throw new Error('Asset manifest: W4-M3 visitor alpha inventory is incomplete.');
+  if (!visitor.alphaEdgeMismatch || !Number.isInteger(visitor.alphaEdgeMismatch.inspectedPixels) || !Number.isFinite(visitor.alphaEdgeMismatch.mismatchRatio)) throw new Error('Asset manifest: W4-M3 visitor alpha-edge metrics are required.');
+  const visitorUsesBinaryAlpha = visitor.partialAlphaPixelCount === 0;
+  if (!visitorUsesBinaryAlpha && visitor.alphaEdgeMismatch.mismatchRatio > MAX_WEEK_FOUR_VISITOR_ALPHA_EDGE_MISMATCH_RATIO) throw new Error('Asset manifest: W4-M3 visitor alpha-edge mismatch exceeds 4%.');
+  const visitorPadding = visitor.visibleAlphaBounds?.padding;
+  if (!visitor.visibleAlphaBounds || !Number.isInteger(visitor.visibleAlphaBounds.visiblePixelCount) || visitor.visibleAlphaBounds.visiblePixelCount <= 0
+    || !visitorPadding || ['left', 'top', 'right', 'bottom'].some((side) => !Number.isInteger(visitorPadding[side]) || visitorPadding[side] < WEEK_FOUR_VISITOR_MIN_ALPHA_PADDING)) {
+    throw new Error('Asset manifest: W4-M3 visitor alpha>128 artwork must preserve at least 48px transparent padding on every side.');
+  }
+  if (!visitor.lowAlphaResidue || visitor.lowAlphaResidue.orphanPixels !== 0 || visitor.lowAlphaResidue.longLineRuns !== 0) throw new Error('Asset manifest: W4-M3 visitor must contain zero low-alpha orphan pixels and zero long-line runs.');
+  if (visitor.webpLossless !== true) throw new Error('Asset manifest: W4-M3 visitor must preserve the recorded lossless WebP technical matte.');
+
+  if (states.transparentPixelCount < 6000) throw new Error('Asset manifest: W4-M3 branch states must contain substantial real transparency, not a one-transparent-pixel token.');
+  if (!states.alphaEdgeMismatch || !Number.isFinite(states.alphaEdgeMismatch.mismatchRatio) || states.alphaEdgeMismatch.mismatchRatio > MAX_WEEK_FOUR_BRANCH_STATE_ALPHA_EDGE_MISMATCH_RATIO) throw new Error('Asset manifest: W4-M3 branch-state alpha-edge mismatch exceeds the independent 8% glow allowance.');
+  if (!states.lowAlphaResidue || !Number.isInteger(states.lowAlphaResidue.orphanPixels) || !Number.isInteger(states.lowAlphaResidue.longLineRuns)) throw new Error('Asset manifest: W4-M3 branch-state low-alpha residue metrics are required.');
+  if (states.outerBorderNonTransparentPixelCount !== 0) throw new Error('Asset manifest: W4-M3 branch-state outer border must be fully transparent.');
+  if (!Array.isArray(states.cellVisiblePixelCounts) || states.cellVisiblePixelCounts.length !== 3 || states.cellVisiblePixelCounts.some((count) => !Number.isInteger(count) || count < WEEK_FOUR_BRANCH_MIN_VISIBLE_PIXELS_PER_CELL)) throw new Error('Asset manifest: W4-M3 branch-state sprite must contain visible content in all three cells.');
+  if (!Array.isArray(states.separatorNonTransparentPixelCounts) || states.separatorNonTransparentPixelCounts.length !== WEEK_FOUR_BRANCH_SEPARATOR_COLUMNS.length || states.separatorNonTransparentPixelCounts.some((count) => count !== 0)) throw new Error(`Asset manifest: W4-M3 branch-state separator columns ${WEEK_FOUR_BRANCH_SEPARATOR_COLUMNS.join(', ')} must be fully transparent with no cross-cell artwork.`);
+
+  if (!Number.isFinite(sharedBackgroundBytes) || sharedBackgroundBytes < 0) throw new Error('Asset manifest: W4-M3 shared background bytes are required.');
+  if (sharedBackgroundBytes + files.reduce((sum, file) => sum + file.bytes, 0) > MAX_MISSION_MEDIA_BYTES) throw new Error('Asset manifest: W4-M3 shared background plus two new assets exceeds 1.25 MiB.');
+  if (sharedBackgroundScreenSlots !== undefined && sharedBackgroundScreenSlots !== WEEK_FOUR_SHARED_BACKGROUND_SLOT) throw new Error(`Asset manifest: White Tiger Ridge shared background screen slots must be exactly ${WEEK_FOUR_SHARED_BACKGROUND_SLOT}.`);
+  if (typeof source !== 'string') throw new Error(`Asset manifest: ${sourcePath} source text is required for W4-M3 scene slot verification.`);
+
+  const expectedLivePaths = ['assets/week-four-mapping/white-tiger-ridge-background.webp', ...WEEK_FOUR_BRANCH_REQUIRED_ASSETS];
+  const { sourceFile, checker } = createBoundSource(sourcePath, source);
+  if (sourceFile.parseDiagnostics.length > 0) throw new Error(`Asset manifest: ${sourcePath} cannot be parsed as TypeScript for W4-M3 scene slot verification.`);
+  let assetUrlSymbol = null;
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || statement.moduleSpecifier.getText(sourceFile) !== "'../utils/assets'") continue;
+    const named = statement.importClause?.namedBindings;
+    if (!named || !ts.isNamedImports(named)) continue;
+    const imported = named.elements.find((item) => !item.isTypeOnly && !item.propertyName && item.name.text === 'assetUrl');
+    if (imported) assetUrlSymbol = checker.getSymbolAtLocation(imported.name) ?? null;
+  }
+  const readAssetPath = (node) => {
+    if (!assetUrlSymbol || !ts.isCallExpression(node) || !ts.isIdentifier(node.expression)
+      || checker.getSymbolAtLocation(node.expression) !== assetUrlSymbol || node.arguments.length !== 1
+      || !ts.isStringLiteral(node.arguments[0])) return null;
+    return node.arguments[0].text.replace(/^\//, '');
+  };
+  const assetCalls = [];
+  const collectAssetCalls = (node) => {
+    const assetPath = readAssetPath(node);
+    if (assetPath !== null) assetCalls.push(assetPath);
+    ts.forEachChild(node, collectAssetCalls);
+  };
+  collectAssetCalls(sourceFile);
+  const exactExpectedPaths = (paths) => paths.length === expectedLivePaths.length
+    && new Set(paths).size === expectedLivePaths.length
+    && expectedLivePaths.every((assetId) => paths.includes(assetId));
+  if (!assetUrlSymbol || !exactExpectedPaths(assetCalls)) throw new Error(`Asset manifest: ${sourcePath} must contain exactly three imported assetUrl(literal) calls for the shared background and two W4-M3 assets.`);
+
+  const sceneDeclarations = sourceFile.statements.filter((statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === 'WeekFourBranchScene');
+  const sceneDeclaration = sceneDeclarations.length === 1 ? sceneDeclarations[0] : null;
+  const isExported = sceneDeclaration?.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) === true;
+  if (!sceneDeclaration?.body || !isExported) throw new Error(`Asset manifest: ${sourcePath} must export exactly one parseable WeekFourBranchScene function.`);
+
+  const boundAssetsBySymbol = new Map();
+  const boundAssetsByPath = new Map();
+  const collectBindings = (node) => {
+    const declarationList = ts.isVariableDeclaration(node) && ts.isVariableDeclarationList(node.parent) ? node.parent : null;
+    const variableStatement = declarationList && ts.isVariableStatement(declarationList.parent) ? declarationList.parent : null;
+    const isTopLevelConst = variableStatement?.parent === sceneDeclaration.body && (declarationList.flags & ts.NodeFlags.Const) !== 0;
+    if (isTopLevelConst && ts.isIdentifier(node.name) && node.initializer) {
+      const paths = [];
+      const inspectInitializer = (candidate) => {
+        const assetPath = readAssetPath(candidate);
+        if (assetPath !== null) paths.push(assetPath);
+        ts.forEachChild(candidate, inspectInitializer);
+      };
+      inspectInitializer(node.initializer);
+      const symbol = checker.getSymbolAtLocation(node.name);
+      if (symbol && paths.length === 1) {
+        boundAssetsBySymbol.set(symbol, { path: paths[0], name: node.name.text });
+        if (!boundAssetsByPath.has(paths[0])) boundAssetsByPath.set(paths[0], []);
+        boundAssetsByPath.get(paths[0]).push({ symbol, name: node.name.text });
+      }
+    }
+    ts.forEachChild(node, collectBindings);
+  };
+  collectBindings(sceneDeclaration.body);
+  const expectedBindingNames = new Map([
+    ['assets/week-four-mapping/white-tiger-ridge-background.webp', 'backgroundUrl'],
+    ['assets/week-four-branches/old-woman-visitor.webp', 'visitorUrl'],
+    ['assets/week-four-branches/branch-route-states.webp', 'statesUrl'],
+  ]);
+  for (const [assetPath, bindingName] of expectedBindingNames) {
+    const bindings = boundAssetsByPath.get(assetPath) ?? [];
+    if (bindings.length !== 1 || bindings[0].name !== bindingName) throw new Error(`Asset manifest: ${sourcePath} must bind ${assetPath} once as top-level const ${bindingName}.`);
+  }
+
+  const returns = [];
+  const collectReturns = (node) => {
+    if (node !== sceneDeclaration.body && ts.isFunctionLike(node)) return;
+    if (ts.isReturnStatement(node) && node.expression) returns.push(node.expression);
+    else ts.forEachChild(node, collectReturns);
+  };
+  collectReturns(sceneDeclaration.body);
+  if (returns.length !== 1) throw new Error(`Asset manifest: ${sourcePath} must have one live WeekFourBranchScene return tree.`);
+
+  const directBoundPaths = (node) => {
+    const paths = [];
+    const inspect = (candidate) => {
+      if (ts.isIdentifier(candidate)) {
+        const binding = boundAssetsBySymbol.get(checker.getSymbolAtLocation(candidate));
+        if (binding) paths.push(binding.path);
+      }
+      ts.forEachChild(candidate, inspect);
+    };
+    inspect(node);
+    return [...new Set(paths)];
+  };
+  const isConditionalSlot = (node) => {
+    for (let ancestor = node.parent; ancestor && ancestor !== returns[0]; ancestor = ancestor.parent) {
+      if (ts.isConditionalExpression(ancestor)) return true;
+      if (ts.isBinaryExpression(ancestor) && [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(ancestor.operatorToken.kind)) return true;
+      if (ts.isFunctionLike(ancestor)) return true;
+    }
+    return false;
+  };
+  const visibleImagePaths = [];
+  const visibleBackgroundImagePaths = [];
+  const exactBackgroundImagePath = (initializer) => {
+    if (!ts.isTemplateExpression(initializer) || initializer.templateSpans.length !== 1) return null;
+    const quote = initializer.head.text === 'url("' ? '"' : initializer.head.text === "url('" ? "'" : null;
+    const span = initializer.templateSpans[0];
+    if (!quote || span.literal.text !== `${quote})` || !ts.isIdentifier(span.expression)) return null;
+    const binding = boundAssetsBySymbol.get(checker.getSymbolAtLocation(span.expression));
+    return binding?.path ?? null;
+  };
+  const inspectReturnTree = (node) => {
+    if (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) {
+      const hidden = node.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute) && attribute.name.text === 'hidden');
+      const conditional = isConditionalSlot(node);
+      if (!hidden && !conditional && node.tagName.getText(sourceFile) === 'img') {
+        const src = node.attributes.properties.find((attribute) => ts.isJsxAttribute(attribute) && attribute.name.text === 'src');
+        const expression = src?.initializer && ts.isJsxExpression(src.initializer) ? src.initializer.expression : null;
+        if (expression && ts.isIdentifier(expression)) visibleImagePaths.push(...directBoundPaths(expression));
+      }
+      if (!hidden && !conditional) {
+        const style = node.attributes.properties.find((attribute) => ts.isJsxAttribute(attribute) && attribute.name.text === 'style');
+        const expression = style?.initializer && ts.isJsxExpression(style.initializer) ? style.initializer.expression : null;
+        if (expression && ts.isObjectLiteralExpression(expression)) {
+          const backgroundProperties = expression.properties.filter((property) => ts.isPropertyAssignment(property) && propertyNameText(property.name) === 'backgroundImage');
+          if (backgroundProperties.length === 1) {
+            const backgroundImagePath = exactBackgroundImagePath(backgroundProperties[0].initializer);
+            if (backgroundImagePath) visibleBackgroundImagePaths.push(backgroundImagePath);
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, inspectReturnTree);
+  };
+  inspectReturnTree(returns[0]);
+  const exactVisibleImages = visibleImagePaths.length === 2 && new Set(visibleImagePaths).size === 2
+    && visibleImagePaths.includes('assets/week-four-mapping/white-tiger-ridge-background.webp')
+    && visibleImagePaths.includes('assets/week-four-branches/old-woman-visitor.webp');
+  const exactVisibleStateBackground = visibleBackgroundImagePaths.length === 1 && visibleBackgroundImagePaths[0] === 'assets/week-four-branches/branch-route-states.webp';
+  if (!exactVisibleImages || !exactVisibleStateBackground) throw new Error(`Asset manifest: ${sourcePath} must expose backgroundUrl and visitorUrl through unconditional visible img src bindings, and statesUrl only through the exact single-interpolation inline style.backgroundImage template url("${'${'}statesUrl}"); hidden loaders, logical/conditional/call/concat expressions, and CSS custom properties do not prove a live slot.`);
+
+  const rowPromptRecords = promptRecordsForRows(promptRecords, rows);
+  verifyWeekFourBranchPromptProvenance(rowPromptRecords);
+  return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: rowPromptRecords, mode });
+}
+
 export function verifyRequiredDragonPalaceInventory({
   manifestRows,
   publicFiles,
@@ -1651,6 +1963,12 @@ export async function collectAssetFiles(assetRoot, assetDirectory = 'assets/drag
       let alphaZeroRgbPixels;
       let lowAlphaResidue;
       let transparentPixelCount;
+      let partialAlphaPixelCount;
+      let opaquePixelCount;
+      let visibleAlphaBounds;
+      let outerBorderNonTransparentPixelCount;
+      let cellVisiblePixelCounts;
+      let separatorNonTransparentPixelCounts;
       let webpLossless;
       if ((assetDirectory === 'assets/week-three-manor-help' && relativePath === 'manor-message-states.webp') || (assetDirectory === 'assets/week-three-cuilan' && relativePath === 'cuilan-boolean-states.webp') || (assetDirectory === 'assets/week-three-yunzhan-dialogue' && relativePath === 'yunzhan-dialogue-states.webp') || (assetDirectory === 'assets/week-three-bajie-joining' && relativePath === 'bajie-joining-states.webp')) {
         const { data, info } = await sharp(bytes, { failOn: 'error', limitInputPixels: 20_000_000 }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -1661,9 +1979,21 @@ export async function collectAssetFiles(assetRoot, assetDirectory = 'assets/drag
           webpLossless = bytes.includes(Buffer.from('VP8L'));
         }
       }
-      if (assetDirectory === 'assets/week-four-variables') {
-        const { data } = await sharp(bytes, { failOn: 'error', limitInputPixels: 20_000_000 }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      if (assetDirectory === 'assets/week-four-variables' || assetDirectory === 'assets/week-four-branches') {
+        const { data, info } = await sharp(bytes, { failOn: 'error', limitInputPixels: 20_000_000 }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
         transparentPixelCount = countTransparentPixels(data);
+        if (assetDirectory === 'assets/week-four-branches') {
+          alphaEdgeMismatch = measureAlphaEdgeMismatch(data, info.width, info.height);
+          lowAlphaResidue = measureLowAlphaResidue(data, info.width, info.height);
+          const alphaInventory = measureAlphaInventory(data, info.width, info.height);
+          partialAlphaPixelCount = alphaInventory.partialAlphaPixelCount;
+          opaquePixelCount = alphaInventory.opaquePixelCount;
+          visibleAlphaBounds = alphaInventory.visibleAlphaBounds;
+          outerBorderNonTransparentPixelCount = alphaInventory.outerBorderNonTransparentPixelCount;
+          cellVisiblePixelCounts = alphaInventory.cellVisiblePixelCounts;
+          separatorNonTransparentPixelCounts = alphaInventory.separatorNonTransparentPixelCounts;
+          if (relativePath === 'old-woman-visitor.webp') webpLossless = bytes.includes(Buffer.from('VP8L'));
+        }
       }
       publicFiles.push({
         path: posix.join(assetDirectory, relativePath),
@@ -1674,6 +2004,12 @@ export async function collectAssetFiles(assetRoot, assetDirectory = 'assets/drag
         ...(alphaZeroRgbPixels !== undefined ? { alphaZeroRgbPixels } : {}),
         ...(lowAlphaResidue ? { lowAlphaResidue } : {}),
         ...(transparentPixelCount !== undefined ? { transparentPixelCount } : {}),
+        ...(partialAlphaPixelCount !== undefined ? { partialAlphaPixelCount } : {}),
+        ...(opaquePixelCount !== undefined ? { opaquePixelCount } : {}),
+        ...(visibleAlphaBounds ? { visibleAlphaBounds } : {}),
+        ...(outerBorderNonTransparentPixelCount !== undefined ? { outerBorderNonTransparentPixelCount } : {}),
+        ...(cellVisiblePixelCounts ? { cellVisiblePixelCounts } : {}),
+        ...(separatorNonTransparentPixelCounts ? { separatorNonTransparentPixelCounts } : {}),
         ...(webpLossless !== undefined ? { webpLossless } : {}),
         ...decodedDimensions,
       });
@@ -1701,6 +2037,7 @@ async function main() {
   const weekThreeBossRoot = join(root, 'public', 'assets', 'week-three-boss');
   const weekFourMappingRoot = join(root, 'public', 'assets', 'week-four-mapping');
   const weekFourVariableRoot = join(root, 'public', 'assets', 'week-four-variables');
+  const weekFourBranchRoot = join(root, 'public', 'assets', 'week-four-branches');
   const { manifestRows, promptRecords } = parseAssetManifest(await readFile(manifestPath, 'utf8'));
   const publicFiles = [
     ...await collectAssetFiles(dragonPalaceRoot),
@@ -1717,6 +2054,7 @@ async function main() {
     ...await collectAssetFiles(weekThreeBossRoot, 'assets/week-three-boss'),
     ...await collectAssetFiles(weekFourMappingRoot, 'assets/week-four-mapping'),
     ...await collectAssetFiles(weekFourVariableRoot, 'assets/week-four-variables'),
+    ...await collectAssetFiles(weekFourBranchRoot, 'assets/week-four-branches'),
   ];
   const sourceFiles = new Map(await Promise.all([
     'src/components/GameScene.tsx',
@@ -1772,6 +2110,16 @@ async function main() {
     sharedBackgroundScreenSlots: sharedBackgroundManifest?.screenSlots,
     mode,
   });
+  const weekFourBranchResult = verifyRequiredWeekFourBranchInventory({
+    manifestRows,
+    publicFiles,
+    promptRecords,
+    source: await readFile(join(root, WEEK_FOUR_BRANCH_SOURCE_PATH), 'utf8'),
+    visualEvidenceIndex: await readFile(join(root, WEEK_FOUR_BRANCH_VISUAL_EVIDENCE_PATH), 'utf8'),
+    sharedBackgroundBytes: sharedBackground?.bytes,
+    sharedBackgroundScreenSlots: sharedBackgroundManifest?.screenSlots,
+    mode,
+  });
   console.log(`Dragon Palace assets: ${dragonResult.assetCount} files, ${dragonResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Advanced Week One assets: ${advancedResult.assetCount} files, ${advancedResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Two horse-care assets: ${weekTwoHorseResult.assetCount} files, ${weekTwoHorseResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
@@ -1786,6 +2134,7 @@ async function main() {
   console.log(`Week Three boss assets: ${weekThreeBossResult.assetCount} files, ${weekThreeBossResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Four mapping assets: ${weekFourMappingResult.assetCount} files, ${weekFourMappingResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Four variable evidence assets: ${weekFourVariableResult.assetCount} files plus shared background, ${weekFourVariableResult.totalBytes + sharedBackground.bytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
+  console.log(`Week Four branch assets: ${weekFourBranchResult.assetCount} files plus shared background, ${weekFourBranchResult.totalBytes + sharedBackground.bytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

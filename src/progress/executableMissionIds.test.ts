@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { isExecutableMissionId } from './executableMissionIds';
 
@@ -21,6 +22,7 @@ describe('executable mission ids', () => {
       'w3-m5',
       'w4-m1',
       'w4-m2',
+      'w4-m3',
     ]) {
       expect(isExecutableMissionId(id)).toBe(true);
     }
@@ -29,8 +31,19 @@ describe('executable mission ids', () => {
       expect(isExecutableMissionId(id)).toBe(false);
     }
 
-    for (const id of ['w4-m3', 'w4-m4', 'w4-m5']) {
+    for (const id of ['w4-m4', 'w4-m5']) {
       expect(isExecutableMissionId(id)).toBe(false);
     }
+  });
+
+  it('promotes W4-M3 to the executable Python mission registry', () => {
+    expect(isExecutableMissionId('w4-m3')).toBe(true);
+  });
+
+  it('uses one executable mission type boundary for every registered session', () => {
+    const source = readFileSync('src/progress/types.ts', 'utf8');
+    expect(source).not.toContain('SessionMissionId');
+    expect(source).toMatch(/export type ExecutableMissionId = keyof MissionSessionById;/);
+    expect(source).toMatch(/export type AnyMissionSession = MissionSession;/);
   });
 });

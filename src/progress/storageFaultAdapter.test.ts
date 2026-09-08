@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import type { FourSeasInstruction } from '../battle/types';
-import { storageFaultAdapter as e2eStorageFaultAdapter } from '../../e2e/support/storageFaultAdapter';
+import { WEEK_FOUR_BRANCH_LATER_SETUP_MODES, storageFaultAdapter as e2eStorageFaultAdapter } from '../../e2e/support/storageFaultAdapter';
 import { completeMission, createInitialProgress, serializeProgress } from './progress';
 import { createMissionSession, recordConditionObservationUse, recordCuilanConditionObservationUse, recordHint, recordRun, updateWorkspaceDraft } from './session';
 import { compileManorHelpDraft, createDefaultManorHelpDraft, runManorHelp } from '../blockly/weekThreeManorHelpContract';
@@ -16,9 +16,17 @@ import { compileWeekFourMappingDraft } from '../blockly/weekFourMappingCompiler'
 import { compareWeekFourMappingTraces } from '../blockly/weekFourMappingContract';
 import { SOLVED_WEEK_FOUR_MAPPING_PYTHON, parseWeekFourMappingPython } from '../engine/weekFourPythonMappingGrammar';
 import { createWeekFourMappingSession, recordWeekFourMappingObservation, recordWeekFourMappingRun, updateWeekFourMappingCode } from './weekFourMappingSession';
-import { parseWeekFourVariablePython } from '../engine/weekFourVariablePythonGrammar';
-import { createWeekFourVariableSession, recordWeekFourVariableObservation, recordWeekFourVariableRun } from './weekFourVariableSession';
-import { WEEK_FOUR_MAPPING_STORAGE_FAULT_MODES, WEEK_FOUR_VARIABLE_STORAGE_FAULT_MODES, WEEK_THREE_BOSS_STORAGE_FAULT_MODES, storageFaultAdapter as productionStorageFaultAdapter } from './storageFaultAdapter';
+import { SOLVED_WEEK_FOUR_VARIABLE_PYTHON, parseWeekFourVariablePython } from '../engine/weekFourVariablePythonGrammar';
+import { createWeekFourVariableSession, recordWeekFourVariableObservation, recordWeekFourVariableRun, updateWeekFourVariableCode } from './weekFourVariableSession';
+import { SOLVED_WEEK_FOUR_BRANCH_PYTHON, parseWeekFourBranchPython } from '../engine/weekFourBranchPythonGrammar';
+import {
+  createWeekFourBranchSession,
+  recordWeekFourBranchInfrastructureFailure,
+  recordWeekFourBranchObservation,
+  recordWeekFourBranchRun,
+  updateWeekFourBranchCode,
+} from './weekFourBranchSession';
+import { WEEK_FOUR_BRANCH_STORAGE_FAULT_MODES, WEEK_FOUR_MAPPING_STORAGE_FAULT_MODES, WEEK_FOUR_VARIABLE_STORAGE_FAULT_MODES, WEEK_THREE_BOSS_STORAGE_FAULT_MODES, storageFaultAdapter as productionStorageFaultAdapter } from './storageFaultAdapter';
 import type { ProgressV3 } from './types';
 
 const CURRENT_KEY = 'xiyou-programming-progress-v3';
@@ -161,6 +169,33 @@ function withW4FailedRun(base = createInitialProgress()) {
   return { ...base, sessions: { ...base.sessions, 'w4-m1': saved }, savedAt: saved.savedAt };
 }
 
+function withFormalW4VariableBase() {
+  const base = createInitialProgress();
+  base.missionCompletionEvidence['w4-m1'] = { kind: 'formal-v3' } as never;
+  const session = updateWeekFourVariableCode(createWeekFourVariableSession('2026-08-31T00:00:00.000Z'), SOLVED_WEEK_FOUR_VARIABLE_PYTHON, '2026-08-31T00:00:00.000Z');
+  const parsed = parseWeekFourVariablePython(session.pythonCode);
+  base.sessions['w4-m2'] = recordWeekFourVariableRun(session, {
+    canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run,
+  }, '2026-08-31T00:00:01.000Z');
+  return completeMission(base, 'w4-m2', { stars: 3, hintsUsed: 0 });
+}
+
+function withW4BranchDraft(base = withFormalW4VariableBase()) {
+  const session = createWeekFourBranchSession('2026-08-31T01:00:00.000Z');
+  return { ...base, sessions: { ...base.sessions, 'w4-m3': session }, savedAt: session.savedAt };
+}
+
+function withW4BranchRun(base = withW4BranchDraft(), solved = false) {
+  let session = base.sessions['w4-m3']!;
+  if (solved) session = updateWeekFourBranchCode(session, SOLVED_WEEK_FOUR_BRANCH_PYTHON, '2026-08-31T01:00:01.000Z');
+  const parsed = parseWeekFourBranchPython(session.pythonCode);
+  if ('state' in parsed) throw new Error('expected runnable W4-M3 fixture');
+  const saved = recordWeekFourBranchRun(session, {
+    canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run,
+  }, '2026-08-31T01:00:02.000Z');
+  return { ...base, sessions: { ...base.sessions, 'w4-m3': saved }, savedAt: saved.savedAt };
+}
+
 describe('storage fault adapters', () => {
   it('keeps the E2E fault adapter free of W3 runtime imports', () => {
     const source = readFileSync('e2e/support/storageFaultAdapter.ts', 'utf8');
@@ -191,6 +226,85 @@ describe('storage fault adapters', () => {
     expect(WEEK_FOUR_VARIABLE_STORAGE_FAULT_MODES).toEqual([
       'fail-w4-m2-draft', 'fail-w4-m2-run', 'fail-w4-m2-observation', 'fail-w4-m2-work', 'fail-w4-m2-completion',
     ]);
+  });
+
+  it('declares the exact five isolated W4-M3 write faults without enabling them in production', () => {
+    expect(WEEK_FOUR_BRANCH_STORAGE_FAULT_MODES).toEqual([
+      'fail-w4-m3-draft', 'fail-w4-m3-run', 'fail-w4-m3-observation', 'fail-w4-m3-work', 'fail-w4-m3-completion',
+    ]);
+  });
+
+  it('uses the exact W4-M3 corrupt-current setup id and keeps the rejected old alias absent', () => {
+    expect(WEEK_FOUR_BRANCH_LATER_SETUP_MODES).toContain('fail-w4-m3-corrupt-current');
+    const source = readFileSync('e2e/support/storageFaultAdapter.ts', 'utf8');
+    expect(source).not.toContain("'corrupt-w4-m3-current'");
+
+    const storage = new MemoryStorage();
+    const progress = withFormalW4VariableBase();
+    storeCurrent(storage, progress, 'fail-w4-m3-corrupt-current');
+    e2eStorageFaultAdapter.beforeProgressLoad(storage);
+    expect(storage.getItem(SNAPSHOT_KEY)).toBe(serializeProgress(progress));
+    expect(storage.getItem(CURRENT_KEY)).toBe('{broken w4-m3 current');
+  });
+
+  it('injects only exact W4-M3 draft, run, observation, and atomic work/completion deltas', () => {
+    const storage = new MemoryStorage();
+    const base = withFormalW4VariableBase();
+    const draft = withW4BranchDraft(base);
+    storeCurrent(storage, base, 'fail-w4-m3-draft');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: draft })).toMatch(/fault/i);
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: { ...draft, settings: { ...draft.settings, muted: true } } })).toBeNull();
+
+    const failed = withW4BranchRun(draft);
+    storeCurrent(storage, draft, 'fail-w4-m3-run');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: failed })).toMatch(/fault/i);
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: { ...failed, abilities: { conditionObservation: { acquiredAt: NOW, stableUnlockedAt: null } } } })).toBeNull();
+
+    const observedSession = recordWeekFourBranchObservation(failed.sessions['w4-m3']!, '2026-08-31T01:00:03.000Z');
+    const observed = { ...failed, sessions: { ...failed.sessions, 'w4-m3': observedSession }, savedAt: observedSession.savedAt };
+    storeCurrent(storage, failed, 'fail-w4-m3-observation');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: observed })).toMatch(/fault/i);
+    const repeated = structuredClone(observed);
+    repeated.sessions['w4-m3']!.conditionObservationUses.push({ ...repeated.sessions['w4-m3']!.conditionObservationUses[0]!, usedAt: '2026-08-31T01:00:04.000Z' });
+    repeated.sessions['w4-m3']!.savedAt = '2026-08-31T01:00:04.000Z'; repeated.savedAt = '2026-08-31T01:00:04.000Z';
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: repeated })).toBeNull();
+
+    const solved = withW4BranchRun(withW4BranchDraft(base), true);
+    const completed = completeMission(solved, 'w4-m3', { stars: 3, hintsUsed: 0 });
+    storeCurrent(storage, solved, 'fail-w4-m3-work');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: completed })).toMatch(/fault/i);
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: { ...completed, works: { ...completed.works, 'w4-m3-branch-structure-record': undefined } } })).toBeNull();
+    storeCurrent(storage, solved, 'fail-w4-m3-completion');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: completed })).toMatch(/fault/i);
+  });
+
+  it('injects the W4-M3 run fault when an unchanged rerun invalidates the previous observation', () => {
+    const storage = new MemoryStorage();
+    const failed = withW4BranchRun(withW4BranchDraft());
+    const observedSession = recordWeekFourBranchObservation(failed.sessions['w4-m3']!, '2026-08-31T01:00:03.000Z');
+    const observed = { ...failed, sessions: { ...failed.sessions, 'w4-m3': observedSession }, savedAt: observedSession.savedAt };
+    const parsed = parseWeekFourBranchPython(observedSession.pythonCode);
+    if ('state' in parsed) throw new Error('Expected runnable failure code');
+    const rerunSession = recordWeekFourBranchRun(observedSession, {
+      canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run,
+    }, '2026-08-31T01:00:04.000Z');
+    const rerun = { ...observed, sessions: { ...observed.sessions, 'w4-m3': rerunSession }, savedAt: rerunSession.savedAt };
+    expect(rerunSession.conditionObservationUses).toEqual([]);
+    storeCurrent(storage, observed, 'fail-w4-m3-run');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: rerun })).toMatch(/fault/i);
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: {
+      ...rerun, settings: { ...rerun.settings, muted: !rerun.settings.muted },
+    } })).toBeNull();
+  });
+
+  it('accepts exact W4-M3 validation and infrastructure deltas under the run fault only', () => {
+    const storage = new MemoryStorage();
+    const draft = withW4BranchDraft();
+    const infrastructureSession = recordWeekFourBranchInfrastructureFailure(draft.sessions['w4-m3']!, { executionStarted: true }, '2026-08-31T01:00:01.000Z');
+    const infrastructure = { ...draft, sessions: { ...draft.sessions, 'w4-m3': infrastructureSession }, savedAt: infrastructureSession.savedAt };
+    storeCurrent(storage, draft, 'fail-w4-m3-run');
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: infrastructure })).toMatch(/fault/i);
+    expect(e2eStorageFaultAdapter.beforeProgressWrite({ storage, progress: { ...infrastructure, equipment: { ...infrastructure.equipment, equipped: { ...infrastructure.equipment.equipped, weapon: 'ruyi-staff' } } } as ProgressV3 })).toBeNull();
   });
 
   it('injects only exact W4 draft, run, and atomic work/completion deltas', () => {

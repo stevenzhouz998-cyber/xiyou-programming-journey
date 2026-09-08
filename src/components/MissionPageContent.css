@@ -1,6 +1,8 @@
 .mission-page { min-height: calc(100vh - 70px); background: #e9e0ca; padding-bottom: 22px; }
 .mission-page:has(.legacy-mission-tools) { background-image: url('/assets/world-map.jpg'); background-size: cover; background-position: center; }
 .mission-page:has(.dragon-palace-experience) { background-image: none; }
+.week-four-branch-access-notice a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 14px; border-radius: 9px; color: white; background: var(--jade-deep); font-weight: 700; }
+.week-four-branch-access-notice a:focus-visible { outline: 3px solid #b85f22; outline-offset: 3px; }
 .mission-header { min-height: 78px; display: grid; grid-template-columns: 190px 1fr minmax(330px, auto); align-items: center; padding: 9px 34px; background: rgba(247,240,223,.93); border-bottom: 1px solid var(--line); }
 .mission-header h1 { margin: 2px 0 0; font-size: 27px; }
 .mission-header > div > span { color: var(--cinnabar); font-weight: 700; }

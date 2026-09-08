@@ -1,4 +1,4 @@
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { lstat, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 import { dirname, isAbsolute, join, normalize, posix, relative, resolve, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +18,9 @@ import {
   PYTHON_RUNTIME_TRANSFER_MAX_BYTES,
 } from './budget-limits.mjs';
 export { WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES, WEEK_THREE_BAJIE_JOINING_COLD_LOAD_MAX_BYTES, WEEK_THREE_BOSS_COLD_LOAD_MAX_BYTES, WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES, WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES, WEEK_FOUR_MAPPING_COLD_LOAD_MAX_BYTES, WEEK_FOUR_VARIABLE_COLD_LOAD_MAX_BYTES, PYTHON_RUNTIME_TRANSFER_MAX_BYTES };
+export const WEEK_FOUR_BRANCH_MAX_LAZY_BYTES = 3 * 1024 * 1024;
+export const WEEK_FOUR_BRANCH_MAX_MEDIA_BYTES = 1.25 * 1024 * 1024;
+const WEEK_FOUR_BRANCH_ROUTE_ROOTS = ['src/components/WeekFourBranchExperience.tsx', 'src/components/WeekFourBranchExperience.tsx?retry=1'];
 export {
   DRAGON_PALACE_COLD_LOAD_MAX_BYTES,
   DRAGON_PALACE_COLD_BYTES,
@@ -52,6 +55,8 @@ export const COLD_LOAD_ROUTE_CLOSURE_BUDGETS = Object.freeze({
   'src/components/WeekThreeBossExperience.tsx': WEEK_THREE_BOSS_COLD_LOAD_MAX_BYTES,
   'src/components/WeekFourMappingExperience.tsx': WEEK_FOUR_MAPPING_COLD_LOAD_MAX_BYTES,
   'src/components/WeekFourVariableEvidenceExperience.tsx': WEEK_FOUR_VARIABLE_COLD_LOAD_MAX_BYTES,
+  'src/components/WeekFourBranchExperience.tsx': WEEK_FOUR_BRANCH_MAX_LAZY_BYTES,
+  'src/components/WeekFourBranchExperience.tsx?retry=1': WEEK_FOUR_BRANCH_MAX_LAZY_BYTES,
 });
 const COLD_LOAD_ROUTE_STATIC_ISOLATION = Object.freeze({
   'src/components/WeekThreeBajieJoiningExperience.tsx': [
@@ -70,6 +75,11 @@ const COLD_LOAD_ROUTE_STATIC_ISOLATION = Object.freeze({
     'src/components/WeekFourVariableEvidencePythonEditor.tsx',
     'src/components/WeekFourVariableEvidenceScene.tsx',
   ],
+  'src/components/WeekFourBranchExperience.tsx': [
+    'src/components/WeekFourBranchPythonEditor.tsx',
+    'src/components/WeekFourBranchScene.tsx',
+    'src/workers/weekFourBranchPython.worker.ts',
+  ],
 });
 const WEEK_THREE_BAJIE_JOINING_ENTRY_FORBIDDEN = new Set([
   'src/components/WeekThreeBajieJoiningExperience.tsx',
@@ -81,6 +91,10 @@ const WEEK_THREE_BAJIE_JOINING_ENTRY_FORBIDDEN = new Set([
   'src/components/WeekFourMappingExperience.tsx',
   'src/components/WeekFourMappingBlocklyWorkspace.tsx',
   'src/components/WeekFourMappingScene.tsx',
+  'src/components/WeekFourBranchExperience.tsx',
+  'src/components/WeekFourBranchPythonEditor.tsx',
+  'src/components/WeekFourBranchScene.tsx',
+  'src/workers/weekFourBranchPython.worker.ts',
 ]);
 const STATIC_SOURCE_EXTENSIONS = ['.tsx', '.ts', '.mts', '.jsx', '.js'];
 const MAX_STATIC_SOURCE_CLOSURE_FILES = 500;
@@ -163,6 +177,23 @@ export function assertNoProductionTestSentinels(files) {
   }
 }
 
+export async function assertWeekFourBranchWorkerOutput(distRoot, emittedFiles) {
+  if (!Array.isArray(emittedFiles) || emittedFiles.some((file) => typeof file !== 'string')) throw new Error('Bundle budget: W4-M3 Worker emitted file inventory is invalid.');
+  const workers = emittedFiles.filter((file) => /^assets\/weekFourBranchPython\.worker-[A-Za-z0-9_-]+\.js$/.test(file));
+  if (workers.length !== 1) throw new Error(`Bundle budget: W4-M3 Worker requires exactly one emitted file; found ${workers.length === 0 ? 'missing' : `duplicate ${workers.length}`}.`);
+  const assetsRoot = resolve(distRoot, 'assets');
+  const workerPath = resolve(distRoot, workers[0]);
+  const within = relative(assetsRoot, workerPath);
+  if (within.startsWith('..') || isAbsolute(within)) throw new Error('Bundle budget: W4-M3 Worker resolved outside dist/assets.');
+  const metadata = await lstat(workerPath);
+  if (metadata.isSymbolicLink()) throw new Error('Bundle budget: W4-M3 Worker must not be a symbolic link.');
+  if (!metadata.isFile()) throw new Error('Bundle budget: W4-M3 Worker must be a regular file.');
+  const realWorker = await realpath(workerPath);
+  const realWithin = relative(await realpath(assetsRoot), realWorker);
+  if (realWithin.startsWith('..') || isAbsolute(realWithin)) throw new Error('Bundle budget: W4-M3 Worker real path escaped dist/assets.');
+  return workers[0];
+}
+
 async function listFiles(root, relativeRoot = '') {
   const entries = await readdir(join(root, relativeRoot), { withFileTypes: true });
   const files = [];
@@ -219,7 +250,14 @@ function assertHealthyManifestGraph(manifest, entryKey) {
   for (const key of Object.keys(manifest)) walk(key);
 }
 
-export function analyzeManifest(manifest, gzipSizes, rawSizes = {}) {
+export function analyzeManifest(manifest, gzipSizes, rawSizes = {}, emittedFiles) {
+  // A production inventory requires both entry URLs; focused synthetic manifests
+  // without W4-M3 remain useful to test unrelated routes in isolation.
+  if (emittedFiles !== undefined || WEEK_FOUR_BRANCH_ROUTE_ROOTS.some((root) => manifest[root])) {
+    for (const root of WEEK_FOUR_BRANCH_ROUTE_ROOTS) {
+      if (!manifest[root]) throw new Error(`Bundle budget: required W4-M3 lazy route ${root} is missing.`);
+    }
+  }
   const entryKey = Object.keys(manifest).find((key) => key.replaceAll('\\', '/') === 'src/main.tsx' && manifest[key].isEntry)
     ?? Object.keys(manifest).find((key) => manifest[key].isEntry && manifest[key].src === 'index.html');
   if (!entryKey) throw new Error('Bundle budget: src/main.tsx/index.html application entry is missing from the Vite manifest.');
@@ -255,12 +293,32 @@ export function analyzeManifest(manifest, gzipSizes, rawSizes = {}) {
     if (!manifest[root]) continue;
     if (!manifest[root].isDynamicEntry) throw new Error(`Bundle budget: ${root.split('/').at(-1).replace('.tsx', '')} must remain a lazy route entry.`);
     if (visited.has(root)) throw new Error(`Bundle budget: ${root.split('/').at(-1).replace('.tsx', '')} must stay outside the application entry static closure.`);
-    for (const isolatedRoot of COLD_LOAD_ROUTE_STATIC_ISOLATION[root] ?? []) {
+    const isBranchRoute = WEEK_FOUR_BRANCH_ROUTE_ROOTS.includes(root);
+    for (const isolatedRoot of COLD_LOAD_ROUTE_STATIC_ISOLATION[isBranchRoute ? WEEK_FOUR_BRANCH_ROUTE_ROOTS[0] : root] ?? []) {
       if (visited.has(isolatedRoot)) throw new Error(`Bundle budget: ${isolatedRoot.split('/').at(-1).replace('.tsx', '')} must stay outside the application entry static closure.`);
     }
     const keys = collectRuntimeClosure(manifest, root);
     const files = [...new Set([...keys].map((key) => manifest[key].file).filter((file) => file?.endsWith('.js')))];
-    const closure = { files, rawBytes: files.reduce((sum, file) => sum + (rawSizes[file] ?? 0), 0), gzipBytes: files.reduce((sum, file) => sum + (gzipSizes[file] ?? 0), 0) };
+    let workerFile;
+    if (isBranchRoute && emittedFiles !== undefined) {
+      if (!Array.isArray(emittedFiles) || emittedFiles.some((file) => typeof file !== 'string')) throw new Error('Bundle budget: W4-M3 Worker emitted file inventory is invalid.');
+      const workers = emittedFiles.filter((file) => /^assets\/weekFourBranchPython\.worker-[A-Za-z0-9_-]+\.js$/.test(file));
+      if (workers.length !== 1) throw new Error(`Bundle budget: W4-M3 Worker requires exactly one emitted file; found ${workers.length === 0 ? 'missing' : `duplicate ${workers.length}`}.`);
+      [workerFile] = workers;
+      if (!Number.isFinite(rawSizes[workerFile]) || !Number.isFinite(gzipSizes[workerFile])) throw new Error(`Bundle budget: W4-M3 Worker size is missing for ${workerFile}.`);
+      if (!files.includes(workerFile)) files.push(workerFile);
+    }
+    if (isBranchRoute) {
+      for (const file of files) {
+        if (!Number.isFinite(rawSizes[file]) || rawSizes[file] < 0 || !Number.isFinite(gzipSizes[file]) || gzipSizes[file] < 0) throw new Error(`Bundle budget: W4-M3 closure size is missing or invalid for ${file}.`);
+      }
+    }
+    const closure = {
+      files,
+      rawBytes: files.reduce((sum, file) => sum + (rawSizes[file] ?? 0), 0),
+      gzipBytes: files.reduce((sum, file) => sum + (gzipSizes[file] ?? 0), 0),
+      ...(workerFile ? { workerFile } : {}),
+    };
     closures[root] = closure;
     if (closure.rawBytes > maxBytes) throw new Error(`Bundle budget: ${root.split('/').at(-1).replace('.tsx', '')} closure exceeds its ${(maxBytes / 1024 / 1024).toFixed(0)} MiB cold-load budget.`);
   }
@@ -281,12 +339,14 @@ async function main() {
   assertNoSourceVisualAssets(await listFiles(join(root, 'public')));
   const distRoot = join(root, 'dist');
   const distFiles = await listFiles(distRoot);
+  await assertWeekFourBranchWorkerOutput(distRoot, distFiles);
   assertNoProductionTestSentinels(new Map(await Promise.all(distFiles.map(async (file) => [file, await readFile(join(distRoot, file))]))));
   const manifestPath = join(root, 'dist', '.vite', 'manifest.json');
   let manifest;
   try { manifest = JSON.parse(await readFile(manifestPath, 'utf8')); }
   catch (error) { throw new Error(`Bundle budget: cannot read ${manifestPath}: ${error instanceof Error ? error.message : String(error)}`); }
-  const files = [...new Set(Object.values(manifest).map((chunk) => chunk.file).filter((file) => file?.endsWith('.js')))];
+  const branchWorkerFiles = distFiles.filter((file) => /^assets\/weekFourBranchPython\.worker-[A-Za-z0-9_-]+\.js$/.test(file));
+  const files = [...new Set([...Object.values(manifest).map((chunk) => chunk.file).filter((file) => file?.endsWith('.js')), ...branchWorkerFiles])];
   const gzipSizes = {};
   const rawSizes = {};
   for (const file of files) {
@@ -298,7 +358,7 @@ async function main() {
     gzipSizes[file] = gzipSync(bytes).byteLength;
     rawSizes[file] = (await stat(path)).size;
   }
-  const result = analyzeManifest(manifest, gzipSizes, rawSizes);
+  const result = analyzeManifest(manifest, gzipSizes, rawSizes, distFiles);
   const homeFiles = ['index.html', 'assets/world-map.jpg', 'assets/mentor.jpg', 'assets/young-hero.jpg'];
   const cssFiles = [...new Set(Object.values(manifest).flatMap((chunk) => chunk.css ?? []))];
   const homeStaticBytes = result.entryGzipBytes;
@@ -309,7 +369,7 @@ async function main() {
   console.log(`Conservative homepage total: ${(homeTotalBytes / 1024).toFixed(1)} KiB / 650 KiB`);
   const phaserEntry = Object.entries(manifest).find(([key, chunk]) => isPhaserSource(key, chunk));
   if (phaserEntry) console.log(`Phaser identified by manifest ${phaserEntry[1].name === 'phaser' ? 'name' : 'provenance'}: ${phaserEntry[0]}`);
-  for (const [mode, closure] of Object.entries(result.closures)) console.log(`${mode.split('/').at(-1).replace('.tsx', '')} closure: ${(closure.rawBytes / 1024).toFixed(1)} KiB raw, ${(closure.gzipBytes / 1024).toFixed(1)} KiB gzip`);
+  for (const [mode, closure] of Object.entries(result.closures)) console.log(`${mode.split('/').at(-1).replace('.tsx', '')} closure: ${(closure.rawBytes / 1024).toFixed(1)} KiB raw, ${(closure.gzipBytes / 1024).toFixed(1)} KiB gzip${closure.workerFile ? `, Worker: ${closure.workerFile}` : ''}`);
   console.log('Dynamic JS chunks (not part of homepage entry):');
   for (const chunk of result.dynamic.sort((a, b) => b.rawBytes - a.rawBytes)) console.log(`  ${chunk.file}: ${(chunk.rawBytes / 1024).toFixed(1)} KiB raw, ${(chunk.gzipBytes / 1024).toFixed(1)} KiB gzip${/phaser/i.test(`${chunk.key} ${chunk.file}`) ? ' (approved Phaser ceiling: 1600 KiB raw)' : ''}`);
   console.log('Homepage total-resource target is enforced statically and re-measured in browser QA.');

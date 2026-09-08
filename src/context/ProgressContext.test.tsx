@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProgressProvider, useProgress, type ProgressContextValue } from './ProgressContext';
-import { completeMission, createInitialProgress, serializeProgress } from '../progress/progress';
+import { completeMission, createInitialProgress, getWeekFourBranchAccess, serializeProgress } from '../progress/progress';
 import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, LEGACY_PROGRESS_KEY, REVISION_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from '../progress/storage';
 import {
   createMissionSession,
@@ -19,6 +19,25 @@ import { loadFourSeasWorkspaceDraft, type FourSeasWorkspaceDraftV1 } from '../bl
 import { updateWorkspaceDraft } from '../progress/session';
 import type { CoordinatedSaveResult } from '../progress/storageCoordinator';
 import { updateWeekFourMappingCode } from '../progress/weekFourMappingSession';
+import { createWeekFourMappingSession, recordWeekFourMappingRun } from '../progress/weekFourMappingSession';
+import { compileWeekFourMappingDraft } from '../blockly/weekFourMappingCompiler';
+import { compareWeekFourMappingTraces } from '../blockly/weekFourMappingContract';
+import { SOLVED_WEEK_FOUR_MAPPING_PYTHON, parseWeekFourMappingPython } from '../engine/weekFourPythonMappingGrammar';
+import { compileManorHelpDraft, createDefaultManorHelpDraft, runManorHelp } from '../blockly/weekThreeManorHelpContract';
+import { compileCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract';
+import { compileYunzhanDialogueDraft, runYunzhanDialogueForDraft } from '../blockly/weekThreeYunzhanDialogueContract';
+import { compileBajieJoiningDraft, runBajieJoiningForDraft } from '../blockly/weekThreeBajieJoiningContract';
+import { runWeekThreeBossDraft } from '../blockly/weekThreeBossContract';
+import { createSolvedWeekThreeBossDraftForTest } from '../blockly/weekThreeBossTestHelpers';
+import { SOLVED_WEEK_FOUR_VARIABLE_PYTHON, parseWeekFourVariablePython } from '../engine/weekFourVariablePythonGrammar';
+import { createWeekFourVariableSession, recordWeekFourVariableRun, updateWeekFourVariableCode } from '../progress/weekFourVariableSession';
+import {
+  DEFAULT_WEEK_FOUR_BRANCH_PYTHON,
+  INVALID_ELSE_WEEK_FOUR_BRANCH_PYTHON,
+  SOLVED_WEEK_FOUR_BRANCH_PYTHON,
+  parseWeekFourBranchPython,
+} from '../engine/weekFourBranchPythonGrammar';
+import { createWeekFourBranchSession, recordWeekFourBranchRun, updateWeekFourBranchCode } from '../progress/weekFourBranchSession';
 
 const originalStorage = localStorage;
 const originalLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
@@ -55,6 +74,62 @@ function realFourSeasFixture() {
   } finally {
     workspace.dispose();
   }
+}
+
+function formalWeekFourVariableProgressForContext() {
+  let progress = formalWeekFourMappingProgressForContext();
+  let session = updateWeekFourVariableCode(createWeekFourVariableSession('2026-08-31T00:00:00.000Z'), SOLVED_WEEK_FOUR_VARIABLE_PYTHON, '2026-08-31T00:00:01.000Z');
+  const parsed = parseWeekFourVariablePython(session.pythonCode);
+  session = recordWeekFourVariableRun(session, { canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run }, '2026-08-31T00:00:02.000Z');
+  progress.sessions['w4-m2'] = session;
+  return completeMission(progress, 'w4-m2', { stars: 3, hintsUsed: 0 });
+}
+
+function formalWeekFourMappingProgressForContext() {
+  let progress = createInitialProgress();
+  const manorDraft = createDefaultManorHelpDraft();
+  manorDraft.blocks.find((block) => block.id === 'manor-condition')!.type = 'w3_manor_condition_explicit_demon_help';
+  const manorTrace = compileManorHelpDraft(manorDraft);
+  progress.sessions['w3-m1'] = recordRun(updateWorkspaceDraft(createMissionSession('w3-m1', SESSION_NOW), manorDraft, SESSION_NOW), runManorHelp(manorTrace), manorTrace, SESSION_NOW);
+  progress = completeMission(progress, 'w3-m1', { stars: 3, hintsUsed: 0 });
+
+  const cuilanSession = createMissionSession('w3-m2', SESSION_NOW); const cuilanDraft = structuredClone(cuilanSession.workspace);
+  cuilanDraft.blocks.find((block) => block.id === 'cuilan-identity-condition')!.type = 'w3_cuilan_condition_identity_is_cuilan';
+  const cuilanTrace = compileCuilanBooleanDraft(cuilanDraft);
+  progress.sessions['w3-m2'] = recordRun(updateWorkspaceDraft(cuilanSession, cuilanDraft, SESSION_NOW), runCuilanBooleanForDraft(cuilanDraft, cuilanTrace), cuilanTrace, SESSION_NOW);
+  progress = completeMission(progress, 'w3-m2', { stars: 3, hintsUsed: 0 });
+
+  const yunzhanSession = createMissionSession('w3-m3', SESSION_NOW); const yunzhanDraft = structuredClone(yunzhanSession.workspace);
+  yunzhanDraft.blocks.find((block) => block.id === 'yunzhan-condition')!.type = 'w3_yunzhan_condition_pilgrimage_explicit';
+  yunzhanDraft.blocks.find((block) => block.id === 'yunzhan-then-action')!.type = 'w3_yunzhan_explain_guanyin_origin';
+  yunzhanDraft.blocks.find((block) => block.id === 'yunzhan-else-action')!.type = 'w3_yunzhan_guard_cave';
+  const yunzhanTrace = compileYunzhanDialogueDraft(yunzhanDraft);
+  progress.sessions['w3-m3'] = recordRun(updateWorkspaceDraft(yunzhanSession, yunzhanDraft, SESSION_NOW), runYunzhanDialogueForDraft(yunzhanDraft, yunzhanTrace), yunzhanTrace, SESSION_NOW);
+  progress = completeMission(progress, 'w3-m3', { stars: 3, hintsUsed: 0 });
+
+  const bajieSession = createMissionSession('w3-m4', SESSION_NOW); const bajieDraft = structuredClone(bajieSession.workspace);
+  bajieDraft.blocks.find((block) => block.type === 'w3_bajie_boolean_operation')!.operator = 'and';
+  const bajieTrace = compileBajieJoiningDraft(bajieDraft);
+  progress.sessions['w3-m4'] = recordRun(updateWorkspaceDraft(bajieSession, bajieDraft, SESSION_NOW), runBajieJoiningForDraft(bajieDraft, bajieTrace), bajieTrace, SESSION_NOW);
+  progress = completeMission(progress, 'w3-m4', { stars: 3, hintsUsed: 0 });
+
+  const bossDraft = createSolvedWeekThreeBossDraftForTest(); const bossRun = runWeekThreeBossDraft(bossDraft);
+  progress.sessions['w3-m5'] = recordRun(updateWorkspaceDraft(createMissionSession('w3-m5', SESSION_NOW), bossDraft, SESSION_NOW), bossRun, bossRun.trace, SESSION_NOW);
+  progress = completeMission(progress, 'w3-m5', { stars: 3, hintsUsed: 0 });
+
+  let mapping = updateWeekFourMappingCode(createWeekFourMappingSession(SESSION_NOW), SOLVED_WEEK_FOUR_MAPPING_PYTHON, SESSION_NOW);
+  const blocklyTrace = compileWeekFourMappingDraft(mapping.workspace).trace; const pythonTrace = parseWeekFourMappingPython(mapping.pythonCode).trace;
+  mapping = recordWeekFourMappingRun(mapping, { blocklyTrace, pythonTrace, run: compareWeekFourMappingTraces(blocklyTrace, pythonTrace) }, SESSION_NOW);
+  progress.sessions['w4-m1'] = mapping;
+  return completeMission(progress, 'w4-m1', { stars: 3, hintsUsed: 0 });
+}
+
+function solvedWeekFourBranchSessionForContext() {
+  let session = updateWeekFourBranchCode(createWeekFourBranchSession('2026-08-31T01:00:00.000Z'), SOLVED_WEEK_FOUR_BRANCH_PYTHON, '2026-08-31T01:00:01.000Z');
+  const parsed = parseWeekFourBranchPython(session.pythonCode);
+  if ('state' in parsed) throw new Error('expected solved branch fixture');
+  session = recordWeekFourBranchRun(session, { canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run }, '2026-08-31T01:00:02.000Z');
+  return session;
 }
 let latestContext: ProgressContextValue | null = null;
 
@@ -134,6 +209,156 @@ function Probe() {
 }
 
 describe('ProgressContext persistence status', () => {
+  it('upgrades an old W4-M2 legacy completion through real saved replay and remains formal after reload', async () => {
+    const legacyCompletedAt = '2026-08-01T00:00:00.000Z';
+    const initial = formalWeekFourMappingProgressForContext();
+    initial.missions['w4-m2'] = { status: 'completed', stars: 3, attempts: 6, hintsUsed: 2, completedAt: legacyCompletedAt };
+    initial.missionCompletionEvidence['w4-m2'] = { kind: 'legacy-replay-only', completedAt: legacyCompletedAt, sourceVersion: 3, sourceSchemaRevision: 8 };
+    installStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(initial), [REVISION_PROGRESS_KEY]: '0' });
+    let view = render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    let draft!: CoordinatedSaveResult; let run!: CoordinatedSaveResult; let completed!: CoordinatedSaveResult;
+    await act(async () => { draft = await latestContext!.saveWeekFourVariableDraft(SOLVED_WEEK_FOUR_VARIABLE_PYTHON); });
+    const parsed = parseWeekFourVariablePython(SOLVED_WEEK_FOUR_VARIABLE_PYTHON);
+    await act(async () => { run = await latestContext!.saveWeekFourVariableRun({ canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run }); });
+    await act(async () => { completed = await latestContext!.completeWeekFourVariable({ stars: 1, hintsUsed: 0 }); });
+    expect([draft.status, run.status, completed.status]).toEqual(['saved', 'saved', 'saved']);
+
+    view.unmount();
+    view = render(<ProgressProvider><Probe /></ProgressProvider>);
+    expect(getWeekFourBranchAccess(latestContext!.progress)).toEqual({ kind: 'formal', upgradingLegacy: false });
+    expect(latestContext!.progress.missions['w4-m2'].completedAt).toBe(legacyCompletedAt);
+    expect(latestContext!.progress.sessions['w4-m2']!.savedAt > legacyCompletedAt).toBe(true);
+    view.unmount();
+  });
+
+  it('persists W4-M3 legacy replay draft, run, and atomic formal upgrade across every reload', async () => {
+    const legacyCompletedAt = '2026-08-02T00:00:00.000Z';
+    const initial = formalWeekFourVariableProgressForContext();
+    initial.missions['w4-m3'] = { status: 'completed', stars: 2, attempts: 8, hintsUsed: 3, completedAt: legacyCompletedAt };
+    initial.missionCompletionEvidence['w4-m3'] = { kind: 'legacy-replay-only', completedAt: legacyCompletedAt, sourceVersion: 3, sourceSchemaRevision: 9 };
+    installStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(initial), [REVISION_PROGRESS_KEY]: '0' });
+    let view = render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    let draft!: CoordinatedSaveResult;
+    await act(async () => { draft = await latestContext!.saveWeekFourBranchDraft(SOLVED_WEEK_FOUR_BRANCH_PYTHON); });
+    expect(draft.status).toBe('saved');
+    view.unmount(); view = render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    const parsed = parseWeekFourBranchPython(latestContext!.progress.sessions['w4-m3']!.pythonCode);
+    if ('state' in parsed) throw new Error('expected solved branch after reload');
+    let run!: CoordinatedSaveResult;
+    await act(async () => { run = await latestContext!.saveWeekFourBranchRun({ canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run }); });
+    expect(run.status).toBe('saved');
+    view.unmount(); view = render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    let completed!: CoordinatedSaveResult;
+    await act(async () => { completed = await latestContext!.completeWeekFourBranch({ stars: 3, hintsUsed: 0 }); });
+    expect(completed.status).toBe('saved');
+    view.unmount(); view = render(<ProgressProvider><Probe /></ProgressProvider>);
+    expect(latestContext!.progress.missions['w4-m3'].completedAt).toBe(legacyCompletedAt);
+    expect(latestContext!.progress.missionCompletionEvidence['w4-m3']).toMatchObject({ kind: 'formal-v3', completedAt: legacyCompletedAt });
+    expect(latestContext!.progress.works['w4-m3-branch-structure-record']).toMatchObject({ kind: 'python-branch-structure-v1' });
+    view.unmount();
+  });
+
+  it('routes every W4-M3 session mutation and hint through revision-checked coordinated writes', async () => {
+    installStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(formalWeekFourVariableProgressForContext()), [REVISION_PROGRESS_KEY]: '0' });
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+
+    await act(async () => { await latestContext!.saveWeekFourBranchDraft(DEFAULT_WEEK_FOUR_BRANCH_PYTHON); });
+    const failed = parseWeekFourBranchPython(DEFAULT_WEEK_FOUR_BRANCH_PYTHON);
+    if ('state' in failed) throw new Error('expected runnable branch fixture');
+    await act(async () => { await latestContext!.saveWeekFourBranchRun({ canonicalTrace: failed.trace, workerTrace: failed.trace, run: failed.run }); });
+    await act(async () => { await latestContext!.saveWeekFourBranchObservation(); });
+    await act(async () => { await latestContext!.recordMissionHint('w4-m3', 'observe'); });
+    await act(async () => { await latestContext!.saveWeekFourBranchDraft(INVALID_ELSE_WEEK_FOUR_BRANCH_PYTHON); });
+    let validation!: CoordinatedSaveResult; let infrastructure!: CoordinatedSaveResult;
+    await act(async () => { validation = await latestContext!.saveWeekFourBranchValidationFailure(); });
+    await act(async () => { infrastructure = await latestContext!.saveWeekFourBranchInfrastructureFailure({ executionStarted: true }); });
+
+    expect([validation.status, infrastructure.status]).toEqual(['saved', 'saved']);
+    expect(localStorage.getItem(REVISION_PROGRESS_KEY)).toBe(String(infrastructure.status === 'saved' ? infrastructure.revision : -1));
+    expect(JSON.parse(localStorage.getItem(CURRENT_PROGRESS_KEY)!).sessions['w4-m3']).toMatchObject({
+      pythonCode: INVALID_ELSE_WEEK_FOUR_BRANCH_PYTHON,
+      totalRuns: 2,
+      branchConflictFailures: 1,
+      validationFailures: 1,
+      runnerInfrastructureFailures: 1,
+      usedHintTiers: ['observe'],
+      lastRun: null,
+    });
+  });
+
+  it('keeps W4-M3 completion mission, evidence, and work unpublished together when the atomic commit fails', async () => {
+    const formal = formalWeekFourVariableProgressForContext();
+    formal.sessions['w4-m3'] = solvedWeekFourBranchSessionForContext();
+    formal.savedAt = formal.sessions['w4-m3']!.savedAt;
+    installStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(formal), [REVISION_PROGRESS_KEY]: '0' });
+    const saveProgressCoordinated = vi.fn<typeof import('../progress/storageCoordinator').saveProgressCoordinated>((progress) => (
+      Promise.resolve({ status: 'unsaved', progress, error: 'branch atomic write failed' })
+    ));
+    render(<ProgressProvider loadSaveCoordinator={() => Promise.resolve({ saveProgressCoordinated } as unknown as typeof import('../progress/storageCoordinator'))}><Probe /></ProgressProvider>);
+    const equipment = structuredClone(formal.equipment);
+    const abilities = structuredClone(formal.abilities);
+
+    let result!: CoordinatedSaveResult;
+    await act(async () => { result = await latestContext!.completeWeekFourBranch({ stars: 3, hintsUsed: 0 }); });
+
+    expect(result).toMatchObject({ status: 'unsaved', error: 'branch atomic write failed' });
+    expect(latestContext!.progress.missions['w4-m3']).toBeUndefined();
+    expect(latestContext!.progress.missionCompletionEvidence['w4-m3']).toBeUndefined();
+    expect(latestContext!.progress.works['w4-m3-branch-structure-record']).toBeUndefined();
+    const backup = JSON.parse(latestContext!.createBackup().contents);
+    expect(backup).toMatchObject({
+      missions: { 'w4-m3': { status: 'completed' } },
+      missionCompletionEvidence: { 'w4-m3': { kind: 'formal-v3' } },
+      works: { 'w4-m3-branch-structure-record': { kind: 'python-branch-structure-v1' } },
+    });
+    expect(backup.equipment).toEqual(equipment);
+    expect(backup.abilities).toEqual(abilities);
+  });
+
+  it('rejects a stale W4-M3 writer before creating or mutating its session', async () => {
+    installStorage({
+      [CURRENT_PROGRESS_KEY]: serializeProgress(formalWeekFourVariableProgressForContext()),
+      [REVISION_PROGRESS_KEY]: '1',
+    });
+    render(<ProgressProvider><Probe /></ProgressProvider>);
+    localStorage.setItem(REVISION_PROGRESS_KEY, '2');
+    window.dispatchEvent(new StorageEvent('storage', { key: REVISION_PROGRESS_KEY, newValue: '2' }));
+    await waitFor(() => expect(latestContext!.saveStatus).toBe('conflict'));
+
+    const result = await latestContext!.saveWeekFourBranchDraft(DEFAULT_WEEK_FOUR_BRANCH_PYTHON);
+    expect(result).toMatchObject({ status: 'conflict' });
+    expect(latestContext!.progress.sessions['w4-m3']).toBeUndefined();
+  });
+
+  it('backs up historical W4-M3 provenance before clear and restores the exact initial V3 contract', async () => {
+    const cleared = createInitialProgress();
+    const historical = createInitialProgress();
+    historical.settings.muted = true;
+    historical.privacy.localDataNoticeSeen = true;
+    historical.missions['w4-m2'] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: SESSION_NOW };
+    historical.missionCompletionEvidence['w4-m2'] = { kind: 'legacy-replay-only', completedAt: SESSION_NOW, sourceVersion: 3, sourceSchemaRevision: 8 };
+    historical.missions['w4-m3'] = { status: 'completed', stars: 3, attempts: 1, hintsUsed: 0, completedAt: SESSION_NOW };
+    historical.missionCompletionEvidence['w4-m3'] = { kind: 'legacy-replay-only', completedAt: SESSION_NOW, sourceVersion: 3, sourceSchemaRevision: 9 };
+    installStorage({ [CURRENT_PROGRESS_KEY]: serializeProgress(historical), [REVISION_PROGRESS_KEY]: '0' });
+    const clearProgressCoordinated = vi.fn(async () => ({ status: 'cleared' as const, progress: cleared, revision: 1 }));
+    render(<ProgressProvider loadParentCoordinator={() => Promise.resolve({ clearProgressCoordinated } as unknown as typeof import('../progress/storageCoordinatorParent'))}><Probe /></ProgressProvider>);
+    const backup = JSON.parse(latestContext!.createBackup().contents);
+
+    await act(async () => { await latestContext!.clearProgress(); });
+
+    expect(backup.missionCompletionEvidence['w4-m3']).toMatchObject({ kind: 'legacy-replay-only', sourceSchemaRevision: 9 });
+    expect(latestContext!.progress).toEqual(cleared);
+    expect(latestContext!.progress.sessions['w4-m3']).toBeUndefined();
+    expect(latestContext!.progress.works['w4-m3-branch-structure-record']).toBeUndefined();
+    expect(latestContext!.progress.missionCompletionEvidence['w4-m3']).toBeUndefined();
+    expect(latestContext!.progress.settings).toEqual(createInitialProgress().settings);
+    expect(latestContext!.progress.privacy).toEqual(createInitialProgress().privacy);
+  });
+
   it('routes W4 code changes through the same revision-checked mission-session transaction', async () => {
     installStorage({});
     render(<ProgressProvider><Probe /></ProgressProvider>);
