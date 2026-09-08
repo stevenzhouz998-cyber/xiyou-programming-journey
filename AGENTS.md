@@ -69,3 +69,14 @@ Run the local server yourself and open the preview in the browser available to t
 Before making substantial visual changes, use the Product Design plugin's `get-context` skill when the visual source is unclear or no longer matches the current goal. When the user gives durable prototype-specific design feedback, preferences, or decisions, record them in `AGENTS.md`.
 
 When implementing from a selected generated mock, treat that image as the source of truth for layout, component anatomy, density, spacing, color, typography, visible content, and hierarchy.
+
+## Engineering Efficiency
+
+- Start with `docs/engineering/current-work.md`; confirm its checkout and current Git state before implementation. It is a dated pointer, not authorization or proof of completion.
+- Default to one implementation owner per complete feature chain. Delegate only independently useful work under current authorization; do not create an implementer plus two reviewers for every small task. Review concrete high-risk boundaries and the integrated result, and verify important findings directly.
+- Approved plans and gameplay decisions remain valid until relevant facts change. Old plan templates that recommend compulsory subskill chains or per-task double review do not override these project rules. Do not reopen design or copy entire plans merely to resume work.
+- Use the validation tiers and evidence rules in `docs/engineering/verification.md`. Reuse a successful check only when its relevant inputs, environment, scope and assumptions remain valid. Expand or repeat checks for new changes, failures or a concrete unresolved risk, never solely because another agent or turn finished.
+- Batch related browser specs for the same source state into one Playwright invocation, preserving required projects and fault coverage. Retain the current worker count until a measured isolation/resource check supports changing it. Do not hide known failures or equate a targeted pass with full-site health.
+- Keep raw logs in local artifacts; read summaries and relevant failure excerpts. At natural design/implementation/acceptance boundaries, hand off decisions, exact checkout, changed files, valid evidence and remaining failures instead of replaying the entire history. Do not split a task merely to satisfy a token threshold.
+- Stop review when the required evidence is sufficient and concrete findings are resolved. Report actual validation duration and scope; token comparisons must separate cached input and avoid summing inherited cumulative totals. Never promise savings without a comparable measurement.
+- These rules preserve player behavior, persistence/recovery, restricted execution, accessibility, browser coverage and all commercial delivery standards above.
