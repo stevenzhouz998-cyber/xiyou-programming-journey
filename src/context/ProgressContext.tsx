@@ -1,8 +1,13 @@
 import { getWeekFourListAccess } from '../progress/progress';
+import { getWeekFourBossAccess } from '../progress/progress';
 import type { WeekFourListMissionSession } from '../progress/types';
+import type { WeekFourBossMissionSession } from '../progress/types';
 import type { WeekFourListRunResult, WeekFourListTraceItem } from '../engine/weekFourListContract';
+import type { WeekFourBossRunResult, WeekFourBossTraceItem } from '../engine/weekFourBossContract';
 import { recordWeekFourListHint, recordWeekFourListInfrastructureFailure, recordWeekFourListObservation, recordWeekFourListRun, recordWeekFourListValidationFailure, updateWeekFourListCode } from '../progress/weekFourListSession';
+import { recordWeekFourBossHint, recordWeekFourBossInfrastructureFailure, recordWeekFourBossObservation, recordWeekFourBossRun, recordWeekFourBossValidationFailure, updateWeekFourBossCode } from '../progress/weekFourBossSession';
 import { parseWeekFourListSession } from '../progress/weekFourListSessionSchema';
+import { parseWeekFourBossSession } from '../progress/weekFourBossSessionSchema';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   completeMission,
@@ -87,7 +92,8 @@ type MissionSessionUpdateArgs =
   | [missionId: 'w4-m1', update: (session: WeekFourMappingMissionSession) => WeekFourMappingMissionSession, options?: ProgressWriteOptions]
   | [missionId: 'w4-m2', update: (session: WeekFourVariableMissionSession) => WeekFourVariableMissionSession, options?: ProgressWriteOptions]
   | [missionId: 'w4-m3', update: (session: WeekFourBranchMissionSession) => WeekFourBranchMissionSession, options?: ProgressWriteOptions]
-  | [missionId: 'w4-m4', update: (session: WeekFourListMissionSession) => WeekFourListMissionSession, options?: ProgressWriteOptions];
+  | [missionId: 'w4-m4', update: (session: WeekFourListMissionSession) => WeekFourListMissionSession, options?: ProgressWriteOptions]
+  | [missionId: 'w4-m5', update: (session: WeekFourBossMissionSession) => WeekFourBossMissionSession, options?: ProgressWriteOptions];
 type MissionSessionUpdateAtArgs =
   | [missionId: 'w1-m1', update: (session: DragonPalaceMissionSession) => DragonPalaceMissionSession, now: string, options?: ProgressWriteOptions]
   | [missionId: 'w1-m2', update: (session: RuyiStaffMissionSession) => RuyiStaffMissionSession, now: string, options?: ProgressWriteOptions]
@@ -106,7 +112,8 @@ type MissionSessionUpdateAtArgs =
   | [missionId: 'w4-m1', update: (session: WeekFourMappingMissionSession) => WeekFourMappingMissionSession, now: string, options?: ProgressWriteOptions]
   | [missionId: 'w4-m2', update: (session: WeekFourVariableMissionSession) => WeekFourVariableMissionSession, now: string, options?: ProgressWriteOptions]
   | [missionId: 'w4-m3', update: (session: WeekFourBranchMissionSession) => WeekFourBranchMissionSession, now: string, options?: ProgressWriteOptions]
-  | [missionId: 'w4-m4', update: (session: WeekFourListMissionSession) => WeekFourListMissionSession, now: string, options?: ProgressWriteOptions];
+  | [missionId: 'w4-m4', update: (session: WeekFourListMissionSession) => WeekFourListMissionSession, now: string, options?: ProgressWriteOptions]
+  | [missionId: 'w4-m5', update: (session: WeekFourBossMissionSession) => WeekFourBossMissionSession, now: string, options?: ProgressWriteOptions];
 interface UpdateMissionSession {
   (
     missionId: 'w1-m1',
@@ -198,6 +205,11 @@ interface UpdateMissionSession {
     update: (session: WeekFourListMissionSession) => WeekFourListMissionSession,
     options?: ProgressWriteOptions,
   ): Promise<CoordinatedSaveResult>;
+  (
+    missionId: 'w4-m5',
+    update: (session: WeekFourBossMissionSession) => WeekFourBossMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
 }
 type MissionHintTier = MissionSession['usedHintTiers'][number];
 interface RecordMissionHint {
@@ -230,11 +242,17 @@ export interface ProgressContextValue {
   saveWeekFourBranchValidationFailure: () => Promise<CoordinatedSaveResult>;
   completeWeekFourBranch: (input: CompletionInput) => Promise<CoordinatedSaveResult>;
   saveWeekFourListDraft: (code: string) => Promise<CoordinatedSaveResult>;
+  saveWeekFourBossDraft: (code: string) => Promise<CoordinatedSaveResult>;
   saveWeekFourListRun: (value: { canonicalTrace: WeekFourListTraceItem[]; workerTrace: WeekFourListTraceItem[]; run: WeekFourListRunResult }) => Promise<CoordinatedSaveResult>;
+  saveWeekFourBossRun: (value: { canonicalTrace: WeekFourBossTraceItem[]; workerTrace: WeekFourBossTraceItem[]; run: WeekFourBossRunResult }) => Promise<CoordinatedSaveResult>;
   saveWeekFourListObservation: () => Promise<CoordinatedSaveResult>;
+  saveWeekFourBossObservation: () => Promise<CoordinatedSaveResult>;
   saveWeekFourListInfrastructureFailure: (input: { executionStarted: boolean }) => Promise<CoordinatedSaveResult>;
+  saveWeekFourBossInfrastructureFailure: (input: { executionStarted: boolean }) => Promise<CoordinatedSaveResult>;
   saveWeekFourListValidationFailure: () => Promise<CoordinatedSaveResult>;
+  saveWeekFourBossValidationFailure: () => Promise<CoordinatedSaveResult>;
   completeWeekFourList: (input: CompletionInput) => Promise<CoordinatedSaveResult>;
+  completeWeekFourBoss: (input: CompletionInput) => Promise<CoordinatedSaveResult>;
   recordMissionHint: RecordMissionHint;
   replaceProgress: (progress: ProgressV3) => Promise<CoordinatedSaveResult>;
   updateSettings: (settings: Partial<ProgressV3['settings']>) => Promise<CoordinatedSaveResult>;
@@ -490,6 +508,17 @@ export function ProgressProvider({
         savedAt: now,
       }, true, options);
     }
+    if (missionId === 'w4-m5') {
+      if (getWeekFourBossAccess(currentProgress).kind !== 'formal') {
+        throw new Error('W4-M5保存需要W4-M4 formal-v3正式证明');
+      }
+      const branchSession = parseWeekFourBossSession(updated);
+      return commit({
+        ...currentProgress,
+        sessions: { ...currentProgress.sessions, 'w4-m5': branchSession },
+        savedAt: now,
+      }, true, options);
+    }
     const next = migrateProgress({
       ...currentProgress,
       sessions: { ...currentProgress.sessions, [missionId]: updated },
@@ -596,6 +625,11 @@ export function ProgressProvider({
       const current = currentProgress.sessions['w4-m4'] ? structuredClone(currentProgress.sessions['w4-m4']) : createMissionSession('w4-m4', now);
       return persistMissionSession(missionId, update(current), now, options);
     }
+    if (missionId === 'w4-m5') {
+      const currentProgress = workingProgress();
+      const current = currentProgress.sessions['w4-m5'] ? structuredClone(currentProgress.sessions['w4-m5']) : createMissionSession('w4-m5', now);
+      return persistMissionSession(missionId, update(current), now, options);
+    }
     const currentProgress = workingProgress();
     const current = currentProgress.sessions['w1-m5'] ? structuredClone(currentProgress.sessions['w1-m5']) : createMissionSession('w1-m5', now);
     return persistMissionSession(missionId, update(current), now, options);
@@ -691,6 +725,11 @@ export function ProgressProvider({
     update: (session: WeekFourListMissionSession) => WeekFourListMissionSession,
     options?: ProgressWriteOptions,
   ): Promise<CoordinatedSaveResult>;
+  function updateMissionSession(
+    missionId: 'w4-m5',
+    update: (session: WeekFourBossMissionSession) => WeekFourBossMissionSession,
+    options?: ProgressWriteOptions,
+  ): Promise<CoordinatedSaveResult>;
   function updateMissionSession(...args: MissionSessionUpdateArgs) {
     const now = new Date().toISOString();
     if (args[0] === 'w1-m1') {
@@ -718,6 +757,7 @@ export function ProgressProvider({
     if (args[0] === 'w4-m2') return updateMissionSessionAt(args[0], args[1], now, args[2]);
     if (args[0] === 'w4-m3') return updateMissionSessionAt(args[0], args[1], now, args[2]);
     if (args[0] === 'w4-m4') return updateMissionSessionAt(args[0], args[1], now, args[2]);
+    if (args[0] === 'w4-m5') return updateMissionSessionAt(args[0], args[1], now, args[2]);
     throw new Error('任务编号无效');
   }
 
@@ -853,6 +893,27 @@ export function ProgressProvider({
       return updateMissionSessionAt('w4-m4', (session: WeekFourListMissionSession) => recordWeekFourListValidationFailure(session, now), now);
     },
     completeWeekFourList: (input) => commit(completeMission(workingProgress(), 'w4-m4', input), false, {}, true, true, 'w4-m4'),
+    saveWeekFourBossDraft: (code) => {
+      const now = new Date().toISOString();
+      return updateMissionSessionAt('w4-m5', (session: WeekFourBossMissionSession) => updateWeekFourBossCode(session, code, now), now);
+    },
+    saveWeekFourBossRun: (value) => {
+      const now = new Date().toISOString();
+      return updateMissionSessionAt('w4-m5', (session: WeekFourBossMissionSession) => recordWeekFourBossRun(session, value, now), now);
+    },
+    saveWeekFourBossObservation: () => {
+      const now = new Date().toISOString();
+      return updateMissionSessionAt('w4-m5', (session: WeekFourBossMissionSession) => recordWeekFourBossObservation(session, now), now);
+    },
+    saveWeekFourBossInfrastructureFailure: (input) => {
+      const now = new Date().toISOString();
+      return updateMissionSessionAt('w4-m5', (session: WeekFourBossMissionSession) => recordWeekFourBossInfrastructureFailure(session, input, now), now);
+    },
+    saveWeekFourBossValidationFailure: () => {
+      const now = new Date().toISOString();
+      return updateMissionSessionAt('w4-m5', (session: WeekFourBossMissionSession) => recordWeekFourBossValidationFailure(session, now), now);
+    },
+    completeWeekFourBoss: (input) => commit(completeMission(workingProgress(), 'w4-m5', input), false, {}, true, true, 'w4-m5'),
     recordMissionHint: (missionId, tier) => {
       const unpublished = pendingUnpublishedRef.current;
       if (unpublished?.completionMissionIds.has(missionId)) return Promise.resolve(unpublished.failure ?? {
@@ -894,6 +955,7 @@ export function ProgressProvider({
       }, now);
       if (missionId === 'w4-m3') return updateMissionSessionAt(missionId, (session: WeekFourBranchMissionSession) => recordWeekFourBranchHint(session, tier, now), now);
       if (missionId === 'w4-m4') return updateMissionSessionAt(missionId, (session: WeekFourListMissionSession) => recordWeekFourListHint(session, tier, now), now);
+      if (missionId === 'w4-m5') return updateMissionSessionAt(missionId, (session: WeekFourBossMissionSession) => recordWeekFourBossHint(session, tier, now), now);
       throw new Error('任务编号无效');
     },
     replaceProgress: (next) => commit(next),

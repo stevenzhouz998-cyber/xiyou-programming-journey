@@ -126,3 +126,9 @@ When implementing from a selected generated mock, treat that image as the source
 - On 2026-09-09 the user authorized the agent to choose the best W4-M4 gameplay and complete local implementation/validation without presenting choices again. Preserve the selected list-and-loop observation-book direction in `docs/superpowers/specs/2026-09-09-week-four-python-list-loop-design.md` unless relevant facts change.
 - The visible appearances list and loop recording argument jointly determine actual Python iteration evidence. Default list order and fixed-literal recording are independent learning mistakes. Keep prior W4 proofs, zero-penalty failure, historical provenance and read-only formal replay. Canon banishment is a fixed story epilogue, never a child command or failure penalty.
 - On 2026-09-11 the user additionally authorized committing and pushing this W4-M4 change to the current branch. Merging and deploying remain outside this authorization.
+
+## Approved W4-M5 Direction
+
+- User approved the agent-selected white-tiger-ridge verification station on 2026-09-11. One visible Python program processes two fully public card orders, including an explicitly non-canon same-appearance/different-identity practice card. Preserve the fourth-week storybook visuals and zero-penalty learning failures. See `docs/superpowers/specs/2026-09-11-week-four-verification-station-design.md`.
+
+- On 2026-09-11 the user additionally authorized a handoff and committing/pushing W4-M5 to the current branch. This does not authorize merging or deployment.

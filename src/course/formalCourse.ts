@@ -183,6 +183,11 @@ export const formalWeekFourMissions: FormalMissionSpec[] = [
     storyBeats: [beat('第三次变化', '白骨精第三次变作老翁，寻找妻女。'), beat('原著后续', '悟空识破白骨精，唐僧却仍误解悟空并写下贬书。此为固定原著尾声，不是孩子的命令或失败惩罚。')],
     hints: { observe: '对照已保存的每轮 item 和记录值，看看它们是否相同。', think: '列表决定先后；循环变量每一轮会取出当前的一项。', partial: '检查列表中的事实顺序，以及循环记录的是固定文字还是每轮变化的值。' },
   }),
+  formalPythonMission('w4-m5', {
+    subtitle: '白虎岭核验站', objective: '让同一段 Python 在两组公开卡片顺序中都正确核验身份', canon: formalWeekFourCanon,
+    storyBeats: [beat('三次变化复盘', '三张原著卡与一张非原著练习卡，一起检验程序是否依据身份。'), beat('核验报告', '两轮程序运行共同形成白虎岭核验报告；原著后续为固定回顾。')],
+    hints: {observe: '先看首次偏离的卡片，程序读进了什么变量？', think: '外形相同的卡片，身份也一定相同吗？', partial: '对照已保存的变量、条件和实际动作，检查当前出错行。'},
+  }),
 ];
 
 export function getFormalMission(id: string): FormalMissionSpec | undefined {

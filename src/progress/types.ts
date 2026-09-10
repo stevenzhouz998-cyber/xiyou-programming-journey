@@ -94,6 +94,12 @@ import type {
   WeekFourListRunResult,
   WeekFourListTraceItem,
 } from '../engine/weekFourListContract';
+import type { WeekFourBossMissionSession } from './weekFourBossSession';
+export type { WeekFourBossMissionSession } from './weekFourBossSession';
+import type {
+  WeekFourBossRunResult,
+  WeekFourBossTraceItem,
+} from '../engine/weekFourBossContract';
 
 export interface MissionProgress {
   status: 'completed';
@@ -457,6 +463,28 @@ export interface WeekFourListWorkV1 {
   createdAt: string;
   verifiedAt: string;
 }
+export type WeekFourBossCompletionEvidence =
+  | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 1; sourceSchemaRevision: null }
+  | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 2; sourceSchemaRevision: 1 }
+  | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 3; sourceSchemaRevision: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 }
+  | {
+    kind: 'formal-v3'; completedAt: string; verifiedAt: string; pythonCode: string;
+    canonicalTrace: WeekFourBossTraceItem[]; workerTrace: WeekFourBossTraceItem[];
+    run: WeekFourBossRunResult; workId: 'w4-m5-verification-report';
+  };
+
+export interface WeekFourBossWorkV1 {
+  kind: 'python-verification-station-v1';
+  workId: 'w4-m5-verification-report';
+  missionId: 'w4-m5';
+  title: string;
+  pythonCode: string;
+  canonicalTrace: WeekFourBossTraceItem[];
+  workerTrace: WeekFourBossTraceItem[];
+  run: WeekFourBossRunResult;
+  createdAt: string;
+  verifiedAt: string;
+}
 
 export interface MissionCompletionEvidenceV1 {
   'w3-m1'?: ManorHelpCompletionEvidence;
@@ -468,6 +496,7 @@ export interface MissionCompletionEvidenceV1 {
   'w4-m2'?: WeekFourVariableCompletionEvidence;
   'w4-m3'?: WeekFourBranchCompletionEvidence;
   'w4-m4'?: WeekFourListCompletionEvidence;
+  'w4-m5'?: WeekFourBossCompletionEvidence;
 }
 
 export interface MissionSessionById {
@@ -490,6 +519,7 @@ export interface MissionSessionById {
   'w4-m2': WeekFourVariableMissionSession;
   'w4-m3': WeekFourBranchMissionSession;
   'w4-m4': WeekFourListMissionSession;
+  'w4-m5': WeekFourBossMissionSession;
 }
 
 export type ExecutableMissionId = keyof MissionSessionById;
@@ -499,7 +529,7 @@ export type MissionSessions = { [MissionId in keyof MissionSessionById]?: Missio
 
 export interface ProgressV3 {
   version: 3;
-  schemaRevision: 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+  schemaRevision: 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
   learnerName: string;
   missions: Record<string, MissionProgress>;
   settings: ProgressSettings;
@@ -517,6 +547,7 @@ export interface ProgressV3 {
     'w4-m2-variable-evidence-record': WeekFourVariableWorkV1;
     'w4-m3-branch-structure-record': WeekFourBranchWorkV1;
     'w4-m4-list-loop-record': WeekFourListWorkV1;
+    'w4-m5-verification-report': WeekFourBossWorkV1;
   }>;
   savedAt: string;
 }

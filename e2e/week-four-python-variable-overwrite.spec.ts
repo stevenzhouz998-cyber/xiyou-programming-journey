@@ -825,7 +825,7 @@ test.describe("W4-M2 Python 变量覆盖真实浏览器证据", () => {
     expect(recoveredCurrent).not.toBeNull();
     expect(corruptBytes).not.toBeNull();
     const recovered = JSON.parse(recoveredCurrent!);
-    expect(recovered.schemaRevision).toBe(11);
+    expect(recovered.schemaRevision).toBe(12);
     expect(recovered.recovery).toMatchObject({ source: "snapshot" });
     expect(recovered.sessions["w4-m2"].lastCanonicalTrace).toEqual(
       legal.sessions["w4-m2"].lastCanonicalTrace,

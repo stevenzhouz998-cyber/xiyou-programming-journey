@@ -77,7 +77,7 @@ describe('course manifest', () => {
     expect(formalWeekTwoMissions).toHaveLength(5);
     expect(formalWeekThreeMissions).toHaveLength(5);
     for (const mission of formalWeekOneMissions) expect(mission).not.toHaveProperty('expectedSequence');
-    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5', 'w2-m1', 'w2-m2', 'w2-m3', 'w2-m4', 'w2-m5', 'w3-m1', 'w3-m2', 'w3-m3', 'w3-m4', 'w3-m5', 'w4-m1', 'w4-m2', 'w4-m3', 'w4-m4']);
+    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5', 'w2-m1', 'w2-m2', 'w2-m3', 'w2-m4', 'w2-m5', 'w3-m1', 'w3-m2', 'w3-m3', 'w3-m4', 'w3-m5', 'w4-m1', 'w4-m2', 'w4-m3', 'w4-m4', 'w4-m5']);
     for (const mission of course.weeks.flatMap((week) => week.missions)) {
       if (formalIds.has(mission.id)) expect(mission).not.toHaveProperty('expectedSequence');
       else expect(mission).toHaveProperty('expectedSequence', expect.any(Array));
@@ -146,7 +146,7 @@ describe('course manifest', () => {
     expect(mission).not.toHaveProperty('expectedSequence');
     expect(mission).not.toHaveProperty('expectedOutput');
     expect(mission).not.toHaveProperty('starterCode');
-    for (const id of ['w4-m5']) {
+    for (const id of ['w5-m1']) {
       expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
       expect(isExecutableMissionId(id)).toBe(false);
     }
@@ -172,7 +172,7 @@ describe('course manifest', () => {
     expect(mission).not.toHaveProperty('expectedSequence');
     expect(mission).not.toHaveProperty('expectedOutput');
     expect(mission).not.toHaveProperty('starterCode');
-    for (const id of ['w4-m5']) {
+    for (const id of ['w5-m1']) {
       expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
       expect(isExecutableMissionId(id)).toBe(false);
     }
@@ -202,32 +202,19 @@ describe('course manifest', () => {
     expect(mission).not.toHaveProperty('expectedSequence');
     expect(mission).not.toHaveProperty('expectedOutput');
     expect(mission).not.toHaveProperty('starterCode');
-    for (const id of ['w4-m5']) {
+    for (const id of ['w5-m1']) {
       expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
       expect(isExecutableMissionId(id)).toBe(false);
     }
   });
 
-  it('formalizes W4-M4 and preserves W4-M5 legacy snapshot', () => {
-    expect(getMission('w4-m1')?.mode).toBe('blockly');
-    expect(getMission('w4-m4')).not.toHaveProperty('expectedSequence');
-    expect(getMission('w4-m4')).not.toHaveProperty('expectedOutput');
-    expect(isExecutableMissionId('w4-m4')).toBe(true);
-    expect(getMission('w4-m5')).toMatchObject({
-      expectedSequence: ['woman_is_demon', 'old_woman_is_demon', 'old_man_is_demon', 'canon_ending'],
-      expectedOutput: '女子: 识破\n老妇: 识破\n老翁: 识破',
-      starterCode: "records = [('女子', '白骨精'), ('老妇', '白骨精'), ('老翁', '白骨精')]\nfor appearance, identity in records:\n    if identity == '白骨精':\n        print(appearance + ': 识破')",
-    });
-    for (const id of ['w4-m5']) {
-      const mission = getMission(id);
-      expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
-      expect(isExecutableMissionId(id)).toBe(false);
-      expect(mission).toHaveProperty('expectedSequence');
-      expect(mission).toHaveProperty('expectedOutput');
-      expect(mission).toHaveProperty('starterCode');
+  it('formalizes both W4-M4 and W4-M5 without legacy answers', () => {
+    for(const id of ['w4-m4','w4-m5']) {
+      expect(isExecutableMissionId(id)).toBe(true);
+      expect(isFormalMissionOutline(getMissionOutline(id))).toBe(true);
+      for(const key of ['expectedSequence','expectedOutput','starterCode']) expect(getMission(id)).not.toHaveProperty(key);
     }
   });
-
   it('gives every selectable command a child-readable Chinese label', () => {
     for (const command of course.weeks.flatMap((week) => week.missions.flatMap((mission) => 'expectedSequence' in mission ? mission.expectedSequence : []))) {
       expect(commandLabel(command)).not.toContain('_');

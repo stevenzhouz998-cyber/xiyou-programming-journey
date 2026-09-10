@@ -400,6 +400,99 @@ function exactW4ListCompletionDelta(previous: ProgressV3, next: ProgressV3) {
   });
 }
 
+function hasNoW4BossPublication(progress: ProgressV3) {
+  return progress.missions['w4-m5'] === undefined
+    && progress.missionCompletionEvidence['w4-m5'] === undefined
+    && progress.works['w4-m5-verification-report'] === undefined;
+}
+
+function exactW4BossDraftDelta(previous: ProgressV3, next: ProgressV3) {
+  const prior = previous.sessions['w4-m5']; const candidate = next.sessions['w4-m5'];
+  if (!candidate || !hasNoW4BossPublication(next) || candidate.lastRun !== null) return false;
+  if (!prior) return exactAfterAllowedDelta(previous, next, (expected) => { expected.sessions['w4-m5'] = structuredClone(candidate); });
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    const session = expected.sessions['w4-m5']!;
+    session.pythonCode = candidate.pythonCode;
+    session.lastCanonicalTrace = [];
+    session.lastWorkerTrace = [];
+    session.lastRun = null;
+    session.failureSnapshot = null;
+    session.conditionObservationUses = [];
+    session.lastRunAt = null;
+    session.savedAt = candidate.savedAt;
+  });
+}
+
+function exactW4BossRunDelta(previous: ProgressV3, next: ProgressV3) {
+  const prior = previous.sessions['w4-m5']; const candidate = next.sessions['w4-m5'];
+  if (!prior || !candidate || !hasNoW4BossPublication(next)) return false;
+  if (candidate.validationFailures === prior.validationFailures + 1) {
+    return exactAfterAllowedDelta(previous, next, (expected) => {
+      const session = expected.sessions['w4-m5']!;
+      session.validationFailures = candidate.validationFailures;
+      session.firstBlockingConcept = candidate.firstBlockingConcept;
+      session.savedAt = candidate.savedAt;
+    });
+  }
+  if (candidate.runnerInfrastructureFailures === prior.runnerInfrastructureFailures + 1
+    && (candidate.totalRuns === prior.totalRuns || candidate.totalRuns === prior.totalRuns + 1)) {
+    return exactAfterAllowedDelta(previous, next, (expected) => {
+      const session = expected.sessions['w4-m5']!;
+      session.runnerInfrastructureFailures = candidate.runnerInfrastructureFailures;
+      session.totalRuns = candidate.totalRuns;
+      session.savedAt = candidate.savedAt;
+    });
+  }
+  if (!candidate.lastRun || candidate.totalRuns !== prior.totalRuns + 1) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    const session = expected.sessions['w4-m5']!;
+    session.lastCanonicalTrace = structuredClone(candidate.lastCanonicalTrace);
+    session.lastWorkerTrace = structuredClone(candidate.lastWorkerTrace);
+    session.lastRun = structuredClone(candidate.lastRun);
+    session.failureSnapshot = structuredClone(candidate.failureSnapshot);
+    session.conditionObservationUses = [];
+    session.totalRuns = candidate.totalRuns;
+    session.identityFailures = candidate.identityFailures;
+    session.branchFailures = candidate.branchFailures;
+    session.firstBlockingConcept = candidate.firstBlockingConcept;
+    session.lastRunAt = candidate.lastRunAt;
+    session.savedAt = candidate.savedAt;
+  });
+}
+
+function exactW4BossObservationDelta(previous: ProgressV3, next: ProgressV3) {
+  const prior = previous.sessions['w4-m5']; const candidate = next.sessions['w4-m5'];
+  const observation = candidate?.conditionObservationUses.at(-1);
+  if (!prior || !candidate || !observation || !prior.failureSnapshot || !hasNoW4BossPublication(next)
+    || candidate.conditionObservationUses.length !== prior.conditionObservationUses.length + 1
+    || canonicalJson(candidate.conditionObservationUses.slice(0, -1)) !== canonicalJson(prior.conditionObservationUses)
+    || prior.conditionObservationUses.some((use) => use.snapshotId === observation.snapshotId)
+    || observation.snapshotId !== prior.failureSnapshot.snapshotId
+    || observation.pythonCode !== prior.pythonCode || observation.usedAt !== candidate.savedAt) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    const session = expected.sessions['w4-m5']!;
+    session.conditionObservationUses.push(structuredClone(observation));
+    session.savedAt = candidate.savedAt;
+  });
+}
+
+function exactW4BossCompletionDelta(previous: ProgressV3, next: ProgressV3) {
+  const completion = next.missions['w4-m5'];
+  const evidence = next.missionCompletionEvidence['w4-m5'];
+  const work = next.works['w4-m5-verification-report'];
+  const oldEvidence = previous.missionCompletionEvidence['w4-m5'];
+  const initial = previous.missions['w4-m5'] === undefined && oldEvidence === undefined
+    && previous.works['w4-m5-verification-report'] === undefined;
+  const upgrade = previous.missions['w4-m5'] !== undefined && oldEvidence?.kind === 'legacy-replay-only'
+    && previous.works['w4-m5-verification-report'] === undefined;
+  if (!completion || evidence?.kind !== 'formal-v3' || !work || (!initial && !upgrade)) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    if (initial) expected.missions['w4-m5'] = structuredClone(completion);
+    expected.missionCompletionEvidence['w4-m5'] = structuredClone(evidence);
+    expected.works['w4-m5-verification-report'] = structuredClone(work);
+  });
+}
+
 function exactDraftDelta(previous: ProgressV3, next: ProgressV3) {
   const candidate = next.sessions['w1-m3'];
   if (!candidate || candidate.lastRun !== null || next.missions['w1-m3'] !== undefined) return false;
@@ -927,14 +1020,19 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-w4-m2-completion' && exactW4VariableCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m3-draft' && exactW4BranchDraftDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-draft' && exactW4ListDraftDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w4-m5-draft' && exactW4BossDraftDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m3-run' && exactW4BranchRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-run' && exactW4ListRunDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w4-m5-run' && exactW4BossRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m3-observation' && exactW4BranchObservationDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-observation' && exactW4ListObservationDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w4-m5-observation' && exactW4BossObservationDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m3-work' && exactW4BranchCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-work' && exactW4ListCompletionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w4-m5-work' && exactW4BossCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m3-completion' && exactW4BranchCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-completion' && exactW4ListCompletionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w4-m5-completion' && exactW4BossCompletionDelta(previous, progress)) return FAILURE;
     const advancedFailure = advancedStorageFaultHandler({ storage, progress });
     if (advancedFailure !== null) return advancedFailure;
     return null;

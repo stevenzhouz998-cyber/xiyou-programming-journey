@@ -62,7 +62,6 @@ export const course: CourseManifest = {
     deriveWeekFromOutline('week-4', { subtitle: '从积木跨入 Python', canon: c27,
       missions: [
         ...formalWeekFourMissions,
-        mission('w4-m5', { subtitle: '外形会变，事实要核验', objective: '用 Python 判断三次变化背后的同一身份', mode: 'python', canon: c27, storyBeats: [beat('三次变化', '女子、老妇、老翁都是白骨精变化。'), beat('原著结局', '白骨精被打死，悟空却被唐僧逐走。')], expectedSequence: ['woman_is_demon', 'old_woman_is_demon', 'old_man_is_demon', 'canon_ending'], starterCode: "records = [('女子', '白骨精'), ('老妇', '白骨精'), ('老翁', '白骨精')]\nfor appearance, identity in records:\n    if identity == '白骨精':\n        print(appearance + ': 识破')", expectedOutput: '女子: 识破\n老妇: 识破\n老翁: 识破' }),
       ],
     }),
     deriveWeekFromOutline('week-5', { subtitle: '把复杂问题拆成函数', canon: c44to46,

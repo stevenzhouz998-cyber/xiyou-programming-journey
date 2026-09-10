@@ -2,25 +2,20 @@
 
 更新时间：2026-09-11。此索引定位现场，不代表功能已完成。
 
-- 当前开发工作区：`/Users/macmini-zz/.codex/worktrees/5806/少儿编程学习网页`。
-- 当前分支：`codex/w4-m3-branch-structure`；基线 HEAD `db2188477c233c7366bbe5017573bc80525fb9bd`，本轮开始时已核实与远端同名分支一致；W4-M4 交付提交以当前 Git HEAD 为准，恢复前重新核实。
-- 当前玩家功能：W4-M3 与工程优化已提交并推送；W4-M4 列表与循环已达到本地 One-level playable：最终五项目28/28，全量单元1779/1779，相关旧关90/90；详细失败历史、修复与证据见下方验收记录。用户授权自主选定本关方案并完成本地工作，2026-09-11 追加授权本关提交与推送；未授权合并或部署。
-- 本关规格：[W4-M4 逐项观察册](../superpowers/specs/2026-09-09-week-four-python-list-loop-design.md)。沿用已定方案，不重新请求用户选玩法。
-- 实施计划：[W4-M4 计划](../superpowers/plans/2026-09-09-week-four-python-list-loop.md)；验收与限制：[W4-M4 验收记录](../verification/week-four-python-list-loop.md)。
-- 工程优化入口：[验证分层与证据复用](verification.md)。本关涉及 Progress revision 11、独立作品/证明、家长摘要及 W4-M5 解锁；保留 W4-M1/M2/M3 的因果链和原有作品。
-- 主目录 `/Users/macmini-zz/Documents/少儿编程学习网页` 仍在 `7b018ab`；不要在那里继续编写 W4 玩法。其他工作区属于历史现场，未经授权不清理或合并。
+- 当前工作区：`/Users/macmini-zz/.codex/worktrees/5806/少儿编程学习网页`，分支 `codex/w4-m3-branch-structure`。
+- W4-M5 实施基线：`7720af2c4edceeb974fb5bce7969a9ba7e288990`（W4-M4）。W4-M5交付提交号与推送结果见此次交接文档及Git记录；恢复时必须重新检查HEAD、远端与工作树，不覆盖现有文件。
+- 最新任务：W4-M5「白骨迷踪总试炼」采用用户已确认的「白虎岭核验站」。同一真实Python程序处理两轮公开卡片；维持第四周视觉方向、历史来源、独立作品、零惩罚失败与原著固定回顾。
+- [规格与实施顺序](../superpowers/specs/2026-09-11-week-four-verification-station-design.md)；[验收记录与未闭合项](../verification/week-four-verification-station.md)。本关已达到本地One-level playable：全量单元1810/1810、第四周五关联合浏览器148/148（本关30/30，859.582秒）；类型、构建预算、素材及五端性能通过。
+- 当前授权：本地实现与非破坏性验证；2026-09-11用户进一步明确要求做好交接并commit and push，授权本关提交并推送当前分支。未授权合并或部署。
+- 主目录 `/Users/macmini-zz/Documents/少儿编程学习网页` 是旧玩家代码入口，不应在那里继续开发。其他工作区、现有node_modules和回归/视觉输出均保留。
+- [验证分层与证据复用](verification.md)。新关涉及Progress revision12、独立session/作品/证明、家长摘要、W5-M1解锁；保持W4-M1至M4原作品和证明。
 
 ## 恢复时最少检查
 
-在上述工作区运行 `git rev-parse HEAD`、`git status --short`。只读取此次涉及的文件、规格片段和验证记录；有漂移再扩大检查。不要重新读取全部历史。
+在上述工作区运行`git rev-parse HEAD`、`git status --short`。读取当前验收记录及此次涉及文件，有漂移再扩大检查。已确认玩法不重新提问。
 
-## 未闭合项
+## 已有边界
 
-- W4-M3 已有[验收记录](../verification/week-four-python-branch-structure.md)：最终专项 30/30；全站 508 项中 473 通过、35 失败。这是历史全站记录，不等于当前仍有35项失败；本轮相关回归见 W4-M4 验收记录。
-- W4-M2 的历史全站回归曾为 440/471；31 项首次失败不是当前重新测得的失败数。后续只修复并验证了部分路径。见[原记录](../verification/week-four-python-variable-overwrite.md)。
-- W3-M5 parent 历史重复测试曾 2/3 通过，属于待重新诊断的稳定性问题，不能直接隔离、跳过或增加重试来掩盖。
-- Worker 公共壳暂不提取：W4-M3 已有严格消息窄化、重复 ready 拒绝及取消原因处理，W4-M2 行为不同。未来先锁定两关的加载、取消、迟到消息、错误和恢复等价检查，再提取生命周期；保留各关语法、学习错误和 trace 校验。不要为消除少量重复扩大成全局存档重构。
+W4-M4 [验收记录](../verification/week-four-python-list-loop.md)保留其One-level playable证据。W4-M3历史全站508项中473通过/35失败、W4-M2旧全站440/471，以及W3-M5 parent历史稳定性问题，都属于既有全站验收缺口；不要把历史失败数冒充当前新测结果。新关联合回归不等于全站通过或商业完成。
 
-## 下次任务的成本对比
-
-记录任务范围、涉及公共系统、模型/代理数、有效验证次数与总耗时、实际失败与修复轮次。若读取会话 token，分别记录输入、缓存输入、输出，并排除父子继承和累计事件重复。与范围接近的任务比较；本次工具测试速度不能代表后续关卡节省比例。
+Worker公共生命周期暂不提取。各关语法、学习错误、取消、迟到消息和trace校验边界各自保留；避免为少量重复扩大成全局存档重构。

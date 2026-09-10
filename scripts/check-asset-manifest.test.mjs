@@ -1043,7 +1043,7 @@ test('requires exactly the two W4-M2 variable-evidence assets and the shared Whi
   ];
   assert.deepEqual(WEEK_FOUR_VARIABLE_REQUIRED_ASSETS, required);
   assert.equal(WEEK_FOUR_VARIABLE_SCENE_SLOT, 'w4-m2 WeekFourVariableEvidenceScene');
-  assert.equal(WEEK_FOUR_SHARED_BACKGROUND_SLOT, 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene; w4-m3 WeekFourBranchScene; w4-m4 WeekFourListScene');
+  assert.equal(WEEK_FOUR_SHARED_BACKGROUND_SLOT, 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene; w4-m3 WeekFourBranchScene; w4-m4 WeekFourListScene; w4-m5 WeekFourBossScene');
   assert.equal(typeof verifyRequiredWeekFourVariableInventory, 'function');
 });
 
@@ -1055,7 +1055,7 @@ test('reserves the exact two W4-M3 branch assets and extends the shared White Ti
   assert.deepEqual(assetManifestModule.WEEK_FOUR_BRANCH_REQUIRED_ASSETS, required);
   assert.equal(assetManifestModule.WEEK_FOUR_BRANCH_SCENE_SLOT, 'w4-m3 WeekFourBranchScene');
   assert.equal(typeof assetManifestModule.verifyRequiredWeekFourBranchInventory, 'function');
-  assert.equal(WEEK_FOUR_SHARED_BACKGROUND_SLOT, 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene; w4-m3 WeekFourBranchScene; w4-m4 WeekFourListScene');
+  assert.equal(WEEK_FOUR_SHARED_BACKGROUND_SLOT, 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene; w4-m3 WeekFourBranchScene; w4-m4 WeekFourListScene; w4-m5 WeekFourBossScene');
   const verify = assetManifestModule.verifyRequiredWeekFourBranchInventory;
   if (typeof verify !== 'function') return;
   const promptRows = [
@@ -1105,7 +1105,7 @@ export function WeekFourBranchScene() {
   const statesUrl = \`${'${'}assetUrl('${required[1]}')}?retry=0\`;
   return <><img src={backgroundUrl} /><img src={visitorUrl} /><div style={{ backgroundImage: \`url("${'${'}statesUrl}")\` }}><img src={statesUrl} hidden /></div></>;
 }`;
-  const scenario = { manifestRows: rows, publicFiles: files, promptRecords: records, source, sharedBackgroundBytes: 128 * 1024, sharedBackgroundScreenSlots: 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene; w4-m3 WeekFourBranchScene; w4-m4 WeekFourListScene' };
+  const scenario = { manifestRows: rows, publicFiles: files, promptRecords: records, source, sharedBackgroundBytes: 128 * 1024, sharedBackgroundScreenSlots: 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene; w4-m3 WeekFourBranchScene; w4-m4 WeekFourListScene; w4-m5 WeekFourBossScene' };
   assert.doesNotThrow(() => verify(scenario));
   assert.throws(() => verify({ ...scenario, manifestRows: rows.slice(0, 1), publicFiles: files.slice(0, 1) }), /exactly|required/i);
   assert.throws(() => verify({ ...scenario, manifestRows: [...rows, row({ assetId: 'assets/week-four-branches/extra.webp', screenSlots: 'w4-m3 WeekFourBranchScene' })] }), /exactly|required/i);

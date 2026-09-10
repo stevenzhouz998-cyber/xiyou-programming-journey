@@ -1,0 +1,35 @@
+.week-four-boss-experience { display:grid; gap:16px; min-width:0; color:var(--ink); }
+.week-four-boss-experience > header { padding:16px 18px; border:1px solid rgba(47,115,91,.28); border-radius:18px; background:rgba(255,253,246,.88); }
+.week-four-boss-experience > header h2, .week-four-boss-experience > header p { margin-block:6px; }
+.week-four-boss-layout { display:grid; grid-template-columns:minmax(0,1.12fr) minmax(320px,.88fr); gap:16px; align-items:start; grid-template-rows:min-content 1fr; }
+.week-four-boss-layout > * { min-width:0; }
+.week-four-boss-scene { grid-column:1; grid-row:1 / span 2; }
+.week-four-boss-python-panel, .week-four-boss-preview-feedback { grid-column:2; }
+.week-four-boss-scene, .week-four-boss-python-panel, .week-four-boss-preview-feedback, .week-four-boss-experience > aside { padding:16px; border:1px solid rgba(47,115,91,.3); border-radius:16px; background:rgba(245,237,214,.82); overflow-wrap:anywhere; }
+.week-four-boss-scene h3, .week-four-boss-python-panel h3 { margin:0 0 12px; }
+.week-four-boss-scene h3:not(:first-child) { margin-top:18px; }
+.week-four-boss-scene p, .week-four-boss-python-panel p { line-height:1.6; }
+.week-four-boss-backdrop { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:12px; }
+.week-four-boss-scene table { width:100%; border-collapse:collapse; background:#fffdf6; }
+.week-four-boss-scene caption { padding:8px; text-align:left; }
+.week-four-boss-scene th, .week-four-boss-scene td { padding:12px 8px; border-bottom:1px solid #ded8c8; text-align:left; }
+.week-four-boss-scene aside { margin-top:16px; border-top:1px solid rgba(47,115,91,.3); padding-top:8px; }
+.week-four-boss-controls { display:flex; flex-wrap:wrap; gap:12px; margin-top:16px; }
+.week-four-boss-controls label { display:flex; flex-direction:column; gap:6px; }
+.week-four-boss-controls select { height:44px; min-height:44px; max-width:100%; border:1px solid #918b78; border-radius:6px; padding:8px; background:#fffdf6; color:#243f36; }
+.week-four-boss-controls select:disabled { opacity:.7; }
+.week-four-boss-codemirror { max-width:100%; padding:12px; border-radius:12px; background:#132622; color:#fffbea; font-size:15px; }
+.week-four-boss-codemirror .cm-content { min-height:112px; }
+.week-four-boss-codemirror .cm-cursor { border-left-color:#fffbea; }
+.week-four-boss-codemirror .cm-editor.cm-focused { outline:none; }
+.week-four-boss-codemirror .cm-gutters { background:#203e34; color:#dfdbc9; border:none; }
+.week-four-boss-codemirror:focus-within, .week-four-boss-experience :focus-visible { outline:3px solid #ae4d0b; outline-offset:3px; }
+.week-four-boss-preview-feedback button { min-height:44px; margin:4px 8px 4px 0; }
+@media(max-width:1000px) { .week-four-boss-layout { grid-template-columns:minmax(0,1fr); } .week-four-boss-layout > * { grid-column:1; grid-row:auto; } }
+@media(max-width:600px) { .week-four-boss-experience > header, .week-four-boss-scene, .week-four-boss-python-panel, .week-four-boss-preview-feedback { padding:12px; } .week-four-boss-codemirror { font-size:13px; padding:8px; } }
+.week-four-boss-evidence { display:grid; gap: .6rem; }
+.week-four-boss-evidence div { padding:.6rem; border:1px solid #d6d9b8; border-radius:.6rem; background:#fffdf4; }
+.week-four-boss-evidence dt { font-weight:700; }
+.week-four-boss-evidence dd { margin: .2rem 0 0; }
+.week-four-boss-table-scroll { max-width:100%; overflow-x:auto; }
+.week-four-boss-scene table { font-size:.85rem; }

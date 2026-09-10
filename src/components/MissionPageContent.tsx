@@ -1,6 +1,9 @@
 import { getWeekFourListAccess } from '../progress/progress';
+import { getWeekFourBossAccess } from '../progress/progress';
 import type { WeekFourListExperienceProps } from './WeekFourListExperience';
+import type { WeekFourBossExperienceProps } from './WeekFourBossExperience';
 import { WeekFourListAccessNotice } from './WeekFourListAccessNotice';
+import { WeekFourBossAccessNotice } from './WeekFourBossAccessNotice';
 import {
   lazy,
   Suspense,
@@ -129,6 +132,10 @@ const loadWeekFourListExperience = () => import('./WeekFourListExperience').then
 const loadWeekFourListExperienceRetry: () => Promise<{ default: ComponentType<WeekFourListExperienceProps> }> = () =>
   // @ts-expect-error Vite treats this literal query as a second statically bundled module URL.
   import('./WeekFourListExperience?retry=1').then((module) => ({ default: module.WeekFourListExperience }));
+const loadWeekFourBossExperience = () => import('./WeekFourBossExperience').then((module) => ({ default: module.WeekFourBossExperience }));
+const loadWeekFourBossExperienceRetry: () => Promise<{ default: ComponentType<WeekFourBossExperienceProps> }> = () =>
+  // @ts-expect-error Vite treats this literal query as a second statically bundled module URL.
+  import('./WeekFourBossExperience?retry=1').then((module) => ({ default: module.WeekFourBossExperience }));
 
 export function FourSeasRegaliaRouteBoundary({
   loader = loadFourSeasRegaliaExperience,
@@ -384,6 +391,15 @@ export function WeekFourListRouteBoundary({ loader = loadWeekFourListExperience,
   const retry = () => setRetryGeneration((generation) => generation + 1);
   return <LazySectionBoundary key={retryGeneration} label="逐项观察体验" reloadPage={retry}><Suspense fallback={<p className="mission-tools-loading" role="status">逐项观察体验加载中，请稍候……</p>}><Experience {...props} /></Suspense></LazySectionBoundary>;
 }
+export function WeekFourBossRouteBoundary({ loader = loadWeekFourBossExperience, reloadPage: _reloadPage, ...props }: WeekFourBossExperienceProps & { loader?: () => Promise<{ default: ComponentType<WeekFourBossExperienceProps> }>; reloadPage?: () => void }) {
+  const [retryGeneration, setRetryGeneration] = useState(0);
+  const selectedLoader = loader === loadWeekFourBossExperience && retryGeneration > 0
+    ? loadWeekFourBossExperienceRetry
+    : loader;
+  const Experience = useMemo(() => lazy(selectedLoader), [selectedLoader, retryGeneration]);
+  const retry = () => setRetryGeneration((generation) => generation + 1);
+  return <LazySectionBoundary key={retryGeneration} label="逐项观察体验" reloadPage={retry}><Suspense fallback={<p className="mission-tools-loading" role="status">逐项观察体验加载中，请稍候……</p>}><Experience {...props} /></Suspense></LazySectionBoundary>;
+}
 
 function playAudio(path: string, muted: boolean) {
   if (muted || typeof Audio === "undefined") return;
@@ -561,8 +577,10 @@ interface MissionPageProps {
   onCompletionPersistenceActiveChange: (active: boolean) => void;
   weekFourBranchLoader?: () => Promise<{ default: ComponentType<WeekFourBranchExperienceProps> }>;
   weekFourListLoader?: () => Promise<{ default: ComponentType<WeekFourListExperienceProps> }>;
+  weekFourBossLoader?: () => Promise<{ default: ComponentType<WeekFourBossExperienceProps> }>;
   weekFourBranchRuntimeFactory?: WeekFourBranchExperienceProps['runtimeFactory'];
   weekFourListRuntimeFactory?: WeekFourListExperienceProps['runtimeFactory'];
+  weekFourBossRuntimeFactory?: WeekFourBossExperienceProps['runtimeFactory'];
 }
 
 export function MissionPageForId({
@@ -573,8 +591,10 @@ export function MissionPageForId({
   onCompletionPersistenceActiveChange,
   weekFourBranchLoader,
   weekFourListLoader,
+  weekFourBossLoader,
   weekFourBranchRuntimeFactory,
   weekFourListRuntimeFactory,
+  weekFourBossRuntimeFactory,
 }: MissionPageProps & {
   id: string;
   mission: MissionSpec | FormalMissionSpec | undefined;
@@ -649,6 +669,9 @@ export function MissionPageForId({
   const weekFourListAccess = mission.id === 'w4-m4' ? getWeekFourListAccess(progress) : null;
   if (weekFourListAccess && weekFourListAccess.kind !== 'formal')
     return <WeekFourListAccessNotice access={weekFourListAccess} />;
+  const weekFourBossAccess = mission.id === 'w4-m5' ? getWeekFourBossAccess(progress) : null;
+  if (weekFourBossAccess && weekFourBossAccess.kind !== 'formal')
+    return <WeekFourBossAccessNotice access={weekFourBossAccess} />;
   if (!isMissionUnlocked(progress, mission.id))
     return (
       <main className="not-found">
@@ -730,6 +753,21 @@ export function MissionPageForId({
     completionHints: number,
   ): Promise<boolean> => {
     if (mission.id !== 'w4-m4' || successRef.current || completionSaveRef.current !== null) return false;
+    const request: CompletionSave = {
+      requestId: ++requestGenerationRef.current,
+      stars: earnedStars,
+      hintsUsed: completionHints,
+      status: 'pending',
+    };
+    onCompletionPersistenceActiveChange(true);
+    completionSaveRef.current = request;
+    return revealSuccess(request, earnedStars);
+  };
+  const revealPersistedWeekFourBossCompletion = async (
+    earnedStars: number,
+    completionHints: number,
+  ): Promise<boolean> => {
+    if (mission.id !== 'w4-m5' || successRef.current || completionSaveRef.current !== null) return false;
     const request: CompletionSave = {
       requestId: ++requestGenerationRef.current,
       stars: earnedStars,
@@ -1124,6 +1162,17 @@ export function MissionPageForId({
                 muted={progress.settings.muted}
                 locked={completionSave !== null}
                 onComplete={({ stars: earnedStars, hintsUsed: used }) => revealPersistedWeekFourListCompletion(earnedStars, used)}
+                onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
+                onInteractionLockChange={setBattleInteractionLocked}
+              />
+            ) : mission.id === 'w4-m5' ? (
+              <WeekFourBossRouteBoundary
+                loader={weekFourBossLoader}
+                runtimeFactory={weekFourBossRuntimeFactory}
+                reducedMotion={reducedMotion}
+                muted={progress.settings.muted}
+                locked={completionSave !== null}
+                onComplete={({ stars: earnedStars, hintsUsed: used }) => revealPersistedWeekFourBossCompletion(earnedStars, used)}
                 onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
                 onInteractionLockChange={setBattleInteractionLocked}
               />

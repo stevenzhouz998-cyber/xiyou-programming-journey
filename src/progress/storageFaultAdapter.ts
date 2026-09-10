@@ -45,6 +45,14 @@ export const WEEK_FOUR_LIST_STORAGE_FAULT_MODES = [
   'fail-w4-m4-completion',
 ] as const;
 
+export const WEEK_FOUR_BOSS_STORAGE_FAULT_MODES = [
+  'fail-w4-m5-draft',
+  'fail-w4-m5-run',
+  'fail-w4-m5-observation',
+  'fail-w4-m5-work',
+  'fail-w4-m5-completion',
+] as const;
+
 export interface StorageFaultAdapter {
   beforeProgressWrite(input: { storage: Storage; progress: ProgressV3 }): string | null;
   beforeProgressLoad(storage: Storage): void;

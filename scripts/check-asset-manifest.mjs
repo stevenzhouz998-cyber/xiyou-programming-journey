@@ -149,7 +149,7 @@ export const WEEK_FOUR_BRANCH_REQUIRED_ASSETS = Object.freeze([
   'assets/week-four-branches/branch-route-states.webp',
 ]);
 export const WEEK_FOUR_BRANCH_SCENE_SLOT = 'w4-m3 WeekFourBranchScene';
-export const WEEK_FOUR_SHARED_BACKGROUND_SLOT = 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene; w4-m3 WeekFourBranchScene; w4-m4 WeekFourListScene';
+export const WEEK_FOUR_SHARED_BACKGROUND_SLOT = 'w4-m1 WeekFourMappingScene; w4-m2 WeekFourVariableEvidenceScene; w4-m3 WeekFourBranchScene; w4-m4 WeekFourListScene; w4-m5 WeekFourBossScene';
 const WEEK_FOUR_VARIABLE_SOURCE_PATH = 'src/components/WeekFourVariableEvidenceScene.tsx';
 const WEEK_FOUR_BRANCH_SOURCE_PATH = 'src/components/WeekFourBranchScene.tsx';
 const REQUIRED_BAJIE_JOINING_ART_DIRECTION = "polished bright 3D Chinese children's storybook game";
