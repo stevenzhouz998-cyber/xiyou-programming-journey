@@ -1,13 +1,13 @@
 # 当前开发入口
 
-更新时间：2026-09-09。此索引定位现场，不代表功能已完成。
+更新时间：2026-09-11。此索引定位现场，不代表功能已完成。
 
 - 当前开发工作区：`/Users/macmini-zz/.codex/worktrees/5806/少儿编程学习网页`。
-- 当前分支：`codex/w4-m3-branch-structure`；HEAD `b8b7abe024324461fd83a5c7d05e002335aeb46a`，已核实与远端同名分支一致；执行前重新核实。
-- 当前玩家功能：W4-M3 Python 分支归位已提交并推送；工程优化规则、工具与索引由后续独立提交维护，最新状态以 Git 为准。
-- 已批准规格：[W4-M3 设计](../superpowers/specs/2026-08-31-week-four-python-branch-structure-design.md)。
-- 原实施计划：[W4-M3 计划](../superpowers/plans/2026-08-31-week-four-python-branch-structure.md)。按当前 AGENTS 执行，不再按模板为每个小任务固定启动两轮审查。
-- 工程优化入口：[验证分层与证据复用](verification.md)。本次只增加工程规则、工具和索引，未改变关卡及存档。
+- 当前分支：`codex/w4-m3-branch-structure`；基线 HEAD `db2188477c233c7366bbe5017573bc80525fb9bd`，本轮开始时已核实与远端同名分支一致；W4-M4 交付提交以当前 Git HEAD 为准，恢复前重新核实。
+- 当前玩家功能：W4-M3 与工程优化已提交并推送；W4-M4 列表与循环已达到本地 One-level playable：最终五项目28/28，全量单元1779/1779，相关旧关90/90；详细失败历史、修复与证据见下方验收记录。用户授权自主选定本关方案并完成本地工作，2026-09-11 追加授权本关提交与推送；未授权合并或部署。
+- 本关规格：[W4-M4 逐项观察册](../superpowers/specs/2026-09-09-week-four-python-list-loop-design.md)。沿用已定方案，不重新请求用户选玩法。
+- 实施计划：[W4-M4 计划](../superpowers/plans/2026-09-09-week-four-python-list-loop.md)；验收与限制：[W4-M4 验收记录](../verification/week-four-python-list-loop.md)。
+- 工程优化入口：[验证分层与证据复用](verification.md)。本关涉及 Progress revision 11、独立作品/证明、家长摘要及 W4-M5 解锁；保留 W4-M1/M2/M3 的因果链和原有作品。
 - 主目录 `/Users/macmini-zz/Documents/少儿编程学习网页` 仍在 `7b018ab`；不要在那里继续编写 W4 玩法。其他工作区属于历史现场，未经授权不清理或合并。
 
 ## 恢复时最少检查
@@ -16,7 +16,7 @@
 
 ## 未闭合项
 
-- W4-M3 已有[验收记录](../verification/week-four-python-branch-structure.md)：最终专项 30/30；全站 508 项中 473 通过、35 失败。本次仅核对已提交记录，没有重跑浏览器，不增加新的游戏完成声明。
+- W4-M3 已有[验收记录](../verification/week-four-python-branch-structure.md)：最终专项 30/30；全站 508 项中 473 通过、35 失败。这是历史全站记录，不等于当前仍有35项失败；本轮相关回归见 W4-M4 验收记录。
 - W4-M2 的历史全站回归曾为 440/471；31 项首次失败不是当前重新测得的失败数。后续只修复并验证了部分路径。见[原记录](../verification/week-four-python-variable-overwrite.md)。
 - W3-M5 parent 历史重复测试曾 2/3 通过，属于待重新诊断的稳定性问题，不能直接隔离、跳过或增加重试来掩盖。
 - Worker 公共壳暂不提取：W4-M3 已有严格消息窄化、重复 ready 拒绝及取消原因处理，W4-M2 行为不同。未来先锁定两关的加载、取消、迟到消息、错误和恢复等价检查，再提取生命周期；保留各关语法、学习错误和 trace 校验。不要为消除少量重复扩大成全局存档重构。

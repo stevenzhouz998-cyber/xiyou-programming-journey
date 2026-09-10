@@ -120,3 +120,9 @@ When implementing from a selected generated mock, treat that image as the source
 - Keep raw logs in local artifacts; read summaries and relevant failure excerpts. At natural design/implementation/acceptance boundaries, hand off decisions, exact checkout, changed files, valid evidence and remaining failures instead of replaying the entire history. Do not split a task merely to satisfy a token threshold.
 - Stop review when the required evidence is sufficient and concrete findings are resolved. Report actual validation duration and scope; token comparisons must separate cached input and avoid summing inherited cumulative totals. Never promise savings without a comparable measurement.
 - These rules preserve player behavior, persistence/recovery, restricted execution, accessibility, browser coverage and all commercial delivery standards above.
+
+## W4-M4 Delegated Gameplay Decision
+
+- On 2026-09-09 the user authorized the agent to choose the best W4-M4 gameplay and complete local implementation/validation without presenting choices again. Preserve the selected list-and-loop observation-book direction in `docs/superpowers/specs/2026-09-09-week-four-python-list-loop-design.md` unless relevant facts change.
+- The visible appearances list and loop recording argument jointly determine actual Python iteration evidence. Default list order and fixed-literal recording are independent learning mistakes. Keep prior W4 proofs, zero-penalty failure, historical provenance and read-only formal replay. Canon banishment is a fixed story epilogue, never a child command or failure penalty.
+- On 2026-09-11 the user additionally authorized committing and pushing this W4-M4 change to the current branch. Merging and deploying remain outside this authorization.

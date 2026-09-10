@@ -1,3 +1,4 @@
+import { parseWeekFourListPython } from '../engine/weekFourListPythonGrammar';
 import { createInitialProgress, parseProgress } from './schema';
 import type {
   ManorHelpCompletionEvidence,
@@ -17,8 +18,11 @@ import type {
   WeekFourVariableMissionSession,
   WeekFourVariableWorkV1,
   WeekFourBranchCompletionEvidence,
+  WeekFourListCompletionEvidence,
   WeekFourBranchMissionSession,
+  WeekFourListMissionSession,
   WeekFourBranchWorkV1,
+  WeekFourListWorkV1,
   ProgressV3,
 } from './types';
 
@@ -58,8 +62,11 @@ export type {
   WeekFourVariableMissionSession,
   WeekFourVariableWorkV1,
   WeekFourBranchCompletionEvidence,
+  WeekFourListCompletionEvidence,
   WeekFourBranchMissionSession,
+  WeekFourListMissionSession,
   WeekFourBranchWorkV1,
+  WeekFourListWorkV1,
   MissionCompletionEvidenceV1,
   ProgressV1,
   ProgressV2,
@@ -208,6 +215,68 @@ function hasValidFormalWeekFourBranchCompletion(progress: ProgressV3): boolean {
   try {
     const parsed = parseWeekFourBranchPython(session.pythonCode);
     return !('state' in parsed) && parsed.run.completed && parsed.run.state === 'branch-proven'
+      && parsed.run.failureSnapshots.length === 0 && session.failureSnapshot === null
+      && work.pythonCode === session.pythonCode && evidence.pythonCode === session.pythonCode
+      && deeplyEqual(session.lastCanonicalTrace, parsed.trace)
+      && deeplyEqual(session.lastWorkerTrace, parsed.trace)
+      && deeplyEqual(session.lastRun, parsed.run)
+      && deeplyEqual(work.canonicalTrace, parsed.trace)
+      && deeplyEqual(work.workerTrace, parsed.trace)
+      && deeplyEqual(work.run, parsed.run)
+      && deeplyEqual(evidence.canonicalTrace, parsed.trace)
+      && deeplyEqual(evidence.workerTrace, parsed.trace)
+      && deeplyEqual(evidence.run, parsed.run);
+  } catch { return false; }
+}
+
+function formalWeekFourListCompletionEvidence(
+  session: WeekFourListMissionSession | undefined,
+  completedAt: string,
+  workCreatedAt: string,
+  verifiedAt: string,
+): { evidence: Extract<WeekFourListCompletionEvidence, { kind: 'formal-v3' }>; work: WeekFourListWorkV1 } | null {
+  if (!session || session.lastRun === null || session.lastRunAt === null) return null;
+  try {
+    const parsed = parseWeekFourListPython(session.pythonCode);
+    if ('state' in parsed || !parsed.run.completed || parsed.run.state !== 'list-proven'
+      || parsed.run.failureSnapshots.length !== 0 || session.failureSnapshot !== null
+      || !deeplyEqual(session.lastCanonicalTrace, parsed.trace)
+      || !deeplyEqual(session.lastWorkerTrace, parsed.trace)
+      || !deeplyEqual(session.lastRun, parsed.run)) return null;
+    const work: WeekFourListWorkV1 = {
+      kind: 'python-list-loop-v1', workId: 'w4-m4-list-loop-record', missionId: 'w4-m4',
+      title: '三次变化逐项观察册', pythonCode: session.pythonCode,
+      canonicalTrace: structuredClone(parsed.trace), workerTrace: structuredClone(parsed.trace), run: structuredClone(parsed.run),
+      createdAt: workCreatedAt, verifiedAt,
+    };
+    return {
+      evidence: {
+        kind: 'formal-v3', completedAt, verifiedAt, pythonCode: session.pythonCode,
+        canonicalTrace: structuredClone(parsed.trace), workerTrace: structuredClone(parsed.trace),
+        run: structuredClone(parsed.run), workId: work.workId,
+      },
+      work,
+    };
+  } catch { return null; }
+}
+
+function hasValidFormalWeekFourListCompletion(progress: ProgressV3): boolean {
+  const mission = progress.missions['w4-m4'];
+  const evidence = progress.missionCompletionEvidence['w4-m4'];
+  const session = progress.sessions['w4-m4'];
+  const work = progress.works['w4-m4-list-loop-record'];
+  if (!hasValidFormalWeekFourBranchCompletion(progress) || !hasValidCompletedMission(mission)
+    || evidence?.kind !== 'formal-v3' || !session || !work
+    || evidence.completedAt !== mission.completedAt || evidence.workId !== work.workId
+    || evidence.verifiedAt !== work.verifiedAt || work.kind !== 'python-list-loop-v1'
+    || work.missionId !== 'w4-m4' || !isCanonicalIso(evidence.verifiedAt)
+    || !isCanonicalIso(work.createdAt) || !isCanonicalIso(work.verifiedAt)
+    || work.createdAt < mission.completedAt || work.verifiedAt < work.createdAt || session.lastRunAt === null
+    || !isCanonicalIso(session.lastRunAt) || !isCanonicalIso(session.savedAt)
+    || session.lastRunAt > session.savedAt || session.savedAt > work.createdAt) return false;
+  try {
+    const parsed = parseWeekFourListPython(session.pythonCode);
+    return !('state' in parsed) && parsed.run.completed && parsed.run.state === 'list-proven'
       && parsed.run.failureSnapshots.length === 0 && session.failureSnapshot === null
       && work.pythonCode === session.pythonCode && evidence.pythonCode === session.pythonCode
       && deeplyEqual(session.lastCanonicalTrace, parsed.trace)
@@ -442,9 +511,48 @@ export function completeWeekFourBranchProgress(progress: ProgressV3, input: Comp
   };
 }
 
+export function completeWeekFourListProgress(progress: ProgressV3, input: CompletionInput): ProgressV3 {
+  const previous = progress.missions['w4-m4'];
+  const existingEvidence = progress.missionCompletionEvidence['w4-m4'];
+  if (existingEvidence?.kind === 'formal-v3') {
+    if (hasValidFormalWeekFourListCompletion(progress)) return progress;
+    throw new Error('W4-M4现有formal-v3证明与当前前置、session、作品或运行不一致');
+  }
+  if (!hasValidFormalWeekFourBranchCompletion(progress)) {
+    throw new Error('W4-M4完成需要W4-M3 formal-v3正式证明');
+  }
+  if (previous && existingEvidence?.kind !== 'legacy-replay-only') {
+    throw new Error('W4-M4历史完成缺少可升级的来源证明');
+  }
+  const now = new Date().toISOString();
+  const completion = formalWeekFourListCompletionEvidence(
+    progress.sessions['w4-m4'], previous?.completedAt ?? now, now, now,
+  );
+  if (completion === null) {
+    throw new Error('W4-M4完成需要当前保存session的list-proven成功运行');
+  }
+  const mission = previous ?? {
+    status: 'completed' as const,
+    stars: normalizeStars(input.stars),
+    attempts: safeCount(0, 1),
+    hintsUsed: safeCount(0, normalizeHints(input.hintsUsed)),
+    completedAt: now,
+  };
+  return {
+    ...progress,
+    missions: { ...progress.missions, 'w4-m4': mission },
+    missionCompletionEvidence: { ...progress.missionCompletionEvidence, 'w4-m4': completion.evidence },
+    works: { ...progress.works, [completion.work.workId]: completion.work },
+    equipment: progress.equipment,
+    abilities: progress.abilities,
+    savedAt: now,
+  };
+}
+
 export function completeMission(progress: ProgressV3, missionId: string, input: CompletionInput): ProgressV3 {
   if (!allMissionOutlines.some((mission) => mission.id === missionId)) throw new Error('任务编号无效');
   if (missionId === 'w4-m3') return completeWeekFourBranchProgress(progress, input);
+  if (missionId === 'w4-m4') return completeWeekFourListProgress(progress, input);
   const previous = progress.missions[missionId];
   const stars = normalizeStars(input.stars);
   const normalizedHints = normalizeHints(input.hintsUsed);
@@ -591,12 +699,8 @@ export function isMissionUnlocked(progress: ProgressV3, missionId: string): bool
   if (missionId === 'w4-m3') {
     return getWeekFourBranchAccess(progress).kind !== 'locked';
   }
-  if (missionId === 'w4-m4') {
-    return hasValidFormalWeekFourBranchCompletion(progress)
-      || (progress.missions['w4-m3']?.status === 'completed'
-        && progress.missionCompletionEvidence['w4-m3']?.kind === 'legacy-replay-only')
-      || progress.missions['w4-m4']?.status === 'completed';
-  }
+  if (missionId === 'w4-m4') return getWeekFourListAccess(progress).kind !== 'locked';
+  if (missionId === 'w4-m5') return hasValidFormalWeekFourListCompletion(progress) || progress.missionCompletionEvidence['w4-m4']?.kind === 'legacy-replay-only' || progress.missions['w4-m5']?.status === 'completed';
   return progress.missions[allMissionOutlines[index - 1].id]?.status === 'completed';
 }
 
@@ -637,6 +741,27 @@ export function getWeekFourBranchAccess(progress: ProgressV3): WeekFourBranchAcc
   return { kind: 'locked' };
 }
 
+export type WeekFourListAccess =
+  | { kind: 'locked' }
+  | { kind: 'historical-read-only'; completed: boolean }
+  | { kind: 'formal'; upgradingLegacy: boolean };
+
+export function getWeekFourListAccess(progress: ProgressV3): WeekFourListAccess {
+  const branchEvidence = progress.missionCompletionEvidence['w4-m4'];
+  if (hasValidFormalWeekFourBranchCompletion(progress)) {
+    return { kind: 'formal', upgradingLegacy: branchEvidence?.kind === 'legacy-replay-only' };
+  }
+  const variableEvidence = progress.missionCompletionEvidence['w4-m3'];
+  if ((progress.missions['w4-m3']?.status === 'completed' && variableEvidence?.kind === 'legacy-replay-only') || branchEvidence?.kind === 'legacy-replay-only') {
+    return {
+      kind: 'historical-read-only',
+      completed: progress.missions['w4-m4']?.status === 'completed'
+        && branchEvidence?.kind === 'legacy-replay-only',
+    };
+  }
+  return { kind: 'locked' };
+}
+
 export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyReport {
   const missions = allMissionOutlines.filter((mission) => mission.week === week);
   const records = missions.flatMap((mission) => progress.missions[mission.id] ? [progress.missions[mission.id]] : []);
@@ -661,6 +786,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
   const weekFourMappingSession = week === 4 ? progress.sessions['w4-m1'] : undefined;
   const weekFourVariableSession = week === 4 ? progress.sessions['w4-m2'] : undefined;
   const weekFourBranchSession = week === 4 ? progress.sessions['w4-m3'] : undefined;
+  const weekFourListSession = week === 4 ? progress.sessions['w4-m4'] : undefined;
   const sessionSupport = [
     ...(dragonSession ? getSessionSupport(dragonSession, 'w1-m1') : []),
     ...(ruyiSession ? getSessionSupport(ruyiSession, 'w1-m2') : []),
@@ -684,7 +810,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
   const sessionRuns = safeCount(sessionRecords.reduce(
     (total, session) => safeCount(total, session.totalRuns),
     0,
-  ), weekFourBranchSession?.totalRuns ?? 0);
+  ), safeCount(weekFourBranchSession?.totalRuns ?? 0, weekFourListSession?.totalRuns ?? 0));
   const sessionAdjustments = safeCount(sessionRecords.reduce(
     (total, session) => safeCount(
       safeCount(total, session.compileFailures),
@@ -702,7 +828,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
     stars: records.reduce((sum, record) => safeCount(sum, record.stars), 0),
     hintsUsed: records.reduce((sum, record) => safeCount(sum, record.hintsUsed), 0),
     sessionRuns,
-    sessionAdjustments,
+    sessionAdjustments: safeCount(sessionAdjustments, weekFourListSession ? safeCount(safeCount(weekFourListSession.listOrderFailures, weekFourListSession.loopValueFailures), weekFourListSession.validationFailures) : 0),
     needsSupport: [...new Set([...missionSupport, ...sessionSupport])],
     ...(week !== 3 ? {} : {
       bajieJoining: {

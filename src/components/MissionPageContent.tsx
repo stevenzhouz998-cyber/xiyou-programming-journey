@@ -1,3 +1,6 @@
+import { getWeekFourListAccess } from '../progress/progress';
+import type { WeekFourListExperienceProps } from './WeekFourListExperience';
+import { WeekFourListAccessNotice } from './WeekFourListAccessNotice';
 import {
   lazy,
   Suspense,
@@ -122,6 +125,10 @@ const loadWeekFourBranchExperience = () => import('./WeekFourBranchExperience').
 const loadWeekFourBranchExperienceRetry: () => Promise<{ default: ComponentType<WeekFourBranchExperienceProps> }> = () =>
   // @ts-expect-error Vite treats this literal query as a second statically bundled module URL.
   import('./WeekFourBranchExperience?retry=1').then((module) => ({ default: module.WeekFourBranchExperience }));
+const loadWeekFourListExperience = () => import('./WeekFourListExperience').then((module) => ({ default: module.WeekFourListExperience }));
+const loadWeekFourListExperienceRetry: () => Promise<{ default: ComponentType<WeekFourListExperienceProps> }> = () =>
+  // @ts-expect-error Vite treats this literal query as a second statically bundled module URL.
+  import('./WeekFourListExperience?retry=1').then((module) => ({ default: module.WeekFourListExperience }));
 
 export function FourSeasRegaliaRouteBoundary({
   loader = loadFourSeasRegaliaExperience,
@@ -368,6 +375,16 @@ export function WeekFourBranchRouteBoundary({ loader = loadWeekFourBranchExperie
   return <LazySectionBoundary key={retryGeneration} label="分支归位体验" reloadPage={retry}><Suspense fallback={<p className="mission-tools-loading" role="status">分支归位体验加载中，请稍候……</p>}><Experience {...props} /></Suspense></LazySectionBoundary>;
 }
 
+export function WeekFourListRouteBoundary({ loader = loadWeekFourListExperience, reloadPage: _reloadPage, ...props }: WeekFourListExperienceProps & { loader?: () => Promise<{ default: ComponentType<WeekFourListExperienceProps> }>; reloadPage?: () => void }) {
+  const [retryGeneration, setRetryGeneration] = useState(0);
+  const selectedLoader = loader === loadWeekFourListExperience && retryGeneration > 0
+    ? loadWeekFourListExperienceRetry
+    : loader;
+  const Experience = useMemo(() => lazy(selectedLoader), [selectedLoader, retryGeneration]);
+  const retry = () => setRetryGeneration((generation) => generation + 1);
+  return <LazySectionBoundary key={retryGeneration} label="逐项观察体验" reloadPage={retry}><Suspense fallback={<p className="mission-tools-loading" role="status">逐项观察体验加载中，请稍候……</p>}><Experience {...props} /></Suspense></LazySectionBoundary>;
+}
+
 function playAudio(path: string, muted: boolean) {
   if (muted || typeof Audio === "undefined") return;
   const playback = new Audio(path).play();
@@ -543,7 +560,9 @@ interface MissionPageProps {
   onGlobalModalOpenChange: (open: boolean) => void;
   onCompletionPersistenceActiveChange: (active: boolean) => void;
   weekFourBranchLoader?: () => Promise<{ default: ComponentType<WeekFourBranchExperienceProps> }>;
+  weekFourListLoader?: () => Promise<{ default: ComponentType<WeekFourListExperienceProps> }>;
   weekFourBranchRuntimeFactory?: WeekFourBranchExperienceProps['runtimeFactory'];
+  weekFourListRuntimeFactory?: WeekFourListExperienceProps['runtimeFactory'];
 }
 
 export function MissionPageForId({
@@ -553,7 +572,9 @@ export function MissionPageForId({
   onGlobalModalOpenChange,
   onCompletionPersistenceActiveChange,
   weekFourBranchLoader,
+  weekFourListLoader,
   weekFourBranchRuntimeFactory,
+  weekFourListRuntimeFactory,
 }: MissionPageProps & {
   id: string;
   mission: MissionSpec | FormalMissionSpec | undefined;
@@ -625,6 +646,9 @@ export function MissionPageForId({
   const weekFourBranchAccess = mission.id === 'w4-m3' ? getWeekFourBranchAccess(progress) : null;
   if (weekFourBranchAccess && weekFourBranchAccess.kind !== 'formal')
     return <WeekFourBranchAccessNotice access={weekFourBranchAccess} />;
+  const weekFourListAccess = mission.id === 'w4-m4' ? getWeekFourListAccess(progress) : null;
+  if (weekFourListAccess && weekFourListAccess.kind !== 'formal')
+    return <WeekFourListAccessNotice access={weekFourListAccess} />;
   if (!isMissionUnlocked(progress, mission.id))
     return (
       <main className="not-found">
@@ -691,6 +715,21 @@ export function MissionPageForId({
     completionHints: number,
   ): Promise<boolean> => {
     if (mission.id !== 'w4-m3' || successRef.current || completionSaveRef.current !== null) return false;
+    const request: CompletionSave = {
+      requestId: ++requestGenerationRef.current,
+      stars: earnedStars,
+      hintsUsed: completionHints,
+      status: 'pending',
+    };
+    onCompletionPersistenceActiveChange(true);
+    completionSaveRef.current = request;
+    return revealSuccess(request, earnedStars);
+  };
+  const revealPersistedWeekFourListCompletion = async (
+    earnedStars: number,
+    completionHints: number,
+  ): Promise<boolean> => {
+    if (mission.id !== 'w4-m4' || successRef.current || completionSaveRef.current !== null) return false;
     const request: CompletionSave = {
       requestId: ++requestGenerationRef.current,
       stars: earnedStars,
@@ -1074,6 +1113,17 @@ export function MissionPageForId({
                 locked={completionSave !== null}
                 work={progress.works['w4-m2-variable-evidence-record']}
                 onComplete={({ stars: earnedStars, hintsUsed: used }) => revealPersistedWeekFourBranchCompletion(earnedStars, used)}
+                onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
+                onInteractionLockChange={setBattleInteractionLocked}
+              />
+            ) : mission.id === 'w4-m4' ? (
+              <WeekFourListRouteBoundary
+                loader={weekFourListLoader}
+                runtimeFactory={weekFourListRuntimeFactory}
+                reducedMotion={reducedMotion}
+                muted={progress.settings.muted}
+                locked={completionSave !== null}
+                onComplete={({ stars: earnedStars, hintsUsed: used }) => revealPersistedWeekFourListCompletion(earnedStars, used)}
                 onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
                 onInteractionLockChange={setBattleInteractionLocked}
               />

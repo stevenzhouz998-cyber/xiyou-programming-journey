@@ -288,7 +288,8 @@ test('counts the unique real built W4-M3 Worker in its closure and fails closed 
   const manifestFiles = Object.values(manifest).map((chunk) => chunk.file).filter((file) => file?.endsWith('.js'));
   const workerFiles = emittedFiles.filter((file) => /^assets\/weekFourBranchPython\.worker-[A-Za-z0-9_-]+\.js$/.test(file));
   assert.equal(workerFiles.length, 1);
-  const files = [...new Set([...manifestFiles, ...workerFiles])];
+  const allWorkerFiles = emittedFiles.filter(file => /^assets\/weekFour(?:Branch|List)Python\.worker-[A-Za-z0-9_-]+\.js$/.test(file));
+  const files = [...new Set([...manifestFiles, ...allWorkerFiles])];
   const rawSizes = Object.fromEntries(files.map((file) => [file, statSync(fileURLToPath(new URL(`../dist/${file}`, import.meta.url))).size]));
   const gzipSizes = Object.fromEntries(files.map((file) => [file, gzipSync(readFileSync(fileURLToPath(new URL(`../dist/${file}`, import.meta.url)))).byteLength]));
   const result = analyzeManifest(manifest, gzipSizes, rawSizes, emittedFiles);
@@ -1593,4 +1594,20 @@ test('rejects every E2E storage fault sentinel from production bundle bytes', ()
       /test sentinel|storage fault/i,
     );
   }
+});
+
+test('bounds both W4-M4 entry closures including their unique real Worker and rejects oversized or missing Worker bytes', () => {
+  const manifest = JSON.parse(readFileSync('dist/.vite/manifest.json', 'utf8'));
+  const emitted = readdirSync('dist/assets').map(name => `assets/${name}`);
+  const all = [...new Set([...Object.values(manifest).map(c=>c.file).filter(f=>f?.endsWith('.js')), ...emitted.filter(f=>/weekFour(?:Branch|List)Python\.worker-/.test(f))])];
+  const raw = Object.fromEntries(all.map(f=>[f,statSync(`dist/${f}`).size]));
+  const gzip = Object.fromEntries(all.map(f=>[f,gzipSync(readFileSync(`dist/${f}`)).byteLength]));
+  const workers=emitted.filter(f=>/weekFourListPython\.worker-/.test(f));assert.equal(workers.length,1);
+  const result=analyzeManifest(manifest,gzip,raw,emitted);
+  for(const root of ['src/components/WeekFourListExperience.tsx','src/components/WeekFourListExperience.tsx?retry=1']) {
+    assert.equal(result.closures[root].workerFile,workers[0]);
+    assert.ok(result.closures[root].rawBytes<=3*1024*1024);
+  }
+  assert.throws(()=>analyzeManifest(manifest,gzip,{...raw,[workers[0]]:3*1024*1024},emitted),/WeekFourListExperience.*closure exceeds/);
+  assert.throws(()=>analyzeManifest(manifest,gzip,raw,emitted.filter(f=>f!==workers[0])),/Worker.*exactly one|missing/);
 });

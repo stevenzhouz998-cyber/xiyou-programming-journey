@@ -36,6 +36,15 @@ export const WEEK_FOUR_BRANCH_STORAGE_FAULT_MODES = [
   'fail-w4-m3-completion',
 ] as const;
 
+/** Test-only W4-M4 save stages. Production never reads browser storage fault flags. */
+export const WEEK_FOUR_LIST_STORAGE_FAULT_MODES = [
+  'fail-w4-m4-draft',
+  'fail-w4-m4-run',
+  'fail-w4-m4-observation',
+  'fail-w4-m4-work',
+  'fail-w4-m4-completion',
+] as const;
+
 export interface StorageFaultAdapter {
   beforeProgressWrite(input: { storage: Storage; progress: ProgressV3 }): string | null;
   beforeProgressLoad(storage: Storage): void;

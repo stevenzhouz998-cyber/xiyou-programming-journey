@@ -1,3 +1,4 @@
+import { parseWeekFourListEvidence, parseWeekFourListSession, parseWeekFourListWork } from './weekFourListSessionSchema';
 import { allMissionOutlines } from '../course/courseOutline';
 import type { DragonBlockType } from '../blockly/dragonPalaceBlocks';
 import type { RuyiBlockType } from '../blockly/ruyiStaffBlocks';
@@ -108,7 +109,7 @@ const utf8Encoder = new TextEncoder();
 
 export const createInitialProgress = (): ProgressV3 => ({
   version: 3,
-  schemaRevision: 10,
+  schemaRevision: 11,
   learnerName: '小行者',
   missions: {},
   settings: { muted: false, reducedMotion: false, reducedMotionOverride: false, parentPin: 'unset' },
@@ -1659,7 +1660,9 @@ function sessions(value: unknown): MissionSessions {
       catch { invalid('sessions.w4-m2无效'); }
     } else if (missionId === 'w4-m3') {
       try { result['w4-m3'] = parseWeekFourBranchSession(rawSession); }
-      catch { invalid('sessions.w4-m3无效'); }
+      catch { invalid('sessions.w4-m3无效'); }    } else if (missionId === 'w4-m4') {
+      try { result['w4-m4'] = parseWeekFourListSession(rawSession); }
+      catch { invalid('sessions.w4-m4无效'); }
     } else {
       invalid(`任务 ${missionId} 尚不支持可执行会话`);
     }
@@ -1867,12 +1870,13 @@ function missionCompletionEvidence(
   parseWeekFour = true,
   parseWeekFourVariable = false,
   parseWeekFourBranch = false,
+  parseWeekFourList = false,
   legacyRevisionThree = false,
   legacyBeforeSix = false,
   legacyM4Source: { sourceVersion: 1 | 2 | 3; sourceSchemaRevision: null | 1 | 2 | 3 | 4 | 5 } | null = null,
 ): MissionCompletionEvidenceV1 {
   const source = object(value, 'missionCompletionEvidence');
-  const unexpected = Object.keys(source).find((key) => key !== 'w3-m1' && key !== 'w3-m2' && key !== 'w3-m3' && key !== 'w3-m4' && key !== 'w3-m5' && key !== 'w4-m1' && key !== 'w4-m2' && key !== 'w4-m3');
+  const unexpected = Object.keys(source).find((key) => key !== 'w3-m1' && key !== 'w3-m2' && key !== 'w3-m3' && key !== 'w3-m4' && key !== 'w3-m5' && key !== 'w4-m1' && key !== 'w4-m2' && key !== 'w4-m3' && key !== 'w4-m4');
   if (unexpected) invalid(`missionCompletionEvidence包含未知字段 ${unexpected}`);
   const result: MissionCompletionEvidenceV1 = {};
   const manorMission = parsedMissions['w3-m1']; const rawManor = source['w3-m1'];
@@ -2033,12 +2037,30 @@ function missionCompletionEvidence(
       });
     } catch { invalid('missionCompletionEvidence.w4-m3必须绑定正式 W4-M2、当前 session 与作品'); }
   }
+  const w4ListMission = parsedMissions['w4-m4']; const rawW4List = source['w4-m4'];
+  if (!parseWeekFourList) {
+    if (rawW4List !== undefined || parsedWorks['w4-m4-list-loop-record'] !== undefined) invalid('revision 11 之前不能保存 W4-M4证明或作品');
+    return result;
+  }
+  if (!w4ListMission) {
+    if (rawW4List !== undefined || parsedWorks['w4-m4-list-loop-record'] !== undefined) invalid('W4-M4没有对应完成任务却保存了证明或作品');
+  } else {
+    if (rawW4List === undefined) invalid('missionCompletionEvidence.w4-m4缺少完成证明');
+    try {
+      result['w4-m4'] = parseWeekFourListEvidence(rawW4List, {
+        mission: w4ListMission,
+        formalWeekFourBranch: result['w4-m3']?.kind === 'formal-v3',
+        session: parsedSessions['w4-m4'],
+        work: parsedWorks['w4-m4-list-loop-record'],
+      });
+    } catch { invalid('missionCompletionEvidence.w4-m4必须绑定正式 W4-M3、当前 session 与作品'); }
+  }
   return result;
 }
 
 function weekFourWorks(value: unknown): ProgressV3['works'] {
   const source = object(value, 'works');
-  const unexpected = Object.keys(source).find((key) => key !== 'w4-m1-first-python-mapping' && key !== 'w4-m2-variable-evidence-record' && key !== 'w4-m3-branch-structure-record');
+  const unexpected = Object.keys(source).find((key) => key !== 'w4-m1-first-python-mapping' && key !== 'w4-m2-variable-evidence-record' && key !== 'w4-m3-branch-structure-record' && key !== 'w4-m4-list-loop-record');
   if (unexpected) invalid(`works包含未知字段 ${unexpected}`);
   const works: ProgressV3['works'] = {};
   if (source['w4-m1-first-python-mapping'] !== undefined) {
@@ -2052,6 +2074,10 @@ function weekFourWorks(value: unknown): ProgressV3['works'] {
   if (source['w4-m3-branch-structure-record'] !== undefined) {
     try { works['w4-m3-branch-structure-record'] = parseWeekFourBranchWork(source['w4-m3-branch-structure-record']); }
     catch { invalid('works.w4-m3-branch-structure-record无效'); }
+  }
+  if (source['w4-m4-list-loop-record'] !== undefined) {
+    try { works['w4-m4-list-loop-record'] = parseWeekFourListWork(source['w4-m4-list-loop-record']); }
+    catch { invalid('works.w4-m4-list-loop-record无效'); }
   }
   return works;
 }
@@ -2078,38 +2104,42 @@ function migratedLegacyMissionCompletionEvidence(
     ...(parsedMissions['w4-m1'] === undefined ? {} : { 'w4-m1': { kind: 'legacy-replay-only' as const, completedAt: parsedMissions['w4-m1']!.completedAt, sourceVersion, sourceSchemaRevision } }),
     ...(parsedMissions['w4-m2'] === undefined ? {} : { 'w4-m2': { kind: 'legacy-replay-only' as const, completedAt: parsedMissions['w4-m2']!.completedAt, sourceVersion, sourceSchemaRevision } as MissionCompletionEvidenceV1['w4-m2'] }),
     ...(parsedMissions['w4-m3'] === undefined ? {} : { 'w4-m3': { kind: 'legacy-replay-only' as const, completedAt: parsedMissions['w4-m3']!.completedAt, sourceVersion, sourceSchemaRevision } as MissionCompletionEvidenceV1['w4-m3'] }),
+    ...(parsedMissions['w4-m4'] === undefined ? {} : { 'w4-m4': { kind: 'legacy-replay-only' as const, completedAt: parsedMissions['w4-m4']!.completedAt, sourceVersion, sourceSchemaRevision } as MissionCompletionEvidenceV1['w4-m4'] }),
   };
 }
 
 function parseV3(source: Record<string, unknown>): ProgressV3 {
   const legacyRevision = source.schemaRevision === 1;
-  const currentRevision = source.schemaRevision === 3 || source.schemaRevision === 4 || source.schemaRevision === 5 || source.schemaRevision === 6 || source.schemaRevision === 7 || source.schemaRevision === 8 || source.schemaRevision === 9 || source.schemaRevision === 10;
-  const worksRevision = source.schemaRevision === 8 || source.schemaRevision === 9 || source.schemaRevision === 10;
+  const currentRevision = source.schemaRevision === 3 || source.schemaRevision === 4 || source.schemaRevision === 5 || source.schemaRevision === 6 || source.schemaRevision === 7 || source.schemaRevision === 8 || source.schemaRevision === 9 || (source.schemaRevision === 10 || source.schemaRevision === 11);
+  const worksRevision = source.schemaRevision === 8 || source.schemaRevision === 9 || (source.schemaRevision === 10 || source.schemaRevision === 11);
   const revisionThree = source.schemaRevision === 3;
   exactKeys(source, '顶层', [
     'version', 'schemaRevision', 'learnerName', 'missions', 'settings', 'privacy', 'recovery', 'sessions',
     ...(legacyRevision ? [] : ['equipment']), ...(currentRevision ? ['abilities', 'missionCompletionEvidence'] : []), ...(worksRevision ? ['works'] : []), 'savedAt',
   ]);
-  if (source.schemaRevision !== 1 && source.schemaRevision !== 2 && source.schemaRevision !== 3 && source.schemaRevision !== 4 && source.schemaRevision !== 5 && source.schemaRevision !== 6 && source.schemaRevision !== 7 && source.schemaRevision !== 8 && source.schemaRevision !== 9 && source.schemaRevision !== 10) {
-    invalid('schemaRevision必须是1至10');
+  if (source.schemaRevision !== 1 && source.schemaRevision !== 2 && source.schemaRevision !== 3 && source.schemaRevision !== 4 && source.schemaRevision !== 5 && source.schemaRevision !== 6 && source.schemaRevision !== 7 && source.schemaRevision !== 8 && source.schemaRevision !== 9 && source.schemaRevision !== 10 && source.schemaRevision !== 11) {
+    invalid('schemaRevision必须是1至11');
   }
-  if (source.schemaRevision !== 8 && source.schemaRevision !== 9 && source.schemaRevision !== 10 && Object.prototype.hasOwnProperty.call(object(source.sessions, 'sessions'), 'w4-m1')) {
+  if (source.schemaRevision !== 8 && source.schemaRevision !== 9 && source.schemaRevision !== 10 && source.schemaRevision !== 11 && Object.prototype.hasOwnProperty.call(object(source.sessions, 'sessions'), 'w4-m1')) {
     invalid('revision 8 之前的存档不能包含 W4-M1 session');
   }
-  if (source.schemaRevision !== 9 && source.schemaRevision !== 10 && Object.prototype.hasOwnProperty.call(object(source.sessions, 'sessions'), 'w4-m2')) {
+  if (source.schemaRevision !== 9 && source.schemaRevision !== 10 && source.schemaRevision !== 11 && Object.prototype.hasOwnProperty.call(object(source.sessions, 'sessions'), 'w4-m2')) {
     invalid('revision 9 之前的存档不能包含 W4-M2 session');
   }
-  if (source.schemaRevision !== 10 && Object.prototype.hasOwnProperty.call(object(source.sessions, 'sessions'), 'w4-m3')) {
+  if (source.schemaRevision !== 10 && source.schemaRevision !== 11 && Object.prototype.hasOwnProperty.call(object(source.sessions, 'sessions'), 'w4-m3')) {
     invalid('revision 10 之前的存档不能包含 W4-M3 session');
   }
-  if (source.schemaRevision !== 10 && currentRevision
+  if (source.schemaRevision !== 10 && source.schemaRevision !== 11 && currentRevision
     && Object.prototype.hasOwnProperty.call(object(source.missionCompletionEvidence, 'missionCompletionEvidence'), 'w4-m3')) {
     invalid('revision 10 之前的存档不能包含 W4-M3证明');
   }
-  if (source.schemaRevision !== 10 && worksRevision
+  if (source.schemaRevision !== 10 && source.schemaRevision !== 11 && worksRevision
     && Object.prototype.hasOwnProperty.call(object(source.works, 'works'), 'w4-m3-branch-structure-record')) {
     invalid('revision 10 之前的存档不能包含 W4-M3作品');
   }
+  if (source.schemaRevision !== 11 && (Object.prototype.hasOwnProperty.call(object(source.sessions, 'sessions'), 'w4-m4')
+    || (currentRevision && Object.prototype.hasOwnProperty.call(object(source.missionCompletionEvidence, 'missionCompletionEvidence'), 'w4-m4'))
+    || (worksRevision && Object.prototype.hasOwnProperty.call(object(source.works, 'works'), 'w4-m4-list-loop-record')))) invalid('revision 11 之前不能包含 W4-M4 session、作品或证明');
   const parsedCommon = common(source, true);
   const parsedSessions = sessions(source.sessions);
   if (parsedSessions['w4-m3']
@@ -2120,16 +2150,16 @@ function parseV3(source: Record<string, unknown>): ProgressV3 {
   const parsedAbilities = currentRevision
     ? learningAbilities(source.abilities, parsedCommon.missions)
     : { conditionObservation: deriveConditionObservation(parsedCommon.missions) };
-  const observationUses = [...(parsedSessions['w3-m1']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m2']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m3']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m4']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m5']?.conditionObservationUses ?? []), ...(parsedSessions['w4-m1']?.conditionObservationUses ?? []), ...(parsedSessions['w4-m2']?.conditionObservationUses ?? []), ...(parsedSessions['w4-m3']?.conditionObservationUses ?? [])];
+  const observationUses = [...(parsedSessions['w3-m1']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m2']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m3']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m4']?.conditionObservationUses ?? []), ...(parsedSessions['w3-m5']?.conditionObservationUses ?? []), ...(parsedSessions['w4-m1']?.conditionObservationUses ?? []), ...(parsedSessions['w4-m2']?.conditionObservationUses ?? []), ...(parsedSessions['w4-m3']?.conditionObservationUses ?? []), ...(parsedSessions['w4-m4']?.conditionObservationUses ?? [])];
   if (observationUses.length > 0
     && (parsedAbilities.conditionObservation.acquiredAt === null
       || parsedAbilities.conditionObservation.stableUnlockedAt === null)) {
     invalid('conditionObservationUses需要已获得且已稳定的火眼金睛能力');
   }
   let parsedEvidence = currentRevision
-      ? missionCompletionEvidence(source.missionCompletionEvidence, parsedCommon.missions, parsedSessions, parsedWorks, worksRevision, source.schemaRevision === 9 || source.schemaRevision === 10, source.schemaRevision === 10, revisionThree, source.schemaRevision < 7, { sourceVersion: 3, sourceSchemaRevision: (source.schemaRevision === 6 ? 5 : source.schemaRevision) as 1 | 2 | 3 | 4 | 5 })
+      ? missionCompletionEvidence(source.missionCompletionEvidence, parsedCommon.missions, parsedSessions, parsedWorks, worksRevision, source.schemaRevision === 9 || (source.schemaRevision === 10 || source.schemaRevision === 11), (source.schemaRevision === 10 || source.schemaRevision === 11), source.schemaRevision === 11, revisionThree, source.schemaRevision < 7, { sourceVersion: 3, sourceSchemaRevision: (source.schemaRevision === 6 ? 5 : source.schemaRevision) as 1 | 2 | 3 | 4 | 5 })
     : migratedLegacyMissionCompletionEvidence(parsedCommon.missions, 3, source.schemaRevision as 1 | 2);
-  if (source.schemaRevision !== 8 && source.schemaRevision !== 9 && source.schemaRevision !== 10 && parsedCommon.missions['w4-m1'] && !parsedEvidence['w4-m1']) {
+  if (source.schemaRevision !== 8 && source.schemaRevision !== 9 && source.schemaRevision !== 10 && source.schemaRevision !== 11 && parsedCommon.missions['w4-m1'] && !parsedEvidence['w4-m1']) {
     parsedEvidence = {
       ...parsedEvidence,
       'w4-m1': {
@@ -2149,7 +2179,7 @@ function parseV3(source: Record<string, unknown>): ProgressV3 {
       },
     };
   }
-  if (source.schemaRevision !== 10 && parsedCommon.missions['w4-m3'] && !parsedEvidence['w4-m3']) {
+  if (source.schemaRevision !== 10 && source.schemaRevision !== 11 && parsedCommon.missions['w4-m3'] && !parsedEvidence['w4-m3']) {
     parsedEvidence = {
       ...parsedEvidence,
       'w4-m3': {
@@ -2158,13 +2188,17 @@ function parseV3(source: Record<string, unknown>): ProgressV3 {
       },
     };
   }
-  if (source.schemaRevision === 10 && parsedSessions['w4-m3'] && parsedEvidence['w4-m2']?.kind !== 'formal-v3') {
+  if ((source.schemaRevision === 10 || source.schemaRevision === 11) && parsedSessions['w4-m3'] && parsedEvidence['w4-m2']?.kind !== 'formal-v3') {
     invalid('W4-M3 session缺少正式 W4-M2 前置，属于孤立会话');
   }
+  if (source.schemaRevision !== 11 && parsedCommon.missions['w4-m4'] && !parsedEvidence['w4-m4']) {
+    parsedEvidence['w4-m4'] = { kind: 'legacy-replay-only', completedAt: parsedCommon.missions['w4-m4'].completedAt, sourceVersion: 3, sourceSchemaRevision: source.schemaRevision as 1|2|3|4|5|6|7|8|9|10 };
+  }
+  if (parsedSessions['w4-m4'] && (parsedEvidence['w4-m3']?.kind !== 'formal-v3' || parsedSessions['w4-m4'].savedAt > parsedCommon.savedAt)) invalid('W4-M4 session 前置或保存时间无效');
   if (parsedCommon.missions['w3-m5'] && parsedEvidence['w3-m4']?.kind !== 'formal-v3' && parsedEvidence['w3-m5']?.kind !== 'legacy-replay-only') invalid('W3-M5历史完成缺少重玩标记');
   return {
     version: 3,
-    schemaRevision: 10,
+    schemaRevision: 11,
     ...parsedCommon,
     ...privacyAndRecovery(source),
     sessions: parsedSessions,
@@ -2187,7 +2221,7 @@ export function migrateProgress(value: unknown): ProgressV3 {
   if (legacy.version === 2) return {
     ...legacy,
     version: 3,
-    schemaRevision: 10,
+    schemaRevision: 11,
     sessions: {},
     equipment: equipmentFromMissions(legacy.missions),
     abilities: { conditionObservation: deriveConditionObservation(legacy.missions) },
@@ -2196,7 +2230,7 @@ export function migrateProgress(value: unknown): ProgressV3 {
   };
   return {
     version: 3,
-    schemaRevision: 10,
+    schemaRevision: 11,
     learnerName: legacy.learnerName,
     missions: legacy.missions,
     settings: { ...legacy.settings, reducedMotionOverride: false },

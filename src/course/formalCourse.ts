@@ -178,6 +178,11 @@ export const formalWeekFourMissions: FormalMissionSpec[] = [
       partial: '检查礼貌帮助这一行属于条件内、条件外，还是应该属于另一条互斥路线。',
     },
   }),
+  formalPythonMission('w4-m4', {
+    subtitle: '逐项观察册', objective: '用列表保存先后，用循环逐项记录三次变化', canon: formalWeekFourCanon,
+    storyBeats: [beat('第三次变化', '白骨精第三次变作老翁，寻找妻女。'), beat('原著后续', '悟空识破白骨精，唐僧却仍误解悟空并写下贬书。此为固定原著尾声，不是孩子的命令或失败惩罚。')],
+    hints: { observe: '对照已保存的每轮 item 和记录值，看看它们是否相同。', think: '列表决定先后；循环变量每一轮会取出当前的一项。', partial: '检查列表中的事实顺序，以及循环记录的是固定文字还是每轮变化的值。' },
+  }),
 ];
 
 export function getFormalMission(id: string): FormalMissionSpec | undefined {

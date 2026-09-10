@@ -63,6 +63,8 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     runs: 0, conflicts: 0, missing: 0, validation: 0, infrastructure: 0,
     observations: 0, workSaved: false, proof: 'none' as const, completedAt: null,
   }
+  const listSession = progress.sessions['w4-m4'];
+  const listProof = progress.missionCompletionEvidence['w4-m4'];
   const blockerLabels = {
     'manor-help-specificity': '庄口求助判断过宽',
     'disguise-identity': '外形与身份判断',
@@ -135,6 +137,13 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     {weekFourBranches.proof === 'formal-v3' && weekFourBranches.workSaved ? <p>正式分支结构证明与作品已保存</p> : null}
     {weekFourBranches.proof === 'legacy-replay-only' ? <p>第四周历史兼容完成记录，尚非正式分支结构证明</p> : null}
     {weekFourBranches.proof === 'formal-v3' && !weekFourBranches.workSaved ? <p>正式证明记录异常：尚未发现已保存作品</p> : null}
+  </section>
+  <section className="parent-equipment-report" role="region" aria-label="第四周列表与循环学习摘要">
+    <h2>第四周列表与循环学习摘要</h2>
+    <p>已运行 {listSession?.totalRuns ?? 0} 次；列表顺序或数量调整 {listSession?.listOrderFailures ?? 0} 次，逐项记录调整 {listSession?.loopValueFailures ?? 0} 次。</p>
+    <p>结构验证未通过 {listSession?.validationFailures ?? 0} 次；运行环境故障 {listSession?.runnerInfrastructureFailures ?? 0} 次（不计入学习困难）。</p>
+    {listProof?.kind === 'formal-v3' && progress.works['w4-m4-list-loop-record'] ? <p>正式列表循环证明与观察册作品已保存</p> : null}
+    {listProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式列表循环证明</p> : null}
   </section></>
 }
 

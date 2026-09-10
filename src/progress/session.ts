@@ -1,3 +1,5 @@
+import { createWeekFourListSession } from './weekFourListSession';
+import type { WeekFourListMissionSession } from './weekFourListSession';
 import type {
   BattleRunResult,
   DragonPalaceInstruction,
@@ -127,8 +129,8 @@ import type {
 import { isExecutableMissionId } from './executableMissionIds';
 
 type HintTier = MissionSession['usedHintTiers'][number];
-type WorkspaceMissionSession = Exclude<MissionSession, WeekFourVariableMissionSession | WeekFourBranchMissionSession>;
-type CompileFailureMissionSession = Exclude<MissionSession, WeekFourBranchMissionSession>;
+type WorkspaceMissionSession = Exclude<MissionSession, WeekFourVariableMissionSession | WeekFourBranchMissionSession | WeekFourListMissionSession>;
+type CompileFailureMissionSession = Exclude<MissionSession, WeekFourBranchMissionSession | WeekFourListMissionSession>;
 
 export {
   recordWeekFourVariableHint,
@@ -213,6 +215,7 @@ export function createMissionSession(
   if (missionIdOrNow === 'w4-m1') return createWeekFourMappingSession(now);
   if (missionIdOrNow === 'w4-m2') return createWeekFourVariableSession(now);
   if (missionIdOrNow === 'w4-m3') return createWeekFourBranchSession(now);
+  if (missionIdOrNow === 'w4-m4') return createWeekFourListSession(now);
   const session = {
     workspace: missionIdOrNow === 'w3-m5'
       ? createDefaultWeekThreeBossDraft()

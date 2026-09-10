@@ -21,7 +21,7 @@ it('migrates an old W4 completion only to legacy replay without inventing sessio
   const { works: _works, ...oldBase } = createInitialProgress();
   const old = { ...oldBase, schemaRevision: 7 as const, missions: { 'w4-m1': { status: 'completed' as const, stars: 3 as const, attempts: 1, hintsUsed: 0, completedAt: '2026-08-30T00:00:00.000Z' } } };
   const migrated = migrateProgress(old);
-  expect(migrated.schemaRevision).toBe(10);
+  expect(migrated.schemaRevision).toBe(11);
   expect(migrated.missionCompletionEvidence['w4-m1']).toMatchObject({ kind: 'legacy-replay-only' });
   expect(migrated.sessions['w4-m1']).toBeUndefined();
   expect(migrated.works).toEqual({});
