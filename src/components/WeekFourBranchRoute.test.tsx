@@ -152,7 +152,8 @@ it('replays the real formal Experience and reveals one persisted success modal w
 it('routes only formal W4-M3 access to Experience and checks access before the generic unlock path', () => {
   const source = readFileSync('src/components/MissionPageContent.tsx', 'utf8');
   expect(source).toMatch(/mission\.id\s*===\s*['"]w4-m3['"][\s\S]{0,900}<WeekFourBranchRouteBoundary\b/);
-  expect(source).toMatch(/getWeekFourBranchAccess\(progress\)[\s\S]{0,500}WeekFourBranchAccessNotice[\s\S]{0,500}isMissionUnlocked\(progress, mission\.id\)/);
+  expect(source.indexOf('getWeekFourBranchAccess(progress)')).toBeLessThan(source.indexOf('if (!isMissionUnlocked(progress, mission.id))'));
+  expect(source.indexOf('return <WeekFourBranchAccessNotice')).toBeLessThan(source.indexOf('if (!isMissionUnlocked(progress, mission.id))'));
   const branchStart = source.lastIndexOf("mission.id === 'w4-m3'");
   const genericFallback = source.indexOf('renderLegacyMissionTools()', branchStart);
   expect(branchStart).toBeGreaterThan(-1);

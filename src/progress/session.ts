@@ -2,6 +2,8 @@ import { createWeekFourListSession } from './weekFourListSession';
 import type { WeekFourListMissionSession } from './weekFourListSession';
 import { createWeekFourBossSession } from './weekFourBossSession';
 import type { WeekFourBossMissionSession } from './weekFourBossSession';
+import { createWeekFiveMonksSession } from './weekFiveMonksSession';
+import type { WeekFiveMonksMissionSession } from './weekFiveMonksSession';
 import type {
   BattleRunResult,
   DragonPalaceInstruction,
@@ -131,8 +133,8 @@ import type {
 import { isExecutableMissionId } from './executableMissionIds';
 
 type HintTier = MissionSession['usedHintTiers'][number];
-type WorkspaceMissionSession = Exclude<MissionSession, WeekFourVariableMissionSession | WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession>;
-type CompileFailureMissionSession = Exclude<MissionSession, WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession>;
+type WorkspaceMissionSession = Exclude<MissionSession, WeekFourVariableMissionSession | WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession>;
+type CompileFailureMissionSession = Exclude<MissionSession, WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession>;
 
 export {
   recordWeekFourVariableHint,
@@ -219,6 +221,7 @@ export function createMissionSession(
   if (missionIdOrNow === 'w4-m3') return createWeekFourBranchSession(now);
   if (missionIdOrNow === 'w4-m4') return createWeekFourListSession(now);
   if (missionIdOrNow === 'w4-m5') return createWeekFourBossSession(now);
+  if (missionIdOrNow === 'w5-m1') return createWeekFiveMonksSession(now);
   const session = {
     workspace: missionIdOrNow === 'w3-m5'
       ? createDefaultWeekThreeBossDraft()

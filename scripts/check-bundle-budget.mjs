@@ -18,6 +18,8 @@ import {
   PYTHON_RUNTIME_TRANSFER_MAX_BYTES,
 } from './budget-limits.mjs';
 export { WEEK_THREE_CUILAN_COLD_LOAD_MAX_BYTES, WEEK_THREE_BAJIE_JOINING_COLD_LOAD_MAX_BYTES, WEEK_THREE_BOSS_COLD_LOAD_MAX_BYTES, WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES, WEEK_THREE_MANOR_HELP_COLD_LOAD_MAX_BYTES, WEEK_FOUR_MAPPING_COLD_LOAD_MAX_BYTES, WEEK_FOUR_VARIABLE_COLD_LOAD_MAX_BYTES, PYTHON_RUNTIME_TRANSFER_MAX_BYTES };
+export const WEEK_FIVE_MONKS_MAX_LAZY_BYTES = 3 * 1024 * 1024;
+const WEEK_FIVE_MONKS_ROUTE_ROOTS = ['src/components/WeekFiveMonksExperience.tsx', 'src/components/WeekFiveMonksExperience.tsx?retry=1'];
 export const WEEK_FOUR_BOSS_MAX_LAZY_BYTES = 3 * 1024 * 1024;
 const WEEK_FOUR_BOSS_ROUTE_ROOTS = ['src/components/WeekFourBossExperience.tsx', 'src/components/WeekFourBossExperience.tsx?retry=1'];
 export const WEEK_FOUR_LIST_MAX_LAZY_BYTES = 3 * 1024 * 1024;
@@ -61,6 +63,8 @@ export const COLD_LOAD_ROUTE_CLOSURE_BUDGETS = Object.freeze({
   'src/components/WeekFourVariableEvidenceExperience.tsx': WEEK_FOUR_VARIABLE_COLD_LOAD_MAX_BYTES,
   'src/components/WeekFourListExperience.tsx': WEEK_FOUR_LIST_MAX_LAZY_BYTES,
   'src/components/WeekFourBossExperience.tsx': WEEK_FOUR_BOSS_MAX_LAZY_BYTES,
+  'src/components/WeekFiveMonksExperience.tsx': WEEK_FIVE_MONKS_MAX_LAZY_BYTES,
+  'src/components/WeekFiveMonksExperience.tsx?retry=1': WEEK_FIVE_MONKS_MAX_LAZY_BYTES,
   'src/components/WeekFourListExperience.tsx?retry=1': WEEK_FOUR_LIST_MAX_LAZY_BYTES,
   'src/components/WeekFourBossExperience.tsx?retry=1': WEEK_FOUR_BOSS_MAX_LAZY_BYTES,
   'src/components/WeekFourBranchExperience.tsx': WEEK_FOUR_BRANCH_MAX_LAZY_BYTES,
@@ -302,6 +306,7 @@ export function analyzeManifest(manifest, gzipSizes, rawSizes = {}, emittedFiles
     if (!manifest[root].isDynamicEntry) throw new Error(`Bundle budget: ${root.split('/').at(-1).replace('.tsx', '')} must remain a lazy route entry.`);
     if (visited.has(root)) throw new Error(`Bundle budget: ${root.split('/').at(-1).replace('.tsx', '')} must stay outside the application entry static closure.`);
     const isBranchRoute = WEEK_FOUR_BRANCH_ROUTE_ROOTS.includes(root);
+    const isMonksRoute = WEEK_FIVE_MONKS_ROUTE_ROOTS.includes(root);
     const isBossRoute = WEEK_FOUR_BOSS_ROUTE_ROOTS.includes(root);
     const isListRoute = WEEK_FOUR_LIST_ROUTE_ROOTS.includes(root);
     for (const isolatedRoot of COLD_LOAD_ROUTE_STATIC_ISOLATION[isBranchRoute ? WEEK_FOUR_BRANCH_ROUTE_ROOTS[0] : root] ?? []) {
@@ -310,15 +315,15 @@ export function analyzeManifest(manifest, gzipSizes, rawSizes = {}, emittedFiles
     const keys = collectRuntimeClosure(manifest, root);
     const files = [...new Set([...keys].map((key) => manifest[key].file).filter((file) => file?.endsWith('.js')))];
     let workerFile;
-    if ((isBranchRoute || isListRoute || isBossRoute) && emittedFiles !== undefined) {
+    if ((isBranchRoute || isListRoute || isBossRoute || isMonksRoute) && emittedFiles !== undefined) {
       if (!Array.isArray(emittedFiles) || emittedFiles.some((file) => typeof file !== 'string')) throw new Error('Bundle budget: W4-M3 Worker emitted file inventory is invalid.');
-      const workers = emittedFiles.filter((file) => (isBossRoute ? /^assets\/weekFourBossPython\.worker-[A-Za-z0-9_-]+\.js$/ : isListRoute ? /^assets\/weekFourListPython\.worker-[A-Za-z0-9_-]+\.js$/ : /^assets\/weekFourBranchPython\.worker-[A-Za-z0-9_-]+\.js$/).test(file));
+      const workers = emittedFiles.filter((file) => (isMonksRoute ? /^assets\/weekFiveMonksPython\.worker-[A-Za-z0-9_-]+\.js$/ : isBossRoute ? /^assets\/weekFourBossPython\.worker-[A-Za-z0-9_-]+\.js$/ : isListRoute ? /^assets\/weekFourListPython\.worker-[A-Za-z0-9_-]+\.js$/ : /^assets\/weekFourBranchPython\.worker-[A-Za-z0-9_-]+\.js$/).test(file));
       if (workers.length !== 1) throw new Error(`Bundle budget: W4-M3 Worker requires exactly one emitted file; found ${workers.length === 0 ? 'missing' : `duplicate ${workers.length}`}.`);
       [workerFile] = workers;
       if (!Number.isFinite(rawSizes[workerFile]) || !Number.isFinite(gzipSizes[workerFile])) throw new Error(`Bundle budget: W4-M3 Worker size is missing for ${workerFile}.`);
       if (!files.includes(workerFile)) files.push(workerFile);
     }
-    if (isBranchRoute || isListRoute || isBossRoute) {
+    if (isBranchRoute || isListRoute || isBossRoute || isMonksRoute) {
       for (const file of files) {
         if (!Number.isFinite(rawSizes[file]) || rawSizes[file] < 0 || !Number.isFinite(gzipSizes[file]) || gzipSizes[file] < 0) throw new Error(`Bundle budget: W4-M3 closure size is missing or invalid for ${file}.`);
       }
@@ -355,7 +360,7 @@ async function main() {
   let manifest;
   try { manifest = JSON.parse(await readFile(manifestPath, 'utf8')); }
   catch (error) { throw new Error(`Bundle budget: cannot read ${manifestPath}: ${error instanceof Error ? error.message : String(error)}`); }
-  const branchWorkerFiles = distFiles.filter((file) => /^assets\/weekFour(?:Branch|List|Boss)Python\.worker-[A-Za-z0-9_-]+\.js$/.test(file));
+  const branchWorkerFiles = distFiles.filter((file) => /^assets\/(?:weekFour(?:Branch|List|Boss)|weekFiveMonks)Python\.worker-[A-Za-z0-9_-]+\.js$/.test(file));
   const files = [...new Set([...Object.values(manifest).map((chunk) => chunk.file).filter((file) => file?.endsWith('.js')), ...branchWorkerFiles])];
   const gzipSizes = {};
   const rawSizes = {};
@@ -369,6 +374,7 @@ async function main() {
     rawSizes[file] = (await stat(path)).size;
   }
   for (const root of WEEK_FOUR_LIST_ROUTE_ROOTS) if (!manifest[root]) throw new Error(`Bundle budget: required W4-M4 route missing: ${root}`);
+  for (const root of WEEK_FIVE_MONKS_ROUTE_ROOTS) if (!manifest[root]) throw new Error(`Bundle budget: required W5-M1 route missing: ${root}`);
   for (const root of WEEK_FOUR_BOSS_ROUTE_ROOTS) if (!manifest[root]) throw new Error(`Bundle budget: required W4-M5 route missing: ${root}`);
   const result = analyzeManifest(manifest, gzipSizes, rawSizes, distFiles);
   const homeFiles = ['index.html', 'assets/world-map.jpg', 'assets/mentor.jpg', 'assets/young-hero.jpg'];

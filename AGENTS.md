@@ -132,3 +132,7 @@ When implementing from a selected generated mock, treat that image as the source
 - User approved the agent-selected white-tiger-ridge verification station on 2026-09-11. One visible Python program processes two fully public card orders, including an explicitly non-canon same-appearance/different-identity practice card. Preserve the fourth-week storybook visuals and zero-penalty learning failures. See `docs/superpowers/specs/2026-09-11-week-four-verification-station-design.md`.
 
 - On 2026-09-11 the user additionally authorized a handoff and committing/pushing W4-M5 to the current branch. This does not authorize merging or deployment.
+
+## Approved W5-M1 Direction
+
+- On 2026-09-11 the user approved the recommended per-monk rescue loop and delegated subsequent local gameplay and implementation decisions. Preserve the existing bright storybook visual style. Teach the scope of a for-loop body: each practice monk needs release then registration; the default final registration is outside the loop. Practice identities and procedures are explicitly non-canon abstractions. See `docs/superpowers/specs/2026-09-11-week-five-monks-loop-design.md`. On 2026-09-11 the user additionally authorized a handoff and committing/pushing W5-M1 to the current branch. Merging and deployment remain outside this authorization.

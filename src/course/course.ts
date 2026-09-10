@@ -9,6 +9,7 @@ import {
   formalWeekThreeMissions,
   formalWeekFourCanon,
   formalWeekFourMissions,
+  formalWeekFiveMissions,
 } from './formalCourse';
 
 const SOURCE_ROOT = 'https://zh.wikisource.org/zh-hans/西游记';
@@ -66,7 +67,7 @@ export const course: CourseManifest = {
     }),
     deriveWeekFromOutline('week-5', { subtitle: '把复杂问题拆成函数', canon: c44to46,
       missions: [
-        mission('w5-m1', { subtitle: '用循环处理重复任务', objective: '用循环记录被役使僧众获救', mode: 'python', canon: c44to46, storyBeats: [beat('僧众受役', '车迟国尊道灭僧，众僧被迫做苦工。'), beat('悟空解救', '悟空施法让僧众离开。')], expectedSequence: ['find_monks', 'release_each'], starterCode: "monks = ['甲', '乙', '丙']\nfor monk in monks:\n    print('放行' + monk)", expectedOutput: '放行甲\n放行乙\n放行丙' }),
+        ...formalWeekFiveMissions,
         mission('w5-m2', { subtitle: '把重复动作写成函数', objective: '定义函数整理三清观事件', mode: 'python', canon: c44to46, storyBeats: [beat('夜入三清观', '悟空、八戒、沙僧夜里来到三清观。'), beat('留下名号', '三人变化并在观中留下名号。')], expectedSequence: ['enter_temple', 'transform_three', 'leave_names'], starterCode: "def leave_name(name):\n    print(name + '留名')\n\nfor name in ['悟空', '八戒', '沙僧']:\n    leave_name(name)", expectedOutput: '悟空留名\n八戒留名\n沙僧留名' }),
         mission('w5-m3', { subtitle: '函数接收不同参数', objective: '用参数记录祈雨号令的先后', mode: 'python', canon: c44to46, storyBeats: [beat('登坛祈雨', '唐僧与虎力大仙在车迟国登坛祈雨。'), beat('悟空查明', '悟空到空中查明风云雷雨诸神受谁差遣。')], expectedSequence: ['wind', 'cloud', 'thunder', 'rain'], starterCode: "def weather(order):\n    print(order)\n\nfor item in ['风', '云', '雷', '雨']:\n    weather(item)", expectedOutput: '风\n云\n雷\n雨' }),
         mission('w5-m4', { subtitle: '分解多个试炼项目', objective: '把原著比试拆成可检查的函数', mode: 'python', canon: c44to46, storyBeats: [beat('云梯显圣', '双方继续比试坐禅等项目。'), beat('外道败亡', '三位国师在后续赌赛中先后败亡。')], expectedSequence: ['meditation', 'guess_objects', 'beheading', 'disembowel', 'oil_bath'], starterCode: "tests = ['坐禅', '猜物', '砍头', '剖腹', '油锅']\ndef announce(item):\n    return '比试:' + item\nfor item in tests:\n    print(announce(item))", expectedOutput: '比试:坐禅\n比试:猜物\n比试:砍头\n比试:剖腹\n比试:油锅' }),

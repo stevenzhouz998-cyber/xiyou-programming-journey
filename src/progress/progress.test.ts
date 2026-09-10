@@ -632,7 +632,7 @@ describe('progress rules', () => {
     expect(progress.missions['w1-m1']).toMatchObject({ stars: 3, attempts: 1, hintsUsed: 0, status: 'completed' });
     expect(progress).toMatchObject({
       version: 3,
-      schemaRevision: 12,
+      schemaRevision: 13,
       sessions: {},
       privacy: { localDataNoticeSeen: true },
       recovery: { lastRecoveredAt: '2026-07-12T00:00:00.000Z', source: 'snapshot' },
@@ -642,7 +642,7 @@ describe('progress rules', () => {
   it('publishes the derived condition-observation ability with w2 completion and keeps it idempotent', () => {
     let progress = createInitialProgress();
     expect(progress).toMatchObject({
-      schemaRevision: 12,
+      schemaRevision: 13,
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
     });
 

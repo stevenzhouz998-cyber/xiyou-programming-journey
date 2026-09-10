@@ -65,6 +65,8 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   }
   const bossSession = progress.sessions['w4-m5'];
   const bossProof = progress.missionCompletionEvidence['w4-m5'];
+  const monksSession = progress.sessions['w5-m1'];
+  const monksProof = progress.missionCompletionEvidence['w5-m1'];
   const listSession = progress.sessions['w4-m4'];
   const listProof = progress.missionCompletionEvidence['w4-m4'];
   const blockerLabels = {
@@ -152,6 +154,12 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     <p>结构验证未通过 {bossSession?.validationFailures ?? 0} 次；运行环境故障 {bossSession?.runnerInfrastructureFailures ?? 0} 次（不计入学习困难）。</p>
     {bossProof?.kind === 'formal-v3' && progress.works['w4-m5-verification-report'] ? <p>两轮核验正式证明与白虎岭核验报告已保存</p> : null}
     {bossProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式核验站证明</p> : null}
+  </section><section aria-label="第五周循环学习摘要">
+    <h2>第五周循环学习摘要</h2>
+    <p>已运行 {monksSession?.totalRuns ?? 0} 次；名单覆盖调整 {monksSession?.coverageFailures ?? 0} 次，逐人动作调整 {monksSession?.actionFailures ?? 0} 次。</p>
+    <p>结构验证未通过 {monksSession?.validationFailures ?? 0} 次；运行环境故障 {monksSession?.runnerInfrastructureFailures ?? 0} 次（不计入学习困难）。</p>
+    {monksProof?.kind === 'formal-v3' && progress.works['w5-m1-monks-rescue-record'] ? <p>逐人解困正式证明与僧众解困记录已保存</p> : null}
+    {monksProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式解困循环证明</p> : null}
   </section></>
 }
 

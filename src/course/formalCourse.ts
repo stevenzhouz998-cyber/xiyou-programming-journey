@@ -190,7 +190,16 @@ export const formalWeekFourMissions: FormalMissionSpec[] = [
   }),
 ];
 
+export const formalWeekFiveCanon = { chapters: [44], title: '第四十四回　法身元运逢车力　心正妖邪度脊关', sourceUrl: 'https://zh.wikisource.org/zh-hans/西游记/第044回' };
+export const formalWeekFiveMissions: FormalMissionSpec[] = [
+  formalPythonMission('w5-m1', {
+    subtitle: '逐人解困', objective: '用循环让每位练习僧众都先解除役使，再登记离开', canon: formalWeekFiveCanon,
+    storyBeats: [beat('僧众受役', '车迟国僧众被迫做苦工，悟空前去了解情况。'), beat('悟空解救', '悟空帮助僧众脱离役使。三位编号与逐人登记是本关教学抽象，不是原著人数或具体流程。')],
+    hints: {observe: '查看实际记录：哪些人执行了动作，分别执行几次？', think: 'for 里的语句逐人重复；循环外的语句只在循环结束后执行一次。', partial: '对照两条动作的代码位置、执行对象和先后，找出有人未能完成两步的原因。'},
+  }),
+];
+
 export function getFormalMission(id: string): FormalMissionSpec | undefined {
-  return [...formalWeekOneMissions, ...formalWeekTwoMissions, ...formalWeekThreeMissions, ...formalWeekFourMissions]
+  return [...formalWeekOneMissions, ...formalWeekTwoMissions, ...formalWeekThreeMissions, ...formalWeekFourMissions, ...formalWeekFiveMissions]
     .find((mission) => mission.id === id);
 }

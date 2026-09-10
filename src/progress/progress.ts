@@ -1,5 +1,6 @@
 import { parseWeekFourListPython } from '../engine/weekFourListPythonGrammar';
 import { parseWeekFourBossPython } from '../engine/weekFourBossPythonGrammar';
+import { parseWeekFiveMonksPython } from '../engine/weekFiveMonksPythonGrammar';
 import { createInitialProgress, parseProgress } from './schema';
 import type {
   ManorHelpCompletionEvidence,
@@ -21,12 +22,15 @@ import type {
   WeekFourBranchCompletionEvidence,
   WeekFourListCompletionEvidence,
   WeekFourBossCompletionEvidence,
+  WeekFiveMonksCompletionEvidence,
   WeekFourBranchMissionSession,
   WeekFourListMissionSession,
   WeekFourBossMissionSession,
+  WeekFiveMonksMissionSession,
   WeekFourBranchWorkV1,
   WeekFourListWorkV1,
   WeekFourBossWorkV1,
+  WeekFiveMonksWorkV1,
   ProgressV3,
 } from './types';
 
@@ -296,6 +300,36 @@ function formalWeekFourBossCompletionEvidence(
     };
   } catch { return null; }
 }
+function formalWeekFiveMonksCompletionEvidence(
+  session: WeekFiveMonksMissionSession | undefined,
+  completedAt: string,
+  workCreatedAt: string,
+  verifiedAt: string,
+): { evidence: Extract<WeekFiveMonksCompletionEvidence, { kind: 'formal-v3' }>; work: WeekFiveMonksWorkV1 } | null {
+  if (!session || session.lastRun === null || session.lastRunAt === null) return null;
+  try {
+    const parsed = parseWeekFiveMonksPython(session.pythonCode);
+    if ('state' in parsed || !parsed.run.completed || parsed.run.state !== 'rescue-proven'
+      || parsed.run.failureSnapshots.length !== 0 || session.failureSnapshot !== null
+      || !deeplyEqual(session.lastCanonicalTrace, parsed.trace)
+      || !deeplyEqual(session.lastWorkerTrace, parsed.trace)
+      || !deeplyEqual(session.lastRun, parsed.run)) return null;
+    const work: WeekFiveMonksWorkV1 = {
+      kind: 'python-monks-loop-v1', workId: 'w5-m1-monks-rescue-record', missionId: 'w5-m1',
+      title: '僧众解困记录', pythonCode: session.pythonCode,
+      canonicalTrace: structuredClone(parsed.trace), workerTrace: structuredClone(parsed.trace), run: structuredClone(parsed.run),
+      createdAt: workCreatedAt, verifiedAt,
+    };
+    return {
+      evidence: {
+        kind: 'formal-v3', completedAt, verifiedAt, pythonCode: session.pythonCode,
+        canonicalTrace: structuredClone(parsed.trace), workerTrace: structuredClone(parsed.trace),
+        run: structuredClone(parsed.run), workId: work.workId,
+      },
+      work,
+    };
+  } catch { return null; }
+}
 
 function hasValidFormalWeekFourListCompletion(progress: ProgressV3): boolean {
   const mission = progress.missions['w4-m4'];
@@ -344,6 +378,36 @@ function hasValidFormalWeekFourBossCompletion(progress: ProgressV3): boolean {
   try {
     const parsed = parseWeekFourBossPython(session.pythonCode);
     return !('state' in parsed) && parsed.run.completed && parsed.run.state === 'station-proven'
+      && parsed.run.failureSnapshots.length === 0 && session.failureSnapshot === null
+      && work.pythonCode === session.pythonCode && evidence.pythonCode === session.pythonCode
+      && deeplyEqual(session.lastCanonicalTrace, parsed.trace)
+      && deeplyEqual(session.lastWorkerTrace, parsed.trace)
+      && deeplyEqual(session.lastRun, parsed.run)
+      && deeplyEqual(work.canonicalTrace, parsed.trace)
+      && deeplyEqual(work.workerTrace, parsed.trace)
+      && deeplyEqual(work.run, parsed.run)
+      && deeplyEqual(evidence.canonicalTrace, parsed.trace)
+      && deeplyEqual(evidence.workerTrace, parsed.trace)
+      && deeplyEqual(evidence.run, parsed.run);
+  } catch { return false; }
+}
+function hasValidFormalWeekFiveMonksCompletion(progress: ProgressV3): boolean {
+  const mission = progress.missions['w5-m1'];
+  const evidence = progress.missionCompletionEvidence['w5-m1'];
+  const session = progress.sessions['w5-m1'];
+  const work = progress.works['w5-m1-monks-rescue-record'];
+  if (!hasValidFormalWeekFourBossCompletion(progress) || !hasValidCompletedMission(mission)
+    || evidence?.kind !== 'formal-v3' || !session || !work
+    || evidence.completedAt !== mission.completedAt || evidence.workId !== work.workId
+    || evidence.verifiedAt !== work.verifiedAt || work.kind !== 'python-monks-loop-v1'
+    || work.missionId !== 'w5-m1' || !isCanonicalIso(evidence.verifiedAt)
+    || !isCanonicalIso(work.createdAt) || !isCanonicalIso(work.verifiedAt)
+    || work.createdAt < mission.completedAt || work.verifiedAt < work.createdAt || session.lastRunAt === null
+    || !isCanonicalIso(session.lastRunAt) || !isCanonicalIso(session.savedAt)
+    || session.lastRunAt > session.savedAt || session.savedAt > work.createdAt) return false;
+  try {
+    const parsed = parseWeekFiveMonksPython(session.pythonCode);
+    return !('state' in parsed) && parsed.run.completed && parsed.run.state === 'rescue-proven'
       && parsed.run.failureSnapshots.length === 0 && session.failureSnapshot === null
       && work.pythonCode === session.pythonCode && evidence.pythonCode === session.pythonCode
       && deeplyEqual(session.lastCanonicalTrace, parsed.trace)
@@ -652,12 +716,50 @@ export function completeWeekFourBossProgress(progress: ProgressV3, input: Comple
     savedAt: now,
   };
 }
+export function completeWeekFiveMonksProgress(progress: ProgressV3, input: CompletionInput): ProgressV3 {
+  const previous = progress.missions['w5-m1'];
+  const existingEvidence = progress.missionCompletionEvidence['w5-m1'];
+  if (existingEvidence?.kind === 'formal-v3') {
+    if (hasValidFormalWeekFiveMonksCompletion(progress)) return progress;
+    throw new Error('W5-M1现有formal-v3证明与当前前置、session、作品或运行不一致');
+  }
+  if (!hasValidFormalWeekFourBossCompletion(progress)) {
+    throw new Error('W5-M1完成需要W4-M5 formal-v3正式证明');
+  }
+  if (previous && existingEvidence?.kind !== 'legacy-replay-only') {
+    throw new Error('W5-M1历史完成缺少可升级的来源证明');
+  }
+  const now = new Date().toISOString();
+  const completion = formalWeekFiveMonksCompletionEvidence(
+    progress.sessions['w5-m1'], previous?.completedAt ?? now, now, now,
+  );
+  if (completion === null) {
+    throw new Error('W5-M1完成需要当前保存session的rescue-proven成功运行');
+  }
+  const mission = previous ?? {
+    status: 'completed' as const,
+    stars: normalizeStars(input.stars),
+    attempts: safeCount(0, 1),
+    hintsUsed: safeCount(0, normalizeHints(input.hintsUsed)),
+    completedAt: now,
+  };
+  return {
+    ...progress,
+    missions: { ...progress.missions, 'w5-m1': mission },
+    missionCompletionEvidence: { ...progress.missionCompletionEvidence, 'w5-m1': completion.evidence },
+    works: { ...progress.works, [completion.work.workId]: completion.work },
+    equipment: progress.equipment,
+    abilities: progress.abilities,
+    savedAt: now,
+  };
+}
 
 export function completeMission(progress: ProgressV3, missionId: string, input: CompletionInput): ProgressV3 {
   if (!allMissionOutlines.some((mission) => mission.id === missionId)) throw new Error('任务编号无效');
   if (missionId === 'w4-m3') return completeWeekFourBranchProgress(progress, input);
   if (missionId === 'w4-m4') return completeWeekFourListProgress(progress, input);
   if (missionId === 'w4-m5') return completeWeekFourBossProgress(progress, input);
+  if (missionId === 'w5-m1') return completeWeekFiveMonksProgress(progress, input);
   const previous = progress.missions[missionId];
   const stars = normalizeStars(input.stars);
   const normalizedHints = normalizeHints(input.hintsUsed);
@@ -806,7 +908,8 @@ export function isMissionUnlocked(progress: ProgressV3, missionId: string): bool
   }
   if (missionId === 'w4-m4') return getWeekFourListAccess(progress).kind !== 'locked';
   if (missionId === 'w4-m5') return getWeekFourBossAccess(progress).kind !== 'locked';
-  if (missionId === 'w5-m1') return hasValidFormalWeekFourBossCompletion(progress) || progress.missionCompletionEvidence['w4-m5']?.kind === 'legacy-replay-only' || progress.missions['w5-m1']?.status === 'completed';
+  if (missionId === 'w5-m1') return getWeekFiveMonksAccess(progress).kind !== 'locked';
+  if (missionId === 'w5-m2') return hasValidFormalWeekFiveMonksCompletion(progress) || progress.missionCompletionEvidence['w5-m1']?.kind === 'legacy-replay-only' || progress.missions['w5-m2']?.status === 'completed';
   return progress.missions[allMissionOutlines[index - 1].id]?.status === 'completed';
 }
 
@@ -887,6 +990,26 @@ export function getWeekFourBossAccess(progress: ProgressV3): WeekFourBossAccess 
   }
   return { kind: 'locked' };
 }
+export type WeekFiveMonksAccess =
+  | { kind: 'locked' }
+  | { kind: 'historical-read-only'; completed: boolean }
+  | { kind: 'formal'; upgradingLegacy: boolean };
+
+export function getWeekFiveMonksAccess(progress: ProgressV3): WeekFiveMonksAccess {
+  const branchEvidence = progress.missionCompletionEvidence['w5-m1'];
+  if (hasValidFormalWeekFourBossCompletion(progress)) {
+    return { kind: 'formal', upgradingLegacy: branchEvidence?.kind === 'legacy-replay-only' };
+  }
+  const variableEvidence = progress.missionCompletionEvidence['w4-m5'];
+  if ((progress.missions['w4-m5']?.status === 'completed' && variableEvidence?.kind === 'legacy-replay-only') || branchEvidence?.kind === 'legacy-replay-only') {
+    return {
+      kind: 'historical-read-only',
+      completed: progress.missions['w5-m1']?.status === 'completed'
+        && branchEvidence?.kind === 'legacy-replay-only',
+    };
+  }
+  return { kind: 'locked' };
+}
 
 export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyReport {
   const missions = allMissionOutlines.filter((mission) => mission.week === week);
@@ -913,6 +1036,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
   const weekFourVariableSession = week === 4 ? progress.sessions['w4-m2'] : undefined;
   const weekFourBranchSession = week === 4 ? progress.sessions['w4-m3'] : undefined;
   const weekFourBossSession = week === 4 ? progress.sessions['w4-m5'] : undefined;
+  const weekFiveMonksSession = week === 5 ? progress.sessions['w5-m1'] : undefined;
   const weekFourListSession = week === 4 ? progress.sessions['w4-m4'] : undefined;
   const sessionSupport = [
     ...(dragonSession ? getSessionSupport(dragonSession, 'w1-m1') : []),
@@ -954,8 +1078,8 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
     total: missions.length,
     stars: records.reduce((sum, record) => safeCount(sum, record.stars), 0),
     hintsUsed: records.reduce((sum, record) => safeCount(sum, record.hintsUsed), 0),
-    sessionRuns: safeCount(sessionRuns, weekFourBossSession?.totalRuns ?? 0),
-    sessionAdjustments: safeCount(safeCount(sessionAdjustments, weekFourBossSession ? safeCount(safeCount(weekFourBossSession.identityFailures, weekFourBossSession.branchFailures), weekFourBossSession.validationFailures) : 0), weekFourListSession ? safeCount(safeCount(weekFourListSession.listOrderFailures, weekFourListSession.loopValueFailures), weekFourListSession.validationFailures) : 0),
+    sessionRuns: safeCount(safeCount(sessionRuns, weekFourBossSession?.totalRuns ?? 0), weekFiveMonksSession?.totalRuns ?? 0),
+    sessionAdjustments: safeCount(safeCount(safeCount(sessionAdjustments, weekFiveMonksSession ? safeCount(safeCount(weekFiveMonksSession.coverageFailures, weekFiveMonksSession.actionFailures), weekFiveMonksSession.validationFailures) : 0), weekFourBossSession ? safeCount(safeCount(weekFourBossSession.identityFailures, weekFourBossSession.branchFailures), weekFourBossSession.validationFailures) : 0), weekFourListSession ? safeCount(safeCount(weekFourListSession.listOrderFailures, weekFourListSession.loopValueFailures), weekFourListSession.validationFailures) : 0),
     needsSupport: [...new Set([...missionSupport, ...sessionSupport])],
     ...(week !== 3 ? {} : {
       bajieJoining: {
