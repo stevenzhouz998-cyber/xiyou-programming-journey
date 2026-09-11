@@ -10,6 +10,8 @@ import { createWeekFiveWeatherSession } from './weekFiveWeatherSession';
 import type { WeekFiveWeatherMissionSession } from './weekFiveWeatherSession';
 import { createWeekFiveDecompositionSession } from './weekFiveDecompositionSession';
 import type { WeekFiveDecompositionMissionSession } from './weekFiveDecompositionSession';
+import { createWeekFiveStoryOrchestrationSession } from './weekFiveStoryOrchestrationSession';
+import type { WeekFiveStoryOrchestrationMissionSession } from './weekFiveStoryOrchestrationSession';
 import type {
   BattleRunResult,
   DragonPalaceInstruction,
@@ -139,8 +141,8 @@ import type {
 import { isExecutableMissionId } from './executableMissionIds';
 
 type HintTier = MissionSession['usedHintTiers'][number];
-type WorkspaceMissionSession = Exclude<MissionSession, WeekFourVariableMissionSession | WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession | WeekFiveWeatherMissionSession | WeekFiveDecompositionMissionSession>;
-type CompileFailureMissionSession = Exclude<MissionSession, WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession | WeekFiveWeatherMissionSession | WeekFiveDecompositionMissionSession>;
+export type WorkspaceMissionSession = Exclude<MissionSession, WeekFourVariableMissionSession | WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession | WeekFiveWeatherMissionSession | WeekFiveDecompositionMissionSession | WeekFiveStoryOrchestrationMissionSession>;
+type CompileFailureMissionSession = Exclude<MissionSession, WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession | WeekFiveWeatherMissionSession | WeekFiveDecompositionMissionSession | WeekFiveStoryOrchestrationMissionSession>;
 
 export {
   recordWeekFourVariableHint,
@@ -208,6 +210,7 @@ export function createMissionSession(missionId: 'w3-m3', now: string): YunzhanDi
 export function createMissionSession(missionId: 'w4-m1', now: string): WeekFourMappingMissionSession;
 export function createMissionSession(missionId: 'w4-m2', now: string): WeekFourVariableMissionSession;
 export function createMissionSession(missionId: 'w5-m4', now: string): WeekFiveDecompositionMissionSession;
+export function createMissionSession(missionId: 'w5-m5', now: string): WeekFiveStoryOrchestrationMissionSession;
 export function createMissionSession<TMissionId extends keyof MissionSessionById>(
   missionId: TMissionId,
   now: string,
@@ -232,6 +235,7 @@ export function createMissionSession(
   if (missionIdOrNow === 'w5-m2') return createWeekFiveFunctionSession(now);
   if (missionIdOrNow === 'w5-m3') return createWeekFiveWeatherSession(now);
   if (missionIdOrNow === 'w5-m4') return createWeekFiveDecompositionSession(now);
+  if (missionIdOrNow === 'w5-m5') return createWeekFiveStoryOrchestrationSession(now);
   const session = {
     workspace: missionIdOrNow === 'w3-m5'
       ? createDefaultWeekThreeBossDraft()
@@ -600,133 +604,4 @@ export function recordHint<TSession extends MissionSession>(
   return next;
 }
 
-function sequencePrecondition(session: WorkspaceMissionSession): number {
-  return 'sequencePrecondition' in session.conceptFailures
-    ? session.conceptFailures.sequencePrecondition
-    : 0;
-}
-
-export function getSessionSupport(session: DragonPalaceMissionSession): string[];
-export function getSessionSupport(
-  session: DragonPalaceMissionSession,
-  missionId: 'w1-m1',
-): string[];
-export function getSessionSupport(session: AdvancedWeekOneMissionSession, missionId: 'w1-m4' | 'w1-m5'): string[];
-export function getSessionSupport(session: HorseCareMissionSession, missionId: 'w2-m1'): string[];
-export function getSessionSupport(session: MonkeyKingMissionSession, missionId: 'w2-m2'): string[];
-export function getSessionSupport(session: PeachElixirMissionSession, missionId: 'w2-m3'): string[];
-export function getSessionSupport(session: FurnaceConditionMissionSession, missionId: 'w2-m4'): string[];
-export function getSessionSupport(session: HeavenlySignalBossMissionSession, missionId: 'w2-m5'): string[];
-export function getSessionSupport(session: ManorHelpMissionSession, missionId: 'w3-m1'): string[];
-export function getSessionSupport(session: CuilanBooleanMissionSession, missionId: 'w3-m2'): string[];
-export function getSessionSupport(session: YunzhanDialogueMissionSession, missionId: 'w3-m3'): string[];
-export function getSessionSupport(session: BajieJoiningMissionSession, missionId: 'w3-m4'): string[];
-export function getSessionSupport(session: WeekThreeBossMissionSession, missionId: 'w3-m5'): string[];
-export function getSessionSupport(
-  session: RuyiStaffMissionSession,
-  missionId: 'w1-m2',
-): string[];
-export function getSessionSupport(
-  session: FourSeasRegaliaMissionSession,
-  missionId: 'w1-m3',
-): string[];
-export function getSessionSupport(
-  session: WorkspaceMissionSession,
-  missionId: ExecutableMissionId = 'w1-m1',
-): string[] {
-  const support: string[] = [];
-  if (missionId === 'w3-m1') {
-    const manor = session as ManorHelpMissionSession;
-    if (
-      manor.conceptFailures.programStructure >= 2
-      || manor.conceptFailures.conditionSelection >= 2
-      || manor.conceptFailures.branchRouting >= 2
-      || manor.conceptFailures.completeness >= 2
-    ) support.push('真假条件与分支');
-    if (new Set(manor.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
-    return support;
-  }
-  if (missionId === 'w3-m2') {
-    const cuilan = session as CuilanBooleanMissionSession;
-    if (
-      cuilan.conceptFailures.programStructure >= 2
-      || cuilan.conceptFailures.conditionSelection >= 2
-      || cuilan.conceptFailures.branchRouting >= 2
-      || cuilan.conceptFailures.sequencePrecondition >= 2
-      || cuilan.conceptFailures.completeness >= 2
-    ) support.push('布尔判断与分支');
-    if (new Set(cuilan.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
-    return support;
-  }
-  if (missionId === 'w3-m3') {
-    const yunzhan = session as YunzhanDialogueMissionSession;
-    if (yunzhan.conceptFailures.programStructure >= 2 || yunzhan.conceptFailures.branchRouting >= 2 || yunzhan.conceptFailures.completeness >= 2) support.push('双轮条件分支');
-    if (new Set(yunzhan.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
-    return support;
-  }
-  if (missionId === 'w3-m4') {
-    const bajie = session as BajieJoiningMissionSession;
-    if (bajie.conceptFailures.booleanComposition >= 2) support.push('多条件组合');
-    if (bajie.conceptFailures.completeness >= 2) support.push('完整条件核对');
-    if (new Set(bajie.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
-    return support;
-  }
-  if (missionId === 'w3-m5') {
-    const boss = session as WeekThreeBossMissionSession;
-    if (boss.runtimeFailures >= 2 || boss.compileFailures >= 2) support.push('故事状态与条件判断');
-    if (new Set(boss.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
-    return support;
-  }
-  const common = session as Exclude<WorkspaceMissionSession, WeekThreeBossMissionSession>;
-  if (missionId === 'w2-m3') {
-    if (common.conceptFailures.programStructure >= 2 || sequencePrecondition(common) >= 2 || common.conceptFailures.completeness >= 2) support.push('顺序调试');
-    if (new Set(common.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
-    return support;
-  }
-  if (missionId === 'w2-m4') {
-    if (sequencePrecondition(common) >= 2 || common.conceptFailures.completeness >= 2) support.push('循环结束条件');
-    if (new Set(common.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
-    return support;
-  }
-  if (missionId === 'w2-m5') {
-    if (common.runtimeFailures >= 2 || common.compileFailures >= 2) support.push('循环与调试综合');
-    if (new Set(common.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
-    return support;
-  }
-  if (missionId === 'w2-m2') {
-    if (common.conceptFailures.programStructure >= 2 || sequencePrecondition(common) >= 2 || common.conceptFailures.completeness >= 2) support.push('事件触发');
-    if (new Set(common.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
-    return support;
-  }
-  if (missionId === 'w2-m1') {
-    if (common.conceptFailures.programStructure >= 2 || sequencePrecondition(common) >= 2 || common.conceptFailures.completeness >= 2) support.push('重复与循环');
-    if (new Set(common.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
-    return support;
-  }
-  if (missionId === 'w1-m4') {
-    if (common.conceptFailures.programStructure >= 2 || sequencePrecondition(common) >= 2 || common.conceptFailures.completeness >= 2) support.push('查找与处理');
-    if (new Set(common.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
-    return support;
-  }
-  if (missionId === 'w1-m5') {
-    if (common.conceptFailures.programStructure >= 2 || sequencePrecondition(common) >= 2 || common.conceptFailures.completeness >= 2) support.push('综合算法规划');
-    if (new Set(common.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
-    return support;
-  }
-  if (missionId === 'w1-m3') {
-    if (
-      common.conceptFailures.programStructure >= 2
-      || sequencePrecondition(common) >= 2
-      || common.conceptFailures.completeness >= 2
-    ) support.push('任务分解');
-    if (new Set(common.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
-    return support;
-  }
-  if (common.conceptFailures.programStructure >= 2) support.push('程序结构');
-  if (sequencePrecondition(common) >= 2) {
-    support.push(missionId === 'w1-m2' ? '数值比较' : '顺序与前置条件');
-  }
-  if (common.conceptFailures.completeness >= 2) support.push('完整性检查');
-  if (new Set(common.usedHintTiers).size >= 2) support.push('使用了多个提示层级');
-  return support;
-}
+export { getSessionSupport } from './weeklyReport';

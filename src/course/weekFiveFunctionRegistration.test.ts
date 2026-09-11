@@ -24,3 +24,14 @@ describe('W5-M4 formal registration', () => {
     expect(mission).not.toHaveProperty('expectedOutput');
   });
 });
+
+describe('W5-M5 formal registration', () => {
+  it('registers a real Python orchestration mission without output equality', () => {
+    const mission = getFormalMission('w5-m5');
+    expect(mission?.mode).toBe('python');
+    expect(mission?.objective).toContain('一次真实 Python 运行');
+    expect(mission).not.toHaveProperty('expectedSequence');
+    expect(mission).not.toHaveProperty('expectedOutput');
+    expect(mission).not.toHaveProperty('starterCode');
+  });
+});

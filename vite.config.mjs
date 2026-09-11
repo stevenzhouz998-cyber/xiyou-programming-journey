@@ -48,19 +48,22 @@ export default defineConfig({
           if (id.includes('/node_modules/@phosphor-icons/react/dist/lib/')) return 'phosphor-core';
           if (/\/node_modules\/(?:react|react-dom|react-router|react-router-dom|scheduler)\//.test(id)) return 'app-vendor';
           const source = id.replaceAll('\\', '/');
+          if (source.endsWith('/src/utils/assets.ts')) return 'asset-path';
           if (source.endsWith('/src/utils/focus.ts')) return 'focus-shared';
           if (source.endsWith('/src/engine/validation.ts')) return 'validation-shared';
+          if (source.endsWith('/src/progress/storageWrite.ts')) return 'storage-write';
+          if (source.endsWith('/src/progress/storageParentKeys.ts')) return 'parent-data';
+          if (source.endsWith('/src/progress/weeklyReport.ts')) return 'parent-report';
           if (source.endsWith('/src/course/formalCourse.ts')) return 'formal-course';
           if (source.endsWith('/src/course/course.ts')) return 'course-content';
           if (source.endsWith('/src/blockly/advancedWeekOneContract.ts')) return 'advanced-session-contract';
           if (source.endsWith('/src/components/LazySectionBoundary.tsx')
             || source.endsWith('/src/utils/download.ts')) return 'route-shared';
-          if (source.endsWith('/src/progress/storageFaultAdapter.ts') || source.endsWith('/src/progress/parentAccess.ts') || source.endsWith('/src/progress/advancedSessionSchema.ts')) return 'progress-core';
+          if (source.endsWith('/src/progress/storageFaultAdapter.ts') || source.endsWith('/src/progress/parentAccessSchema.ts') || source.endsWith('/src/progress/advancedSessionSchema.ts')) return 'progress-core';
           if (source.includes('/src/battle/')
             || /\/src\/progress\/(?:equipment|progress|schema|session|storage|types)\.ts$/.test(source)
           ) return 'progress-core';
           if (source.endsWith('/src/context/ProgressContext.tsx')
-            || source.endsWith('/src/utils/assets.ts')
             || source.endsWith('/src/components/ToolErrorBoundary.tsx')) return 'app-core';
         },
       },

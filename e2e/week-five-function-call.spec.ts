@@ -38,6 +38,7 @@ async function parent(page: Page) {
   await page.goto('./#/parent');
   const acknowledge = page.getByRole('button', { name: '我知道了', exact: true });
   if (await acknowledge.isVisible()) await acknowledge.click();
+  await expect(page.getByTestId('app-background')).not.toHaveAttribute('inert', '');
   const report = page.getByRole('button', { name: '导出进度', exact: true });
   const login = page.getByLabel('家长 PIN', { exact: true });
   const setup = page.getByLabel('设置 4 位家长 PIN', { exact: true });
@@ -47,11 +48,8 @@ async function parent(page: Page) {
     await login.fill('4826'); await page.getByRole('button', { name: '进入周报', exact: true }).click(); await expect(report).toBeVisible(); return;
   }
   await setup.fill('4826'); const confirm = page.getByLabel('确认家长 PIN', { exact: true }); await confirm.fill('4826');
-  await expect.poll(async () => {
-    if (await setup.inputValue() !== '4826') await setup.fill('4826');
-    if (await confirm.inputValue() !== '4826') await confirm.fill('4826');
-    return [await setup.inputValue(), await confirm.inputValue()];
-  }).toEqual(['4826', '4826']);
+  await expect(setup).toHaveValue('4826');
+  await expect(confirm).toHaveValue('4826');
   await page.getByRole('button', { name: '创建家长 PIN', exact: true }).click();
   await page.getByLabel('我已安全保存恢复码').check();
   await page.getByRole('button', { name: '确认已保存并进入', exact: true }).click();
@@ -71,7 +69,7 @@ test('@w5-m2-full definition is inert, calls really execute, formal proof surviv
   await setCode(page, `${DEFAULT}\nrecord_arrival()\nrecord_sanqing()`); await run(page); expect((await session(page)).lastRun.state).toBe('body-conflict');
   await setCode(page, `${SOLVED}\nrecord_sanqing()`); await run(page); expect((await session(page)).lastRun.state).toBe('call-conflict');
   await setCode(page, SOLVED); await runButton(page).click(); await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 30_000 });
-  const completed = await saved(page); expect(completed.schemaRevision).toBe(15); expect(completed.missionCompletionEvidence['w5-m2'].kind).toBe('formal-v3'); expect(completed.works['w5-m2-sanqing-function-record'].run.completed).toBe(true);
+  const completed = await saved(page); expect(completed.schemaRevision).toBe(17); expect(completed.missionCompletionEvidence['w5-m2'].kind).toBe('formal-v3'); expect(completed.works['w5-m2-sanqing-function-record'].run.completed).toBe(true);
   await page.reload(); await open(page); const replay = await saved(page); await expect(page.getByText('悟空、八戒、沙僧夜入三清观，悟空随后说明他们是西行取经的僧众。故事接着进入车迟国祈雨比试。', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '真实回放函数作品' }).click(); await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 30_000 }); expect(await saved(page)).toEqual(replay);
   await parent(page); const summary = page.getByRole('region', { name: '第五周函数学习摘要' }); await expect(summary).toContainText('函数定义与调用正式证明及三清观记录作品已保存'); await expect(summary).not.toContainText(/record_sanqing|record_arrival|record_names|trace|pythonCode/);

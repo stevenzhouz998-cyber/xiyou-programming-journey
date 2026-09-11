@@ -68,7 +68,6 @@ export const course: CourseManifest = {
     deriveWeekFromOutline('week-5', { subtitle: '把复杂问题拆成函数', canon: c44to46,
       missions: [
         ...formalWeekFiveMissions,
-        mission('w5-m5', { subtitle: '函数重建斗法次序', objective: '用函数与循环输出第四十四至四十六回事件链', mode: 'python', canon: c44to46, storyBeats: [beat('先救僧众', '师徒先遇受役僧众并施救。'), beat('再经斗法', '三清观后，双方在朝中展开多项赌赛。')], expectedSequence: ['save_monks', 'temple', 'rain', 'later_tests'], starterCode: "events = ['解救僧众', '三清观留名', '祈雨赌胜', '后续比试']\ndef record(event):\n    print(event)\nfor event in events:\n    record(event)", expectedOutput: '解救僧众\n三清观留名\n祈雨赌胜\n后续比试' }),
       ],
     }),
     deriveWeekFromOutline('week-6', { subtitle: '从原著事实学习 AI 思维', canon: c59to61,

@@ -1,0 +1,18 @@
+import { lazy, Suspense, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useProgress } from '../context/ProgressContext';
+import { courseOutline } from '../course/courseOutline';
+import { getWeeklyReport } from '../progress/weeklyReport';
+import { downloadTextFile } from '../utils/download';
+import { LazySectionBoundary } from './LazySectionBoundary';
+
+const ParentAccessGate = lazy(() => import('./ParentAccessGate').then((module) => ({ default: module.ParentAccessGate })));
+const ParentDataTools = lazy(() => import('./ParentDataTools').then((module) => ({ default: module.ParentDataTools })));
+const ParentEquipmentReport = lazy(() => import('./ParentEquipmentReport').then((module) => ({ default: module.ParentEquipmentReport })));
+
+export function ParentPage() {
+  const data = useProgress();
+  const { progress } = data;
+  const [dataDialogOpen, setDataDialogOpen] = useState(false);
+  return <LazySectionBoundary label="家长入口"><Suspense fallback={<main className="parent-gate" role="status">家长入口加载中，请稍候……</main>}><ParentAccessGate record={progress.settings.parentPin} saveRecord={async (record) => (await data.commitParentAccess(record)).status === 'saved'}><main className="parent-page"><div data-testid="parent-data-background" inert={dataDialogOpen ? true : undefined} aria-hidden={dataDialogOpen ? true : undefined}><div className="parent-heading"><div><span className="eyebrow">本地学习档案</span><h1>家长周报</h1><p>学习数据仅保存在这台电脑</p></div><Link className="button button-ghost" to="/">返回成长地图</Link></div><section className="report-summary"><article><strong>{Object.keys(progress.missions).length}</strong><span>已完成关卡</span></article><article><strong>{Object.values(progress.missions).reduce((sum, item) => sum + item.stars, 0)}</strong><span>累计星数</span></article><article><strong>{Object.values(progress.missions).reduce((sum, item) => sum + item.hintsUsed, 0)}</strong><span>使用提示</span></article></section><LazySectionBoundary label="装备与跨关学习工具"><Suspense fallback={<p role="status">装备奖励报告加载中，请稍候……</p>}><ParentEquipmentReport progress={progress} /></Suspense></LazySectionBoundary><section className="weekly-reports">{courseOutline.weeks.map((week) => { const report = getWeeklyReport(progress, week.week); const completedMissions = week.missions.filter((mission) => progress.missions[mission.id]).map((mission) => mission.title); return <article className="weekly-report" key={week.id}><div><span>第{'一二三四五六'[week.week - 1]}周</span><h2>{week.title}</h2><p>{week.theme}</p>{completedMissions.length ? <p className="completed-mission-summary">已完成：{completedMissions.join('、')}</p> : null}{report.sessionRuns > 0 || report.sessionAdjustments > 0 ? <p className="mission-session-summary">运行 {report.sessionRuns} 次 · 调整 {report.sessionAdjustments} 次</p> : null}</div><div className="report-progress"><strong>{report.completed}/5</strong><span>完成 · {report.stars} 星 · {report.hintsUsed} 次提示</span><progress value={report.completed} max={5} /></div><div><span className="eyebrow">需要留意</span><p>{report.needsSupport.length ? [...new Set(report.needsSupport)].join('、') : report.completed ? '本周暂未出现明显卡点' : '尚未开始本周学习'}</p></div></article>; })}</section><LazySectionBoundary label="家长数据工具"><Suspense fallback={<p role="status">家长数据工具加载中，请稍候……</p>}><ParentDataTools progress={progress} loadStatus={data.loadStatus} loadPersistence={data.loadPersistence} saveStatus={data.saveStatus} corruptDownload={data.corruptDownload} corruptError={data.corruptError} onImport={data.importProgressFile} onClear={data.clearProgress} onCreateBackup={data.createBackup} onDownload={downloadTextFile} onDialogOpenChange={setDataDialogOpen} /></Suspense></LazySectionBoundary></div></main></ParentAccessGate></Suspense></LazySectionBoundary>;
+}

@@ -1343,6 +1343,36 @@ function exactWeekThreeBossCompletionDelta(previous: ProgressV3, next: ProgressV
   return exactAfterAllowedDelta(previous, next, (expected) => { expected.missions['w3-m5'] = structuredClone(completion); expected.missionCompletionEvidence['w3-m5'] = structuredClone(evidence); });
 }
 
+function hasNoW5StoryPublication(progress: ProgressV3) {
+  return progress.missions['w5-m5'] === undefined
+    && progress.missionCompletionEvidence['w5-m5'] === undefined
+    && progress.works['w5-m5-story-orchestration-record'] === undefined;
+}
+
+function exactW5StorySessionDelta(previous: ProgressV3, next: ProgressV3, stage: 'draft' | 'run' | 'observation') {
+  const prior = previous.sessions['w5-m5']; const candidate = next.sessions['w5-m5'];
+  if (!candidate || !hasNoW5StoryPublication(next)) return false;
+  if (stage === 'draft' && prior && candidate.pythonCode === prior.pythonCode) return false;
+  if (stage === 'run' && (!prior || !(candidate.totalRuns === prior.totalRuns + 1 || candidate.validationFailures === prior.validationFailures + 1 || candidate.runnerInfrastructureFailures === prior.runnerInfrastructureFailures + 1))) return false;
+  if (stage === 'observation' && (!prior || candidate.conditionObservationUses.length !== prior.conditionObservationUses.length + 1)) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => { expected.sessions['w5-m5'] = structuredClone(candidate); });
+}
+
+function exactW5StoryCompletionDelta(previous: ProgressV3, next: ProgressV3) {
+  const completion = next.missions['w5-m5'];
+  const evidence = next.missionCompletionEvidence['w5-m5'];
+  const work = next.works['w5-m5-story-orchestration-record'];
+  const oldEvidence = previous.missionCompletionEvidence['w5-m5'];
+  const initial = previous.missions['w5-m5'] === undefined && oldEvidence === undefined && previous.works['w5-m5-story-orchestration-record'] === undefined;
+  const upgrade = previous.missions['w5-m5'] !== undefined && oldEvidence?.kind === 'legacy-replay-only' && previous.works['w5-m5-story-orchestration-record'] === undefined;
+  if (!completion || evidence?.kind !== 'formal-v3' || !work || (!initial && !upgrade)) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    if (initial) expected.missions['w5-m5'] = structuredClone(completion);
+    expected.missionCompletionEvidence['w5-m5'] = structuredClone(evidence);
+    expected.works['w5-m5-story-orchestration-record'] = structuredClone(work);
+  });
+}
+
 export const storageFaultAdapter: StorageFaultAdapter = {
   beforeProgressWrite: ({ storage, progress }) => {
     const mode = storage.getItem(MODE_KEY);
@@ -1399,6 +1429,7 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-w5-m2-draft' && exactW5FunctionDraftDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m3-draft' && exactW5WeatherDraftDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m4-draft' && exactW5DecompositionDraftDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w5-m5-draft' && exactW5StorySessionDelta(previous, progress, 'draft')) return FAILURE;
     if (mode === 'fail-w4-m3-run' && exactW4BranchRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-run' && exactW4ListRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m5-run' && exactW4BossRunDelta(previous, progress)) return FAILURE;
@@ -1406,6 +1437,7 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-w5-m2-run' && exactW5FunctionRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m3-run' && exactW5WeatherRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m4-run' && exactW5DecompositionRunDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w5-m5-run' && exactW5StorySessionDelta(previous, progress, 'run')) return FAILURE;
     if (mode === 'fail-w4-m3-observation' && exactW4BranchObservationDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-observation' && exactW4ListObservationDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m5-observation' && exactW4BossObservationDelta(previous, progress)) return FAILURE;
@@ -1413,6 +1445,7 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-w5-m2-observation' && exactW5FunctionObservationDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m3-observation' && exactW5WeatherObservationDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m4-observation' && exactW5DecompositionObservationDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w5-m5-observation' && exactW5StorySessionDelta(previous, progress, 'observation')) return FAILURE;
     if (mode === 'fail-w4-m3-work' && exactW4BranchCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-work' && exactW4ListCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m5-work' && exactW4BossCompletionDelta(previous, progress)) return FAILURE;
@@ -1420,6 +1453,7 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-w5-m2-work' && exactW5FunctionCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m3-work' && exactW5WeatherCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m4-work' && exactW5DecompositionCompletionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w5-m5-work' && exactW5StoryCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m3-completion' && exactW4BranchCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-completion' && exactW4ListCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m5-completion' && exactW4BossCompletionDelta(previous, progress)) return FAILURE;
@@ -1427,16 +1461,17 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-w5-m2-completion' && exactW5FunctionCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m3-completion' && exactW5WeatherCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m4-completion' && exactW5DecompositionCompletionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w5-m5-completion' && exactW5StoryCompletionDelta(previous, progress)) return FAILURE;
     const advancedFailure = advancedStorageFaultHandler({ storage, progress });
     if (advancedFailure !== null) return advancedFailure;
     return null;
   },
   beforeProgressLoad: (storage) => {
     const mode = storage.getItem(MODE_KEY);
-    if (mode !== 'corrupt-regalia-current' && mode !== 'corrupt-advanced-current' && mode !== 'corrupt-horse-current' && mode !== 'corrupt-monkey-current' && mode !== 'corrupt-peach-current' && mode !== 'corrupt-boss-current' && mode !== 'corrupt-manor-current' && mode !== 'corrupt-cuilan-current' && mode !== 'corrupt-yunzhan-current' && mode !== 'corrupt-bajie-current' && mode !== 'corrupt-week-three-boss-current' && mode !== 'corrupt-week-four-mapping-current' && mode !== 'corrupt-w4-variable-current' && mode !== 'fail-w4-m3-corrupt-current' && mode !== 'corrupt-w5-m2-current' && mode !== 'corrupt-w5-m3-current' && mode !== 'corrupt-w5-m4-current') return;
+    if (mode !== 'corrupt-regalia-current' && mode !== 'corrupt-advanced-current' && mode !== 'corrupt-horse-current' && mode !== 'corrupt-monkey-current' && mode !== 'corrupt-peach-current' && mode !== 'corrupt-boss-current' && mode !== 'corrupt-manor-current' && mode !== 'corrupt-cuilan-current' && mode !== 'corrupt-yunzhan-current' && mode !== 'corrupt-bajie-current' && mode !== 'corrupt-week-three-boss-current' && mode !== 'corrupt-week-four-mapping-current' && mode !== 'corrupt-w4-variable-current' && mode !== 'fail-w4-m3-corrupt-current' && mode !== 'corrupt-w5-m2-current' && mode !== 'corrupt-w5-m3-current' && mode !== 'corrupt-w5-m4-current' && mode !== 'corrupt-w5-m5-current') return;
     const legal = storage.getItem(CURRENT_KEY);
     if (legal !== null) storage.setItem(SNAPSHOT_KEY, legal);
-    storage.setItem(CURRENT_KEY, mode === 'corrupt-regalia-current' ? '{broken w1-m3 current' : mode === 'corrupt-advanced-current' ? '{broken advanced current' : mode === 'corrupt-horse-current' ? '{broken w2-m1 current' : mode === 'corrupt-monkey-current' ? '{broken w2-m2 current' : mode === 'corrupt-peach-current' ? '{broken w2-m3 current' : mode === 'corrupt-boss-current' ? '{broken w2-m5 current' : mode === 'corrupt-manor-current' ? '{broken w3-m1 current' : mode === 'corrupt-cuilan-current' ? '{broken w3-m2 current' : mode === 'corrupt-yunzhan-current' ? '{broken w3-m3 current' : mode === 'corrupt-bajie-current' ? '{broken w3-m4 current' : mode === 'corrupt-week-three-boss-current' ? '{broken w3-m5 current' : mode === 'corrupt-w4-variable-current' ? '{broken w4-m2 current' : mode === 'fail-w4-m3-corrupt-current' ? '{broken w4-m3 current' : mode === 'corrupt-w5-m2-current' ? '{broken w5-m2 current' : mode === 'corrupt-w5-m3-current' ? '{broken w5-m3 current' : mode === 'corrupt-w5-m4-current' ? '{broken w5-m4 current' : '{broken w4-m1 current');
+    storage.setItem(CURRENT_KEY, mode === 'corrupt-regalia-current' ? '{broken w1-m3 current' : mode === 'corrupt-advanced-current' ? '{broken advanced current' : mode === 'corrupt-horse-current' ? '{broken w2-m1 current' : mode === 'corrupt-monkey-current' ? '{broken w2-m2 current' : mode === 'corrupt-peach-current' ? '{broken w2-m3 current' : mode === 'corrupt-boss-current' ? '{broken w2-m5 current' : mode === 'corrupt-manor-current' ? '{broken w3-m1 current' : mode === 'corrupt-cuilan-current' ? '{broken w3-m2 current' : mode === 'corrupt-yunzhan-current' ? '{broken w3-m3 current' : mode === 'corrupt-bajie-current' ? '{broken w3-m4 current' : mode === 'corrupt-week-three-boss-current' ? '{broken w3-m5 current' : mode === 'corrupt-w4-variable-current' ? '{broken w4-m2 current' : mode === 'fail-w4-m3-corrupt-current' ? '{broken w4-m3 current' : mode === 'corrupt-w5-m2-current' ? '{broken w5-m2 current' : mode === 'corrupt-w5-m3-current' ? '{broken w5-m3 current' : mode === 'corrupt-w5-m4-current' ? '{broken w5-m4 current' : mode === 'corrupt-w5-m5-current' ? '{broken w5-m5 current' : '{broken w4-m1 current');
     storage.setItem(MODE_KEY, 'off');
   },
 };

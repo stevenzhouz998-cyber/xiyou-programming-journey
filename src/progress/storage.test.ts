@@ -1,3 +1,4 @@
+import { retrySave, saveProgressTransaction } from './storageWrite';
 import * as Blockly from 'blockly';
 import { describe, expect, it, vi } from 'vitest';
 import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
@@ -23,8 +24,6 @@ import {
   SNAPSHOT_PROGRESS_KEY,
   createProgressBackup,
   loadProgressTransaction,
-  retrySave,
-  saveProgressTransaction,
 } from './storage';
 import { repairLoadedProgressTransaction } from './storageRepair';
 import { clearProgressTransaction, importProgressTransaction } from './storageParent';

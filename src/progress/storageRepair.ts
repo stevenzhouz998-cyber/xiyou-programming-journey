@@ -1,9 +1,9 @@
+import { writeAndVerify } from './storageWrite';
 import {
   CORRUPT_PROGRESS_KEY,
   CURRENT_PROGRESS_KEY,
   REVISION_PROGRESS_KEY,
   SNAPSHOT_PROGRESS_KEY,
-  writeAndVerify,
   type LoadRepair,
   type SaveResult,
 } from './storage';

@@ -38,7 +38,7 @@ describe('executable mission ids', () => {
     }
 
     for (const id of ['w5-m5']) {
-      expect(isExecutableMissionId(id)).toBe(false);
+      expect(isExecutableMissionId(id)).toBe(true);
     }
   });
 

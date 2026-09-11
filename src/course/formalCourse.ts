@@ -223,6 +223,15 @@ export const formalWeekFiveMissions: FormalMissionSpec[] = [
     ],
     hints: { observe: '对照已保存的记录归属，先看哪一组收进了不属于它的故事。', think: '每个小函数只负责自己的部分；总函数再按顺序调用三组。', partial: '先核对当前失败小组的记录归属，再观察总记录启动了哪些组。' },
   }),
+  formalPythonMission('w5-m5', {
+    subtitle: '一个总函数编排完整故事', objective: '用一次真实 Python 运行连接解困循环、三清观函数、天气参数和后续小函数',
+    canon: { chapters: [44, 45, 46], title: '第四十四至四十六回　车迟国斗法', sourceUrl: 'https://zh.wikisource.org/wiki/西遊記/第046回' },
+    storyBeats: [
+      beat('解困与三清观', '悟空先帮助受役僧人，师徒随后经历三清观故事。本关用公开标题和三位编号僧人做教学抽象。'),
+      beat('祈雨与后续比试', '风、云、雷、雨的参数记录与后续比试小函数由故事总编排按顺序启动，记录不模拟伤害。'),
+    ],
+    hints: { observe: '先看本次完整运行的第一个阻塞阶段。', think: '每个阶段完成已学过的职责，总函数负责按故事顺序连接它们。', partial: '定位当前失败行，对照该阶段的实际执行记录。' },
+  }),
 ];
 
 export function getFormalMission(id: string): FormalMissionSpec | undefined {

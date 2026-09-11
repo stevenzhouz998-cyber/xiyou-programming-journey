@@ -4,18 +4,21 @@ import { getWeekFiveMonksAccess } from '../progress/progress';
 import { getWeekFiveFunctionAccess } from '../progress/progress';
 import { getWeekFiveWeatherAccess } from '../progress/progress';
 import { getWeekFiveDecompositionAccess } from '../progress/progress';
+import { getWeekFiveStoryOrchestrationAccess } from '../progress/progress';
 import type { WeekFourListExperienceProps } from './WeekFourListExperience';
 import type { WeekFourBossExperienceProps } from './WeekFourBossExperience';
 import type { WeekFiveMonksExperienceProps } from './WeekFiveMonksExperience';
 import type { WeekFiveFunctionExperienceProps } from './WeekFiveFunctionExperience';
 import type { WeekFiveWeatherExperienceProps } from './WeekFiveWeatherExperience';
 import type { WeekFiveDecompositionExperienceProps } from './WeekFiveDecompositionExperience';
+import type { WeekFiveStoryOrchestrationExperienceProps } from './WeekFiveStoryOrchestrationExperience';
 import { WeekFourListAccessNotice } from './WeekFourListAccessNotice';
 import { WeekFourBossAccessNotice } from './WeekFourBossAccessNotice';
 import { WeekFiveMonksAccessNotice } from './WeekFiveMonksAccessNotice';
 import { WeekFiveFunctionAccessNotice } from './WeekFiveFunctionAccessNotice';
 import { WeekFiveWeatherAccessNotice } from './WeekFiveWeatherAccessNotice';
 import { WeekFiveDecompositionAccessNotice } from './WeekFiveDecompositionAccessNotice';
+import { WeekFiveStoryOrchestrationAccessNotice } from './WeekFiveStoryOrchestrationAccessNotice';
 import {
   lazy,
   Suspense,
@@ -164,6 +167,10 @@ const loadWeekFiveDecompositionExperience = () => import('./WeekFiveDecompositio
 const loadWeekFiveDecompositionExperienceRetry: () => Promise<{ default: ComponentType<WeekFiveDecompositionExperienceProps> }> = () =>
   // @ts-expect-error Vite treats this literal query as a second statically bundled module URL.
   import('./WeekFiveDecompositionExperience?retry=1').then((module) => ({ default: module.WeekFiveDecompositionExperience }));
+const loadWeekFiveStoryOrchestrationExperience = () => import('./WeekFiveStoryOrchestrationExperience').then((module) => ({ default: module.WeekFiveStoryOrchestrationExperience }));
+const loadWeekFiveStoryOrchestrationExperienceRetry: () => Promise<{ default: ComponentType<WeekFiveStoryOrchestrationExperienceProps> }> = () =>
+  // @ts-expect-error Vite treats this literal query as a second statically bundled module URL.
+  import('./WeekFiveStoryOrchestrationExperience?retry=1').then((module) => ({ default: module.WeekFiveStoryOrchestrationExperience }));
 
 export function FourSeasRegaliaRouteBoundary({
   loader = loadFourSeasRegaliaExperience,
@@ -458,6 +465,13 @@ export function WeekFiveDecompositionRouteBoundary({ loader = loadWeekFiveDecomp
   return <LazySectionBoundary key={retryGeneration} label="问题分解体验" reloadPage={() => setRetryGeneration((value) => value + 1)}><Suspense fallback={<p className="mission-tools-loading" role="status">问题分解体验加载中，请稍候……</p>}><Experience {...props} /></Suspense></LazySectionBoundary>;
 }
 
+export function WeekFiveStoryOrchestrationRouteBoundary({ loader = loadWeekFiveStoryOrchestrationExperience, reloadPage: _reloadPage, ...props }: WeekFiveStoryOrchestrationExperienceProps & { loader?: () => Promise<{ default: ComponentType<WeekFiveStoryOrchestrationExperienceProps> }>; reloadPage?: () => void }) {
+  const [retryGeneration, setRetryGeneration] = useState(0);
+  const selectedLoader = loader === loadWeekFiveStoryOrchestrationExperience && retryGeneration > 0 ? loadWeekFiveStoryOrchestrationExperienceRetry : loader;
+  const Experience = useMemo(() => lazy(selectedLoader), [selectedLoader, retryGeneration]);
+  return <LazySectionBoundary key={retryGeneration} label="故事总编排体验" reloadPage={() => setRetryGeneration((value) => value + 1)}><Suspense fallback={<p className="mission-tools-loading" role="status">故事总编排体验加载中，请稍候……</p>}><Experience {...props} /></Suspense></LazySectionBoundary>;
+}
+
 function playAudio(path: string, muted: boolean) {
   if (muted || typeof Audio === "undefined") return;
   const playback = new Audio(path).play();
@@ -639,6 +653,7 @@ interface MissionPageProps {
   weekFiveFunctionLoader?: () => Promise<{ default: ComponentType<WeekFiveFunctionExperienceProps> }>;
   weekFiveWeatherLoader?: () => Promise<{ default: ComponentType<WeekFiveWeatherExperienceProps> }>;
   weekFiveDecompositionLoader?: () => Promise<{ default: ComponentType<WeekFiveDecompositionExperienceProps> }>;
+  weekFiveStoryOrchestrationLoader?: () => Promise<{ default: ComponentType<WeekFiveStoryOrchestrationExperienceProps> }>;
   weekFourBranchRuntimeFactory?: WeekFourBranchExperienceProps['runtimeFactory'];
   weekFourListRuntimeFactory?: WeekFourListExperienceProps['runtimeFactory'];
   weekFourBossRuntimeFactory?: WeekFourBossExperienceProps['runtimeFactory'];
@@ -646,6 +661,7 @@ interface MissionPageProps {
   weekFiveFunctionRuntimeFactory?: WeekFiveFunctionExperienceProps['runtimeFactory'];
   weekFiveWeatherRuntimeFactory?: WeekFiveWeatherExperienceProps['runtimeFactory'];
   weekFiveDecompositionRuntimeFactory?: WeekFiveDecompositionExperienceProps['runtimeFactory'];
+  weekFiveStoryOrchestrationRuntimeFactory?: WeekFiveStoryOrchestrationExperienceProps['runtimeFactory'];
 }
 
 export function MissionPageForId({
@@ -661,6 +677,7 @@ export function MissionPageForId({
   weekFiveFunctionLoader,
   weekFiveWeatherLoader,
   weekFiveDecompositionLoader,
+  weekFiveStoryOrchestrationLoader,
   weekFourBranchRuntimeFactory,
   weekFourListRuntimeFactory,
   weekFourBossRuntimeFactory,
@@ -668,6 +685,7 @@ export function MissionPageForId({
   weekFiveFunctionRuntimeFactory,
   weekFiveWeatherRuntimeFactory,
   weekFiveDecompositionRuntimeFactory,
+  weekFiveStoryOrchestrationRuntimeFactory,
 }: MissionPageProps & {
   id: string;
   mission: MissionSpec | FormalMissionSpec | undefined;
@@ -757,6 +775,9 @@ export function MissionPageForId({
   const weekFiveDecompositionAccess = mission.id === 'w5-m4' ? getWeekFiveDecompositionAccess(progress) : null;
   if (weekFiveDecompositionAccess && weekFiveDecompositionAccess.kind !== 'formal')
     return <WeekFiveDecompositionAccessNotice access={weekFiveDecompositionAccess} />;
+  const weekFiveStoryOrchestrationAccess = mission.id === 'w5-m5' ? getWeekFiveStoryOrchestrationAccess(progress) : null;
+  if (weekFiveStoryOrchestrationAccess && weekFiveStoryOrchestrationAccess.kind !== 'formal')
+    return <WeekFiveStoryOrchestrationAccessNotice access={weekFiveStoryOrchestrationAccess} />;
   if (!isMissionUnlocked(progress, mission.id))
     return (
       <main className="not-found">
@@ -890,6 +911,11 @@ export function MissionPageForId({
   };
   const revealPersistedWeekFiveDecompositionCompletion = async (earnedStars: number, completionHints: number): Promise<boolean> => {
     if (mission.id !== 'w5-m4' || successRef.current || completionSaveRef.current !== null) return false;
+    const request: CompletionSave = { requestId: ++requestGenerationRef.current, stars: earnedStars, hintsUsed: completionHints, status: 'pending' };
+    onCompletionPersistenceActiveChange(true); completionSaveRef.current = request; return revealSuccess(request, earnedStars);
+  };
+  const revealPersistedWeekFiveStoryOrchestrationCompletion = async (earnedStars: number, completionHints: number): Promise<boolean> => {
+    if (mission.id !== 'w5-m5' || successRef.current || completionSaveRef.current !== null) return false;
     const request: CompletionSave = { requestId: ++requestGenerationRef.current, stars: earnedStars, hintsUsed: completionHints, status: 'pending' };
     onCompletionPersistenceActiveChange(true); completionSaveRef.current = request; return revealSuccess(request, earnedStars);
   };
@@ -1332,6 +1358,17 @@ export function MissionPageForId({
                 muted={progress.settings.muted}
                 locked={completionSave !== null}
                 onComplete={({ stars: earnedStars, hintsUsed: used }) => revealPersistedWeekFiveDecompositionCompletion(earnedStars, used)}
+                onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
+                onInteractionLockChange={setBattleInteractionLocked}
+              />
+            ) : mission.id === 'w5-m5' ? (
+              <WeekFiveStoryOrchestrationRouteBoundary
+                loader={weekFiveStoryOrchestrationLoader}
+                runtimeFactory={weekFiveStoryOrchestrationRuntimeFactory}
+                reducedMotion={reducedMotion}
+                muted={progress.settings.muted}
+                locked={completionSave !== null}
+                onComplete={({ stars: earnedStars, hintsUsed: used }) => revealPersistedWeekFiveStoryOrchestrationCompletion(earnedStars, used)}
                 onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
                 onInteractionLockChange={setBattleInteractionLocked}
               />

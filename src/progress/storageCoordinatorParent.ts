@@ -1,8 +1,8 @@
+import { getClearProgressKeys } from './storageParentKeys';
 import { createInitialProgress } from './schema';
 import {
   CORRUPT_PROGRESS_KEY,
   CURRENT_PROGRESS_KEY,
-  getClearProgressKeys,
   REVISION_PROGRESS_KEY,
   SNAPSHOT_PROGRESS_KEY,
   type ClearResult,

@@ -1,7 +1,7 @@
 import type { ProgressV3 } from '../progress/types'
 import { EQUIPMENT_CATALOGUE, type EquipmentEffect, type EquipmentItemId, type EquipmentSlot } from '../progress/equipment'
 import { EQUIPMENT_PRESENTATION } from '../progress/equipmentPresentation'
-import { getWeeklyReport } from '../progress/progress'
+import { getWeeklyReport } from '../progress/weeklyReport'
 import './ParentEquipmentReport.css'
 
 const itemOrder: EquipmentItemId[] = ['ruyi-staff', 'phoenix-crown', 'golden-chain-armor', 'cloud-walking-boots']
@@ -73,6 +73,8 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   const weatherProof = progress.missionCompletionEvidence['w5-m3'];
   const decompositionSession = progress.sessions['w5-m4'];
   const decompositionProof = progress.missionCompletionEvidence['w5-m4'];
+  const storySession = progress.sessions['w5-m5'];
+  const storyProof = progress.missionCompletionEvidence['w5-m5'];
   const listSession = progress.sessions['w4-m4'];
   const listProof = progress.missionCompletionEvidence['w4-m4'];
   const blockerLabels = {
@@ -187,6 +189,13 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     <p>主动观察 {decompositionSession?.conditionObservationUses.length ?? 0} 次。</p>
     {decompositionProof?.kind === 'formal-v3' && progress.works['w5-m4-problem-decomposition-record'] ? <p>问题分解正式证明及故事记录作品已保存</p> : null}
     {decompositionProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式问题分解证明</p> : null}
+  </section><section aria-label="第五周故事总编排学习摘要">
+    <h2>第五周故事总编排学习摘要</h2>
+    <p>已运行 {storySession?.totalRuns ?? 0} 次；解困循环调整 {storySession?.monkLoopFailures ?? 0} 次，三清观调用调整 {storySession?.templeCallFailures ?? 0} 次，天气参数调整 {storySession?.weatherBindingFailures ?? 0} 次，后续顺序调整 {storySession?.laterCallOrderFailures ?? 0} 次。</p>
+    <p>结构验证未通过 {storySession?.validationFailures ?? 0} 次；运行环境故障 {storySession?.runnerInfrastructureFailures ?? 0} 次（不计入学习困难）。</p>
+    <p>主动观察 {storySession?.conditionObservationUses.length ?? 0} 次。</p>
+    {storyProof?.kind === 'formal-v3' && progress.works['w5-m5-story-orchestration-record'] ? <p>车迟国故事总编排正式证明及作品已保存</p> : null}
+    {storyProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式故事总编排证明</p> : null}
   </section></>
 }
 

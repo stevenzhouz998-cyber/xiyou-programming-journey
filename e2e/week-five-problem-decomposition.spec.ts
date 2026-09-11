@@ -43,6 +43,7 @@ async function openParent(page: Page) {
 async function unlockParent(page: Page) {
   const acknowledge = page.getByRole('button', { name: '我知道了', exact: true });
   if (await acknowledge.isVisible()) await acknowledge.click();
+  await expect(page.getByTestId('app-background')).not.toHaveAttribute('inert', '');
   const report = page.getByRole('button', { name: '导出进度', exact: true });
   const login = page.getByLabel('家长 PIN', { exact: true });
   const setup = page.getByLabel('设置 4 位家长 PIN', { exact: true });
@@ -87,7 +88,7 @@ test('@w5-m4-full real decomposition reports ownership first, exposes the missin
   await runButton(page).click();
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 30_000 });
   const completed = await saved(page);
-  expect(completed.schemaRevision).toBe(16);
+  expect(completed.schemaRevision).toBe(17);
   expect(completed.missionCompletionEvidence['w5-m4'].kind).toBe('formal-v3');
   expect(completed.works['w5-m4-problem-decomposition-record'].run.completed).toBe(true);
 

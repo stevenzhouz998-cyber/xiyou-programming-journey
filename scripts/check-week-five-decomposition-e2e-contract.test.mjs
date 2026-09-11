@@ -20,7 +20,7 @@ test('registers W5-M4 full, fault, security, recovery, keyboard and budget evide
 });
 
 test('runs W5-M4 through all five approved Playwright projects', () => {
-  assert.equal((config.match(/@w5-m\[1234\]-/g) ?? []).length, 5);
+  assert.equal((config.match(/@w5-m\[12345\]-/g) ?? []).length, 5);
   assert.match(config, /workers:\s*1/);
   assert.match(config, /retries:\s*0/);
 });

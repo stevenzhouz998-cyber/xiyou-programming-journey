@@ -1,5 +1,6 @@
 const ACCESS_PREFIX = 'access-v1';
-const ACCESS_PATTERN = /^access-v1:([a-f0-9]{64}):([a-f0-9]{64})$/;
+import { ACCESS_PATTERN } from './parentAccessSchema';
+export { isValidParentAccessRecord } from './parentAccessSchema';
 const RECOVERY_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 async function sha256(value: string): Promise<string> {
@@ -48,8 +49,4 @@ export async function verifyRecoveryCode(record: string, candidate: string): Pro
   const match = ACCESS_PATTERN.exec(record);
   if (!match) return false;
   return match[2] === await sha256(`xiyou-parent-recovery:${normalizeRecoveryCode(candidate)}`);
-}
-
-export function isValidParentAccessRecord(value: string): boolean {
-  return value === 'unset' || /^\d{4}$/.test(value) || ACCESS_PATTERN.test(value);
 }

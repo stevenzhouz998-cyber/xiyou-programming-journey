@@ -1434,13 +1434,14 @@ export function verifyRequiredWeekFiveWeatherInventory({ manifestRows, publicFil
   return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
 }
 
-export function verifyRequiredWeekFiveDecompositionInventory({ manifestRows, publicFiles, promptRecords = [], source, mode = 'check' }) {
+export function verifyRequiredWeekFiveDecompositionInventory({ manifestRows, publicFiles, promptRecords = [], source, storySource, mode = 'check' }) {
   const directory = 'assets/week-five-trials/';
   const rows = familyRows(manifestRows, directory), files = familyFiles(publicFiles, directory);
   const path = `${directory}contest-courtyard-background.webp`;
   requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: [path], label: 'Week Five problem decomposition' });
-  if (rows[0].screenSlots !== 'w5-m4 WeekFiveDecompositionScene') throw new Error('Asset manifest: W5-M4 scene slot mismatch.');
+  if (rows[0].screenSlots !== 'w5-m4 WeekFiveDecompositionScene; w5-m5 WeekFiveStoryOrchestrationScene') throw new Error('Asset manifest: W5-M4/M5 scene slots mismatch.');
   if (typeof source !== 'string' || !source.includes(`assetUrl('/${path}')`) || (source.match(/<img\b/g) ?? []).length !== 1) throw new Error('Asset manifest: W5-M4 must render the approved background through assetUrl.');
+  if (typeof storySource !== 'string' || !storySource.includes(`assetUrl('/${path}')`) || (storySource.match(/<img\b/g) ?? []).length !== 1) throw new Error('Asset manifest: W5-M5 must render the approved background through assetUrl.');
   return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
 }
 
@@ -2177,7 +2178,14 @@ async function main() {
   const monksResult = verifyRequiredWeekFiveMonksInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekFiveMonksScene.tsx'), 'utf8'), mode });
   const templeResult = verifyRequiredWeekFiveTempleInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekFiveTempleScene.tsx'), 'utf8'), mode });
   const weatherResult = verifyRequiredWeekFiveWeatherInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekFiveWeatherScene.tsx'), 'utf8'), mode });
-  const decompositionResult = verifyRequiredWeekFiveDecompositionInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekFiveDecompositionScene.tsx'), 'utf8'), mode });
+  const decompositionResult = verifyRequiredWeekFiveDecompositionInventory({
+    manifestRows,
+    publicFiles,
+    promptRecords,
+    source: await readFile(join(root, 'src/components/WeekFiveDecompositionScene.tsx'), 'utf8'),
+    storySource: await readFile(join(root, 'src/components/WeekFiveStoryOrchestrationScene.tsx'), 'utf8'),
+    mode,
+  });
   console.log(`Week Five monks assets: ${monksResult.assetCount} files, ${monksResult.totalBytes} bytes (${mode}).`);
   console.log(`Week Five temple assets: ${templeResult.assetCount} files, ${templeResult.totalBytes} bytes (${mode}).`);
   console.log(`Week Five weather assets: ${weatherResult.assetCount} files, ${weatherResult.totalBytes} bytes (${mode}).`);

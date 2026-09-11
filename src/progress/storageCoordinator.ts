@@ -1,8 +1,9 @@
+import { saveProgressTransaction } from './storageWrite';
 import type { ProgressV3 } from './types';
 import { storageFaultAdapter } from '#storage-fault-adapter';
 import {
   CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, REVISION_PROGRESS_KEY,
-  LEGACY_WORKSPACE_PREFIX, SNAPSHOT_PROGRESS_KEY, parseStoredRevision, saveProgressTransaction,
+  LEGACY_WORKSPACE_PREFIX, SNAPSHOT_PROGRESS_KEY, parseStoredRevision,
 } from './storage';
 
 export interface LockManagerLike { request<T>(name: string, callback: () => Promise<T> | T): Promise<T> }

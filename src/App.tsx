@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { HashRouter, Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { HashRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Lightning } from '@phosphor-icons/react/dist/icons/Lightning';
 import { LockKey } from '@phosphor-icons/react/dist/icons/LockKey';
 import { MapTrifold } from '@phosphor-icons/react/dist/icons/MapTrifold';
@@ -9,16 +9,14 @@ import { SpeakerSlash } from '@phosphor-icons/react/dist/icons/SpeakerSlash';
 import { UsersThree } from '@phosphor-icons/react/dist/icons/UsersThree';
 import { courseOutline, allMissionOutlines } from './course/courseOutline';
 import { ProgressProvider, useProgress } from './context/ProgressContext';
-import { getWeeklyReport, isMissionUnlocked } from './progress/progress';
+import { isMissionUnlocked } from './progress/progress';
 import { PrivacyPanel } from './components/PrivacyPanel';
 import { LazySectionBoundary } from './components/LazySectionBoundary';
 import { assetUrl } from './utils/assets';
 import { downloadTextFile } from './utils/download';
 import './styles.css';
 
-const ParentAccessGate = lazy(() => import('./components/ParentAccessGate').then((module) => ({ default: module.ParentAccessGate })));
-const ParentDataTools = lazy(() => import('./components/ParentDataTools').then((module) => ({ default: module.ParentDataTools })));
-const ParentEquipmentReport = lazy(() => import('./components/ParentEquipmentReport').then((module) => ({ default: module.ParentEquipmentReport })));
+const ParentPage = lazy(() => import('./components/ParentPage').then((module) => ({ default: module.ParentPage })));
 const RecoveryNotice = lazy(() => import('./components/RecoveryNotice').then((module) => ({ default: module.RecoveryNotice })));
 const MissionPageContent = lazy(() => import('./components/MissionPageContent').then((module) => ({ default: module.MissionPageContent })));
 const EquipmentDrawer = lazy(() => import('./components/EquipmentDrawer').then((module) => ({ default: module.EquipmentDrawer })));
@@ -70,13 +68,6 @@ function HomePage({ onOpenEquipment }: { onOpenEquipment: () => void }) {
   useEffect(() => { playAudio(assetUrl('/assets/audio/welcome.m4a'), progress.settings.muted); }, []);
 
   return <main className="home-page"><div className="world-map-backdrop" aria-hidden="true" /><section className="hero-copy"><span className="chapter-chip">六周原著修行</span><h1>西游编程记</h1><p className="hero-kicker">读原著 · 排指令 · 写代码 · 懂 AI</p><div className="mentor-note"><img src={assetUrl("/assets/mentor.png")} alt="原著讲述导师" /><p>“故事只按原著前行，代码帮你看清其中的顺序、条件与规律。”</p></div><button className="cta" type="button" aria-label={completed === 0 ? '开始第一关：龙宫求兵' : `继续第${nextMission.week}周第${nextMission.order}关`} onClick={() => navigate(`/mission/${nextMission.id}`)}><span>{completed === 0 ? '开始第一关' : '继续今日闯关'}</span><small>{nextMission.title} · 约 20 分钟</small></button><p className="privacy-note"><LockKey size={18} />无需账号，进度只保存在这台电脑</p></section><section className="journey-panel" aria-label="六周成长地图"><div className="journey-heading"><span className="eyebrow">取经路 · 六段原著篇章</span><div className="journey-actions"><strong>{completed}/30 关已完成</strong><button className="button button-ghost equipment-entry" type="button" aria-label="打开装备行囊" onClick={onOpenEquipment}>装备行囊</button></div></div><div className="week-grid">{courseOutline.weeks.map((week) => { const unlocked = isMissionUnlocked(progress, week.missions[0].id); const weekDone = week.missions.filter((mission) => progress.missions[mission.id]).length; return <article key={week.id} className={unlocked ? 'week-card unlocked' : 'week-card locked'}><div className="week-card-top"><span>第{'一二三四五六'[week.week - 1]}周</span>{unlocked ? <span>{weekDone}/5</span> : <LockKey size={18} />}</div><h2>{week.title}</h2><p>{week.theme}</p><div className="mission-dots">{week.missions.map((mission) => <button type="button" key={mission.id} aria-label={`${mission.title}${isMissionUnlocked(progress, mission.id) ? '' : '，未解锁'}`} disabled={!isMissionUnlocked(progress, mission.id)} onClick={() => navigate(`/mission/${mission.id}`)} className={progress.missions[mission.id] ? 'done' : mission.isBoss ? 'boss' : ''}>{mission.isBoss ? <Medal size={17} weight="fill" /> : mission.order}</button>)}</div></article>; })}</div></section></main>;
-}
-
-function ParentPage() {
-  const data = useProgress();
-  const { progress } = data;
-  const [dataDialogOpen, setDataDialogOpen] = useState(false);
-  return <LazySectionBoundary label="家长入口"><Suspense fallback={<main className="parent-gate" role="status">家长入口加载中，请稍候……</main>}><ParentAccessGate record={progress.settings.parentPin} saveRecord={async (record) => (await data.commitParentAccess(record)).status === 'saved'}><main className="parent-page"><div data-testid="parent-data-background" inert={dataDialogOpen ? true : undefined} aria-hidden={dataDialogOpen ? true : undefined}><div className="parent-heading"><div><span className="eyebrow">本地学习档案</span><h1>家长周报</h1><p>学习数据仅保存在这台电脑</p></div><Link className="button button-ghost" to="/">返回成长地图</Link></div><section className="report-summary"><article><strong>{Object.keys(progress.missions).length}</strong><span>已完成关卡</span></article><article><strong>{Object.values(progress.missions).reduce((sum, item) => sum + item.stars, 0)}</strong><span>累计星数</span></article><article><strong>{Object.values(progress.missions).reduce((sum, item) => sum + item.hintsUsed, 0)}</strong><span>使用提示</span></article></section><LazySectionBoundary label="装备与跨关学习工具"><Suspense fallback={<p role="status">装备奖励报告加载中，请稍候……</p>}><ParentEquipmentReport progress={progress} /></Suspense></LazySectionBoundary><section className="weekly-reports">{courseOutline.weeks.map((week) => { const report = getWeeklyReport(progress, week.week); const completedMissions = week.missions.filter((mission) => progress.missions[mission.id]).map((mission) => mission.title); return <article className="weekly-report" key={week.id}><div><span>第{'一二三四五六'[week.week - 1]}周</span><h2>{week.title}</h2><p>{week.theme}</p>{completedMissions.length ? <p className="completed-mission-summary">已完成：{completedMissions.join('、')}</p> : null}{report.sessionRuns > 0 || report.sessionAdjustments > 0 ? <p className="mission-session-summary">运行 {report.sessionRuns} 次 · 调整 {report.sessionAdjustments} 次</p> : null}</div><div className="report-progress"><strong>{report.completed}/5</strong><span>完成 · {report.stars} 星 · {report.hintsUsed} 次提示</span><progress value={report.completed} max={5} /></div><div><span className="eyebrow">需要留意</span><p>{report.needsSupport.length ? [...new Set(report.needsSupport)].join('、') : report.completed ? '本周暂未出现明显卡点' : '尚未开始本周学习'}</p></div></article>; })}</section><LazySectionBoundary label="家长数据工具"><Suspense fallback={<p role="status">家长数据工具加载中，请稍候……</p>}><ParentDataTools progress={progress} loadStatus={data.loadStatus} loadPersistence={data.loadPersistence} saveStatus={data.saveStatus} corruptDownload={data.corruptDownload} corruptError={data.corruptError} onImport={data.importProgressFile} onClear={data.clearProgress} onCreateBackup={data.createBackup} onDownload={downloadTextFile} onDialogOpenChange={setDataDialogOpen} /></Suspense></LazySectionBoundary></div></main></ParentAccessGate></Suspense></LazySectionBoundary>;
 }
 
 function AppRoutes() {
