@@ -38,7 +38,7 @@ describe('ParentAccessGate', () => {
     expect(saveRecord).not.toHaveBeenCalled();
   });
 
-  it('commits only after acknowledgement and retries a failed transaction without losing the code', async () => {
+  it('commits only after acknowledgement, retries without losing the code, and tolerates the saved prop lag', async () => {
     const saveRecord = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
     render(<ParentAccessGate record="unset" saveRecord={saveRecord}><p>家长数据</p></ParentAccessGate>);
     enterNewPin('4826');
@@ -52,6 +52,8 @@ describe('ParentAccessGate', () => {
     expect(screen.queryByText('家长数据')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '确认已保存并进入' }));
     await waitFor(() => expect(screen.getByText('家长数据')).toBeVisible());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByText('家长数据')).toBeVisible();
     expect(saveRecord).toHaveBeenCalledTimes(2);
   });
 

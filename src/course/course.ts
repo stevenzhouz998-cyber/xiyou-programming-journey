@@ -36,7 +36,6 @@ const c18to19 = {
 };
 const c27 = formalWeekFourCanon;
 const c44to46 = canon([44, 45, 46], '第四十四至四十六回　车迟国斗法');
-const c46 = canon([46], '第四十六回　外道弄强欺正法　心猿显圣灭诸邪');
 const c59to61 = canon([59, 60, 61], '第五十九至六十一回　三调芭蕉扇');
 
 export const course: CourseManifest = {
@@ -69,7 +68,6 @@ export const course: CourseManifest = {
     deriveWeekFromOutline('week-5', { subtitle: '把复杂问题拆成函数', canon: c44to46,
       missions: [
         ...formalWeekFiveMissions,
-        mission('w5-m4', { subtitle: '分解多个试炼项目', objective: '把原著比试拆成可检查的函数', mode: 'python', canon: c46, storyBeats: [beat('云梯显圣', '双方继续比试坐禅等项目。'), beat('外道败亡', '三位国师在后续赌赛中先后败亡。')], expectedSequence: ['meditation', 'guess_objects', 'beheading', 'disembowel', 'oil_bath'], starterCode: "tests = ['坐禅', '猜物', '砍头', '剖腹', '油锅']\ndef announce(item):\n    return '比试:' + item\nfor item in tests:\n    print(announce(item))", expectedOutput: '比试:坐禅\n比试:猜物\n比试:砍头\n比试:剖腹\n比试:油锅' }),
         mission('w5-m5', { subtitle: '函数重建斗法次序', objective: '用函数与循环输出第四十四至四十六回事件链', mode: 'python', canon: c44to46, storyBeats: [beat('先救僧众', '师徒先遇受役僧众并施救。'), beat('再经斗法', '三清观后，双方在朝中展开多项赌赛。')], expectedSequence: ['save_monks', 'temple', 'rain', 'later_tests'], starterCode: "events = ['解救僧众', '三清观留名', '祈雨赌胜', '后续比试']\ndef record(event):\n    print(event)\nfor event in events:\n    record(event)", expectedOutput: '解救僧众\n三清观留名\n祈雨赌胜\n后续比试' }),
       ],
     }),

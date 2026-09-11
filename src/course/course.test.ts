@@ -77,7 +77,7 @@ describe('course manifest', () => {
     expect(formalWeekTwoMissions).toHaveLength(5);
     expect(formalWeekThreeMissions).toHaveLength(5);
     for (const mission of formalWeekOneMissions) expect(mission).not.toHaveProperty('expectedSequence');
-    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5', 'w2-m1', 'w2-m2', 'w2-m3', 'w2-m4', 'w2-m5', 'w3-m1', 'w3-m2', 'w3-m3', 'w3-m4', 'w3-m5', 'w4-m1', 'w4-m2', 'w4-m3', 'w4-m4', 'w4-m5', 'w5-m1', 'w5-m2', 'w5-m3']);
+    const formalIds = new Set(['w1-m1', 'w1-m2', 'w1-m3', 'w1-m4', 'w1-m5', 'w2-m1', 'w2-m2', 'w2-m3', 'w2-m4', 'w2-m5', 'w3-m1', 'w3-m2', 'w3-m3', 'w3-m4', 'w3-m5', 'w4-m1', 'w4-m2', 'w4-m3', 'w4-m4', 'w4-m5', 'w5-m1', 'w5-m2', 'w5-m3', 'w5-m4']);
     for (const mission of course.weeks.flatMap((week) => week.missions)) {
       if (formalIds.has(mission.id)) expect(mission).not.toHaveProperty('expectedSequence');
       else expect(mission).toHaveProperty('expectedSequence', expect.any(Array));
@@ -146,7 +146,7 @@ describe('course manifest', () => {
     expect(mission).not.toHaveProperty('expectedSequence');
     expect(mission).not.toHaveProperty('expectedOutput');
     expect(mission).not.toHaveProperty('starterCode');
-    for (const id of ['w5-m4']) {
+    for (const id of ['w5-m5']) {
       expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
       expect(isExecutableMissionId(id)).toBe(false);
     }
@@ -172,7 +172,7 @@ describe('course manifest', () => {
     expect(mission).not.toHaveProperty('expectedSequence');
     expect(mission).not.toHaveProperty('expectedOutput');
     expect(mission).not.toHaveProperty('starterCode');
-    for (const id of ['w5-m4']) {
+    for (const id of ['w5-m5']) {
       expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
       expect(isExecutableMissionId(id)).toBe(false);
     }
@@ -202,7 +202,7 @@ describe('course manifest', () => {
     expect(mission).not.toHaveProperty('expectedSequence');
     expect(mission).not.toHaveProperty('expectedOutput');
     expect(mission).not.toHaveProperty('starterCode');
-    for (const id of ['w5-m4']) {
+    for (const id of ['w5-m5']) {
       expect(isFormalMissionOutline(getMissionOutline(id))).toBe(false);
       expect(isExecutableMissionId(id)).toBe(false);
     }

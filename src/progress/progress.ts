@@ -3,6 +3,7 @@ import { parseWeekFourBossPython } from '../engine/weekFourBossPythonGrammar';
 import { parseWeekFiveMonksPython } from '../engine/weekFiveMonksPythonGrammar';
 import { parseWeekFiveFunctionPython } from '../engine/weekFiveFunctionPythonGrammar';
 import { parseWeekFiveWeatherPython } from '../engine/weekFiveWeatherPythonGrammar';
+import { parseWeekFiveDecompositionPython } from '../engine/weekFiveDecompositionPythonGrammar';
 import { createInitialProgress, parseProgress } from './schema';
 import type {
   ManorHelpCompletionEvidence,
@@ -27,18 +28,21 @@ import type {
   WeekFiveMonksCompletionEvidence,
   WeekFiveFunctionCompletionEvidence,
   WeekFiveWeatherCompletionEvidence,
+  WeekFiveDecompositionCompletionEvidence,
   WeekFourBranchMissionSession,
   WeekFourListMissionSession,
   WeekFourBossMissionSession,
   WeekFiveMonksMissionSession,
   WeekFiveFunctionMissionSession,
   WeekFiveWeatherMissionSession,
+  WeekFiveDecompositionMissionSession,
   WeekFourBranchWorkV1,
   WeekFourListWorkV1,
   WeekFourBossWorkV1,
   WeekFiveMonksWorkV1,
   WeekFiveFunctionWorkV1,
   WeekFiveWeatherWorkV1,
+  WeekFiveDecompositionWorkV1,
   ProgressV3,
 } from './types';
 
@@ -413,6 +417,35 @@ function formalWeekFiveWeatherCompletionEvidence(
     return null;
   }
 }
+function formalWeekFiveDecompositionCompletionEvidence(
+  session: WeekFiveDecompositionMissionSession | undefined,
+  completedAt: string,
+  workCreatedAt: string,
+  verifiedAt: string,
+): { evidence: Extract<WeekFiveDecompositionCompletionEvidence, { kind: 'formal-v3' }>; work: WeekFiveDecompositionWorkV1 } | null {
+  if (!session || session.lastRun === null || session.lastRunAt === null) return null;
+  try {
+    const parsed = parseWeekFiveDecompositionPython(session.pythonCode);
+    if ('state' in parsed || !parsed.run.completed || parsed.run.state !== 'decomposition-proven'
+      || parsed.run.failureSnapshots.length !== 0 || session.failureSnapshot !== null
+      || !deeplyEqual(session.lastCanonicalTrace, parsed.trace)
+      || !deeplyEqual(session.lastWorkerTrace, parsed.trace)
+      || !deeplyEqual(session.lastRun, parsed.run)) return null;
+    const work: WeekFiveDecompositionWorkV1 = {
+      kind: 'python-problem-decomposition-v1', workId: 'w5-m4-problem-decomposition-record', missionId: 'w5-m4',
+      title: '后续比试问题分解记录', pythonCode: session.pythonCode,
+      canonicalTrace: structuredClone(parsed.trace), workerTrace: structuredClone(parsed.trace), run: structuredClone(parsed.run),
+      createdAt: workCreatedAt, verifiedAt,
+    };
+    return {
+      evidence: {
+        kind: 'formal-v3', completedAt, verifiedAt, pythonCode: session.pythonCode,
+        canonicalTrace: structuredClone(parsed.trace), workerTrace: structuredClone(parsed.trace), run: structuredClone(parsed.run), workId: work.workId,
+      },
+      work,
+    };
+  } catch { return null; }
+}
 
 function hasValidFormalWeekFourListCompletion(progress: ProgressV3): boolean {
   const mission = progress.missions['w4-m4'];
@@ -568,6 +601,23 @@ function hasValidFormalWeekFiveWeatherCompletion(progress: ProgressV3): boolean 
     return false;
   }
 }
+function hasValidFormalWeekFiveDecompositionCompletion(progress: ProgressV3): boolean {
+  const mission = progress.missions['w5-m4']; const evidence = progress.missionCompletionEvidence['w5-m4'];
+  const session = progress.sessions['w5-m4']; const work = progress.works['w5-m4-problem-decomposition-record'];
+  if (!hasValidFormalWeekFiveWeatherCompletion(progress) || !hasValidCompletedMission(mission) || evidence?.kind !== 'formal-v3' || !session || !work
+    || evidence.completedAt !== mission.completedAt || evidence.workId !== work.workId || evidence.verifiedAt !== work.verifiedAt
+    || work.kind !== 'python-problem-decomposition-v1' || work.missionId !== 'w5-m4' || !isCanonicalIso(evidence.verifiedAt)
+    || !isCanonicalIso(work.createdAt) || !isCanonicalIso(work.verifiedAt) || work.createdAt < mission.completedAt || work.verifiedAt < work.createdAt
+    || session.lastRunAt === null || !isCanonicalIso(session.lastRunAt) || !isCanonicalIso(session.savedAt) || session.lastRunAt > session.savedAt || session.savedAt > work.createdAt) return false;
+  try {
+    const parsed = parseWeekFiveDecompositionPython(session.pythonCode);
+    return !('state' in parsed) && parsed.run.completed && parsed.run.state === 'decomposition-proven' && parsed.run.failureSnapshots.length === 0 && session.failureSnapshot === null
+      && work.pythonCode === session.pythonCode && evidence.pythonCode === session.pythonCode
+      && deeplyEqual(session.lastCanonicalTrace, parsed.trace) && deeplyEqual(session.lastWorkerTrace, parsed.trace) && deeplyEqual(session.lastRun, parsed.run)
+      && deeplyEqual(work.canonicalTrace, parsed.trace) && deeplyEqual(work.workerTrace, parsed.trace) && deeplyEqual(work.run, parsed.run)
+      && deeplyEqual(evidence.canonicalTrace, parsed.trace) && deeplyEqual(evidence.workerTrace, parsed.trace) && deeplyEqual(evidence.run, parsed.run);
+  } catch { return false; }
+}
 
 export interface WeeklyReport {
   week: number;
@@ -636,6 +686,7 @@ export interface WeeklyReport {
     completedAt: string | null;
   };
   weekFiveWeather?: { runs:number; callFailures:number; parameterFailures:number; validationFailures:number; infrastructureFailures:number; observations:number; workSaved:boolean; proof:'formal-v3'|'legacy-replay-only'|'none'; completedAt:string|null };
+  weekFiveDecomposition?: { runs:number; coordinatorFailures:number; ownershipFailures:number; validationFailures:number; infrastructureFailures:number; observations:number; workSaved:boolean; proof:'formal-v3'|'legacy-replay-only'|'none'; completedAt:string|null };
 }
 
 function normalizeStars(value: number): 1 | 2 | 3 {
@@ -970,6 +1021,26 @@ export function completeWeekFiveWeatherProgress(progress: ProgressV3, input: Com
     savedAt: now,
   };
 }
+export function completeWeekFiveDecompositionProgress(progress: ProgressV3, input: CompletionInput): ProgressV3 {
+  const previous = progress.missions['w5-m4']; const existing = progress.missionCompletionEvidence['w5-m4'];
+  if (existing?.kind === 'formal-v3') {
+    if (hasValidFormalWeekFiveDecompositionCompletion(progress)) return progress;
+    throw Error('W5-M4现有formal-v3证明与当前前置、session、作品或运行不一致');
+  }
+  if (!hasValidFormalWeekFiveWeatherCompletion(progress)) throw Error('W5-M4完成需要W5-M3 formal-v3正式证明');
+  if (previous && existing?.kind !== 'legacy-replay-only') throw Error('W5-M4历史完成缺少可升级来源证明');
+  const now = new Date().toISOString();
+  const completion = formalWeekFiveDecompositionCompletionEvidence(progress.sessions['w5-m4'], previous?.completedAt ?? now, now, now);
+  if (!completion) throw Error('W5-M4完成需要当前保存session的decomposition-proven成功运行');
+  const mission = previous ?? { status: 'completed' as const, stars: normalizeStars(input.stars), attempts: safeCount(0, 1), hintsUsed: safeCount(0, normalizeHints(input.hintsUsed)), completedAt: now };
+  return {
+    ...progress,
+    missions: { ...progress.missions, 'w5-m4': mission },
+    missionCompletionEvidence: { ...progress.missionCompletionEvidence, 'w5-m4': completion.evidence },
+    works: { ...progress.works, [completion.work.workId]: completion.work },
+    equipment: progress.equipment, abilities: progress.abilities, savedAt: now,
+  };
+}
 
 export function completeMission(progress: ProgressV3, missionId: string, input: CompletionInput): ProgressV3 {
   if (!allMissionOutlines.some((mission) => mission.id === missionId)) throw new Error('任务编号无效');
@@ -979,6 +1050,7 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
   if (missionId === 'w5-m1') return completeWeekFiveMonksProgress(progress, input);
   if (missionId === 'w5-m2') return completeWeekFiveFunctionProgress(progress, input);
   if (missionId === 'w5-m3') return completeWeekFiveWeatherProgress(progress, input);
+  if (missionId === 'w5-m4') return completeWeekFiveDecompositionProgress(progress, input);
   const previous = progress.missions[missionId];
   const stars = normalizeStars(input.stars);
   const normalizedHints = normalizeHints(input.hintsUsed);
@@ -1130,7 +1202,8 @@ export function isMissionUnlocked(progress: ProgressV3, missionId: string): bool
   if (missionId === 'w5-m1') return getWeekFiveMonksAccess(progress).kind !== 'locked';
   if (missionId === 'w5-m2') return getWeekFiveFunctionAccess(progress).kind !== 'locked';
   if (missionId === 'w5-m3') return getWeekFiveWeatherAccess(progress).kind !== 'locked';
-  if (missionId === 'w5-m4') return hasValidFormalWeekFiveWeatherCompletion(progress) || progress.missionCompletionEvidence['w5-m3']?.kind === 'legacy-replay-only' || progress.missions['w5-m4']?.status === 'completed';
+  if (missionId === 'w5-m4') return getWeekFiveDecompositionAccess(progress).kind !== 'locked';
+  if (missionId === 'w5-m5') return hasValidFormalWeekFiveDecompositionCompletion(progress) || progress.missionCompletionEvidence['w5-m4']?.kind === 'legacy-replay-only' || progress.missions['w5-m5']?.status === 'completed';
   return progress.missions[allMissionOutlines[index - 1].id]?.status === 'completed';
 }
 
@@ -1265,6 +1338,20 @@ export function getWeekFiveWeatherAccess(progress: ProgressV3): WeekFiveWeatherA
   }
   return { kind: 'locked' };
 }
+export type WeekFiveDecompositionAccess =
+  | { kind: 'locked' }
+  | { kind: 'historical-read-only'; completed: boolean }
+  | { kind: 'formal'; upgradingLegacy: boolean };
+
+export function getWeekFiveDecompositionAccess(progress: ProgressV3): WeekFiveDecompositionAccess {
+  const evidence = progress.missionCompletionEvidence['w5-m4'];
+  if (hasValidFormalWeekFiveWeatherCompletion(progress)) return { kind: 'formal', upgradingLegacy: evidence?.kind === 'legacy-replay-only' };
+  const prerequisite = progress.missionCompletionEvidence['w5-m3'];
+  if ((progress.missions['w5-m3']?.status === 'completed' && prerequisite?.kind === 'legacy-replay-only') || evidence?.kind === 'legacy-replay-only') {
+    return { kind: 'historical-read-only', completed: progress.missions['w5-m4']?.status === 'completed' && evidence?.kind === 'legacy-replay-only' };
+  }
+  return { kind: 'locked' };
+}
 
 export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyReport {
   const missions = allMissionOutlines.filter((mission) => mission.week === week);
@@ -1294,6 +1381,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
   const weekFiveMonksSession = week === 5 ? progress.sessions['w5-m1'] : undefined;
   const weekFiveFunctionSession = week === 5 ? progress.sessions['w5-m2'] : undefined;
   const weekFiveWeatherSession = week === 5 ? progress.sessions['w5-m3'] : undefined;
+  const weekFiveDecompositionSession = week === 5 ? progress.sessions['w5-m4'] : undefined;
   const weekFourListSession = week === 4 ? progress.sessions['w4-m4'] : undefined;
   const sessionSupport = [
     ...(dragonSession ? getSessionSupport(dragonSession, 'w1-m1') : []),
@@ -1335,9 +1423,9 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
     total: missions.length,
     stars: records.reduce((sum, record) => safeCount(sum, record.stars), 0),
     hintsUsed: records.reduce((sum, record) => safeCount(sum, record.hintsUsed), 0),
-    sessionRuns: safeCount(safeCount(safeCount(safeCount(sessionRuns, weekFourBossSession?.totalRuns ?? 0), weekFiveMonksSession?.totalRuns ?? 0), weekFiveFunctionSession?.totalRuns ?? 0), weekFiveWeatherSession?.totalRuns ?? 0),
-    sessionAdjustments: safeCount(safeCount(safeCount(safeCount(safeCount(sessionAdjustments, weekFiveMonksSession ? safeCount(safeCount(weekFiveMonksSession.coverageFailures, weekFiveMonksSession.actionFailures), weekFiveMonksSession.validationFailures) : 0), weekFourBossSession ? safeCount(safeCount(weekFourBossSession.identityFailures, weekFourBossSession.branchFailures), weekFourBossSession.validationFailures) : 0), weekFourListSession ? safeCount(safeCount(weekFourListSession.listOrderFailures, weekFourListSession.loopValueFailures), weekFourListSession.validationFailures) : 0), weekFiveFunctionSession ? safeCount(safeCount(weekFiveFunctionSession.callFailures, weekFiveFunctionSession.bodyFailures), weekFiveFunctionSession.validationFailures) : 0), weekFiveWeatherSession ? safeCount(safeCount(weekFiveWeatherSession.callFailures, weekFiveWeatherSession.parameterFailures), weekFiveWeatherSession.validationFailures) : 0),
-    needsSupport: [...new Set([...missionSupport, ...sessionSupport, ...(weekFiveFunctionSession?.firstBlockingConcept ? [weekFiveFunctionSession.firstBlockingConcept] : []), ...(weekFiveWeatherSession?.firstBlockingConcept ? [weekFiveWeatherSession.firstBlockingConcept] : [])])],
+    sessionRuns: safeCount(safeCount(safeCount(safeCount(safeCount(sessionRuns, weekFourBossSession?.totalRuns ?? 0), weekFiveMonksSession?.totalRuns ?? 0), weekFiveFunctionSession?.totalRuns ?? 0), weekFiveWeatherSession?.totalRuns ?? 0), weekFiveDecompositionSession?.totalRuns ?? 0),
+    sessionAdjustments: safeCount(safeCount(safeCount(safeCount(safeCount(safeCount(sessionAdjustments, weekFiveMonksSession ? safeCount(safeCount(weekFiveMonksSession.coverageFailures, weekFiveMonksSession.actionFailures), weekFiveMonksSession.validationFailures) : 0), weekFourBossSession ? safeCount(safeCount(weekFourBossSession.identityFailures, weekFourBossSession.branchFailures), weekFourBossSession.validationFailures) : 0), weekFourListSession ? safeCount(safeCount(weekFourListSession.listOrderFailures, weekFourListSession.loopValueFailures), weekFourListSession.validationFailures) : 0), weekFiveFunctionSession ? safeCount(safeCount(weekFiveFunctionSession.callFailures, weekFiveFunctionSession.bodyFailures), weekFiveFunctionSession.validationFailures) : 0), weekFiveWeatherSession ? safeCount(safeCount(weekFiveWeatherSession.callFailures, weekFiveWeatherSession.parameterFailures), weekFiveWeatherSession.validationFailures) : 0), weekFiveDecompositionSession ? safeCount(safeCount(weekFiveDecompositionSession.coordinatorFailures, weekFiveDecompositionSession.ownershipFailures), weekFiveDecompositionSession.validationFailures) : 0),
+    needsSupport: [...new Set([...missionSupport, ...sessionSupport, ...(weekFiveFunctionSession?.firstBlockingConcept ? [weekFiveFunctionSession.firstBlockingConcept] : []), ...(weekFiveWeatherSession?.firstBlockingConcept ? [weekFiveWeatherSession.firstBlockingConcept] : []), ...(weekFiveDecompositionSession?.firstBlockingConcept ? [weekFiveDecompositionSession.firstBlockingConcept] : [])])],
     ...(week !== 3 ? {} : {
       bajieJoining: {
         runs: bajieJoiningSession?.totalRuns ?? 0,
@@ -1401,6 +1489,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
         completedAt: progress.missions['w5-m2']?.completedAt ?? null,
       },
       weekFiveWeather: { runs:weekFiveWeatherSession?.totalRuns??0,callFailures:weekFiveWeatherSession?.callFailures??0,parameterFailures:weekFiveWeatherSession?.parameterFailures??0,validationFailures:weekFiveWeatherSession?.validationFailures??0,infrastructureFailures:weekFiveWeatherSession?.runnerInfrastructureFailures??0,observations:weekFiveWeatherSession?.conditionObservationUses.length??0,workSaved:progress.works['w5-m3-weather-parameter-record']!==undefined,proof:progress.missionCompletionEvidence['w5-m3']?.kind??'none',completedAt:progress.missions['w5-m3']?.completedAt??null},
+      weekFiveDecomposition: { runs:weekFiveDecompositionSession?.totalRuns??0,coordinatorFailures:weekFiveDecompositionSession?.coordinatorFailures??0,ownershipFailures:weekFiveDecompositionSession?.ownershipFailures??0,validationFailures:weekFiveDecompositionSession?.validationFailures??0,infrastructureFailures:weekFiveDecompositionSession?.runnerInfrastructureFailures??0,observations:weekFiveDecompositionSession?.conditionObservationUses.length??0,workSaved:progress.works['w5-m4-problem-decomposition-record']!==undefined,proof:progress.missionCompletionEvidence['w5-m4']?.kind??'none',completedAt:progress.missions['w5-m4']?.completedAt??null},
     }),
   };
 }

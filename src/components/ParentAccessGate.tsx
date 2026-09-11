@@ -112,7 +112,7 @@ export function ParentAccessGate({ record, saveRecord, children }: {
     observedRecordRef.current = record;
     const matchesAuthorizedRecord = record === authorizedRecordRef.current || record === locallySavedSourceRecordRef.current;
     if (isParentAccessUnset(record)) {
-      if (!allowed || previousRecord !== record || !matchesAuthorizedRecord) relock('setup');
+      if (previousRecord !== record || (allowed && !matchesAuthorizedRecord)) relock('setup');
       return;
     }
     if (allowed && !matchesAuthorizedRecord) relock('login');

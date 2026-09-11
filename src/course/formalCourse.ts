@@ -214,6 +214,15 @@ export const formalWeekFiveMissions: FormalMissionSpec[] = [
     ],
     hints: { observe: '逐次对照“传入值 → order → 实际记录”，找到第一次不一致。', think: '参数 order 每次接住新的传入值；函数体要使用它，结果才会跟着改变。', partial: '检查 record_weather(...) 里面使用的是固定文字，还是参数 order。' },
   }),
+  formalPythonMission('w5-m4', {
+    subtitle: '三个小记录组合作', objective: '用小函数分工，再让总函数按顺序组合五项故事记录',
+    canon: { chapters: [46], title: '第四十六回　外道弄强欺正法　心猿显圣灭诸邪', sourceUrl: 'https://zh.wikisource.org/wiki/西遊記/第046回' },
+    storyBeats: [
+      beat('五项故事记录', '坐禅、隔板猜物和后三项比试分别收进三个小记录组，再由总记录按顺序启动。'),
+      beat('固定原著回顾', '三位国师在后续比试中先后败亡，师徒得以继续西行。砍头、剖腹和油锅在本关只是亮色记录册中的故事标题。'),
+    ],
+    hints: { observe: '对照已保存的记录归属，先看哪一组收进了不属于它的故事。', think: '每个小函数只负责自己的部分；总函数再按顺序调用三组。', partial: '先核对当前失败小组的记录归属，再观察总记录启动了哪些组。' },
+  }),
 ];
 
 export function getFormalMission(id: string): FormalMissionSpec | undefined {

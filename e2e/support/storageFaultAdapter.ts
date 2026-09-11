@@ -773,6 +773,100 @@ function exactW5WeatherCompletionDelta(previous: ProgressV3, next: ProgressV3) {
 }
 
 
+function hasNoW5DecompositionPublication(progress: ProgressV3) {
+  return progress.missions['w5-m4'] === undefined
+    && progress.missionCompletionEvidence['w5-m4'] === undefined
+    && progress.works['w5-m4-problem-decomposition-record'] === undefined;
+}
+
+function exactW5DecompositionDraftDelta(previous: ProgressV3, next: ProgressV3) {
+  const prior = previous.sessions['w5-m4']; const candidate = next.sessions['w5-m4'];
+  if (!candidate || !hasNoW5DecompositionPublication(next) || candidate.lastRun !== null) return false;
+  if (!prior) return exactAfterAllowedDelta(previous, next, (expected) => { expected.sessions['w5-m4'] = structuredClone(candidate); });
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    const session = expected.sessions['w5-m4']!;
+    session.pythonCode = candidate.pythonCode;
+    session.lastCanonicalTrace = [];
+    session.lastWorkerTrace = [];
+    session.lastRun = null;
+    session.failureSnapshot = null;
+    session.conditionObservationUses = [];
+    session.lastRunAt = null;
+    session.savedAt = candidate.savedAt;
+  });
+}
+
+function exactW5DecompositionRunDelta(previous: ProgressV3, next: ProgressV3) {
+  const prior = previous.sessions['w5-m4']; const candidate = next.sessions['w5-m4'];
+  if (!prior || !candidate || !hasNoW5DecompositionPublication(next)) return false;
+  if (candidate.validationFailures === prior.validationFailures + 1) {
+    return exactAfterAllowedDelta(previous, next, (expected) => {
+      const session = expected.sessions['w5-m4']!;
+      session.validationFailures = candidate.validationFailures;
+      session.firstBlockingConcept = candidate.firstBlockingConcept;
+      session.savedAt = candidate.savedAt;
+    });
+  }
+  if (candidate.runnerInfrastructureFailures === prior.runnerInfrastructureFailures + 1
+    && (candidate.totalRuns === prior.totalRuns || candidate.totalRuns === prior.totalRuns + 1)) {
+    return exactAfterAllowedDelta(previous, next, (expected) => {
+      const session = expected.sessions['w5-m4']!;
+      session.runnerInfrastructureFailures = candidate.runnerInfrastructureFailures;
+      session.totalRuns = candidate.totalRuns;
+      session.savedAt = candidate.savedAt;
+    });
+  }
+  if (!candidate.lastRun || candidate.totalRuns !== prior.totalRuns + 1) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    const session = expected.sessions['w5-m4']!;
+    session.lastCanonicalTrace = structuredClone(candidate.lastCanonicalTrace);
+    session.lastWorkerTrace = structuredClone(candidate.lastWorkerTrace);
+    session.lastRun = structuredClone(candidate.lastRun);
+    session.failureSnapshot = structuredClone(candidate.failureSnapshot);
+    session.conditionObservationUses = [];
+    session.totalRuns = candidate.totalRuns;
+    session.coordinatorFailures = candidate.coordinatorFailures;
+    session.ownershipFailures = candidate.ownershipFailures;
+    session.firstBlockingConcept = candidate.firstBlockingConcept;
+    session.lastRunAt = candidate.lastRunAt;
+    session.savedAt = candidate.savedAt;
+  });
+}
+
+function exactW5DecompositionObservationDelta(previous: ProgressV3, next: ProgressV3) {
+  const prior = previous.sessions['w5-m4']; const candidate = next.sessions['w5-m4'];
+  const observation = candidate?.conditionObservationUses.at(-1);
+  if (!prior || !candidate || !observation || !prior.failureSnapshot || !hasNoW5DecompositionPublication(next)
+    || candidate.conditionObservationUses.length !== prior.conditionObservationUses.length + 1
+    || canonicalJson(candidate.conditionObservationUses.slice(0, -1)) !== canonicalJson(prior.conditionObservationUses)
+    || prior.conditionObservationUses.some((use) => use.snapshotId === observation.snapshotId)
+    || observation.snapshotId !== prior.failureSnapshot.snapshotId
+    || observation.pythonCode !== prior.pythonCode || observation.usedAt !== candidate.savedAt) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    const session = expected.sessions['w5-m4']!;
+    session.conditionObservationUses.push(structuredClone(observation));
+    session.savedAt = candidate.savedAt;
+  });
+}
+
+function exactW5DecompositionCompletionDelta(previous: ProgressV3, next: ProgressV3) {
+  const completion = next.missions['w5-m4'];
+  const evidence = next.missionCompletionEvidence['w5-m4'];
+  const work = next.works['w5-m4-problem-decomposition-record'];
+  const oldEvidence = previous.missionCompletionEvidence['w5-m4'];
+  const initial = previous.missions['w5-m4'] === undefined && oldEvidence === undefined
+    && previous.works['w5-m4-problem-decomposition-record'] === undefined;
+  const upgrade = previous.missions['w5-m4'] !== undefined && oldEvidence?.kind === 'legacy-replay-only'
+    && previous.works['w5-m4-problem-decomposition-record'] === undefined;
+  if (!completion || evidence?.kind !== 'formal-v3' || !work || (!initial && !upgrade)) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    if (initial) expected.missions['w5-m4'] = structuredClone(completion);
+    expected.missionCompletionEvidence['w5-m4'] = structuredClone(evidence);
+    expected.works['w5-m4-problem-decomposition-record'] = structuredClone(work);
+  });
+}
+
+
 function exactDraftDelta(previous: ProgressV3, next: ProgressV3) {
   const candidate = next.sessions['w1-m3'];
   if (!candidate || candidate.lastRun !== null || next.missions['w1-m3'] !== undefined) return false;
@@ -1304,40 +1398,45 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-w5-m1-draft' && exactW5MonksDraftDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m2-draft' && exactW5FunctionDraftDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m3-draft' && exactW5WeatherDraftDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w5-m4-draft' && exactW5DecompositionDraftDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m3-run' && exactW4BranchRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-run' && exactW4ListRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m5-run' && exactW4BossRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m1-run' && exactW5MonksRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m2-run' && exactW5FunctionRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m3-run' && exactW5WeatherRunDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w5-m4-run' && exactW5DecompositionRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m3-observation' && exactW4BranchObservationDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-observation' && exactW4ListObservationDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m5-observation' && exactW4BossObservationDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m1-observation' && exactW5MonksObservationDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m2-observation' && exactW5FunctionObservationDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m3-observation' && exactW5WeatherObservationDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w5-m4-observation' && exactW5DecompositionObservationDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m3-work' && exactW4BranchCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-work' && exactW4ListCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m5-work' && exactW4BossCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m1-work' && exactW5MonksCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m2-work' && exactW5FunctionCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m3-work' && exactW5WeatherCompletionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w5-m4-work' && exactW5DecompositionCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m3-completion' && exactW4BranchCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-completion' && exactW4ListCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m5-completion' && exactW4BossCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m1-completion' && exactW5MonksCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m2-completion' && exactW5FunctionCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m3-completion' && exactW5WeatherCompletionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w5-m4-completion' && exactW5DecompositionCompletionDelta(previous, progress)) return FAILURE;
     const advancedFailure = advancedStorageFaultHandler({ storage, progress });
     if (advancedFailure !== null) return advancedFailure;
     return null;
   },
   beforeProgressLoad: (storage) => {
     const mode = storage.getItem(MODE_KEY);
-    if (mode !== 'corrupt-regalia-current' && mode !== 'corrupt-advanced-current' && mode !== 'corrupt-horse-current' && mode !== 'corrupt-monkey-current' && mode !== 'corrupt-peach-current' && mode !== 'corrupt-boss-current' && mode !== 'corrupt-manor-current' && mode !== 'corrupt-cuilan-current' && mode !== 'corrupt-yunzhan-current' && mode !== 'corrupt-bajie-current' && mode !== 'corrupt-week-three-boss-current' && mode !== 'corrupt-week-four-mapping-current' && mode !== 'corrupt-w4-variable-current' && mode !== 'fail-w4-m3-corrupt-current' && mode !== 'corrupt-w5-m2-current' && mode !== 'corrupt-w5-m3-current') return;
+    if (mode !== 'corrupt-regalia-current' && mode !== 'corrupt-advanced-current' && mode !== 'corrupt-horse-current' && mode !== 'corrupt-monkey-current' && mode !== 'corrupt-peach-current' && mode !== 'corrupt-boss-current' && mode !== 'corrupt-manor-current' && mode !== 'corrupt-cuilan-current' && mode !== 'corrupt-yunzhan-current' && mode !== 'corrupt-bajie-current' && mode !== 'corrupt-week-three-boss-current' && mode !== 'corrupt-week-four-mapping-current' && mode !== 'corrupt-w4-variable-current' && mode !== 'fail-w4-m3-corrupt-current' && mode !== 'corrupt-w5-m2-current' && mode !== 'corrupt-w5-m3-current' && mode !== 'corrupt-w5-m4-current') return;
     const legal = storage.getItem(CURRENT_KEY);
     if (legal !== null) storage.setItem(SNAPSHOT_KEY, legal);
-    storage.setItem(CURRENT_KEY, mode === 'corrupt-regalia-current' ? '{broken w1-m3 current' : mode === 'corrupt-advanced-current' ? '{broken advanced current' : mode === 'corrupt-horse-current' ? '{broken w2-m1 current' : mode === 'corrupt-monkey-current' ? '{broken w2-m2 current' : mode === 'corrupt-peach-current' ? '{broken w2-m3 current' : mode === 'corrupt-boss-current' ? '{broken w2-m5 current' : mode === 'corrupt-manor-current' ? '{broken w3-m1 current' : mode === 'corrupt-cuilan-current' ? '{broken w3-m2 current' : mode === 'corrupt-yunzhan-current' ? '{broken w3-m3 current' : mode === 'corrupt-bajie-current' ? '{broken w3-m4 current' : mode === 'corrupt-week-three-boss-current' ? '{broken w3-m5 current' : mode === 'corrupt-w4-variable-current' ? '{broken w4-m2 current' : mode === 'fail-w4-m3-corrupt-current' ? '{broken w4-m3 current' : mode === 'corrupt-w5-m2-current' ? '{broken w5-m2 current' : mode === 'corrupt-w5-m3-current' ? '{broken w5-m3 current' : '{broken w4-m1 current');
+    storage.setItem(CURRENT_KEY, mode === 'corrupt-regalia-current' ? '{broken w1-m3 current' : mode === 'corrupt-advanced-current' ? '{broken advanced current' : mode === 'corrupt-horse-current' ? '{broken w2-m1 current' : mode === 'corrupt-monkey-current' ? '{broken w2-m2 current' : mode === 'corrupt-peach-current' ? '{broken w2-m3 current' : mode === 'corrupt-boss-current' ? '{broken w2-m5 current' : mode === 'corrupt-manor-current' ? '{broken w3-m1 current' : mode === 'corrupt-cuilan-current' ? '{broken w3-m2 current' : mode === 'corrupt-yunzhan-current' ? '{broken w3-m3 current' : mode === 'corrupt-bajie-current' ? '{broken w3-m4 current' : mode === 'corrupt-week-three-boss-current' ? '{broken w3-m5 current' : mode === 'corrupt-w4-variable-current' ? '{broken w4-m2 current' : mode === 'fail-w4-m3-corrupt-current' ? '{broken w4-m3 current' : mode === 'corrupt-w5-m2-current' ? '{broken w5-m2 current' : mode === 'corrupt-w5-m3-current' ? '{broken w5-m3 current' : mode === 'corrupt-w5-m4-current' ? '{broken w5-m4 current' : '{broken w4-m1 current');
     storage.setItem(MODE_KEY, 'off');
   },
 };

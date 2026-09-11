@@ -71,6 +71,8 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   const functionProof = progress.missionCompletionEvidence['w5-m2'];
   const weatherSession = progress.sessions['w5-m3'];
   const weatherProof = progress.missionCompletionEvidence['w5-m3'];
+  const decompositionSession = progress.sessions['w5-m4'];
+  const decompositionProof = progress.missionCompletionEvidence['w5-m4'];
   const listSession = progress.sessions['w4-m4'];
   const listProof = progress.missionCompletionEvidence['w4-m4'];
   const blockerLabels = {
@@ -178,6 +180,13 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     <p>主动观察 {weatherSession?.conditionObservationUses.length ?? 0} 次。</p>
     {weatherProof?.kind === 'formal-v3' && progress.works['w5-m3-weather-parameter-record'] ? <p>函数参数正式证明及祈雨记录作品已保存</p> : null}
     {weatherProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式函数参数证明</p> : null}
+  </section><section aria-label="第五周问题分解学习摘要">
+    <h2>第五周问题分解学习摘要</h2>
+    <p>已运行 {decompositionSession?.totalRuns ?? 0} 次；记录归属调整 {decompositionSession?.ownershipFailures ?? 0} 次，总记录调用调整 {decompositionSession?.coordinatorFailures ?? 0} 次。</p>
+    <p>结构验证未通过 {decompositionSession?.validationFailures ?? 0} 次；运行环境故障 {decompositionSession?.runnerInfrastructureFailures ?? 0} 次（不计入学习困难）。</p>
+    <p>主动观察 {decompositionSession?.conditionObservationUses.length ?? 0} 次。</p>
+    {decompositionProof?.kind === 'formal-v3' && progress.works['w5-m4-problem-decomposition-record'] ? <p>问题分解正式证明及故事记录作品已保存</p> : null}
+    {decompositionProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式问题分解证明</p> : null}
   </section></>
 }
 

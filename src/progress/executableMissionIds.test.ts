@@ -28,6 +28,7 @@ describe('executable mission ids', () => {
       'w5-m1',
       'w5-m2',
       'w5-m3',
+      'w5-m4',
     ]) {
       expect(isExecutableMissionId(id)).toBe(true);
     }
@@ -36,13 +37,17 @@ describe('executable mission ids', () => {
       expect(isExecutableMissionId(id)).toBe(false);
     }
 
-    for (const id of ['w5-m4']) {
+    for (const id of ['w5-m5']) {
       expect(isExecutableMissionId(id)).toBe(false);
     }
   });
 
   it('promotes W5-M3 to the executable Python mission registry', () => {
     expect(isExecutableMissionId('w5-m3')).toBe(true);
+  });
+
+  it('promotes W5-M4 to the executable Python mission registry', () => {
+    expect(isExecutableMissionId('w5-m4')).toBe(true);
   });
 
   it('promotes W4-M3 to the executable Python mission registry', () => {

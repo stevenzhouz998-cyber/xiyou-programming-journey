@@ -26,6 +26,7 @@ import {
   verifyRequiredWeekFourVariableInventory,
   verifyRequiredWeekFiveTempleInventory,
   verifyRequiredWeekFiveWeatherInventory,
+  verifyRequiredWeekFiveDecompositionInventory,
   WEEK_FOUR_VARIABLE_REQUIRED_ASSETS,
   WEEK_FOUR_VARIABLE_SCENE_SLOT,
   WEEK_FOUR_SHARED_BACKGROUND_SLOT,
@@ -49,6 +50,16 @@ test('W5-M3 weather inventory binds one generated background to WeekFiveWeatherS
   const source = "import { assetUrl } from '../utils/assets'; export const View=()=> <img src={assetUrl('/assets/week-five-weather/rain-altar-background.webp')} />;";
   assert.equal(verifyRequiredWeekFiveWeatherInventory({ manifestRows, publicFiles, promptRecords, source }).assetCount, 1);
   assert.throws(() => verifyRequiredWeekFiveWeatherInventory({ manifestRows, publicFiles, promptRecords, source: `${source}<img />` }), /approved background/i);
+});
+
+test('W5-M4 contest courtyard inventory binds one generated background to WeekFiveDecompositionScene', () => {
+  const assetId = 'assets/week-five-trials/contest-courtyard-background.webp';
+  const manifestRows = [row({ assetId, purpose: 'Contest courtyard record book', promptOrSourceReference: '[Prompt W5M4-001](#prompt-w5m4-001-contest-courtyard)', dimensions: '1536x1024', screenSlots: 'w5-m4 WeekFiveDecompositionScene' })];
+  const publicFiles = [file({ path: assetId, width: 1536, height: 1024 })];
+  const promptRecords = [promptRecord({ heading: 'Prompt W5M4-001 contest courtyard', anchor: '#prompt-w5m4-001-contest-courtyard', prompt: "Use case: illustration-story\nStyle/medium: Bright premium 3D children's Chinese storybook style" })];
+  const source = "import { assetUrl } from '../utils/assets'; export const View=()=> <img src={assetUrl('/assets/week-five-trials/contest-courtyard-background.webp')} />;";
+  assert.equal(verifyRequiredWeekFiveDecompositionInventory({ manifestRows, publicFiles, promptRecords, source }).assetCount, 1);
+  assert.throws(() => verifyRequiredWeekFiveDecompositionInventory({ manifestRows, publicFiles, promptRecords, source: `${source}<img />` }), /approved background/i);
 });
 
 const sha = 'a'.repeat(64);
