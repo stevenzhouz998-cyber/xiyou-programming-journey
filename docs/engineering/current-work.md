@@ -3,20 +3,17 @@
 更新时间：2026-09-11。此索引定位现场，不代表全项目完成，也不是提交或部署授权。
 
 - 当前工作区：`/Users/macmini-zz/.codex/worktrees/5806/少儿编程学习网页`，分支 `codex/w4-m3-branch-structure`。
-- Git基线：`37354419b88728b4bcd9102c92e2fda3dfa76b36`（已推送W4-M5）。其上实现W5-M1；用户已授权提交推送，最终提交号和推送结果见Git记录及本次临时交接文件。恢复前重新检查HEAD与工作树。
-- 最新任务：W5-M1「解救僧众」按用户批准的「逐人解困」实施，用户授权代理决定后续细节。真实Python循环体缩进、逐人两步动作、教学抽象名单、零惩罚失败、Progress revision13及独立作品/正式证明、W5-M2解锁。
-- [规格](../superpowers/specs/2026-09-11-week-five-monks-loop-design.md)；[验收与剩余边界](../verification/week-five-monks-loop.md)。W5-M1达到本地 **One-level playable**：全量unit1867/1867，新关及W4-M5五端联合61/61（新关31/31，391.757秒），类型/构建预算/素材通过。未宣称全站或第五周系统完成。
-- 第四周成果与正式证明保留：[W4-M5验收](../verification/week-four-verification-station.md)；[独立第四周审计](../verification/2026-09-11-week-four-audit.md)是本次开始前已有的未跟踪文件，保留未覆盖。
-- 用户于2026-09-11进一步明确授权本关交接及commit、push到当前分支；未授权merge或deploy。
-- 主目录 `/Users/macmini-zz/Documents/少儿编程学习网页` 仍是旧玩家代码入口，不在那里继续实现。保留既有node_modules、regression-results/、visual-results/及他人改动。
-- 预览4176指向本工作区dist；Codex浏览器0/30空档显示W4-M5正式前置锁定。`artifacts/w5m1-acceptance-final`保存隔离前置的真实测试截图及性能记录，不是用户学习存档。
+- Git 基线 HEAD：`fba30f246fe5ad7b71e87beb9ec72ef35d04ddda`。该提交已包含完成并提交推送的 W5-M1；W5-M2 在此基线上实现；用户随后授权本关提交与推送，最终提交号及远端结果以 Git 和系统临时交接文件为准。
+- 当前成果：W5-M2「三清观」以无参函数教授“定义只是准备，调用才执行”。真实 Worker 执行、逐步轨迹、零惩罚失败、revision 14、作品/formal-v3、恢复/迁移/家长摘要及 W5-M3 解锁均已闭合。
+- [规格](../superpowers/specs/2026-09-11-week-five-function-call-design.md)；[验收与剩余边界](../verification/week-five-function-call.md)。W5-M2 达到本地 **One-level playable**：全量 unit 1902/1902；W5-M1 与 W5-M2 五端完整联合 56/56（W5-M2 25，W5-M1 31，364.708 秒）；桌面故障矩阵 16/16；类型、生产构建、预算、素材合同及素材发布门禁通过。
+- 用户于 2026-09-11 另行明确授权 W5-M2 交接、commit 和 push 到当前分支；未授权 merge 或 deploy。
+- W5-M1 验收见[逐人解困](../verification/week-five-monks-loop.md)；开始本次任务前已有的未跟踪[第四周审计](../verification/2026-09-11-week-four-audit.md)已保留、未覆盖。
+- 最终浏览器截图和指标在 `artifacts/w5m2-acceptance-final/`；独立视觉/StrictMode 与 Python oracle 在 `artifacts/w5m2-independent/`。这些本地 artifacts 不作为 Git 交付内容。
 
 ## 恢复与下一关
 
-先检查Git状态、HEAD、当前规格和涉及文件，有变化才扩大检查。[验证分层](verification.md)继续适用；不要为恢复机械重跑联合测试。当前实现没有未闭合的本关阻塞。
-
-后续从W5-M2「三清观」函数定义目标开始；W5-M2到M5目前仍是兼容旧版关卡，解锁不代表正式可玩。保持已确认W5-M1玩法和所有此前证明。各关Worker生命周期继续独立，不为少量重复扩展全局存档重构。
+恢复时先核对 HEAD、工作树、本规格与验收记录。最终证据使用输入指纹 `9f07abb83625…`。下一关是 W5-M3「祈雨赌胜」的函数参数；保持 W5-M2 的定义/调用证明，不在本关倒灌参数概念。W5-M3 到 M5 当前仍是兼容旧内容，解锁不代表正式可玩。
 
 ## 全站边界
 
-历史W4-M3全站473/508、W4-M2旧440/471与W3-M5 parent稳定性问题不是本次新测结果。本次未全站浏览器、人工屏幕阅读器或公开部署验收。周系统、30关全内容及商业完成仍为not complete。
+本次没有运行全站浏览器、人工屏幕阅读器或公开部署验收。第五周 System loop complete、30 关 Full-content verified、全站通过与 Commercial production complete 均为 **not complete**。

@@ -67,6 +67,8 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   const bossProof = progress.missionCompletionEvidence['w4-m5'];
   const monksSession = progress.sessions['w5-m1'];
   const monksProof = progress.missionCompletionEvidence['w5-m1'];
+  const functionSession = progress.sessions['w5-m2'];
+  const functionProof = progress.missionCompletionEvidence['w5-m2'];
   const listSession = progress.sessions['w4-m4'];
   const listProof = progress.missionCompletionEvidence['w4-m4'];
   const blockerLabels = {
@@ -160,6 +162,13 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     <p>结构验证未通过 {monksSession?.validationFailures ?? 0} 次；运行环境故障 {monksSession?.runnerInfrastructureFailures ?? 0} 次（不计入学习困难）。</p>
     {monksProof?.kind === 'formal-v3' && progress.works['w5-m1-monks-rescue-record'] ? <p>逐人解困正式证明与僧众解困记录已保存</p> : null}
     {monksProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式解困循环证明</p> : null}
+  </section><section aria-label="第五周函数学习摘要">
+    <h2>第五周函数学习摘要</h2>
+    <p>已运行 {functionSession?.totalRuns ?? 0} 次；函数调用调整 {functionSession?.callFailures ?? 0} 次，函数体边界或顺序调整 {functionSession?.bodyFailures ?? 0} 次。</p>
+    <p>结构验证未通过 {functionSession?.validationFailures ?? 0} 次；运行环境故障 {functionSession?.runnerInfrastructureFailures ?? 0} 次（不计入学习困难）。</p>
+    <p>主动观察 {functionSession?.conditionObservationUses.length ?? 0} 次。</p>
+    {functionProof?.kind === 'formal-v3' && progress.works['w5-m2-sanqing-function-record'] ? <p>函数定义与调用正式证明及三清观记录作品已保存</p> : null}
+    {functionProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式函数调用证明</p> : null}
   </section></>
 }
 

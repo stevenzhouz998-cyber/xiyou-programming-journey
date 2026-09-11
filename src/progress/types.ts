@@ -106,6 +106,9 @@ import type {
   WeekFiveMonksRunResult,
   WeekFiveMonksTraceItem,
 } from '../engine/weekFiveMonksContract';
+import type { WeekFiveFunctionMissionSession } from './weekFiveFunctionSession';
+export type { WeekFiveFunctionMissionSession } from './weekFiveFunctionSession';
+import type { WeekFiveFunctionRunResult, WeekFiveFunctionTraceItem } from '../engine/weekFiveFunctionContract';
 
 export interface MissionProgress {
   status: 'completed';
@@ -513,6 +516,28 @@ export interface WeekFiveMonksWorkV1 {
   createdAt: string;
   verifiedAt: string;
 }
+export type WeekFiveFunctionCompletionEvidence =
+  | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 1; sourceSchemaRevision: null }
+  | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 2; sourceSchemaRevision: 1 }
+  | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 3; sourceSchemaRevision: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 }
+  | {
+    kind: 'formal-v3'; completedAt: string; verifiedAt: string; pythonCode: string;
+    canonicalTrace: WeekFiveFunctionTraceItem[]; workerTrace: WeekFiveFunctionTraceItem[];
+    run: WeekFiveFunctionRunResult; workId: 'w5-m2-sanqing-function-record';
+  };
+
+export interface WeekFiveFunctionWorkV1 {
+  kind: 'python-function-call-v1';
+  workId: 'w5-m2-sanqing-function-record';
+  missionId: 'w5-m2';
+  title: string;
+  pythonCode: string;
+  canonicalTrace: WeekFiveFunctionTraceItem[];
+  workerTrace: WeekFiveFunctionTraceItem[];
+  run: WeekFiveFunctionRunResult;
+  createdAt: string;
+  verifiedAt: string;
+}
 
 export interface MissionCompletionEvidenceV1 {
   'w3-m1'?: ManorHelpCompletionEvidence;
@@ -526,6 +551,7 @@ export interface MissionCompletionEvidenceV1 {
   'w4-m4'?: WeekFourListCompletionEvidence;
   'w4-m5'?: WeekFourBossCompletionEvidence;
   'w5-m1'?: WeekFiveMonksCompletionEvidence;
+  'w5-m2'?: WeekFiveFunctionCompletionEvidence;
 }
 
 export interface MissionSessionById {
@@ -550,6 +576,7 @@ export interface MissionSessionById {
   'w4-m4': WeekFourListMissionSession;
   'w4-m5': WeekFourBossMissionSession;
   'w5-m1': WeekFiveMonksMissionSession;
+  'w5-m2': WeekFiveFunctionMissionSession;
 }
 
 export type ExecutableMissionId = keyof MissionSessionById;
@@ -559,7 +586,7 @@ export type MissionSessions = { [MissionId in keyof MissionSessionById]?: Missio
 
 export interface ProgressV3 {
   version: 3;
-  schemaRevision: 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+  schemaRevision: 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
   learnerName: string;
   missions: Record<string, MissionProgress>;
   settings: ProgressSettings;
@@ -579,6 +606,7 @@ export interface ProgressV3 {
     'w4-m4-list-loop-record': WeekFourListWorkV1;
     'w4-m5-verification-report': WeekFourBossWorkV1;
     'w5-m1-monks-rescue-record': WeekFiveMonksWorkV1;
+    'w5-m2-sanqing-function-record': WeekFiveFunctionWorkV1;
   }>;
   savedAt: string;
 }

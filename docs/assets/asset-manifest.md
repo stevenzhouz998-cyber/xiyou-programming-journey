@@ -43,6 +43,7 @@ This manifest gates the formal Dragon Palace media in `public/assets/dragon-pala
 | assets/week-four-branches/old-woman-visitor.webp | b1cf7db437613bbfeb6cea555d7f9b9dca53b2cf27df8d81ccea19a0af601f91 | Transparent, child-safe elderly mountain visitor for the W4-M3 public identity-branch scene; [Visual evidence](../verification/week-four-python-branch-structure-visual-evidence.md) | OpenAI built-in image_gen | [Prompt W4M3-001](#prompt-w4m3-001-old-woman-visitor) | 1024x1024 | generated in-project with built-in image_gen; provenance verified | w4-m3 WeekFourBranchScene | visual-qa-passed |
 | assets/week-four-branches/branch-route-states.webp | 3bdf6244e763333295fcfd6de6e3a6799222bf05f26695a61dfe1126d88dd832 | Transparent three-cell waiting, mutually-exclusive route conflict, and single safe-route confirmation sprite; [Visual evidence](../verification/week-four-python-branch-structure-visual-evidence.md) | OpenAI built-in image_gen | [Prompt W4M3-002](#prompt-w4m3-002-branch-route-states) | 1536x512 | generated in-project with built-in image_gen; provenance verified | w4-m3 WeekFourBranchScene | visual-qa-passed |
 | assets/week-five-monks/chechi-rescue-background.webp | ecc4605f5e41432149ed547cdf4c15f9be592c83a9594a97c926771b7faecece | Chechi rescue story setting with Wukong and three practice monks | OpenAI built-in image_gen | [Prompt W5M1-001](#prompt-w5m1-001-chechi-rescue) | 1536x1024 | generated in-project with built-in image_gen; provenance verified | w5-m1 WeekFiveMonksScene | visual-qa-passed |
+| assets/week-five-temple/sanqing-courtyard-background.webp | 6e6896b92994405b2ce76e16877285fa1978cbaee875d79c88e6063fe9df5c54 | Sanqing Temple story setting, independent of executed learning records | OpenAI built-in image_gen | [Prompt W5M2-001](#prompt-w5m2-001-sanqing-courtyard) | 1536x1024 | generated in-project with built-in image_gen; provenance verified | w5-m2 WeekFiveTempleScene | visual-qa-passed |
 
 ## Prompt records
 
@@ -624,6 +625,21 @@ This section is deliberately outside the Dragon Palace shipping table and is not
 | assets/audio/welcome.m4a | 1d3c70c7d1cacede8d7ad6b36b9fc5fc1f85bbb9c8f1ab473eff0e9bb7f08b10 | Existing homepage audio referenced by the current application; no source derivation recovered in commercial-foundation evidence | Original generation prompt/source reference and license missing | not release-approved; not visual/asset QA passed |
 | assets/audio/success.m4a | abe7df3e33a34401ba82e49d290b4ffce007ce00f07c19edb8285279bb53ea90 | Existing mission-success audio referenced by the current application; no source derivation recovered in commercial-foundation evidence | Original generation prompt/source reference and license missing | not release-approved; not visual/asset QA passed |
 | assets/audio/boss.m4a | 96df6b02db847c332e2c1915aced41df73f6f15a4848abe36f1524873015e578 | Existing boss-success audio referenced by the current application; no source derivation recovered in commercial-foundation evidence | Original generation prompt/source reference and license missing | not release-approved; not visual/asset QA passed |
+
+### Prompt W5M2-001 sanqing-courtyard
+
+```text
+Use case: illustration-story
+Asset type: W5-M2 Sanqing Temple background for a commercial children's Python coding game, landscape 1536x1024
+Primary request: A polished bright 3D Chinese children's storybook illustration of a peaceful traditional Chinese Daoist temple courtyard at early night, inspired by Journey to the West, serving as an atmospheric story background.
+Scene/backdrop: Graceful red wooden columns and jade green tiled temple roofs, cream stone terrace, warm golden lantern light, soft blue twilight sky and a small moon. Respectful beautiful traditional architecture. Wide clear foreground stone courtyard, temple hall in middle distance.
+Subject: Environment only, no people, no statues, no supernatural actions or completed story events baked into image.
+Style/medium: Rounded friendly premium 3D children's storybook game artwork, luminous warm welcoming atmosphere, detailed but visually calm. Existing game direction uses jade, cinnabar red, cream stone, soft gold, gentle pastel foliage.
+Composition/framing: Wide readable composition, clear silhouettes at phone size, spacious foreground, no UI panels. Art fills frame.
+Constraints: No text, no letters, no pseudo-writing, no glyphs, no plaques with marks, no logos, no watermark, no border, no icons. Child-safe, no scary darkness, no combat, no religious caricature.
+```
+
+Generated 2026-09-11 with built-in image_gen. Original source copied unchanged to `assets/source/visual/week-five-temple/sanqing-courtyard-background.png` from `exec-b3f23b91-a205-49d9-90bb-062f4b120096.png`. Existing Sharp 0.35.3 performed format-only WebP encoding at quality86/effort6 without crop, redraw or compositing. Output 1536x1024 RGB, 247316 bytes; original image visually inspected for style, readable composition and absence of writing. Integrated default/failure/success and 1440/768/390/320 Chromium viewport screenshots were independently inspected in `artifacts/w5m2-independent/`; image is legible, style-consistent and unclipped, without horizontal page overflow. This viewport inspection is distinct from the complete five-project acceptance matrix.
 
 ### Prompt W5M1-001 chechi-rescue
 

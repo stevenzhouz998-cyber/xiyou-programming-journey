@@ -197,6 +197,14 @@ export const formalWeekFiveMissions: FormalMissionSpec[] = [
     storyBeats: [beat('僧众受役', '车迟国僧众被迫做苦工，悟空前去了解情况。'), beat('悟空解救', '悟空帮助僧众脱离役使。三位编号与逐人登记是本关教学抽象，不是原著人数或具体流程。')],
     hints: {observe: '查看实际记录：哪些人执行了动作，分别执行几次？', think: 'for 里的语句逐人重复；循环外的语句只在循环结束后执行一次。', partial: '对照两条动作的代码位置、执行对象和先后，找出有人未能完成两步的原因。'},
   }),
+  formalPythonMission('w5-m2', {
+    subtitle: '定义之后要调用', objective: '定义三清观记录函数，并调用一次让两步真正执行', canon: { chapters: [44, 45], title: '第四十四至四十五回　三清观夜入与说明来历', sourceUrl: 'https://zh.wikisource.org/wiki/西遊記/第045回' },
+    storyBeats: [
+      beat('夜入三清观', '悟空、八戒、沙僧夜入三清观。本关两条记录动作是教学回顾抽象，不是原著中的记录手续。'),
+      beat('说明来历', '悟空随后说明他们是西行取经的僧众；故事接着进入车迟国祈雨比试。'),
+    ],
+    hints: { observe: '看看函数被调用了几次，以及两条记录是在函数里面还是外面执行。', think: 'def 只准备一组步骤；运行到函数名加括号时，函数体才会执行。', partial: '检查定义之后是否有且只有一行 record_sanqing()。' },
+  }),
 ];
 
 export function getFormalMission(id: string): FormalMissionSpec | undefined {

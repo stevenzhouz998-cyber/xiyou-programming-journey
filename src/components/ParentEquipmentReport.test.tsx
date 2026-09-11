@@ -17,6 +17,7 @@ import { SOLVED_WEEK_FOUR_VARIABLE_PYTHON, parseWeekFourVariablePython } from '.
 import { createWeekFourVariableSession, recordWeekFourVariableRun, updateWeekFourVariableCode } from '../progress/weekFourVariableSession'
 import { SOLVED_WEEK_FOUR_BRANCH_PYTHON, parseWeekFourBranchPython } from '../engine/weekFourBranchPythonGrammar'
 import { createWeekFourBranchSession, recordWeekFourBranchRun, updateWeekFourBranchCode } from '../progress/weekFourBranchSession'
+import { createWeekFiveFunctionSession } from '../progress/weekFiveFunctionSession'
 import { ParentEquipmentReport } from './ParentEquipmentReport'
 
 describe('ParentEquipmentReport', () => {
@@ -202,5 +203,26 @@ describe('ParentEquipmentReport', () => {
     expect(report).toHaveTextContent('运行环境故障 4 次（不计入学习困难）')
     expect(report).toHaveTextContent('正式分支结构证明与作品已保存')
     expect(report).not.toHaveTextContent(/if identity|else:|indent|pythonCode|source|trace|workId|snapshotId|cardId|w4-m3-branch-structure-record|白骨精/)
+  })
+
+  it('summarizes W5 function learning without exposing the child code, trace, or answer tokens', () => {
+    const progress = createInitialProgress()
+    progress.sessions['w5-m2'] = {
+      ...createWeekFiveFunctionSession('2026-09-11T00:00:00.000Z'),
+      totalRuns: 6, callFailures: 2, bodyFailures: 1, validationFailures: 3, runnerInfrastructureFailures: 4,
+      conditionObservationUses: [{ snapshotId: 'w5-m2:call-missing', pythonCode: 'hidden', canonicalTrace: [], workerTrace: [], run: {} as never, usedAt: '2026-09-11T00:00:01.000Z' }],
+    }
+    progress.missionCompletionEvidence['w5-m2'] = { kind: 'formal-v3' } as never
+    progress.works['w5-m2-sanqing-function-record'] = { kind: 'python-function-call-v1' } as never
+    render(<ParentEquipmentReport progress={progress} />)
+    const report = screen.getByRole('region', { name: '第五周函数学习摘要' })
+    expect(report).toHaveTextContent('已运行 6 次')
+    expect(report).toHaveTextContent('函数调用调整 2 次')
+    expect(report).toHaveTextContent('函数体边界或顺序调整 1 次')
+    expect(report).toHaveTextContent('结构验证未通过 3 次')
+    expect(report).toHaveTextContent('运行环境故障 4 次（不计入学习困难）')
+    expect(report).toHaveTextContent('主动观察 1 次')
+    expect(report).toHaveTextContent('函数定义与调用正式证明及三清观记录作品已保存')
+    expect(report).not.toHaveTextContent(/record_sanqing|record_arrival|record_names|pythonCode|trace|snapshotId|w5-m2-sanqing-function-record/)
   })
 })

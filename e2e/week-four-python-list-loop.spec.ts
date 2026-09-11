@@ -89,7 +89,7 @@ test('@w4-m4-full actual loop, independent bugs, refresh, readonly replay, paren
   await setCode(page,'appearances = []\nfor item in appearances:\n    print(item)');await run(page);expect((await session(page)).lastWorkerTrace).toHaveLength(1);
   await setCode(page,'import os');const count=(await session(page)).totalRuns;await run(page);expect((await session(page)).validationFailures).toBe(1);expect((await session(page)).totalRuns).toBe(count);await expect(page.getByLabel('W4-M4 Python 代码')).toBeFocused();
   await setCode(page,SOLVED);await success(page);
-  const completed=await saved(page);expect(completed.schemaRevision).toBe(13);expect(completed.missionCompletionEvidence['w4-m4'].kind).toBe('formal-v3');expect(completed.works['w4-m4-list-loop-record'].run.completed).toBe(true);
+  const completed=await saved(page);expect(completed.schemaRevision).toBe(14);expect(completed.missionCompletionEvidence['w4-m4'].kind).toBe('formal-v3');expect(completed.works['w4-m4-list-loop-record'].run.completed).toBe(true);
   for(const id of ['w4-m1','w4-m2','w4-m3']){expect(completed.sessions[id]).toEqual(before.sessions[id]);expect(completed.missionCompletionEvidence[id]).toEqual(before.missionCompletionEvidence[id]);}
   await page.reload();await open(page);const replay=await saved(page);await page.screenshot({path:info.outputPath('w4m4-proven.png'),fullPage:true});expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.getByLabel('固定原著尾声')).toBeVisible();await success(page);expect(await saved(page)).toEqual(replay);

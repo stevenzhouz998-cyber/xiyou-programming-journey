@@ -24,11 +24,21 @@ import {
   verifyRequiredWeekThreeBossInventory,
   verifyRequiredWeekFourMappingInventory,
   verifyRequiredWeekFourVariableInventory,
+  verifyRequiredWeekFiveTempleInventory,
   WEEK_FOUR_VARIABLE_REQUIRED_ASSETS,
   WEEK_FOUR_VARIABLE_SCENE_SLOT,
   WEEK_FOUR_SHARED_BACKGROUND_SLOT,
   verifyAssetManifest,
 } from './check-asset-manifest.mjs';
+
+test('W5-M2 temple inventory binds one generated background to WeekFiveTempleScene', () => {
+  const assetId = 'assets/week-five-temple/sanqing-courtyard-background.webp';
+  const manifestRows = [row({ assetId, purpose: 'Sanqing courtyard', promptOrSourceReference: '[Prompt W5M2-001](#prompt-w5m2-001-sanqing-courtyard)', dimensions: '1536x1024', screenSlots: 'w5-m2 WeekFiveTempleScene' })];
+  const publicFiles = [file({ path: assetId, width: 1536, height: 1024 })];
+  const promptRecords = [promptRecord({ heading: 'Prompt W5M2-001 sanqing courtyard', anchor: '#prompt-w5m2-001-sanqing-courtyard', prompt: "Use case: illustration-story\nStyle/medium: polished bright 3D Chinese children's storybook game" })];
+  const source = "import { assetUrl } from '../utils/assets'; export const View=()=> <img src={assetUrl('/assets/week-five-temple/sanqing-courtyard-background.webp')} />;";
+  assert.equal(verifyRequiredWeekFiveTempleInventory({ manifestRows, publicFiles, promptRecords, source }).assetCount, 1);
+});
 
 const sha = 'a'.repeat(64);
 const artDirection = 'commercial children’s learning game, refined Chinese ink-and-color illustration, Journey to the West Dragon Palace, warm jade/cinnabar/gold palette, readable silhouettes, no text, no logo, no emoji, no UI frame.';

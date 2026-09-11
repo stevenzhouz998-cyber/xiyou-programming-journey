@@ -1,12 +1,15 @@
 import { getWeekFourListAccess } from '../progress/progress';
 import { getWeekFourBossAccess } from '../progress/progress';
 import { getWeekFiveMonksAccess } from '../progress/progress';
+import { getWeekFiveFunctionAccess } from '../progress/progress';
 import type { WeekFourListExperienceProps } from './WeekFourListExperience';
 import type { WeekFourBossExperienceProps } from './WeekFourBossExperience';
 import type { WeekFiveMonksExperienceProps } from './WeekFiveMonksExperience';
+import type { WeekFiveFunctionExperienceProps } from './WeekFiveFunctionExperience';
 import { WeekFourListAccessNotice } from './WeekFourListAccessNotice';
 import { WeekFourBossAccessNotice } from './WeekFourBossAccessNotice';
 import { WeekFiveMonksAccessNotice } from './WeekFiveMonksAccessNotice';
+import { WeekFiveFunctionAccessNotice } from './WeekFiveFunctionAccessNotice';
 import {
   lazy,
   Suspense,
@@ -143,6 +146,10 @@ const loadWeekFiveMonksExperience = () => import('./WeekFiveMonksExperience').th
 const loadWeekFiveMonksExperienceRetry: () => Promise<{ default: ComponentType<WeekFiveMonksExperienceProps> }> = () =>
   // @ts-expect-error Vite treats this literal query as a second statically bundled module URL.
   import('./WeekFiveMonksExperience?retry=1').then((module) => ({ default: module.WeekFiveMonksExperience }));
+const loadWeekFiveFunctionExperience = () => import('./WeekFiveFunctionExperience').then((module) => ({ default: module.WeekFiveFunctionExperience }));
+const loadWeekFiveFunctionExperienceRetry: () => Promise<{ default: ComponentType<WeekFiveFunctionExperienceProps> }> = () =>
+  // @ts-expect-error Vite treats this literal query as a second statically bundled module URL.
+  import('./WeekFiveFunctionExperience?retry=1').then((module) => ({ default: module.WeekFiveFunctionExperience }));
 
 export function FourSeasRegaliaRouteBoundary({
   loader = loadFourSeasRegaliaExperience,
@@ -416,6 +423,12 @@ export function WeekFiveMonksRouteBoundary({ loader = loadWeekFiveMonksExperienc
   const retry = () => setRetryGeneration((generation) => generation + 1);
   return <LazySectionBoundary key={retryGeneration} label="逐项观察体验" reloadPage={retry}><Suspense fallback={<p className="mission-tools-loading" role="status">逐项观察体验加载中，请稍候……</p>}><Experience {...props} /></Suspense></LazySectionBoundary>;
 }
+export function WeekFiveFunctionRouteBoundary({ loader = loadWeekFiveFunctionExperience, reloadPage: _reloadPage, ...props }: WeekFiveFunctionExperienceProps & { loader?: () => Promise<{ default: ComponentType<WeekFiveFunctionExperienceProps> }>; reloadPage?: () => void }) {
+  const [retryGeneration, setRetryGeneration] = useState(0);
+  const selectedLoader = loader === loadWeekFiveFunctionExperience && retryGeneration > 0 ? loadWeekFiveFunctionExperienceRetry : loader;
+  const Experience = useMemo(() => lazy(selectedLoader), [selectedLoader, retryGeneration]);
+  return <LazySectionBoundary key={retryGeneration} label="三清观函数体验" reloadPage={() => setRetryGeneration((value) => value + 1)}><Suspense fallback={<p className="mission-tools-loading" role="status">三清观函数体验加载中，请稍候……</p>}><Experience {...props} /></Suspense></LazySectionBoundary>;
+}
 
 function playAudio(path: string, muted: boolean) {
   if (muted || typeof Audio === "undefined") return;
@@ -595,10 +608,12 @@ interface MissionPageProps {
   weekFourListLoader?: () => Promise<{ default: ComponentType<WeekFourListExperienceProps> }>;
   weekFourBossLoader?: () => Promise<{ default: ComponentType<WeekFourBossExperienceProps> }>;
   weekFiveMonksLoader?: () => Promise<{ default: ComponentType<WeekFiveMonksExperienceProps> }>;
+  weekFiveFunctionLoader?: () => Promise<{ default: ComponentType<WeekFiveFunctionExperienceProps> }>;
   weekFourBranchRuntimeFactory?: WeekFourBranchExperienceProps['runtimeFactory'];
   weekFourListRuntimeFactory?: WeekFourListExperienceProps['runtimeFactory'];
   weekFourBossRuntimeFactory?: WeekFourBossExperienceProps['runtimeFactory'];
   weekFiveMonksRuntimeFactory?: WeekFiveMonksExperienceProps['runtimeFactory'];
+  weekFiveFunctionRuntimeFactory?: WeekFiveFunctionExperienceProps['runtimeFactory'];
 }
 
 export function MissionPageForId({
@@ -611,10 +626,12 @@ export function MissionPageForId({
   weekFourListLoader,
   weekFourBossLoader,
   weekFiveMonksLoader,
+  weekFiveFunctionLoader,
   weekFourBranchRuntimeFactory,
   weekFourListRuntimeFactory,
   weekFourBossRuntimeFactory,
   weekFiveMonksRuntimeFactory,
+  weekFiveFunctionRuntimeFactory,
 }: MissionPageProps & {
   id: string;
   mission: MissionSpec | FormalMissionSpec | undefined;
@@ -695,6 +712,9 @@ export function MissionPageForId({
   const weekFiveMonksAccess = mission.id === 'w5-m1' ? getWeekFiveMonksAccess(progress) : null;
   if (weekFiveMonksAccess && weekFiveMonksAccess.kind !== 'formal')
     return <WeekFiveMonksAccessNotice access={weekFiveMonksAccess} />;
+  const weekFiveFunctionAccess = mission.id === 'w5-m2' ? getWeekFiveFunctionAccess(progress) : null;
+  if (weekFiveFunctionAccess && weekFiveFunctionAccess.kind !== 'formal')
+    return <WeekFiveFunctionAccessNotice access={weekFiveFunctionAccess} />;
   if (!isMissionUnlocked(progress, mission.id))
     return (
       <main className="not-found">
@@ -815,6 +835,11 @@ export function MissionPageForId({
     onCompletionPersistenceActiveChange(true);
     completionSaveRef.current = request;
     return revealSuccess(request, earnedStars);
+  };
+  const revealPersistedWeekFiveFunctionCompletion = async (earnedStars: number, completionHints: number): Promise<boolean> => {
+    if (mission.id !== 'w5-m2' || successRef.current || completionSaveRef.current !== null) return false;
+    const request: CompletionSave = { requestId: ++requestGenerationRef.current, stars: earnedStars, hintsUsed: completionHints, status: 'pending' };
+    onCompletionPersistenceActiveChange(true); completionSaveRef.current = request; return revealSuccess(request, earnedStars);
   };
   const retryCompletionSave = async () => {
     const failed = completionSaveRef.current;
@@ -1222,6 +1247,17 @@ export function MissionPageForId({
                 muted={progress.settings.muted}
                 locked={completionSave !== null}
                 onComplete={({ stars: earnedStars, hintsUsed: used }) => revealPersistedWeekFiveMonksCompletion(earnedStars, used)}
+                onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
+                onInteractionLockChange={setBattleInteractionLocked}
+              />
+            ) : mission.id === 'w5-m2' ? (
+              <WeekFiveFunctionRouteBoundary
+                loader={weekFiveFunctionLoader}
+                runtimeFactory={weekFiveFunctionRuntimeFactory}
+                reducedMotion={reducedMotion}
+                muted={progress.settings.muted}
+                locked={completionSave !== null}
+                onComplete={({ stars: earnedStars, hintsUsed: used }) => revealPersistedWeekFiveFunctionCompletion(earnedStars, used)}
                 onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange}
                 onInteractionLockChange={setBattleInteractionLocked}
               />
