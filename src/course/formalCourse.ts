@@ -205,6 +205,15 @@ export const formalWeekFiveMissions: FormalMissionSpec[] = [
     ],
     hints: { observe: '看看函数被调用了几次，以及两条记录是在函数里面还是外面执行。', think: 'def 只准备一组步骤；运行到函数名加括号时，函数体才会执行。', partial: '检查定义之后是否有且只有一行 record_sanqing()。' },
   }),
+  formalPythonMission('w5-m3', {
+    subtitle: '同一个函数接收不同号令', objective: '让参数接住风云雷雨四次传入，并记录本次号令',
+    canon: { chapters: [45], title: '第四十五回　三清观大圣留名　车迟国猴王显法', sourceUrl: 'https://zh.wikisource.org/wiki/西遊記/第045回' },
+    storyBeats: [
+      beat('风云雷雨', '原著祈雨片段依次写到风、云、雷、雨。本关的 record_weather 是帮助学习参数的记录抽象，不是真实气象控制。'),
+      beat('固定原著尾声', '收雨放晴作为固定原著尾声呈现，不由孩子编写，也不把四步冒称完整祈雨流程。'),
+    ],
+    hints: { observe: '逐次对照“传入值 → order → 实际记录”，找到第一次不一致。', think: '参数 order 每次接住新的传入值；函数体要使用它，结果才会跟着改变。', partial: '检查 record_weather(...) 里面使用的是固定文字，还是参数 order。' },
+  }),
 ];
 
 export function getFormalMission(id: string): FormalMissionSpec | undefined {

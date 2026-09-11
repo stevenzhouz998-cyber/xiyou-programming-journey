@@ -6,6 +6,8 @@ import { createWeekFiveMonksSession } from './weekFiveMonksSession';
 import type { WeekFiveMonksMissionSession } from './weekFiveMonksSession';
 import { createWeekFiveFunctionSession } from './weekFiveFunctionSession';
 import type { WeekFiveFunctionMissionSession } from './weekFiveFunctionSession';
+import { createWeekFiveWeatherSession } from './weekFiveWeatherSession';
+import type { WeekFiveWeatherMissionSession } from './weekFiveWeatherSession';
 import type {
   BattleRunResult,
   DragonPalaceInstruction,
@@ -135,8 +137,8 @@ import type {
 import { isExecutableMissionId } from './executableMissionIds';
 
 type HintTier = MissionSession['usedHintTiers'][number];
-type WorkspaceMissionSession = Exclude<MissionSession, WeekFourVariableMissionSession | WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession>;
-type CompileFailureMissionSession = Exclude<MissionSession, WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession>;
+type WorkspaceMissionSession = Exclude<MissionSession, WeekFourVariableMissionSession | WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession | WeekFiveWeatherMissionSession>;
+type CompileFailureMissionSession = Exclude<MissionSession, WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession | WeekFiveWeatherMissionSession>;
 
 export {
   recordWeekFourVariableHint,
@@ -225,6 +227,7 @@ export function createMissionSession(
   if (missionIdOrNow === 'w4-m5') return createWeekFourBossSession(now);
   if (missionIdOrNow === 'w5-m1') return createWeekFiveMonksSession(now);
   if (missionIdOrNow === 'w5-m2') return createWeekFiveFunctionSession(now);
+  if (missionIdOrNow === 'w5-m3') return createWeekFiveWeatherSession(now);
   const session = {
     workspace: missionIdOrNow === 'w3-m5'
       ? createDefaultWeekThreeBossDraft()

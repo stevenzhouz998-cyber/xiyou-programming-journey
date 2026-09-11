@@ -22,6 +22,8 @@ export const WEEK_FIVE_MONKS_MAX_LAZY_BYTES = 3 * 1024 * 1024;
 const WEEK_FIVE_MONKS_ROUTE_ROOTS = ['src/components/WeekFiveMonksExperience.tsx', 'src/components/WeekFiveMonksExperience.tsx?retry=1'];
 export const WEEK_FIVE_FUNCTION_MAX_LAZY_BYTES = 3 * 1024 * 1024;
 const WEEK_FIVE_FUNCTION_ROUTE_ROOTS = ['src/components/WeekFiveFunctionExperience.tsx', 'src/components/WeekFiveFunctionExperience.tsx?retry=1'];
+export const WEEK_FIVE_WEATHER_MAX_LAZY_BYTES = 3 * 1024 * 1024;
+const WEEK_FIVE_WEATHER_ROUTE_ROOTS = ['src/components/WeekFiveWeatherExperience.tsx', 'src/components/WeekFiveWeatherExperience.tsx?retry=1'];
 export const WEEK_FOUR_BOSS_MAX_LAZY_BYTES = 3 * 1024 * 1024;
 const WEEK_FOUR_BOSS_ROUTE_ROOTS = ['src/components/WeekFourBossExperience.tsx', 'src/components/WeekFourBossExperience.tsx?retry=1'];
 export const WEEK_FOUR_LIST_MAX_LAZY_BYTES = 3 * 1024 * 1024;
@@ -69,6 +71,8 @@ export const COLD_LOAD_ROUTE_CLOSURE_BUDGETS = Object.freeze({
   'src/components/WeekFiveMonksExperience.tsx?retry=1': WEEK_FIVE_MONKS_MAX_LAZY_BYTES,
   'src/components/WeekFiveFunctionExperience.tsx': WEEK_FIVE_FUNCTION_MAX_LAZY_BYTES,
   'src/components/WeekFiveFunctionExperience.tsx?retry=1': WEEK_FIVE_FUNCTION_MAX_LAZY_BYTES,
+  'src/components/WeekFiveWeatherExperience.tsx': WEEK_FIVE_WEATHER_MAX_LAZY_BYTES,
+  'src/components/WeekFiveWeatherExperience.tsx?retry=1': WEEK_FIVE_WEATHER_MAX_LAZY_BYTES,
   'src/components/WeekFourListExperience.tsx?retry=1': WEEK_FOUR_LIST_MAX_LAZY_BYTES,
   'src/components/WeekFourBossExperience.tsx?retry=1': WEEK_FOUR_BOSS_MAX_LAZY_BYTES,
   'src/components/WeekFourBranchExperience.tsx': WEEK_FOUR_BRANCH_MAX_LAZY_BYTES,
@@ -101,6 +105,11 @@ const COLD_LOAD_ROUTE_STATIC_ISOLATION = Object.freeze({
     'src/components/WeekFiveTempleScene.tsx',
     'src/workers/weekFiveFunctionPython.worker.ts',
   ],
+  'src/components/WeekFiveWeatherExperience.tsx': [
+    'src/components/WeekFiveWeatherPythonEditor.tsx',
+    'src/components/WeekFiveWeatherScene.tsx',
+    'src/workers/weekFiveWeatherPython.worker.ts',
+  ],
 });
 const WEEK_THREE_BAJIE_JOINING_ENTRY_FORBIDDEN = new Set([
   'src/components/WeekThreeBajieJoiningExperience.tsx',
@@ -120,6 +129,10 @@ const WEEK_THREE_BAJIE_JOINING_ENTRY_FORBIDDEN = new Set([
   'src/components/WeekFiveFunctionPythonEditor.tsx',
   'src/components/WeekFiveTempleScene.tsx',
   'src/workers/weekFiveFunctionPython.worker.ts',
+  'src/components/WeekFiveWeatherExperience.tsx',
+  'src/components/WeekFiveWeatherPythonEditor.tsx',
+  'src/components/WeekFiveWeatherScene.tsx',
+  'src/workers/weekFiveWeatherPython.worker.ts',
 ]);
 const STATIC_SOURCE_EXTENSIONS = ['.tsx', '.ts', '.mts', '.jsx', '.js'];
 const MAX_STATIC_SOURCE_CLOSURE_FILES = 500;
@@ -321,23 +334,24 @@ export function analyzeManifest(manifest, gzipSizes, rawSizes = {}, emittedFiles
     const isBranchRoute = WEEK_FOUR_BRANCH_ROUTE_ROOTS.includes(root);
     const isMonksRoute = WEEK_FIVE_MONKS_ROUTE_ROOTS.includes(root);
     const isFunctionRoute = WEEK_FIVE_FUNCTION_ROUTE_ROOTS.includes(root);
+    const isWeatherRoute = WEEK_FIVE_WEATHER_ROUTE_ROOTS.includes(root);
     const isBossRoute = WEEK_FOUR_BOSS_ROUTE_ROOTS.includes(root);
     const isListRoute = WEEK_FOUR_LIST_ROUTE_ROOTS.includes(root);
-    for (const isolatedRoot of COLD_LOAD_ROUTE_STATIC_ISOLATION[isBranchRoute ? WEEK_FOUR_BRANCH_ROUTE_ROOTS[0] : isFunctionRoute ? WEEK_FIVE_FUNCTION_ROUTE_ROOTS[0] : root] ?? []) {
+    for (const isolatedRoot of COLD_LOAD_ROUTE_STATIC_ISOLATION[isBranchRoute ? WEEK_FOUR_BRANCH_ROUTE_ROOTS[0] : isFunctionRoute ? WEEK_FIVE_FUNCTION_ROUTE_ROOTS[0] : isWeatherRoute ? WEEK_FIVE_WEATHER_ROUTE_ROOTS[0] : root] ?? []) {
       if (visited.has(isolatedRoot)) throw new Error(`Bundle budget: ${isolatedRoot.split('/').at(-1).replace('.tsx', '')} must stay outside the application entry static closure.`);
     }
     const keys = collectRuntimeClosure(manifest, root);
     const files = [...new Set([...keys].map((key) => manifest[key].file).filter((file) => file?.endsWith('.js')))];
     let workerFile;
-    if ((isBranchRoute || isListRoute || isBossRoute || isMonksRoute || isFunctionRoute) && emittedFiles !== undefined) {
+    if ((isBranchRoute || isListRoute || isBossRoute || isMonksRoute || isFunctionRoute || isWeatherRoute) && emittedFiles !== undefined) {
       if (!Array.isArray(emittedFiles) || emittedFiles.some((file) => typeof file !== 'string')) throw new Error('Bundle budget: W4-M3 Worker emitted file inventory is invalid.');
-      const workers = emittedFiles.filter((file) => (isFunctionRoute ? /^assets\/weekFiveFunctionPython\.worker-[A-Za-z0-9_-]+\.js$/ : isMonksRoute ? /^assets\/weekFiveMonksPython\.worker-[A-Za-z0-9_-]+\.js$/ : isBossRoute ? /^assets\/weekFourBossPython\.worker-[A-Za-z0-9_-]+\.js$/ : isListRoute ? /^assets\/weekFourListPython\.worker-[A-Za-z0-9_-]+\.js$/ : /^assets\/weekFourBranchPython\.worker-[A-Za-z0-9_-]+\.js$/).test(file));
+      const workers = emittedFiles.filter((file) => (isWeatherRoute ? /^assets\/weekFiveWeatherPython\.worker-[A-Za-z0-9_-]+\.js$/ : isFunctionRoute ? /^assets\/weekFiveFunctionPython\.worker-[A-Za-z0-9_-]+\.js$/ : isMonksRoute ? /^assets\/weekFiveMonksPython\.worker-[A-Za-z0-9_-]+\.js$/ : isBossRoute ? /^assets\/weekFourBossPython\.worker-[A-Za-z0-9_-]+\.js$/ : isListRoute ? /^assets\/weekFourListPython\.worker-[A-Za-z0-9_-]+\.js$/ : /^assets\/weekFourBranchPython\.worker-[A-Za-z0-9_-]+\.js$/).test(file));
       if (workers.length !== 1) throw new Error(`Bundle budget: W4-M3 Worker requires exactly one emitted file; found ${workers.length === 0 ? 'missing' : `duplicate ${workers.length}`}.`);
       [workerFile] = workers;
       if (!Number.isFinite(rawSizes[workerFile]) || !Number.isFinite(gzipSizes[workerFile])) throw new Error(`Bundle budget: W4-M3 Worker size is missing for ${workerFile}.`);
       if (!files.includes(workerFile)) files.push(workerFile);
     }
-    if (isBranchRoute || isListRoute || isBossRoute || isMonksRoute) {
+    if (isBranchRoute || isListRoute || isBossRoute || isMonksRoute || isFunctionRoute || isWeatherRoute) {
       for (const file of files) {
         if (!Number.isFinite(rawSizes[file]) || rawSizes[file] < 0 || !Number.isFinite(gzipSizes[file]) || gzipSizes[file] < 0) throw new Error(`Bundle budget: W4-M3 closure size is missing or invalid for ${file}.`);
       }
@@ -374,7 +388,7 @@ async function main() {
   let manifest;
   try { manifest = JSON.parse(await readFile(manifestPath, 'utf8')); }
   catch (error) { throw new Error(`Bundle budget: cannot read ${manifestPath}: ${error instanceof Error ? error.message : String(error)}`); }
-  const branchWorkerFiles = distFiles.filter((file) => /^assets\/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function))Python\.worker-[A-Za-z0-9_-]+\.js$/.test(file));
+  const branchWorkerFiles = distFiles.filter((file) => /^assets\/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather))Python\.worker-[A-Za-z0-9_-]+\.js$/.test(file));
   const files = [...new Set([...Object.values(manifest).map((chunk) => chunk.file).filter((file) => file?.endsWith('.js')), ...branchWorkerFiles])];
   const gzipSizes = {};
   const rawSizes = {};
@@ -390,6 +404,7 @@ async function main() {
   for (const root of WEEK_FOUR_LIST_ROUTE_ROOTS) if (!manifest[root]) throw new Error(`Bundle budget: required W4-M4 route missing: ${root}`);
   for (const root of WEEK_FIVE_MONKS_ROUTE_ROOTS) if (!manifest[root]) throw new Error(`Bundle budget: required W5-M1 route missing: ${root}`);
   for (const root of WEEK_FIVE_FUNCTION_ROUTE_ROOTS) if (!manifest[root]) throw new Error(`Bundle budget: required W5-M2 route missing: ${root}`);
+  for (const root of WEEK_FIVE_WEATHER_ROUTE_ROOTS) if (!manifest[root]) throw new Error(`Bundle budget: required W5-M3 route missing: ${root}`);
   for (const root of WEEK_FOUR_BOSS_ROUTE_ROOTS) if (!manifest[root]) throw new Error(`Bundle budget: required W4-M5 route missing: ${root}`);
   const result = analyzeManifest(manifest, gzipSizes, rawSizes, distFiles);
   const homeFiles = ['index.html', 'assets/world-map.jpg', 'assets/mentor.jpg', 'assets/young-hero.jpg'];

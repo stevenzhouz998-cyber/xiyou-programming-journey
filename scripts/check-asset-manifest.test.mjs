@@ -25,6 +25,7 @@ import {
   verifyRequiredWeekFourMappingInventory,
   verifyRequiredWeekFourVariableInventory,
   verifyRequiredWeekFiveTempleInventory,
+  verifyRequiredWeekFiveWeatherInventory,
   WEEK_FOUR_VARIABLE_REQUIRED_ASSETS,
   WEEK_FOUR_VARIABLE_SCENE_SLOT,
   WEEK_FOUR_SHARED_BACKGROUND_SLOT,
@@ -38,6 +39,16 @@ test('W5-M2 temple inventory binds one generated background to WeekFiveTempleSce
   const promptRecords = [promptRecord({ heading: 'Prompt W5M2-001 sanqing courtyard', anchor: '#prompt-w5m2-001-sanqing-courtyard', prompt: "Use case: illustration-story\nStyle/medium: polished bright 3D Chinese children's storybook game" })];
   const source = "import { assetUrl } from '../utils/assets'; export const View=()=> <img src={assetUrl('/assets/week-five-temple/sanqing-courtyard-background.webp')} />;";
   assert.equal(verifyRequiredWeekFiveTempleInventory({ manifestRows, publicFiles, promptRecords, source }).assetCount, 1);
+});
+
+test('W5-M3 weather inventory binds one generated background to WeekFiveWeatherScene', () => {
+  const assetId = 'assets/week-five-weather/rain-altar-background.webp';
+  const manifestRows = [row({ assetId, purpose: 'Chechi rain altar', promptOrSourceReference: '[Prompt W5M3-001](#prompt-w5m3-001-rain-altar-background)', dimensions: '1536x1024', screenSlots: 'w5-m3 WeekFiveWeatherScene' })];
+  const publicFiles = [file({ path: assetId, width: 1536, height: 1024 })];
+  const promptRecords = [promptRecord({ heading: 'Prompt W5M3-001 rain altar background', anchor: '#prompt-w5m3-001-rain-altar-background', prompt: 'Use case: illustration-story\nStyle/medium: bright-3d-storybook-chechi-rain-altar' })];
+  const source = "import { assetUrl } from '../utils/assets'; export const View=()=> <img src={assetUrl('/assets/week-five-weather/rain-altar-background.webp')} />;";
+  assert.equal(verifyRequiredWeekFiveWeatherInventory({ manifestRows, publicFiles, promptRecords, source }).assetCount, 1);
+  assert.throws(() => verifyRequiredWeekFiveWeatherInventory({ manifestRows, publicFiles, promptRecords, source: `${source}<img />` }), /approved background/i);
 });
 
 const sha = 'a'.repeat(64);

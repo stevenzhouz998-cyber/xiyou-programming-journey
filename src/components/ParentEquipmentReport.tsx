@@ -69,6 +69,8 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   const monksProof = progress.missionCompletionEvidence['w5-m1'];
   const functionSession = progress.sessions['w5-m2'];
   const functionProof = progress.missionCompletionEvidence['w5-m2'];
+  const weatherSession = progress.sessions['w5-m3'];
+  const weatherProof = progress.missionCompletionEvidence['w5-m3'];
   const listSession = progress.sessions['w4-m4'];
   const listProof = progress.missionCompletionEvidence['w4-m4'];
   const blockerLabels = {
@@ -169,6 +171,13 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     <p>主动观察 {functionSession?.conditionObservationUses.length ?? 0} 次。</p>
     {functionProof?.kind === 'formal-v3' && progress.works['w5-m2-sanqing-function-record'] ? <p>函数定义与调用正式证明及三清观记录作品已保存</p> : null}
     {functionProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式函数调用证明</p> : null}
+  </section><section aria-label="第五周参数学习摘要">
+    <h2>第五周参数学习摘要</h2>
+    <p>已运行 {weatherSession?.totalRuns ?? 0} 次；调用顺序调整 {weatherSession?.callFailures ?? 0} 次，参数使用调整 {weatherSession?.parameterFailures ?? 0} 次。</p>
+    <p>结构验证未通过 {weatherSession?.validationFailures ?? 0} 次；运行环境故障 {weatherSession?.runnerInfrastructureFailures ?? 0} 次（不计入学习困难）。</p>
+    <p>主动观察 {weatherSession?.conditionObservationUses.length ?? 0} 次。</p>
+    {weatherProof?.kind === 'formal-v3' && progress.works['w5-m3-weather-parameter-record'] ? <p>函数参数正式证明及祈雨记录作品已保存</p> : null}
+    {weatherProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式函数参数证明</p> : null}
   </section></>
 }
 

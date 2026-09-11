@@ -14,6 +14,7 @@ export const REQUIRED_PROVENANCE = 'generated in-project with built-in image_gen
 export const REQUIRED_ART_DIRECTION = 'commercial children’s learning game, refined Chinese ink-and-color illustration, Journey to the West Dragon Palace, warm jade/cinnabar/gold palette, readable silhouettes, no text, no logo, no emoji, no UI frame.';
 export const REQUIRED_ADVANCED_ART_DIRECTION = "polished 3D children's storybook game";
 export const REQUIRED_CUILAN_ART_DIRECTION = "children's storybook";
+export const REQUIRED_WEEK_FIVE_WEATHER_ART_DIRECTION = 'bright-3d-storybook-chechi-rain-altar';
 
 const EXPECTED_COLUMNS = [
   'Asset ID',
@@ -50,7 +51,7 @@ const REQUIRED_METADATA = [
 ];
 
 const QA_STATUSES = new Set(['planned', 'generated', 'provenance-verified', 'visual-qa-passed', 'rejected']);
-const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/', 'assets/week-three-yunzhan-dialogue/', 'assets/week-three-bajie-joining/', 'assets/week-three-boss/', 'assets/week-four-mapping/', 'assets/week-four-variables/', 'assets/week-four-branches/', 'assets/week-five-monks/', 'assets/week-five-temple/'];
+const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/', 'assets/week-three-yunzhan-dialogue/', 'assets/week-three-bajie-joining/', 'assets/week-three-boss/', 'assets/week-four-mapping/', 'assets/week-four-variables/', 'assets/week-four-branches/', 'assets/week-five-monks/', 'assets/week-five-temple/', 'assets/week-five-weather/'];
 
 const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
   ['assets/dragon-palace/background.webp', [
@@ -656,7 +657,9 @@ function verifyPromptRecords(promptRecords, manifestRows) {
     const record = recordsByAnchor.get(anchor);
     if (!record) throw new Error(`Asset manifest: prompt anchor ${anchor} is missing for ${row.assetId}.`);
     if (record.promptId !== linkedPromptId) throw new Error(`Asset manifest: prompt ${linkedPromptId.startsWith('DP-') ? 'DP label' : 'identifier'} ${linkedPromptId} does not match heading ${record.heading}.`);
-    const requiredArtDirection = row.assetId.startsWith('assets/week-five-temple/')
+    const requiredArtDirection = row.assetId.startsWith('assets/week-five-weather/')
+      ? REQUIRED_WEEK_FIVE_WEATHER_ART_DIRECTION
+      : row.assetId.startsWith('assets/week-five-temple/')
       ? "polished bright 3D Chinese children's storybook"
       : row.assetId.startsWith('assets/week-five-monks/')
       ? "Bright polished 3D children's Chinese Journey to the West storybook style"
@@ -1418,6 +1421,16 @@ export function verifyRequiredWeekFiveTempleInventory({ manifestRows, publicFile
   return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
 }
 
+export function verifyRequiredWeekFiveWeatherInventory({ manifestRows, publicFiles, promptRecords = [], source, mode = 'check' }) {
+  const directory = 'assets/week-five-weather/';
+  const rows = familyRows(manifestRows, directory), files = familyFiles(publicFiles, directory);
+  const path = `${directory}rain-altar-background.webp`;
+  requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: [path], label: 'Week Five weather' });
+  if (rows[0].screenSlots !== 'w5-m3 WeekFiveWeatherScene') throw new Error('Asset manifest: W5-M3 scene slot mismatch.');
+  if (typeof source !== 'string' || !source.includes(`assetUrl('/${path}')`) || (source.match(/<img\b/g) ?? []).length !== 1) throw new Error('Asset manifest: W5-M3 must render the approved background through assetUrl.');
+  return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
+}
+
 export function verifyRequiredWeekThreeBossInventory({ manifestRows, publicFiles, promptRecords = [], sourcePath = WEEK_THREE_BOSS_SOURCE_PATH, source, mode = 'check' }) {
   const directory = 'assets/week-three-boss/';
   const rows = familyRows(manifestRows, directory);
@@ -2081,6 +2094,7 @@ async function main() {
     ...await collectAssetFiles(weekFourBranchRoot, 'assets/week-four-branches'),
     ...await collectAssetFiles(join(root, 'public/assets/week-five-monks'), 'assets/week-five-monks'),
     ...await collectAssetFiles(join(root, 'public/assets/week-five-temple'), 'assets/week-five-temple'),
+    ...await collectAssetFiles(join(root, 'public/assets/week-five-weather'), 'assets/week-five-weather'),
   ];
   const sourceFiles = new Map(await Promise.all([
     'src/components/GameScene.tsx',
@@ -2148,8 +2162,10 @@ async function main() {
   });
   const monksResult = verifyRequiredWeekFiveMonksInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekFiveMonksScene.tsx'), 'utf8'), mode });
   const templeResult = verifyRequiredWeekFiveTempleInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekFiveTempleScene.tsx'), 'utf8'), mode });
+  const weatherResult = verifyRequiredWeekFiveWeatherInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekFiveWeatherScene.tsx'), 'utf8'), mode });
   console.log(`Week Five monks assets: ${monksResult.assetCount} files, ${monksResult.totalBytes} bytes (${mode}).`);
   console.log(`Week Five temple assets: ${templeResult.assetCount} files, ${templeResult.totalBytes} bytes (${mode}).`);
+  console.log(`Week Five weather assets: ${weatherResult.assetCount} files, ${weatherResult.totalBytes} bytes (${mode}).`);
   console.log(`Dragon Palace assets: ${dragonResult.assetCount} files, ${dragonResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Advanced Week One assets: ${advancedResult.assetCount} files, ${advancedResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);
   console.log(`Week Two horse-care assets: ${weekTwoHorseResult.assetCount} files, ${weekTwoHorseResult.totalBytes} bytes / ${MAX_MISSION_MEDIA_BYTES} bytes (${mode}).`);

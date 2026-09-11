@@ -8,3 +8,11 @@ describe('W5-M2 formal registration', () => {
     expect(mission).not.toHaveProperty('expectedOutput');
   });
 });
+
+describe('W5-M3 formal registration', () => {
+  it('registers a real Python parameter mission without output equality', () => {
+    const mission = getFormalMission('w5-m3');
+    expect(mission?.mode).toBe('python');
+    expect(mission).not.toHaveProperty('expectedOutput');
+  });
+});

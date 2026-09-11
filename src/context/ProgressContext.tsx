@@ -2,22 +2,27 @@ import { getWeekFourListAccess } from '../progress/progress';
 import { getWeekFourBossAccess } from '../progress/progress';
 import { getWeekFiveMonksAccess } from '../progress/progress';
 import { getWeekFiveFunctionAccess } from '../progress/progress';
+import { getWeekFiveWeatherAccess } from '../progress/progress';
 import type { WeekFourListMissionSession } from '../progress/types';
 import type { WeekFourBossMissionSession } from '../progress/types';
 import type { WeekFiveMonksMissionSession } from '../progress/types';
 import type { WeekFiveFunctionMissionSession } from '../progress/types';
+import type { WeekFiveWeatherMissionSession } from '../progress/types';
 import type { WeekFourListRunResult, WeekFourListTraceItem } from '../engine/weekFourListContract';
 import type { WeekFourBossRunResult, WeekFourBossTraceItem } from '../engine/weekFourBossContract';
 import type { WeekFiveMonksRunResult, WeekFiveMonksTraceItem } from '../engine/weekFiveMonksContract';
 import type { WeekFiveFunctionRunResult, WeekFiveFunctionTraceItem } from '../engine/weekFiveFunctionContract';
+import type { WeekFiveWeatherRunResult, WeekFiveWeatherTraceItem } from '../engine/weekFiveWeatherContract';
 import { recordWeekFourListHint, recordWeekFourListInfrastructureFailure, recordWeekFourListObservation, recordWeekFourListRun, recordWeekFourListValidationFailure, updateWeekFourListCode } from '../progress/weekFourListSession';
 import { recordWeekFourBossHint, recordWeekFourBossInfrastructureFailure, recordWeekFourBossObservation, recordWeekFourBossRun, recordWeekFourBossValidationFailure, updateWeekFourBossCode } from '../progress/weekFourBossSession';
 import { recordWeekFiveMonksHint, recordWeekFiveMonksInfrastructureFailure, recordWeekFiveMonksObservation, recordWeekFiveMonksRun, recordWeekFiveMonksValidationFailure, updateWeekFiveMonksCode } from '../progress/weekFiveMonksSession';
 import { recordWeekFiveFunctionHint, recordWeekFiveFunctionInfrastructureFailure, recordWeekFiveFunctionObservation, recordWeekFiveFunctionRun, recordWeekFiveFunctionValidationFailure, updateWeekFiveFunctionCode } from '../progress/weekFiveFunctionSession';
+import { recordWeekFiveWeatherHint, recordWeekFiveWeatherInfrastructureFailure, recordWeekFiveWeatherObservation, recordWeekFiveWeatherRun, recordWeekFiveWeatherValidationFailure, updateWeekFiveWeatherCode } from '../progress/weekFiveWeatherSession';
 import { parseWeekFourListSession } from '../progress/weekFourListSessionSchema';
 import { parseWeekFourBossSession } from '../progress/weekFourBossSessionSchema';
 import { parseWeekFiveMonksSession } from '../progress/weekFiveMonksSessionSchema';
 import { parseWeekFiveFunctionSession } from '../progress/weekFiveFunctionSessionSchema';
+import { parseWeekFiveWeatherSession } from '../progress/weekFiveWeatherSessionSchema';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   completeMission,
@@ -105,7 +110,8 @@ type MissionSessionUpdateArgs =
   | [missionId: 'w4-m4', update: (session: WeekFourListMissionSession) => WeekFourListMissionSession, options?: ProgressWriteOptions]
   | [missionId: 'w4-m5', update: (session: WeekFourBossMissionSession) => WeekFourBossMissionSession, options?: ProgressWriteOptions]
   | [missionId: 'w5-m1', update: (session: WeekFiveMonksMissionSession) => WeekFiveMonksMissionSession, options?: ProgressWriteOptions]
-  | [missionId: 'w5-m2', update: (session: WeekFiveFunctionMissionSession) => WeekFiveFunctionMissionSession, options?: ProgressWriteOptions];
+  | [missionId: 'w5-m2', update: (session: WeekFiveFunctionMissionSession) => WeekFiveFunctionMissionSession, options?: ProgressWriteOptions]
+  | [missionId: 'w5-m3', update: (session: WeekFiveWeatherMissionSession) => WeekFiveWeatherMissionSession, options?: ProgressWriteOptions];
 type MissionSessionUpdateAtArgs =
   | [missionId: 'w1-m1', update: (session: DragonPalaceMissionSession) => DragonPalaceMissionSession, now: string, options?: ProgressWriteOptions]
   | [missionId: 'w1-m2', update: (session: RuyiStaffMissionSession) => RuyiStaffMissionSession, now: string, options?: ProgressWriteOptions]
@@ -127,7 +133,8 @@ type MissionSessionUpdateAtArgs =
   | [missionId: 'w4-m4', update: (session: WeekFourListMissionSession) => WeekFourListMissionSession, now: string, options?: ProgressWriteOptions]
   | [missionId: 'w4-m5', update: (session: WeekFourBossMissionSession) => WeekFourBossMissionSession, now: string, options?: ProgressWriteOptions]
   | [missionId: 'w5-m1', update: (session: WeekFiveMonksMissionSession) => WeekFiveMonksMissionSession, now: string, options?: ProgressWriteOptions]
-  | [missionId: 'w5-m2', update: (session: WeekFiveFunctionMissionSession) => WeekFiveFunctionMissionSession, now: string, options?: ProgressWriteOptions];
+  | [missionId: 'w5-m2', update: (session: WeekFiveFunctionMissionSession) => WeekFiveFunctionMissionSession, now: string, options?: ProgressWriteOptions]
+  | [missionId: 'w5-m3', update: (session: WeekFiveWeatherMissionSession) => WeekFiveWeatherMissionSession, now: string, options?: ProgressWriteOptions];
 interface UpdateMissionSession {
   (
     missionId: 'w1-m1',
@@ -234,6 +241,7 @@ interface UpdateMissionSession {
     update: (session: WeekFiveFunctionMissionSession) => WeekFiveFunctionMissionSession,
     options?: ProgressWriteOptions,
   ): Promise<CoordinatedSaveResult>;
+  (missionId: 'w5-m3', update: (session: WeekFiveWeatherMissionSession) => WeekFiveWeatherMissionSession, options?: ProgressWriteOptions): Promise<CoordinatedSaveResult>;
 }
 type MissionHintTier = MissionSession['usedHintTiers'][number];
 interface RecordMissionHint {
@@ -269,26 +277,32 @@ export interface ProgressContextValue {
   saveWeekFourBossDraft: (code: string) => Promise<CoordinatedSaveResult>;
   saveWeekFiveMonksDraft: (code: string) => Promise<CoordinatedSaveResult>;
   saveWeekFiveFunctionDraft: (code: string) => Promise<CoordinatedSaveResult>;
+  saveWeekFiveWeatherDraft: (code: string) => Promise<CoordinatedSaveResult>;
   saveWeekFourListRun: (value: { canonicalTrace: WeekFourListTraceItem[]; workerTrace: WeekFourListTraceItem[]; run: WeekFourListRunResult }) => Promise<CoordinatedSaveResult>;
   saveWeekFourBossRun: (value: { canonicalTrace: WeekFourBossTraceItem[]; workerTrace: WeekFourBossTraceItem[]; run: WeekFourBossRunResult }) => Promise<CoordinatedSaveResult>;
   saveWeekFiveMonksRun: (value: { canonicalTrace: WeekFiveMonksTraceItem[]; workerTrace: WeekFiveMonksTraceItem[]; run: WeekFiveMonksRunResult }) => Promise<CoordinatedSaveResult>;
   saveWeekFiveFunctionRun: (value: { canonicalTrace: WeekFiveFunctionTraceItem[]; workerTrace: WeekFiveFunctionTraceItem[]; run: WeekFiveFunctionRunResult }) => Promise<CoordinatedSaveResult>;
+  saveWeekFiveWeatherRun: (value: { canonicalTrace: WeekFiveWeatherTraceItem[]; workerTrace: WeekFiveWeatherTraceItem[]; run: WeekFiveWeatherRunResult }) => Promise<CoordinatedSaveResult>;
   saveWeekFourListObservation: () => Promise<CoordinatedSaveResult>;
   saveWeekFourBossObservation: () => Promise<CoordinatedSaveResult>;
   saveWeekFiveMonksObservation: () => Promise<CoordinatedSaveResult>;
   saveWeekFiveFunctionObservation: () => Promise<CoordinatedSaveResult>;
+  saveWeekFiveWeatherObservation: () => Promise<CoordinatedSaveResult>;
   saveWeekFourListInfrastructureFailure: (input: { executionStarted: boolean }) => Promise<CoordinatedSaveResult>;
   saveWeekFourBossInfrastructureFailure: (input: { executionStarted: boolean }) => Promise<CoordinatedSaveResult>;
   saveWeekFiveMonksInfrastructureFailure: (input: { executionStarted: boolean }) => Promise<CoordinatedSaveResult>;
   saveWeekFiveFunctionInfrastructureFailure: (input: { executionStarted: boolean }) => Promise<CoordinatedSaveResult>;
+  saveWeekFiveWeatherInfrastructureFailure: (input: { executionStarted: boolean }) => Promise<CoordinatedSaveResult>;
   saveWeekFourListValidationFailure: () => Promise<CoordinatedSaveResult>;
   saveWeekFourBossValidationFailure: () => Promise<CoordinatedSaveResult>;
   saveWeekFiveMonksValidationFailure: () => Promise<CoordinatedSaveResult>;
   saveWeekFiveFunctionValidationFailure: () => Promise<CoordinatedSaveResult>;
+  saveWeekFiveWeatherValidationFailure: () => Promise<CoordinatedSaveResult>;
   completeWeekFourList: (input: CompletionInput) => Promise<CoordinatedSaveResult>;
   completeWeekFourBoss: (input: CompletionInput) => Promise<CoordinatedSaveResult>;
   completeWeekFiveMonks: (input: CompletionInput) => Promise<CoordinatedSaveResult>;
   completeWeekFiveFunction: (input: CompletionInput) => Promise<CoordinatedSaveResult>;
+  completeWeekFiveWeather: (input: CompletionInput) => Promise<CoordinatedSaveResult>;
   recordMissionHint: RecordMissionHint;
   replaceProgress: (progress: ProgressV3) => Promise<CoordinatedSaveResult>;
   updateSettings: (settings: Partial<ProgressV3['settings']>) => Promise<CoordinatedSaveResult>;
@@ -571,6 +585,11 @@ export function ProgressProvider({
       const functionSession = parseWeekFiveFunctionSession(updated);
       return commit({ ...currentProgress, sessions: { ...currentProgress.sessions, 'w5-m2': functionSession }, savedAt: now }, true, options);
     }
+    if (missionId === 'w5-m3') {
+      if (getWeekFiveWeatherAccess(currentProgress).kind !== 'formal') throw new Error('W5-M3保存需要W5-M2 formal-v3正式证明');
+      const weatherSession = parseWeekFiveWeatherSession(updated);
+      return commit({ ...currentProgress, sessions: { ...currentProgress.sessions, 'w5-m3': weatherSession }, savedAt: now }, true, options);
+    }
     const next = migrateProgress({
       ...currentProgress,
       sessions: { ...currentProgress.sessions, [missionId]: updated },
@@ -591,6 +610,13 @@ export function ProgressProvider({
     if (missionId === 'w5-m2') {
       const currentProgress = workingProgress();
       const current = currentProgress.sessions['w5-m2'] ? structuredClone(currentProgress.sessions['w5-m2']) : createMissionSession('w5-m2', now);
+      return persistMissionSession(missionId, update(current), now, options);
+    }
+    if (missionId === 'w5-m3') {
+      const currentProgress = workingProgress();
+      const current = currentProgress.sessions['w5-m3']
+        ? structuredClone(currentProgress.sessions['w5-m3'])
+        : createMissionSession('w5-m3', now);
       return persistMissionSession(missionId, update(current), now, options);
     }
     if (missionId === 'w1-m2') {
@@ -802,6 +828,7 @@ export function ProgressProvider({
     update: (session: WeekFiveFunctionMissionSession) => WeekFiveFunctionMissionSession,
     options?: ProgressWriteOptions,
   ): Promise<CoordinatedSaveResult>;
+  function updateMissionSession(missionId:'w5-m3',update:(session:WeekFiveWeatherMissionSession)=>WeekFiveWeatherMissionSession,options?:ProgressWriteOptions):Promise<CoordinatedSaveResult>;
   function updateMissionSession(...args: MissionSessionUpdateArgs) {
     const now = new Date().toISOString();
     if (args[0] === 'w1-m1') {
@@ -832,6 +859,7 @@ export function ProgressProvider({
     if (args[0] === 'w4-m5') return updateMissionSessionAt(args[0], args[1], now, args[2]);
     if (args[0] === 'w5-m1') return updateMissionSessionAt(args[0], args[1], now, args[2]);
     if (args[0] === 'w5-m2') return updateMissionSessionAt(args[0], args[1], now, args[2]);
+    if (args[0] === 'w5-m3') return updateMissionSessionAt(args[0], args[1], now, args[2]);
     throw new Error('任务编号无效');
   }
 
@@ -1030,6 +1058,27 @@ export function ProgressProvider({
       return updateMissionSessionAt('w5-m2', (session: WeekFiveFunctionMissionSession) => recordWeekFiveFunctionValidationFailure(session, now), now);
     },
     completeWeekFiveFunction: (input) => commit(completeMission(workingProgress(), 'w5-m2', input), false, {}, true, true, 'w5-m2'),
+    saveWeekFiveWeatherDraft: (code) => {
+      const now = new Date().toISOString();
+      return updateMissionSessionAt('w5-m3', (session: WeekFiveWeatherMissionSession) => updateWeekFiveWeatherCode(session, code, now), now);
+    },
+    saveWeekFiveWeatherRun: (value) => {
+      const now = new Date().toISOString();
+      return updateMissionSessionAt('w5-m3', (session: WeekFiveWeatherMissionSession) => recordWeekFiveWeatherRun(session, value, now), now);
+    },
+    saveWeekFiveWeatherObservation: () => {
+      const now = new Date().toISOString();
+      return updateMissionSessionAt('w5-m3', (session: WeekFiveWeatherMissionSession) => recordWeekFiveWeatherObservation(session, now), now);
+    },
+    saveWeekFiveWeatherInfrastructureFailure: (input) => {
+      const now = new Date().toISOString();
+      return updateMissionSessionAt('w5-m3', (session: WeekFiveWeatherMissionSession) => recordWeekFiveWeatherInfrastructureFailure(session, input, now), now);
+    },
+    saveWeekFiveWeatherValidationFailure: () => {
+      const now = new Date().toISOString();
+      return updateMissionSessionAt('w5-m3', (session: WeekFiveWeatherMissionSession) => recordWeekFiveWeatherValidationFailure(session, now), now);
+    },
+    completeWeekFiveWeather: (input) => commit(completeMission(workingProgress(), 'w5-m3', input), false, {}, true, true, 'w5-m3'),
     recordMissionHint: (missionId, tier) => {
       const unpublished = pendingUnpublishedRef.current;
       if (unpublished?.completionMissionIds.has(missionId)) return Promise.resolve(unpublished.failure ?? {
@@ -1074,6 +1123,7 @@ export function ProgressProvider({
       if (missionId === 'w4-m5') return updateMissionSessionAt(missionId, (session: WeekFourBossMissionSession) => recordWeekFourBossHint(session, tier, now), now);
       if (missionId === 'w5-m1') return updateMissionSessionAt(missionId, (session: WeekFiveMonksMissionSession) => recordWeekFiveMonksHint(session, tier, now), now);
       if (missionId === 'w5-m2') return updateMissionSessionAt(missionId, (session: WeekFiveFunctionMissionSession) => recordWeekFiveFunctionHint(session, tier, now), now);
+      if (missionId === 'w5-m3') return updateMissionSessionAt(missionId, (session: WeekFiveWeatherMissionSession) => recordWeekFiveWeatherHint(session, tier, now), now);
       throw new Error('任务编号无效');
     },
     replaceProgress: (next) => commit(next),

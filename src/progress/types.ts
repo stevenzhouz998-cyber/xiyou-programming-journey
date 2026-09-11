@@ -109,6 +109,9 @@ import type {
 import type { WeekFiveFunctionMissionSession } from './weekFiveFunctionSession';
 export type { WeekFiveFunctionMissionSession } from './weekFiveFunctionSession';
 import type { WeekFiveFunctionRunResult, WeekFiveFunctionTraceItem } from '../engine/weekFiveFunctionContract';
+import type { WeekFiveWeatherMissionSession } from './weekFiveWeatherSession';
+export type { WeekFiveWeatherMissionSession } from './weekFiveWeatherSession';
+import type { WeekFiveWeatherRunResult, WeekFiveWeatherTraceItem } from '../engine/weekFiveWeatherContract';
 
 export interface MissionProgress {
   status: 'completed';
@@ -539,6 +542,17 @@ export interface WeekFiveFunctionWorkV1 {
   verifiedAt: string;
 }
 
+export type WeekFiveWeatherCompletionEvidence =
+  | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 1; sourceSchemaRevision: null }
+  | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 2; sourceSchemaRevision: 1 }
+  | { kind: 'legacy-replay-only'; completedAt: string; sourceVersion: 3; sourceSchemaRevision: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 }
+  | { kind: 'formal-v3'; completedAt: string; verifiedAt: string; pythonCode: string; canonicalTrace: WeekFiveWeatherTraceItem[]; workerTrace: WeekFiveWeatherTraceItem[]; run: WeekFiveWeatherRunResult; workId: 'w5-m3-weather-parameter-record' };
+
+export interface WeekFiveWeatherWorkV1 {
+  kind: 'python-function-parameter-v1'; workId: 'w5-m3-weather-parameter-record'; missionId: 'w5-m3'; title: string; pythonCode: string;
+  canonicalTrace: WeekFiveWeatherTraceItem[]; workerTrace: WeekFiveWeatherTraceItem[]; run: WeekFiveWeatherRunResult; createdAt: string; verifiedAt: string;
+}
+
 export interface MissionCompletionEvidenceV1 {
   'w3-m1'?: ManorHelpCompletionEvidence;
   'w3-m2'?: CuilanBooleanCompletionEvidence;
@@ -552,6 +566,7 @@ export interface MissionCompletionEvidenceV1 {
   'w4-m5'?: WeekFourBossCompletionEvidence;
   'w5-m1'?: WeekFiveMonksCompletionEvidence;
   'w5-m2'?: WeekFiveFunctionCompletionEvidence;
+  'w5-m3'?: WeekFiveWeatherCompletionEvidence;
 }
 
 export interface MissionSessionById {
@@ -577,6 +592,7 @@ export interface MissionSessionById {
   'w4-m5': WeekFourBossMissionSession;
   'w5-m1': WeekFiveMonksMissionSession;
   'w5-m2': WeekFiveFunctionMissionSession;
+  'w5-m3': WeekFiveWeatherMissionSession;
 }
 
 export type ExecutableMissionId = keyof MissionSessionById;
@@ -586,7 +602,7 @@ export type MissionSessions = { [MissionId in keyof MissionSessionById]?: Missio
 
 export interface ProgressV3 {
   version: 3;
-  schemaRevision: 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
+  schemaRevision: 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
   learnerName: string;
   missions: Record<string, MissionProgress>;
   settings: ProgressSettings;
@@ -607,6 +623,7 @@ export interface ProgressV3 {
     'w4-m5-verification-report': WeekFourBossWorkV1;
     'w5-m1-monks-rescue-record': WeekFiveMonksWorkV1;
     'w5-m2-sanqing-function-record': WeekFiveFunctionWorkV1;
+    'w5-m3-weather-parameter-record': WeekFiveWeatherWorkV1;
   }>;
   savedAt: string;
 }
