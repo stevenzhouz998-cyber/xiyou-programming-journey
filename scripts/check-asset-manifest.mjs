@@ -1411,7 +1411,7 @@ export function verifyRequiredWeekSixRecordsInventory({ manifestRows, publicFile
   const rows = familyRows(manifestRows, directory), files = familyFiles(publicFiles, directory);
   const path = `${directory}flaming-mountain-background.webp`;
   requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: [path], label: 'Week Six records' });
-  if (rows[0].screenSlots !== 'w6-m1 WeekSixRecordsScene; w6-m2 WeekSixClassificationScene; w6-m3 WeekSixPromptScene; w6-m4 WeekSixFactCheckScene') throw new Error('Asset manifest: W6-M1/M2/M3/M4 scene slot mismatch.');
+  if (rows[0].screenSlots !== 'w6-m1 WeekSixRecordsScene; w6-m2 WeekSixClassificationScene; w6-m3 WeekSixPromptScene; w6-m4 WeekSixFactCheckScene; w6-m5 WeekSixArchiveScene') throw new Error('Asset manifest: W6-M1/M2/M3/M4/M5 scene slot mismatch.');
   if (files.length !== 1) throw new Error('Asset manifest: exactly one W6-M1 background file is required.');
   if (files[0].width !== 1536 || files[0].height !== 1024) throw new Error('Asset manifest: W6-M1 background must retain the approved 1536x1024 dimensions.');
   if (typeof source !== 'string' || !source.includes(`assetUrl('/${path}')`) || (source.match(/<img\b/g) ?? []).length !== 1) throw new Error('Asset manifest: W6-M1 must render the approved background through assetUrl.');

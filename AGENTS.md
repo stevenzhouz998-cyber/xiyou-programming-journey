@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Approved W6-M5 Direction
+
+- On 2026-09-12 the user approved real Python orchestration plus a local structured brief and final evidence review, delegated subsequent local decisions, explicitly requested model-squad, and required local One-level playable. Use current valid M1–M4 works as read-only sources; child-visible Python must execute through the restricted same-origin Worker, and actual output and selections drive the archive. Clearly separate teacher-authored review exercises from the child's output and real AI. Upstream edits invalidate dependent results; successful persistence and source-bound formal proof are required. Preserve bright storybook visuals, zero-penalty failures, non-solving assistance, privacy, earlier works/equipment and recovery. This is the terminal course mission, not a fictional W7 unlock or proof of full-site completion. See `docs/superpowers/specs/2026-09-12-week-six-archive-design.md`. No commit, push, merge, deployment or real-player data operations are authorized.
+
 ## Approved W6-M4 Direction
 
 - On 2026-09-12 the user approved per-statement judgment, relevant evidence selection and child-authored structured revision for the local answer-review lab, delegated subsequent details, and required model-squad delivery to local One-level playable. Preserve M3 original brief/output read-only; planted practice errors must be explicitly labeled and never attributed to the child or real AI. Distinguish supported, conflicting and insufficient-in-the-provided-material claims. No automatic answers, zero-penalty failures, formal source-bound proof and successful saving before M5 unlock. Preserve existing bright storybook visuals and privacy. See `docs/superpowers/specs/2026-09-12-week-six-fact-check-design.md`. No commit, push, merge or deployment authorization.

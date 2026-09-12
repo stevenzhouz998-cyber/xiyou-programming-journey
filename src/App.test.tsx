@@ -115,8 +115,9 @@ describe('西游编程记', () => {
     render(<App />);
     await acknowledgePrivacySuccessfully();
     expect(screen.getByRole('heading', { name: '西游编程记' })).toBeInTheDocument();
-    expect(screen.getAllByText(/第[一二三四五六]周/)).toHaveLength(6);
-    expect(screen.getByRole('button', { name: /开始第一关/ })).toBeEnabled();
+    const journey = await screen.findByRole('region', { name: '六周成长地图' });
+    expect(journey.querySelectorAll('.week-card')).toHaveLength(6);
+    expect(await screen.findByRole('button', { name: /开始第一关/ })).toBeEnabled();
   });
 
   it('opens the lazy equipment drawer from the growth map and keeps it outside the inert page', async () => {

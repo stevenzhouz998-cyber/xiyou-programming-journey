@@ -1732,3 +1732,20 @@ test('keeps parent reports and deferred writes outside startup and asset-only sc
   const scene = bundleBudget.collectRuntimeClosure(manifest, 'src/components/RuyiStaffScene.tsx');
   assert.ok(![...scene].some(key => /^_(?:app-core|progress-core|storage-write)-/.test(key)), 'asset URLs must not pull progress/context/write code into a scene');
 });
+
+test('enforces the W6-M5 3 MiB lazy archive and keeps its editor, scene and reused Worker outside entry', () => {
+  const root='src/components/WeekSixArchiveExperience.tsx',editor='src/components/WeekSixArchivePythonEditor.tsx',scene='src/components/WeekSixArchiveScene.tsx';
+  assert.equal(bundleBudget.COLD_LOAD_ROUTE_CLOSURE_BUDGETS[root],3*1024*1024);
+  const manifest={...base,[root]:{file:'assets/w6m5.js',isDynamicEntry:true,imports:[],dynamicImports:[editor,scene]},[editor]:{file:'assets/w6m5-editor.js',isDynamicEntry:true,imports:[]},[scene]:{file:'assets/w6m5-scene.js',isDynamicEntry:true,imports:[]}};
+  const sizes={'assets/main.js':1,'assets/vendor.js':1,'assets/w6m5.js':3*1024*1024-2,'assets/w6m5-editor.js':1,'assets/w6m5-scene.js':1};
+  assert.equal(analyzeManifest(manifest,sizes,sizes).closures[root].rawBytes,3*1024*1024);
+  assert.throws(()=>analyzeManifest({...manifest,'src/main.tsx':{...base['src/main.tsx'],imports:['vendor.js',editor]}},sizes,sizes),/WeekSixArchivePythonEditor must stay outside/);
+  assert.throws(()=>analyzeManifest({...manifest,'src/main.tsx':{...base['src/main.tsx'],imports:['vendor.js',scene]}},sizes,sizes),/WeekSixArchiveScene must stay outside/);
+  const routeSource=readFileSync(new URL('../src/components/MissionPageContent.tsx',import.meta.url),'utf8');
+  const experienceSource=readFileSync(new URL('../src/components/WeekSixArchiveExperience.tsx',import.meta.url),'utf8');
+  assert.match(routeSource,/import\(['"]\.\/WeekSixArchiveExperience['"]\)/);
+  assert.match(routeSource,/import\(['"]\.\/WeekSixArchiveExperience\?retry=1['"]\)/);
+  assert.match(experienceSource,/import\(['"]\.\/WeekSixArchivePythonEditor['"]\)/);
+  assert.match(experienceSource,/import\(['"]\.\/WeekSixArchiveScene['"]\)/);
+  assert.match(experienceSource,/createWeekSixRecordsPythonRuntime/);
+});

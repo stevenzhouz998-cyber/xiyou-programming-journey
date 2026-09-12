@@ -155,7 +155,7 @@ type ValidV3 = Omit<ProgressV3, 'sessions'> & {
 const validV3 = (): ValidV3 => ({
   ...validV2,
   version: 3 as const,
-  schemaRevision: 21 as const,
+  schemaRevision: 22 as const,
   missions: structuredClone(validV2.missions),
   sessions: { 'w1-m1': validSession() },
   equipment: initialEquipment(),
@@ -606,7 +606,7 @@ describe('progress schema', () => {
     const progress = createInitialProgress();
     expect(progress).toMatchObject({
       version: 3,
-      schemaRevision: 21,
+      schemaRevision: 22,
       sessions: {},
       equipment: initialEquipment(),
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
@@ -625,7 +625,7 @@ describe('progress schema', () => {
     const migrated = migrateProgress(legacy);
     expect(migrated).toMatchObject({
       version: 3,
-      schemaRevision: 21,
+      schemaRevision: 22,
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
     });
     expect(migrated.equipment).toEqual({
@@ -810,7 +810,7 @@ describe('progress schema', () => {
     expect(migrateProgress(validV1)).toEqual({
       ...validV1,
       version: 3,
-      schemaRevision: 21,
+      schemaRevision: 22,
       works: {},
       settings: { ...validV1.settings, reducedMotionOverride: false },
       privacy: { localDataNoticeSeen: false },
@@ -826,7 +826,7 @@ describe('progress schema', () => {
     expect(migrateProgress(validV2)).toEqual({
       ...validV2,
       version: 3,
-      schemaRevision: 21,
+      schemaRevision: 22,
       works: {},
       sessions: {},
       equipment: initialEquipment(),
@@ -850,7 +850,7 @@ describe('progress schema', () => {
 
     expect(migrated).toMatchObject({
       version: 3,
-      schemaRevision: 21,
+      schemaRevision: 22,
       missions,
       settings: legacy.settings,
       privacy: legacy.privacy,
@@ -1476,7 +1476,7 @@ describe('progress schema', () => {
 
   it('creates and round-trips only revision 21 for new progress documents', () => {
     const progress = createInitialProgress();
-    expect(progress.schemaRevision).toBe(21);
+    expect(progress.schemaRevision).toBe(22);
     expect(parseProgress(JSON.stringify(progress))).toEqual(progress);
   });
 
@@ -1488,7 +1488,7 @@ describe('progress schema', () => {
     const mission = { ...validMission, completedAt: NOW };
     const migrated = migrateProgress({ ...source, learnerName: '小行者', missions: { 'w4-m3': mission }, savedAt: NOW });
     expect(migrated).toMatchObject({
-      schemaRevision: 21,
+      schemaRevision: 22,
       sessions: {}, works: {},
       missionCompletionEvidence: {
         'w4-m3': { kind: 'legacy-replay-only', completedAt: NOW, sourceVersion, sourceSchemaRevision },
@@ -1514,7 +1514,7 @@ describe('progress schema', () => {
         legacy.works = {};
       }
       const migrated = migrateProgress(legacy);
-      expect(migrated.schemaRevision).toBe(21);
+      expect(migrated.schemaRevision).toBe(22);
       expect(migrated.sessions).toEqual({});
       expect(migrated.works).toEqual({});
       expect(migrated.missionCompletionEvidence['w4-m3']).toEqual({
@@ -1528,7 +1528,7 @@ describe('progress schema', () => {
     const before = structuredClone(revisionNine);
     const migrated = migrateProgress(revisionNine);
 
-    expect(migrated.schemaRevision).toBe(21);
+    expect(migrated.schemaRevision).toBe(22);
     expect(migrated.savedAt).toBe(before.savedAt);
     expect(migrated.sessions['w4-m1']).toEqual(before.sessions['w4-m1']);
     expect(migrated.sessions['w4-m2']).toEqual(before.sessions['w4-m2']);

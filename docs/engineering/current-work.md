@@ -2,7 +2,17 @@
 
 更新时间：2026-09-12。此索引定位现场，不代表全项目完成，也不是提交、推送、合并或部署授权。
 
-## W6-M4 当前工作
+## W6-M5 当前工作
+
+- 实际入口 `/Users/macmini-zz/.codex/worktrees/5806/少儿编程学习网页`；分支 `codex/w4-m3-branch-structure`；实施基线 HEAD `e3abe2934dd5d7ab08b4e4e4dca6a118e1dbab58`。实施与验收时未提交或推送；用户随后明确授权本次 W6-M5 commit and push，最终提交及远端以 Git 为准。未授权合并或部署，未操作真实玩家数据；原有未跟踪审计、依赖和回归/视觉产物保留。
+- 用户已确认终点玩法并授权后续细节自主决定，实际使用模型小队：唯一实现者 `/root/w6m5_implementation`（任务 `01a094d9-b93a-7e50-8551-f3169cf93e85`）请求参数与宿主可见元数据均为 `gpt-5.6-sol/high`，预算只读分析 `/root/w6m5_budget`（任务 `01a094d9-e390-76a0-afe7-69b7572ef840`）请求参数与宿主可见元数据均为 `gpt-5.6-terra/high`，宿主记录位于 `artifacts/w6m5-independent/model-squad-host-metadata.json`，root 独立验收。W6-M5「三调芭蕉扇·取经档案总编」已达到本地 **One-level playable**，progress revision 22；有效 M4 正式作品、当前真实 Worker 输出、孩子结构化选择和最终核验共同决定 `formal-v3`。
+- M5 五配置 16/16，W6 M1–M4 同批 78/78，W4/W5 邻接 6/6；独立普通生产 11/11、58.242 秒通过并保持 1010 文件哈希稳定，覆盖 3,840 语义组合、严格解析、24 类篡改、双保存恢复、素材失败/挂起、键盘焦点、桌面/320px、终点回放与首页入口。
+- 最终普通入口 184203/184320 B（余 117 B），保守首页 565.4/650 KiB，M5 普通/重试闭包 1198.7 KiB raw / 335.2 KiB gzip；阈值未放宽，同步读档和证明重算未异步化。
+- 成功后不虚构 W7；首页显示“回看取经档案”。这只证明本地单关及正式课程终点链可用，不代表全站商业发布或线上部署。W1 advanced cold 的历史 Chromium 超限继续保留。
+- root 保留普通生产预览 `http://127.0.0.1:5207/xiyou-programming-journey/`；端口状态需续接时重查，不是部署证据。
+- [W6-M5 规格](../superpowers/specs/2026-09-12-week-six-archive-design.md)；[W6-M5 验收](../verification/week-six-archive.md)。
+
+## W6-M4 历史交付
 
 - 实际入口 `/Users/macmini-zz/.codex/worktrees/5806/少儿编程学习网页`；分支 `codex/w4-m3-branch-structure`；实施与验收基线 HEAD `50632834a98f3149c50bf5059543da93e61af4cb`。实施与验收时未提交或推送；用户随后明确授权 W6-M4 交接、commit and push，最终提交及远端以 Git 和工作区外交接文件为准。未授权合并或部署，未操作真实玩家数据；原有未跟踪审计、依赖与回归/视觉产物保留。
 - 用户已确认玩法并授权后续细节自主决定，实际使用模型小队：实施者请求/实际 `gpt-5.6-sol/high`，预算只读分析请求/实际 `gpt-5.6-terra/high`。W6-M4「核验而非猜测·回答审校台」已达到本地 **One-level playable**，progress revision 21。它只读使用有效 M3 正式作品，并明确区分人为编写的本地模拟回答；三句分别完成判断、相关依据和处置。有效 M4 `formal-v3` 仅在成功保存后解锁 M5，历史 M4 不生成正式权限。

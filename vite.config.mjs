@@ -47,10 +47,11 @@ export default defineConfig({
       output: {
         onlyExplicitManualChunks: true,
         manualChunks(id, { getModuleInfo }) {
+          if (id.includes('vite/preload-helper')) return 'app-vendor';
           if (id.includes('/node_modules/phaser/')) return 'phaser';
           if (id.includes('/node_modules/blockly/')) return 'blockly-editor';
           if (id.includes('/node_modules/@codemirror/')) return 'codemirror-editor';
-          if (id.includes('/node_modules/@phosphor-icons/react/dist/lib/')) return 'phosphor-core';
+          if (id.includes('/node_modules/@phosphor-icons/react/dist/lib/')) return 'app-vendor';
           if (/\/node_modules\/(?:react|react-dom|react-router|react-router-dom|scheduler)\//.test(id)) return 'app-vendor';
           const source = id.replaceAll('\\', '/');
           if (source.endsWith('/src/utils/assets.ts')) return 'asset-path';
@@ -68,9 +69,8 @@ export default defineConfig({
           if ((source.includes('/src/battle/') || source.includes('/src/engine/') || source.includes('/src/blockly/') || source.includes('/src/progress/'))
             && reachesEntryThroughStaticImports(id, getModuleInfo)
           ) return 'progress-core';
-          if (source.endsWith('/src/course/courseOutline.ts')) return 'progress-core';
-          if (source.endsWith('/src/context/ProgressContext.tsx')
-            || source.endsWith('/src/components/ToolErrorBoundary.tsx')) return 'app-core';
+          if (source.endsWith('/src/course/courseOutline.ts')) return 'formal-course';
+          if (source.endsWith('/src/context/ProgressContext.tsx')) return 'app-core';
         },
       },
     },

@@ -30,6 +30,8 @@ const WEEK_FIVE_DECOMPOSITION_ROUTE_ROOTS = ['src/components/WeekFiveDecompositi
 export const WEEK_FIVE_STORY_ORCHESTRATION_MAX_LAZY_BYTES = 3 * 1024 * 1024;
 const WEEK_FIVE_STORY_ORCHESTRATION_ROUTE_ROOTS = ['src/components/WeekFiveStoryOrchestrationExperience.tsx', 'src/components/WeekFiveStoryOrchestrationExperience.tsx?retry=1'];
 const WEEK_SIX_RECORDS_ROUTE_ROOTS = ['src/components/WeekSixRecordsExperience.tsx', 'src/components/WeekSixRecordsExperience.tsx?retry=1'];
+export const WEEK_SIX_ARCHIVE_MAX_LAZY_BYTES = 3 * 1024 * 1024;
+const WEEK_SIX_ARCHIVE_ROUTE_ROOTS = ['src/components/WeekSixArchiveExperience.tsx', 'src/components/WeekSixArchiveExperience.tsx?retry=1'];
 export const WEEK_FOUR_BOSS_MAX_LAZY_BYTES = 3 * 1024 * 1024;
 const WEEK_FOUR_BOSS_ROUTE_ROOTS = ['src/components/WeekFourBossExperience.tsx', 'src/components/WeekFourBossExperience.tsx?retry=1'];
 export const WEEK_FOUR_LIST_MAX_LAZY_BYTES = 3 * 1024 * 1024;
@@ -85,6 +87,8 @@ export const COLD_LOAD_ROUTE_CLOSURE_BUDGETS = Object.freeze({
   'src/components/WeekFiveStoryOrchestrationExperience.tsx?retry=1': WEEK_FIVE_STORY_ORCHESTRATION_MAX_LAZY_BYTES,
   'src/components/WeekSixRecordsExperience.tsx': WEEK_SIX_RECORDS_COLD_LOAD_MAX_BYTES,
   'src/components/WeekSixRecordsExperience.tsx?retry=1': WEEK_SIX_RECORDS_COLD_LOAD_MAX_BYTES,
+  'src/components/WeekSixArchiveExperience.tsx': WEEK_SIX_ARCHIVE_MAX_LAZY_BYTES,
+  'src/components/WeekSixArchiveExperience.tsx?retry=1': WEEK_SIX_ARCHIVE_MAX_LAZY_BYTES,
   'src/components/WeekFourListExperience.tsx?retry=1': WEEK_FOUR_LIST_MAX_LAZY_BYTES,
   'src/components/WeekFourBossExperience.tsx?retry=1': WEEK_FOUR_BOSS_MAX_LAZY_BYTES,
   'src/components/WeekFourBranchExperience.tsx': WEEK_FOUR_BRANCH_MAX_LAZY_BYTES,
@@ -137,6 +141,12 @@ const COLD_LOAD_ROUTE_STATIC_ISOLATION = Object.freeze({
     'src/components/WeekSixRecordsScene.tsx',
     'src/workers/weekSixRecordsPython.worker.ts',
   ],
+  'src/components/WeekSixArchiveExperience.tsx': [
+    'src/components/WeekSixArchiveExperience.tsx',
+    'src/components/WeekSixArchivePythonEditor.tsx',
+    'src/components/WeekSixArchiveScene.tsx',
+    'src/workers/weekSixRecordsPython.worker.ts',
+  ],
 });
 const WEEK_THREE_BAJIE_JOINING_ENTRY_FORBIDDEN = new Set([
   'src/components/WeekThreeBajieJoiningExperience.tsx',
@@ -172,6 +182,9 @@ const WEEK_THREE_BAJIE_JOINING_ENTRY_FORBIDDEN = new Set([
   'src/components/WeekSixRecordsPythonEditor.tsx',
   'src/components/WeekSixRecordsScene.tsx',
   'src/workers/weekSixRecordsPython.worker.ts',
+  'src/components/WeekSixArchiveExperience.tsx',
+  'src/components/WeekSixArchivePythonEditor.tsx',
+  'src/components/WeekSixArchiveScene.tsx',
 ]);
 const STATIC_SOURCE_EXTENSIONS = ['.tsx', '.ts', '.mts', '.jsx', '.js'];
 const MAX_STATIC_SOURCE_CLOSURE_FILES = 500;
@@ -377,23 +390,24 @@ export function analyzeManifest(manifest, gzipSizes, rawSizes = {}, emittedFiles
     const isDecompositionRoute = WEEK_FIVE_DECOMPOSITION_ROUTE_ROOTS.includes(root);
     const isStoryRoute = WEEK_FIVE_STORY_ORCHESTRATION_ROUTE_ROOTS.includes(root);
     const isRecordsRoute = WEEK_SIX_RECORDS_ROUTE_ROOTS.includes(root);
+    const isArchiveRoute = WEEK_SIX_ARCHIVE_ROUTE_ROOTS.includes(root);
     const isBossRoute = WEEK_FOUR_BOSS_ROUTE_ROOTS.includes(root);
     const isListRoute = WEEK_FOUR_LIST_ROUTE_ROOTS.includes(root);
-    for (const isolatedRoot of COLD_LOAD_ROUTE_STATIC_ISOLATION[isBranchRoute ? WEEK_FOUR_BRANCH_ROUTE_ROOTS[0] : isFunctionRoute ? WEEK_FIVE_FUNCTION_ROUTE_ROOTS[0] : isWeatherRoute ? WEEK_FIVE_WEATHER_ROUTE_ROOTS[0] : isDecompositionRoute ? WEEK_FIVE_DECOMPOSITION_ROUTE_ROOTS[0] : isStoryRoute ? WEEK_FIVE_STORY_ORCHESTRATION_ROUTE_ROOTS[0] : isRecordsRoute ? WEEK_SIX_RECORDS_ROUTE_ROOTS[0] : root] ?? []) {
+    for (const isolatedRoot of COLD_LOAD_ROUTE_STATIC_ISOLATION[isBranchRoute ? WEEK_FOUR_BRANCH_ROUTE_ROOTS[0] : isFunctionRoute ? WEEK_FIVE_FUNCTION_ROUTE_ROOTS[0] : isWeatherRoute ? WEEK_FIVE_WEATHER_ROUTE_ROOTS[0] : isDecompositionRoute ? WEEK_FIVE_DECOMPOSITION_ROUTE_ROOTS[0] : isStoryRoute ? WEEK_FIVE_STORY_ORCHESTRATION_ROUTE_ROOTS[0] : isRecordsRoute ? WEEK_SIX_RECORDS_ROUTE_ROOTS[0] : isArchiveRoute ? WEEK_SIX_ARCHIVE_ROUTE_ROOTS[0] : root] ?? []) {
       if (visited.has(isolatedRoot)) throw new Error(`Bundle budget: ${isolatedRoot.split('/').at(-1).replace('.tsx', '')} must stay outside the application entry static closure.`);
     }
     const keys = collectRuntimeClosure(manifest, root);
     const files = [...new Set([...keys].map((key) => manifest[key].file).filter((file) => file?.endsWith('.js')))];
     let workerFile;
-    if ((isBranchRoute || isListRoute || isBossRoute || isMonksRoute || isFunctionRoute || isWeatherRoute || isDecompositionRoute || isStoryRoute || isRecordsRoute) && emittedFiles !== undefined) {
+    if ((isBranchRoute || isListRoute || isBossRoute || isMonksRoute || isFunctionRoute || isWeatherRoute || isDecompositionRoute || isStoryRoute || isRecordsRoute || isArchiveRoute) && emittedFiles !== undefined) {
       if (!Array.isArray(emittedFiles) || emittedFiles.some((file) => typeof file !== 'string')) throw new Error('Bundle budget: W4-M3 Worker emitted file inventory is invalid.');
-      const workers = emittedFiles.filter((file) => (isRecordsRoute ? /^assets\/weekSixRecordsPython\.worker-[A-Za-z0-9_-]+\.js$/ : isStoryRoute ? /^assets\/weekFiveStoryOrchestrationPython\.worker-[A-Za-z0-9_-]+\.js$/ : isDecompositionRoute ? /^assets\/weekFiveDecompositionPython\.worker-[A-Za-z0-9_-]+\.js$/ : isWeatherRoute ? /^assets\/weekFiveWeatherPython\.worker-[A-Za-z0-9_-]+\.js$/ : isFunctionRoute ? /^assets\/weekFiveFunctionPython\.worker-[A-Za-z0-9_-]+\.js$/ : isMonksRoute ? /^assets\/weekFiveMonksPython\.worker-[A-Za-z0-9_-]+\.js$/ : isBossRoute ? /^assets\/weekFourBossPython\.worker-[A-Za-z0-9_-]+\.js$/ : isListRoute ? /^assets\/weekFourListPython\.worker-[A-Za-z0-9_-]+\.js$/ : /^assets\/weekFourBranchPython\.worker-[A-Za-z0-9_-]+\.js$/).test(file));
+      const workers = emittedFiles.filter((file) => (isRecordsRoute || isArchiveRoute ? /^assets\/weekSixRecordsPython\.worker-[A-Za-z0-9_-]+\.js$/ : isStoryRoute ? /^assets\/weekFiveStoryOrchestrationPython\.worker-[A-Za-z0-9_-]+\.js$/ : isDecompositionRoute ? /^assets\/weekFiveDecompositionPython\.worker-[A-Za-z0-9_-]+\.js$/ : isWeatherRoute ? /^assets\/weekFiveWeatherPython\.worker-[A-Za-z0-9_-]+\.js$/ : isFunctionRoute ? /^assets\/weekFiveFunctionPython\.worker-[A-Za-z0-9_-]+\.js$/ : isMonksRoute ? /^assets\/weekFiveMonksPython\.worker-[A-Za-z0-9_-]+\.js$/ : isBossRoute ? /^assets\/weekFourBossPython\.worker-[A-Za-z0-9_-]+\.js$/ : isListRoute ? /^assets\/weekFourListPython\.worker-[A-Za-z0-9_-]+\.js$/ : /^assets\/weekFourBranchPython\.worker-[A-Za-z0-9_-]+\.js$/).test(file));
       if (workers.length !== 1) throw new Error(`Bundle budget: W4-M3 Worker requires exactly one emitted file; found ${workers.length === 0 ? 'missing' : `duplicate ${workers.length}`}.`);
       [workerFile] = workers;
       if (!Number.isFinite(rawSizes[workerFile]) || !Number.isFinite(gzipSizes[workerFile])) throw new Error(`Bundle budget: W4-M3 Worker size is missing for ${workerFile}.`);
       if (!files.includes(workerFile)) files.push(workerFile);
     }
-    if (isBranchRoute || isListRoute || isBossRoute || isMonksRoute || isFunctionRoute || isWeatherRoute || isDecompositionRoute || isStoryRoute || isRecordsRoute) {
+    if (isBranchRoute || isListRoute || isBossRoute || isMonksRoute || isFunctionRoute || isWeatherRoute || isDecompositionRoute || isStoryRoute || isRecordsRoute || isArchiveRoute) {
       for (const file of files) {
         if (!Number.isFinite(rawSizes[file]) || rawSizes[file] < 0 || !Number.isFinite(gzipSizes[file]) || gzipSizes[file] < 0) throw new Error(`Bundle budget: W4-M3 closure size is missing or invalid for ${file}.`);
       }
@@ -450,6 +464,7 @@ async function main() {
   for (const root of WEEK_FIVE_DECOMPOSITION_ROUTE_ROOTS) if (!manifest[root]) throw new Error(`Bundle budget: required W5-M4 route missing: ${root}`);
   for (const root of WEEK_FIVE_STORY_ORCHESTRATION_ROUTE_ROOTS) if (!manifest[root]) throw new Error(`Bundle budget: required W5-M5 route missing: ${root}`);
   for (const root of WEEK_SIX_RECORDS_ROUTE_ROOTS) if (!manifest[root]) throw new Error(`Bundle budget: required W6-M1 route missing: ${root}`);
+  for (const root of WEEK_SIX_ARCHIVE_ROUTE_ROOTS) if (!manifest[root]) throw new Error(`Bundle budget: required W6-M5 route missing: ${root}`);
   for (const root of WEEK_FOUR_BOSS_ROUTE_ROOTS) if (!manifest[root]) throw new Error(`Bundle budget: required W4-M5 route missing: ${root}`);
   const result = analyzeManifest(manifest, gzipSizes, rawSizes, distFiles);
   const homeFiles = ['index.html', 'assets/world-map.jpg', 'assets/mentor.jpg', 'assets/young-hero.jpg'];

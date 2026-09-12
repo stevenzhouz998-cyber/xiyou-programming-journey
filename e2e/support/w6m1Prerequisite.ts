@@ -11,6 +11,8 @@ import { runWeekSixPrompt, type WeekSixPromptInput } from '../../src/engine/week
 import { createWeekSixPromptSession, recordWeekSixPromptRun, updateWeekSixPromptInput } from '../../src/progress/weekSixPromptSession';
 import { runWeekSixFactCheck, type WeekSixFactCheckInput } from '../../src/engine/weekSixFactCheckContract';
 import { createWeekSixFactCheckSession, recordWeekSixFactCheckRun, updateWeekSixFactCheckInput } from '../../src/progress/weekSixFactCheckSession';
+import { runWeekSixArchive,type WeekSixArchiveInput } from '../../src/engine/weekSixArchiveContract';
+import { createWeekSixArchiveSession,recordWeekSixArchiveRun,updateWeekSixArchiveCode,updateWeekSixArchiveInput } from '../../src/progress/weekSixArchiveSession';
 
 export function formalW5M5Prerequisite(): string {
   const progress = parseProgress(formalW5M4Prerequisite());
@@ -72,4 +74,12 @@ export function formalW6M4Completion():string{
     {statementId:'gained-therefore-passed',verdict:'conflicting',evidenceIds:['m2-second-not-passed'],disposition:'revise-not-passed'},
     {statementId:'exactly-ten-minutes',verdict:'insufficient',evidenceIds:['provided-material-scope'],disposition:'cannot-confirm'},
   ]};let session=createWeekSixFactCheckSession(source,now);session=updateWeekSixFactCheckInput(session,input,now);session=recordWeekSixFactCheckRun(session,input,runWeekSixFactCheck(input,session.source),now);progress.sessions['w6-m4']=session;progress.savedAt=now;return serializeProgress(completeMission(progress,'w6-m4',{stars:3,hintsUsed:0}));
+}
+
+export function formalW6M5Completion(format:'event-table'|'step-list'='event-table'):string{
+  const progress=parseProgress(formalW6M4Completion()),source=progress.works['w6-m4-second-attempt-review'];if(!source)throw Error('W6-M5 source fixture invalid');const now=new Date().toISOString();const input:WeekSixArchiveInput={brief:{scope:'all-three',factIds:['attempt-one','attempt-two','attempt-three'],constraintIds:['provided-only','mark-insufficient'],format},reviews:[
+    {claimId:'first-and-third',verdict:'supported',evidenceIds:['run-first','run-third'],disposition:'keep-original'},
+    {claimId:'second-therefore-passed',verdict:'conflicting',evidenceIds:['m2-second-not-passed'],disposition:'revise-second-result'},
+    {claimId:'exactly-thirty-minutes',verdict:'insufficient',evidenceIds:['provided-material-scope'],disposition:'cannot-confirm'},
+  ]};let session=createWeekSixArchiveSession(source,now);session=updateWeekSixArchiveCode(session,SOLVED_WEEK_SIX_RECORDS_PYTHON,now);session=updateWeekSixArchiveInput(session,input,now);const parsed=parseWeekSixRecordsPython(session.pythonCode);if('state'in parsed)throw Error('W6-M5 fixture Python invalid');const worker={trace:parsed.trace,run:parsed.run};session=recordWeekSixArchiveRun(session,worker,runWeekSixArchive(session.pythonCode,worker,input,session.source),now);progress.sessions['w6-m5']=session;progress.savedAt=now;return serializeProgress(completeMission(progress,'w6-m5',{stars:3,hintsUsed:0}));
 }

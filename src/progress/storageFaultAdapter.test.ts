@@ -28,7 +28,8 @@ import {
   recordWeekFourBranchRun,
   updateWeekFourBranchCode,
 } from './weekFourBranchSession';
-import { WEEK_FOUR_BRANCH_STORAGE_FAULT_MODES, WEEK_FOUR_MAPPING_STORAGE_FAULT_MODES, WEEK_FOUR_VARIABLE_STORAGE_FAULT_MODES, WEEK_THREE_BOSS_STORAGE_FAULT_MODES, storageFaultAdapter as productionStorageFaultAdapter } from './storageFaultAdapter';
+import { storageFaultAdapter as productionStorageFaultAdapter } from './storageFaultAdapter';
+import { WEEK_FOUR_BRANCH_STORAGE_FAULT_MODES, WEEK_FOUR_MAPPING_STORAGE_FAULT_MODES, WEEK_FOUR_VARIABLE_STORAGE_FAULT_MODES, WEEK_THREE_BOSS_STORAGE_FAULT_MODES } from './storageFaultModes';
 import type { ProgressV3 } from './types';
 
 const CURRENT_KEY = 'xiyou-programming-progress-v3';

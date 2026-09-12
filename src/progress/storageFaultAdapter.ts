@@ -1,79 +1,11 @@
 import type { ProgressV3 } from './types';
 
-/** Test-only names shared with the E2E adapter; production never reads or enables them. */
-export const WEEK_THREE_BOSS_STORAGE_FAULT_MODES = [
-  'fail-week-three-boss-draft',
-  'fail-week-three-boss-run',
-  'fail-week-three-boss-observation',
-  'fail-week-three-boss-completion',
-  'corrupt-week-three-boss-current',
-] as const;
-
-/** Test-only W4 save stages. Production never reads browser storage fault flags. */
-export const WEEK_FOUR_MAPPING_STORAGE_FAULT_MODES = [
-  'fail-w4-m1-draft',
-  'fail-w4-m1-run',
-  'fail-w4-m1-observation',
-  'fail-w4-m1-work',
-  'fail-w4-m1-completion',
-] as const;
-
-/** Test-only W4-M2 save stages. Production never reads browser storage fault flags. */
-export const WEEK_FOUR_VARIABLE_STORAGE_FAULT_MODES = [
-  'fail-w4-m2-draft',
-  'fail-w4-m2-run',
-  'fail-w4-m2-observation',
-  'fail-w4-m2-work',
-  'fail-w4-m2-completion',
-] as const;
-
-/** Test-only W4-M3 save stages. Production never reads browser storage fault flags. */
-export const WEEK_FOUR_BRANCH_STORAGE_FAULT_MODES = [
-  'fail-w4-m3-draft',
-  'fail-w4-m3-run',
-  'fail-w4-m3-observation',
-  'fail-w4-m3-work',
-  'fail-w4-m3-completion',
-] as const;
-
-/** Test-only W4-M4 save stages. Production never reads browser storage fault flags. */
-export const WEEK_FOUR_LIST_STORAGE_FAULT_MODES = [
-  'fail-w4-m4-draft',
-  'fail-w4-m4-run',
-  'fail-w4-m4-observation',
-  'fail-w4-m4-work',
-  'fail-w4-m4-completion',
-] as const;
-
-export const WEEK_FOUR_BOSS_STORAGE_FAULT_MODES = [
-  'fail-w4-m5-draft',
-  'fail-w4-m5-run',
-  'fail-w4-m5-observation',
-  'fail-w4-m5-work',
-  'fail-w4-m5-completion',
-] as const;
-
-export const WEEK_FIVE_MONKS_STORAGE_FAULT_MODES = [
-  'fail-w5-m1-draft',
-  'fail-w5-m1-run',
-  'fail-w5-m1-observation',
-  'fail-w5-m1-work',
-  'fail-w5-m1-completion',
-] as const;
-
 export interface StorageFaultAdapter {
   beforeProgressWrite(input: { storage: Storage; progress: ProgressV3 }): string | null;
   beforeProgressLoad(storage: Storage): void;
 }
 
-export type AdvancedStorageFaultHandler = StorageFaultAdapter['beforeProgressWrite'];
-let advancedStorageFaultHandler: AdvancedStorageFaultHandler = () => null;
-
-export function registerAdvancedStorageFaultHandler(handler: AdvancedStorageFaultHandler): void {
-  advancedStorageFaultHandler = handler;
-}
-
 export const storageFaultAdapter: StorageFaultAdapter = {
-  beforeProgressWrite: (input) => advancedStorageFaultHandler(input),
+  beforeProgressWrite: () => null,
   beforeProgressLoad: () => undefined,
 };

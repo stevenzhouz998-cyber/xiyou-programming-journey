@@ -61,7 +61,7 @@ test('@w6-m1-full real dictionary field reads fail visibly, recover the draft, s
   await page.getByRole('button', { name: '运行字段读取代码' }).click();
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 30_000 });
   const completed = await saved(page);
-  expect(completed.schemaRevision).toBe(21);
+  expect(completed.schemaRevision).toBe(22);
   expect(completed.missionCompletionEvidence['w6-m1']).toMatchObject({ kind: 'formal-v3', workId: 'w6-m1-structured-records-table' });
   expect(completed.works['w6-m1-structured-records-table'].run).toMatchObject({ state: 'records-proven', completed: true });
   await page.screenshot({ path: info.outputPath(`w6m1-success-${info.project.name}.png`), fullPage: true });

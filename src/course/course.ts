@@ -1,5 +1,5 @@
-import { deriveMissionFromOutline, deriveWeekFromOutline, type MissionExtension } from './courseOutline';
-import type { CanonRef, CourseManifest, CourseMissionSpec, MissionMode, MissionSpec, StoryBeat } from './types';
+import { deriveWeekFromOutline } from './courseOutline';
+import type { CanonRef, CourseManifest, CourseMissionSpec } from './types';
 import {
   formalWeekOneCanon,
   formalWeekOneMissions,
@@ -20,13 +20,6 @@ const canon = (chapters: number[], title: string): CanonRef => ({
   title,
   sourceUrl: `${SOURCE_ROOT}/第${String(chapters[0]).padStart(3, '0')}回`,
 });
-
-const beat = (title: string, summary: string): StoryBeat => ({ title, summary, canon: true });
-
-type LegacyMissionExtension = Omit<MissionExtension, 'mode'> & { mode?: MissionMode };
-const mission = (id: string, extension: LegacyMissionExtension): MissionSpec => (
-  deriveMissionFromOutline(id, { ...extension, mode: extension.mode ?? 'blockly' })
-);
 
 const c3 = formalWeekOneCanon;
 const c4to7 = formalWeekTwoCanon;
@@ -74,7 +67,6 @@ export const course: CourseManifest = {
     deriveWeekFromOutline('week-6', { subtitle: '从原著事实学习 AI 思维', canon: c59to61,
       missions: [
         ...formalWeekSixMissions,
-        mission('w6-m5', { subtitle: '代码、数据与核验合一', objective: '重建三调芭蕉扇原著事件链并核验结果', mode: 'ai-lab', canon: c59to61, storyBeats: [beat('三调完整经过', '一调得到假扇、二调取得真扇后被骗回、三调最终借得真扇。'), beat('原著结局', '火焰熄灭后，师徒越过火焰山继续西行。')], expectedSequence: ['first_fake', 'second_true', 'fan_reclaimed', 'third_battle', 'true_fan', 'cross_mountain'], aiDataset: [{ step: 1, event: '一调得假扇，火势更旺' }, { step: 2, event: '二调取得真扇，随后被骗回' }, { step: 3, event: '三调最终借得真扇' }, { step: 4, event: '扇息火焰继续西行' }] }),
       ],
     }),
   ],

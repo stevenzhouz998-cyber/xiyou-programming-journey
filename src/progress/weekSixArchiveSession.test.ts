@@ -1,0 +1,25 @@
+import { describe,expect,it } from 'vitest';
+import { formalW6M4Completion } from '../../e2e/support/w6m1Prerequisite';
+import { parseWeekSixRecordsPython,SOLVED_WEEK_SIX_RECORDS_PYTHON } from '../engine/weekSixRecordsPythonGrammar';
+import { runWeekSixArchive,type WeekSixArchiveInput } from '../engine/weekSixArchiveContract';
+import { parseProgress } from './schema';
+import { createWeekSixArchiveSession,recordWeekSixArchiveHint,recordWeekSixArchiveRun,updateWeekSixArchiveCode,updateWeekSixArchiveInput } from './weekSixArchiveSession';
+import { parseWeekSixArchiveSession } from './weekSixArchiveSessionSchema';
+
+const NOW='2030-09-12T04:00:00.000Z',LATER='2030-09-12T04:01:00.000Z';
+const work=parseProgress(formalW6M4Completion()).works['w6-m4-second-attempt-review']!;
+const solved:WeekSixArchiveInput={brief:{scope:'all-three',factIds:['attempt-one','attempt-two','attempt-three'],constraintIds:['provided-only','mark-insufficient'],format:'event-table'},reviews:[
+  {claimId:'first-and-third',verdict:'supported',evidenceIds:['run-first','run-third'],disposition:'keep-original'},
+  {claimId:'second-therefore-passed',verdict:'conflicting',evidenceIds:['run-second','m2-second-not-passed'],disposition:'revise-second-result'},
+  {claimId:'exactly-thirty-minutes',verdict:'insufficient',evidenceIds:['provided-material-scope'],disposition:'cannot-confirm'},
+]};
+function actual(){const parsed=parseWeekSixRecordsPython(SOLVED_WEEK_SIX_RECORDS_PYTHON);if('state'in parsed)throw Error('fixture');return{trace:parsed.trace,run:parsed.run}}
+
+describe('W6-M5 archive session',()=>{
+  it('copies the M4 source and starts with wrong visible Python plus empty downstream input',()=>{expect(createWeekSixArchiveSession(work,NOW)).toMatchObject({kind:'python-ai-archive-v1',input:{brief:{scope:null,factIds:[],constraintIds:[],format:null}},workerRun:null,lastRun:null,totalRuns:0})});
+  it('binds the current code, Worker result, brief and review, then invalidates dependents precisely',()=>{let session=createWeekSixArchiveSession(work,NOW);session=updateWeekSixArchiveCode(session,SOLVED_WEEK_SIX_RECORDS_PYTHON,LATER);session=updateWeekSixArchiveInput(session,solved,LATER);const worker=actual(),run=runWeekSixArchive(session.pythonCode,worker,session.input,session.source);session=recordWeekSixArchiveRun(session,worker,run,LATER);expect(session.lastRun?.completed).toBe(true);const changed=structuredClone(solved);changed.brief.format='step-list';const next=updateWeekSixArchiveInput(session,changed,'2030-09-12T04:02:00.000Z');expect(next.workerRun).toEqual(worker.run);expect(next.lastRun).toBeNull();const recoded=updateWeekSixArchiveCode(session,`${SOLVED_WEEK_SIX_RECORDS_PYTHON}\n`,'2030-09-12T04:02:00.000Z');expect(recoded.workerRun).toBeNull();expect(recoded.lastRun).toBeNull()});
+  it('rejects forged Worker and deterministic run payloads',()=>{let session=updateWeekSixArchiveCode(createWeekSixArchiveSession(work,NOW),SOLVED_WEEK_SIX_RECORDS_PYTHON,LATER);session=updateWeekSixArchiveInput(session,solved,LATER);const worker=actual(),run=runWeekSixArchive(session.pythonCode,worker,session.input,session.source);expect(()=>recordWeekSixArchiveRun(session,{...worker,trace:[]},run,LATER)).toThrow();expect(()=>recordWeekSixArchiveRun(session,worker,{...run,completed:false},LATER)).toThrow()});
+  it('records hints without changing code, selecting answers, or running',()=>{const session=createWeekSixArchiveSession(work,NOW),hinted=recordWeekSixArchiveHint(session,'observe',LATER);expect(hinted.pythonCode).toBe(session.pythonCode);expect(hinted.input).toEqual(session.input);expect(hinted.lastRun).toBeNull();expect(hinted.totalRuns).toBe(0);expect(hinted.usedHintTiers).toEqual(['observe'])});
+  it('persists the latest real output and syntax failures through strict parsing',()=>{let session=createWeekSixArchiveSession(work,NOW);const defaultWorker=parseWeekSixRecordsPython(session.pythonCode);if('state'in defaultWorker)throw Error('default must run');let run=runWeekSixArchive(session.pythonCode,{trace:defaultWorker.trace,run:defaultWorker.run},session.input,session.source);session=recordWeekSixArchiveRun(session,{trace:defaultWorker.trace,run:defaultWorker.run},run,LATER);expect(parseWeekSixArchiveSession(session).lastRun?.state).toBe('python-output-conflict');session=updateWeekSixArchiveCode(session,'import os','2030-09-12T04:02:00.000Z');run=runWeekSixArchive(session.pythonCode,null,session.input,session.source);session=recordWeekSixArchiveRun(session,null,run,'2030-09-12T04:03:00.000Z');expect(parseWeekSixArchiveSession(session).lastRun?.state).toBe('python-structure-invalid')});
+  it('rejects bounded-text violations and invalid code carrying stale Worker evidence',()=>{const base=createWeekSixArchiveSession(work,NOW);expect(()=>parseWeekSixArchiveSession({...base,pythonCode:'x'.repeat(1201)})).toThrow();expect(()=>parseWeekSixArchiveSession({...base,pythonCode:'import os',workerTrace:[],workerRun:{state:'records-proven'},workerRunAt:NOW})).toThrow()});
+});

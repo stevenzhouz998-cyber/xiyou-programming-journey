@@ -259,6 +259,11 @@ export const formalWeekSixMissions: FormalMissionSpec[] = [
     storyBeats:[beat('核验取得与被骗回','对照第六十至六十一回的有限转述，核验二调取得真扇后又被骗回。'),beat('区分冲突与材料不足','取得真扇不等于当次已经通行；本页材料未给具体分钟数时应暂不能确认。')],
     hints:{observe:'先看首个阻塞落在哪句话、哪个核验区域。',think:'每句话都要分别完成判断、相关依据和实际处置。',partial:'只检查当前标出的句子，依据必须直接覆盖判断。'},
   }),
+  formalAiMission('w6-m5', {
+    subtitle:'把代码、整理与核验合成一份真实档案',objective:'运行三调记录程序，组成完整说明书并亲手核验教师练习',canon:formalWeekSixCanon,
+    storyBeats:[beat('三调记录成表','循环读取三张字典的调次与经过，形成本次实际事件表。'),beat('整理与核验定稿','按给定材料整理完整三调，再判断支持、冲突与材料不足。')],
+    hints:{observe:'先看首个阻塞属于代码、整理还是核验。',think:'每一步都只能使用当前真实运行结果和你亲手选择的材料。',partial:'只检查当前标出的区域；帮助不会改代码、选答案或替你运行。'},
+  }),
 ];
 
 export function getFormalMission(id: string): FormalMissionSpec | undefined {

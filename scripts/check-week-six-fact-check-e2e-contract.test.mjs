@@ -10,7 +10,7 @@ test('requires the real W6-M4 blank review, source, evidence, recovery, parent a
   for(const label of ['核验而非猜测·回答审校台','人为编写的本地核验练习','我的 M3 正式说明书与输出','材料支持','与材料冲突','本页材料不足','保留原句','有据修订','暂不能确认'])assert.match(source,new RegExp(label));
   assert.match(source,/formalW6M3Completion/);
   assert.match(source,/sessionStorage\.getItem\(seed\)/);
-  assert.match(source,/schemaRevision:21/);
+  assert.match(source,/schemaRevision:22/);
   assert.match(source,/totalRuns\)\.toBe\(1\)/);
   assert.match(source,/flaming-mountain-background\\\.webp/);
   assert.doesNotMatch(source,/expectedSequence/);

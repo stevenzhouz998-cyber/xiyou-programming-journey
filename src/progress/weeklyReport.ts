@@ -74,6 +74,7 @@ export interface WeeklyReport {
   weekFiveDecomposition?: { runs:number; coordinatorFailures:number; ownershipFailures:number; validationFailures:number; infrastructureFailures:number; observations:number; workSaved:boolean; proof:'formal-v3'|'legacy-replay-only'|'none'; completedAt:string|null };
   weekFiveStoryOrchestration?: { runs:number; monkLoopFailures:number; templeCallFailures:number; weatherBindingFailures:number; laterCallOrderFailures:number; validationFailures:number; infrastructureFailures:number; observations:number; workSaved:boolean; proof:'formal-v3'|'legacy-replay-only'|'none'; completedAt:string|null };
   weekSixRecords?: { runs:number; recordFailures:number; fieldFailures:number; validationFailures:number; infrastructureFailures:number; observations:number; workSaved:boolean; proof:'formal-v3'|'legacy-replay-only'|'none'; completedAt:string|null };
+  weekSixArchive?: { runs:number; pythonFailures:number; briefFailures:number; reviewFailures:number; workSaved:boolean; proof:'formal-v3'|'legacy-replay-only'|'none'; completedAt:string|null };
 }
 
 export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyReport {
@@ -107,6 +108,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
   const weekFiveDecompositionSession = week === 5 ? progress.sessions['w5-m4'] : undefined;
   const weekFiveStoryOrchestrationSession = week === 5 ? progress.sessions['w5-m5'] : undefined;
   const weekSixRecordsSession = week === 6 ? progress.sessions['w6-m1'] : undefined;
+  const weekSixArchiveSession = week === 6 ? progress.sessions['w6-m5'] : undefined;
   const weekFourListSession = week === 4 ? progress.sessions['w4-m4'] : undefined;
   const sessionSupport = [
     ...(dragonSession ? getSessionSupport(dragonSession, 'w1-m1') : []),
@@ -148,7 +150,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
     total: missions.length,
     stars: records.reduce((sum, record) => safeCount(sum, record.stars), 0),
     hintsUsed: records.reduce((sum, record) => safeCount(sum, record.hintsUsed), 0),
-    sessionRuns: safeCount(safeCount(safeCount(safeCount(safeCount(safeCount(safeCount(sessionRuns, weekFourBossSession?.totalRuns ?? 0), weekFiveMonksSession?.totalRuns ?? 0), weekFiveFunctionSession?.totalRuns ?? 0), weekFiveWeatherSession?.totalRuns ?? 0), weekFiveDecompositionSession?.totalRuns ?? 0), weekFiveStoryOrchestrationSession?.totalRuns ?? 0), weekSixRecordsSession?.totalRuns ?? 0),
+    sessionRuns: [sessionRuns, weekFourBossSession?.totalRuns ?? 0, weekFiveMonksSession?.totalRuns ?? 0, weekFiveFunctionSession?.totalRuns ?? 0, weekFiveWeatherSession?.totalRuns ?? 0, weekFiveDecompositionSession?.totalRuns ?? 0, weekFiveStoryOrchestrationSession?.totalRuns ?? 0, weekSixRecordsSession?.totalRuns ?? 0, weekSixArchiveSession?.totalRuns ?? 0].reduce((total, value) => safeCount(total, value), 0),
     sessionAdjustments: [
       sessionAdjustments,
       weekFiveMonksSession ? safeCount(safeCount(weekFiveMonksSession.coverageFailures, weekFiveMonksSession.actionFailures), weekFiveMonksSession.validationFailures) : 0,
@@ -159,6 +161,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
       weekFiveDecompositionSession ? safeCount(safeCount(weekFiveDecompositionSession.coordinatorFailures, weekFiveDecompositionSession.ownershipFailures), weekFiveDecompositionSession.validationFailures) : 0,
       weekFiveStoryOrchestrationSession ? [weekFiveStoryOrchestrationSession.monkLoopFailures, weekFiveStoryOrchestrationSession.templeCallFailures, weekFiveStoryOrchestrationSession.weatherBindingFailures, weekFiveStoryOrchestrationSession.laterCallOrderFailures, weekFiveStoryOrchestrationSession.validationFailures].reduce((total, value) => safeCount(total, value), 0) : 0,
       weekSixRecordsSession ? [weekSixRecordsSession.recordFailures, weekSixRecordsSession.fieldFailures, weekSixRecordsSession.validationFailures].reduce((total, value) => safeCount(total, value), 0) : 0,
+      weekSixArchiveSession ? [weekSixArchiveSession.pythonFailures, weekSixArchiveSession.briefFailures, weekSixArchiveSession.reviewFailures].reduce((total, value) => safeCount(total, value), 0) : 0,
     ].reduce((total, value) => safeCount(total, value), 0),
     needsSupport: [...new Set([...missionSupport, ...sessionSupport, ...(weekFiveFunctionSession?.firstBlockingConcept ? [weekFiveFunctionSession.firstBlockingConcept] : []), ...(weekFiveWeatherSession?.firstBlockingConcept ? [weekFiveWeatherSession.firstBlockingConcept] : []), ...(weekFiveDecompositionSession?.firstBlockingConcept ? [weekFiveDecompositionSession.firstBlockingConcept] : []), ...(weekFiveStoryOrchestrationSession?.firstBlockingConcept ? [weekFiveStoryOrchestrationSession.firstBlockingConcept] : []), ...(weekSixRecordsSession?.firstBlockingConcept ? ['按字段读取记录'] : [])])],
     ...(week !== 3 ? {} : {
@@ -229,6 +232,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
     }),
     ...(week !== 6 ? {} : {
       weekSixRecords: { runs:weekSixRecordsSession?.totalRuns??0,recordFailures:weekSixRecordsSession?.recordFailures??0,fieldFailures:weekSixRecordsSession?.fieldFailures??0,validationFailures:weekSixRecordsSession?.validationFailures??0,infrastructureFailures:weekSixRecordsSession?.runnerInfrastructureFailures??0,observations:weekSixRecordsSession?.conditionObservationUses.length??0,workSaved:progress.works['w6-m1-structured-records-table']!==undefined,proof:progress.missionCompletionEvidence['w6-m1']?.kind??'none',completedAt:progress.missions['w6-m1']?.completedAt??null},
+      weekSixArchive: { runs:weekSixArchiveSession?.totalRuns??0,pythonFailures:weekSixArchiveSession?.pythonFailures??0,briefFailures:weekSixArchiveSession?.briefFailures??0,reviewFailures:weekSixArchiveSession?.reviewFailures??0,workSaved:progress.works['w6-m5-journey-archive']!==undefined,proof:progress.missionCompletionEvidence['w6-m5']?.kind??'none',completedAt:progress.missions['w6-m5']?.completedAt??null},
     }),
   };
 }

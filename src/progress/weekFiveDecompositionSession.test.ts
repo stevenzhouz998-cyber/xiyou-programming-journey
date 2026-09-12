@@ -48,7 +48,7 @@ describe('W5-M4 durable problem-decomposition chain', () => {
     const solved = run(updateWeekFiveDecompositionCode(run(), SOLVED_WEEK_FIVE_DECOMPOSITION_PYTHON, NOW));
     expect(() => completeMission({ ...base, missionCompletionEvidence: {}, sessions: { 'w5-m4': solved } }, 'w5-m4', { stars: 3, hintsUsed: 0 })).toThrow();
     const completed = completeMission({ ...base, sessions: { ...base.sessions, 'w5-m4': solved }, savedAt: NOW }, 'w5-m4', { stars: 3, hintsUsed: 0 });
-    expect(completed.schemaRevision).toBe(21);
+    expect(completed.schemaRevision).toBe(22);
     expect(completed.missionCompletionEvidence['w5-m4']?.kind).toBe('formal-v3');
     expect(completed.works['w5-m4-problem-decomposition-record']?.run.completed).toBe(true);
     expect(isMissionUnlocked(completed, 'w5-m5')).toBe(true);
@@ -66,7 +66,7 @@ describe('W5-M4 durable problem-decomposition chain', () => {
     current.schemaRevision = 15;
     current.missions['w5-m4'] = { status: 'completed', stars: 2, attempts: 1, hintsUsed: 0, completedAt: NOW };
     const migrated = migrateProgress(current);
-    expect(migrated.schemaRevision).toBe(21);
+    expect(migrated.schemaRevision).toBe(22);
     expect(migrated.missionCompletionEvidence['w5-m4']).toMatchObject({ kind: 'legacy-replay-only', sourceSchemaRevision: 15 });
     expect(migrated.sessions['w5-m4']).toBeUndefined();
     expect(getWeekFiveDecompositionAccess(migrated)).toEqual({ kind: 'formal', upgradingLegacy: true });

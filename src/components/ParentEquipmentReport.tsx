@@ -83,6 +83,8 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   const promptProof = progress.missionCompletionEvidence['w6-m3'];
   const factCheckSession = progress.sessions['w6-m4'];
   const factCheckProof = progress.missionCompletionEvidence['w6-m4'];
+  const archiveSession = progress.sessions['w6-m5'];
+  const archiveProof = progress.missionCompletionEvidence['w6-m5'];
   const listSession = progress.sessions['w4-m4'];
   const listProof = progress.missionCompletionEvidence['w4-m4'];
   const blockerLabels = {
@@ -229,6 +231,12 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     <p>缺项调整 {factCheckSession?.missingFailures ?? 0} 次；判断调整 {factCheckSession?.verdictFailures ?? 0} 次；依据调整 {factCheckSession?.evidenceFailures ?? 0} 次；处置调整 {factCheckSession?.dispositionFailures ?? 0} 次。</p>
     {factCheckProof?.kind==='formal-v3'&&progress.works['w6-m4-second-attempt-review']?<p>回答审校正式证明与作品已保存</p>:null}
     {factCheckProof?.kind==='legacy-replay-only'?<p>历史兼容记录，尚非正式回答审校证明</p>:null}
+  </section><section aria-label="第六周取经档案学习摘要">
+    <h2>第六周取经档案学习摘要</h2>
+    <p>学习把真实程序记录整理成档案，并逐句核验教师练习。已运行 {archiveSession?.totalRuns ?? 0} 次。</p>
+    <p>Python 调整 {archiveSession?.pythonFailures ?? 0} 次；说明书调整 {archiveSession?.briefFailures ?? 0} 次；最终核验调整 {archiveSession?.reviewFailures ?? 0} 次。</p>
+    {archiveProof?.kind==='formal-v3'&&progress.works['w6-m5-journey-archive']?<p>课程终点取经档案正式证明与作品已保存</p>:null}
+    {archiveProof?.kind==='legacy-replay-only'?<p>历史兼容记录，尚非正式课程终点档案证明</p>:null}
   </section></>
 }
 

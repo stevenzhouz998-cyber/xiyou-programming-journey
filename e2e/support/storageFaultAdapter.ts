@@ -1425,6 +1425,9 @@ function exactW6PromptCompletionDelta(previous:ProgressV3,next:ProgressV3){const
 function hasNoW6FactCheckPublication(progress:ProgressV3){return progress.missions['w6-m4']===undefined&&progress.missionCompletionEvidence['w6-m4']===undefined&&progress.works['w6-m4-second-attempt-review']===undefined}
 function exactW6FactCheckSessionDelta(previous:ProgressV3,next:ProgressV3){const candidate=next.sessions['w6-m4'];return !!candidate&&hasNoW6FactCheckPublication(next)&&exactAfterAllowedDelta(previous,next,expected=>{expected.sessions['w6-m4']=structuredClone(candidate)})}
 function exactW6FactCheckCompletionDelta(previous:ProgressV3,next:ProgressV3){const completion=next.missions['w6-m4'],evidence=next.missionCompletionEvidence['w6-m4'],work=next.works['w6-m4-second-attempt-review'];if(!completion||evidence?.kind!=='formal-v3'||!work||!hasNoW6FactCheckPublication(previous))return false;return exactAfterAllowedDelta(previous,next,expected=>{expected.missions['w6-m4']=structuredClone(completion);expected.missionCompletionEvidence['w6-m4']=structuredClone(evidence);expected.works['w6-m4-second-attempt-review']=structuredClone(work)})}
+function hasNoW6ArchivePublication(progress:ProgressV3){return progress.missions['w6-m5']===undefined&&progress.missionCompletionEvidence['w6-m5']===undefined&&progress.works['w6-m5-journey-archive']===undefined}
+function exactW6ArchiveSessionDelta(previous:ProgressV3,next:ProgressV3){const candidate=next.sessions['w6-m5'];return !!candidate&&hasNoW6ArchivePublication(next)&&exactAfterAllowedDelta(previous,next,expected=>{expected.sessions['w6-m5']=structuredClone(candidate)})}
+function exactW6ArchiveCompletionDelta(previous:ProgressV3,next:ProgressV3){const completion=next.missions['w6-m5'],evidence=next.missionCompletionEvidence['w6-m5'],work=next.works['w6-m5-journey-archive'],oldEvidence=previous.missionCompletionEvidence['w6-m5'];const initial=hasNoW6ArchivePublication(previous),upgrade=previous.missions['w6-m5']!==undefined&&oldEvidence?.kind==='legacy-replay-only'&&previous.works['w6-m5-journey-archive']===undefined;if(!completion||evidence?.kind!=='formal-v3'||!work||(!initial&&!upgrade))return false;return exactAfterAllowedDelta(previous,next,expected=>{if(initial)expected.missions['w6-m5']=structuredClone(completion);expected.missionCompletionEvidence['w6-m5']=structuredClone(evidence);expected.works['w6-m5-journey-archive']=structuredClone(work)})}
 
 export const storageFaultAdapter: StorageFaultAdapter = {
   beforeProgressWrite: ({ storage, progress }) => {
@@ -1487,6 +1490,7 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-w6-m2-session' && exactW6ClassificationSessionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w6-m3-session' && exactW6PromptSessionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w6-m4-session' && exactW6FactCheckSessionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w6-m5-session' && exactW6ArchiveSessionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m3-run' && exactW4BranchRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-run' && exactW4ListRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m5-run' && exactW4BossRunDelta(previous, progress)) return FAILURE;
@@ -1526,6 +1530,7 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-w6-m2-completion' && exactW6ClassificationCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w6-m3-completion' && exactW6PromptCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w6-m4-completion' && exactW6FactCheckCompletionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w6-m5-completion' && exactW6ArchiveCompletionDelta(previous, progress)) return FAILURE;
     const advancedFailure = advancedStorageFaultHandler({ storage, progress });
     if (advancedFailure !== null) return advancedFailure;
     return null;

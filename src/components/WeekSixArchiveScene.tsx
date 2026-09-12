@@ -1,0 +1,4 @@
+import { useEffect,useState } from 'react';
+import { assetUrl } from '../utils/assets';
+export function WeekSixArchiveScene({onAssetsReady,onAssetsError}:{onAssetsReady():void;onAssetsError(message:string):void}){const[ready,setReady]=useState(false);useEffect(()=>{let live=true;const image=new Image();image.onload=()=>{if(live){setReady(true);onAssetsReady()}};image.onerror=()=>{if(live)onAssetsError('火焰山档案场景加载失败，请重试素材。')};image.src=assetUrl('/assets/week-six-records/flaming-mountain-background.webp');return()=>{live=false}},[]);return <figure className="week-six-archive-scene" aria-label="火焰山取经档案场景"><img src={assetUrl('/assets/week-six-records/flaming-mountain-background.webp')} alt="火焰山前，悟空整理三调芭蕉扇取经档案"/><figcaption>{ready?'三调资料已铺开，等你用代码与证据完成定稿。':'正在准备火焰山档案场景……'}</figcaption></figure>}
+export default WeekSixArchiveScene;

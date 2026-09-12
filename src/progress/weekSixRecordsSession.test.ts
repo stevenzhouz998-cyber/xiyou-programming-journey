@@ -44,7 +44,7 @@ describe('W6-M1 durable structured records', () => {
     expect(getWeekSixRecordsAccess(base)).toEqual({ kind: 'formal', upgradingLegacy: false });
     const session = run(SOLVED_WEEK_SIX_RECORDS_PYTHON, 8);
     const completed = completeMission({ ...base, sessions: { ...base.sessions, 'w6-m1': session }, savedAt: time(8) }, 'w6-m1', { stars: 3, hintsUsed: 0 });
-    expect(completed.schemaRevision).toBe(21);
+    expect(completed.schemaRevision).toBe(22);
     expect(completed.missionCompletionEvidence['w6-m1']?.kind).toBe('formal-v3');
     expect(completed.works['w6-m1-structured-records-table']?.run.completed).toBe(true);
     expect(isMissionUnlocked(completed, 'w6-m2')).toBe(true);
