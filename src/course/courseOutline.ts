@@ -61,7 +61,7 @@ export function getMissionOutline(id: string): CourseOutlineMission | undefined 
 }
 
 export function isFormalMissionOutline(outline: CourseOutlineMission | undefined): boolean {
-  return outline?.week === 1 || outline?.id === 'w2-m1' || outline?.id === 'w2-m2' || outline?.id === 'w2-m3' || outline?.id === 'w2-m4' || outline?.id === 'w2-m5' || outline?.id === 'w3-m1' || outline?.id === 'w3-m2' || outline?.id === 'w3-m3' || outline?.id === 'w3-m4' || outline?.id === 'w3-m5' || outline?.id === 'w4-m1' || outline?.id === 'w4-m2' || outline?.id === 'w4-m3' || outline?.id === 'w4-m4' || outline?.id === 'w4-m5' || outline?.id === 'w5-m1' || outline?.id === 'w5-m2' || outline?.id === 'w5-m3' || outline?.id === 'w5-m4' || outline?.id === 'w5-m5' || outline?.id === 'w6-m1' || outline?.id === 'w6-m2' || outline?.id === 'w6-m3';
+  return outline?.week === 1 || outline?.id === 'w2-m1' || outline?.id === 'w2-m2' || outline?.id === 'w2-m3' || outline?.id === 'w2-m4' || outline?.id === 'w2-m5' || outline?.id === 'w3-m1' || outline?.id === 'w3-m2' || outline?.id === 'w3-m3' || outline?.id === 'w3-m4' || outline?.id === 'w3-m5' || outline?.id === 'w4-m1' || outline?.id === 'w4-m2' || outline?.id === 'w4-m3' || outline?.id === 'w4-m4' || outline?.id === 'w4-m5' || outline?.id === 'w5-m1' || outline?.id === 'w5-m2' || outline?.id === 'w5-m3' || outline?.id === 'w5-m4' || outline?.id === 'w5-m5' || outline?.id === 'w6-m1' || outline?.id === 'w6-m2' || outline?.id === 'w6-m3' || outline?.id === 'w6-m4';
 }
 
 function deriveHints(extension: MissionPresentationExtension, stepCount: number): HintSet {

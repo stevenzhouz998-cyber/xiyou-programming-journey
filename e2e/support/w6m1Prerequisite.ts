@@ -9,6 +9,8 @@ import { runWeekSixClassification, type WeekSixClassificationInput } from '../..
 import { createWeekSixClassificationSession, recordWeekSixClassificationCheck, updateWeekSixClassificationInput } from '../../src/progress/weekSixClassificationSession';
 import { runWeekSixPrompt, type WeekSixPromptInput } from '../../src/engine/weekSixPromptContract';
 import { createWeekSixPromptSession, recordWeekSixPromptRun, updateWeekSixPromptInput } from '../../src/progress/weekSixPromptSession';
+import { runWeekSixFactCheck, type WeekSixFactCheckInput } from '../../src/engine/weekSixFactCheckContract';
+import { createWeekSixFactCheckSession, recordWeekSixFactCheckRun, updateWeekSixFactCheckInput } from '../../src/progress/weekSixFactCheckSession';
 
 export function formalW5M5Prerequisite(): string {
   const progress = parseProgress(formalW5M4Prerequisite());
@@ -62,4 +64,12 @@ export function formalW6M2Completion(): string {
 
 export function formalW6M3Completion(outputFormat:'event-table'|'step-list'='event-table'):string{
   const progress=parseProgress(formalW6M2Completion()),source=progress.works['w6-m2-fan-evidence-classification'];if(!source)throw Error('W6-M3 source fixture invalid');const now=new Date().toISOString();const input:WeekSixPromptInput={task:'organize-second-attempt',factIds:['sun-as-bull-gets-fan','bull-as-bajie-takes-fan','second-not-passed'],constraintIds:['follow-canon','no-invention'],outputFormat};let session=createWeekSixPromptSession(source,now);session=updateWeekSixPromptInput(session,input,now);session=recordWeekSixPromptRun(session,input,runWeekSixPrompt(input,session.source),now);progress.sessions['w6-m3']=session;progress.savedAt=now;return serializeProgress(completeMission(progress,'w6-m3',{stars:3,hintsUsed:0}));
+}
+
+export function formalW6M4Completion():string{
+  const progress=parseProgress(formalW6M3Completion()),source=progress.works['w6-m3-second-attempt-brief'];if(!source)throw Error('W6-M4 source fixture invalid');const now=new Date().toISOString();const input:WeekSixFactCheckInput={reviews:[
+    {statementId:'gained-then-reclaimed',verdict:'supported',evidenceIds:['chapter-60-true-fan','chapter-61-fan-reclaimed'],disposition:'keep-original'},
+    {statementId:'gained-therefore-passed',verdict:'conflicting',evidenceIds:['m2-second-not-passed'],disposition:'revise-not-passed'},
+    {statementId:'exactly-ten-minutes',verdict:'insufficient',evidenceIds:['provided-material-scope'],disposition:'cannot-confirm'},
+  ]};let session=createWeekSixFactCheckSession(source,now);session=updateWeekSixFactCheckInput(session,input,now);session=recordWeekSixFactCheckRun(session,input,runWeekSixFactCheck(input,session.source),now);progress.sessions['w6-m4']=session;progress.savedAt=now;return serializeProgress(completeMission(progress,'w6-m4',{stars:3,hintsUsed:0}));
 }

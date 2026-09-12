@@ -254,6 +254,11 @@ export const formalWeekSixMissions: FormalMissionSpec[] = [
     storyBeats: [beat('变作取扇', '悟空变作牛魔王模样取得真扇。'), beat('变作骗回', '牛魔王变作八戒模样骗回扇子；二调未完成灭火通行。')],
     hints: { observe: '看看首个阻塞落在任务、事实、限制还是格式。', think: '说明书要说清做什么、依据什么、不能做什么，以及怎么呈现。', partial: '只检查当前标出的区域，对照已选材料是否完整且不矛盾。' },
   }),
+  formalAiMission('w6-m4', {
+    subtitle:'逐句判断、举证并亲手修订',objective:'核验本地练习回答的三句话，为判断选择相关依据并作出有据处置',canon:formalWeekSixCanon,
+    storyBeats:[beat('核验取得与被骗回','对照第六十至六十一回的有限转述，核验二调取得真扇后又被骗回。'),beat('区分冲突与材料不足','取得真扇不等于当次已经通行；本页材料未给具体分钟数时应暂不能确认。')],
+    hints:{observe:'先看首个阻塞落在哪句话、哪个核验区域。',think:'每句话都要分别完成判断、相关依据和实际处置。',partial:'只检查当前标出的句子，依据必须直接覆盖判断。'},
+  }),
 ];
 
 export function getFormalMission(id: string): FormalMissionSpec | undefined {

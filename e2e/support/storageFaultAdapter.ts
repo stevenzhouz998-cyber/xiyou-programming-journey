@@ -1422,6 +1422,9 @@ function exactW6ClassificationCompletionDelta(previous: ProgressV3, next: Progre
 function hasNoW6PromptPublication(progress:ProgressV3){return progress.missions['w6-m3']===undefined&&progress.missionCompletionEvidence['w6-m3']===undefined&&progress.works['w6-m3-second-attempt-brief']===undefined}
 function exactW6PromptSessionDelta(previous:ProgressV3,next:ProgressV3){const candidate=next.sessions['w6-m3'];return !!candidate&&hasNoW6PromptPublication(next)&&exactAfterAllowedDelta(previous,next,expected=>{expected.sessions['w6-m3']=structuredClone(candidate)})}
 function exactW6PromptCompletionDelta(previous:ProgressV3,next:ProgressV3){const completion=next.missions['w6-m3'],evidence=next.missionCompletionEvidence['w6-m3'],work=next.works['w6-m3-second-attempt-brief'];if(!completion||evidence?.kind!=='formal-v3'||!work||!hasNoW6PromptPublication(previous))return false;return exactAfterAllowedDelta(previous,next,expected=>{expected.missions['w6-m3']=structuredClone(completion);expected.missionCompletionEvidence['w6-m3']=structuredClone(evidence);expected.works['w6-m3-second-attempt-brief']=structuredClone(work)})}
+function hasNoW6FactCheckPublication(progress:ProgressV3){return progress.missions['w6-m4']===undefined&&progress.missionCompletionEvidence['w6-m4']===undefined&&progress.works['w6-m4-second-attempt-review']===undefined}
+function exactW6FactCheckSessionDelta(previous:ProgressV3,next:ProgressV3){const candidate=next.sessions['w6-m4'];return !!candidate&&hasNoW6FactCheckPublication(next)&&exactAfterAllowedDelta(previous,next,expected=>{expected.sessions['w6-m4']=structuredClone(candidate)})}
+function exactW6FactCheckCompletionDelta(previous:ProgressV3,next:ProgressV3){const completion=next.missions['w6-m4'],evidence=next.missionCompletionEvidence['w6-m4'],work=next.works['w6-m4-second-attempt-review'];if(!completion||evidence?.kind!=='formal-v3'||!work||!hasNoW6FactCheckPublication(previous))return false;return exactAfterAllowedDelta(previous,next,expected=>{expected.missions['w6-m4']=structuredClone(completion);expected.missionCompletionEvidence['w6-m4']=structuredClone(evidence);expected.works['w6-m4-second-attempt-review']=structuredClone(work)})}
 
 export const storageFaultAdapter: StorageFaultAdapter = {
   beforeProgressWrite: ({ storage, progress }) => {
@@ -1483,6 +1486,7 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-w6-m1-draft' && exactW6RecordsSessionDelta(previous, progress, 'draft')) return FAILURE;
     if (mode === 'fail-w6-m2-session' && exactW6ClassificationSessionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w6-m3-session' && exactW6PromptSessionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w6-m4-session' && exactW6FactCheckSessionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m3-run' && exactW4BranchRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-run' && exactW4ListRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m5-run' && exactW4BossRunDelta(previous, progress)) return FAILURE;
@@ -1521,6 +1525,7 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-w6-m1-completion' && exactW6RecordsCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w6-m2-completion' && exactW6ClassificationCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w6-m3-completion' && exactW6PromptCompletionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w6-m4-completion' && exactW6FactCheckCompletionDelta(previous, progress)) return FAILURE;
     const advancedFailure = advancedStorageFaultHandler({ storage, progress });
     if (advancedFailure !== null) return advancedFailure;
     return null;

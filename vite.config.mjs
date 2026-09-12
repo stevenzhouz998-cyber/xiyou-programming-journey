@@ -3,6 +3,12 @@ import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 
 const e2eStorageFaults = process.env.XIYOU_E2E_STORAGE_FAULTS === '1';
+const reachesEntryThroughStaticImports = (id, getModuleInfo, seen = new Set()) => {
+  if (id.replaceAll('\\', '/').endsWith('/src/main.tsx')) return true;
+  if (seen.has(id)) return false;
+  seen.add(id);
+  return (getModuleInfo(id)?.importers ?? []).some((importer) => getModuleInfo(importer)?.importedIds.includes(id) && reachesEntryThroughStaticImports(importer, getModuleInfo, seen));
+};
 const advancedWeekOneBlocklyCore = {
   name: 'advanced-week-one-blockly-core',
   enforce: 'pre',
@@ -40,7 +46,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         onlyExplicitManualChunks: true,
-        manualChunks(id) {
+        manualChunks(id, { getModuleInfo }) {
           if (id.includes('/node_modules/phaser/')) return 'phaser';
           if (id.includes('/node_modules/blockly/')) return 'blockly-editor';
           if (id.includes('/node_modules/@codemirror/')) return 'codemirror-editor';
@@ -48,20 +54,21 @@ export default defineConfig({
           if (/\/node_modules\/(?:react|react-dom|react-router|react-router-dom|scheduler)\//.test(id)) return 'app-vendor';
           const source = id.replaceAll('\\', '/');
           if (source.endsWith('/src/utils/assets.ts')) return 'asset-path';
-          if (source.endsWith('/src/utils/focus.ts')) return 'focus-shared';
+          if (source.endsWith('/src/utils/focus.ts')) return 'ui-shared';
           if (source.endsWith('/src/engine/validation.ts')) return 'validation-shared';
           if (source.endsWith('/src/progress/storageWrite.ts')) return 'storage-write';
           if (source.endsWith('/src/progress/storageParentKeys.ts')) return 'parent-data';
           if (source.endsWith('/src/progress/weeklyReport.ts')) return 'parent-report';
           if (source.endsWith('/src/course/formalCourse.ts')) return 'formal-course';
           if (source.endsWith('/src/course/course.ts')) return 'course-content';
-          if (source.endsWith('/src/blockly/advancedWeekOneContract.ts')) return 'advanced-session-contract';
-          if (source.endsWith('/src/components/LazySectionBoundary.tsx')) return 'lazy-section-boundary';
+          if (source.endsWith('/src/blockly/advancedWeekOneContract.ts')) return 'progress-core';
+          if (source.endsWith('/src/components/LazySectionBoundary.tsx')) return 'ui-shared';
           if (source.endsWith('/src/utils/download.ts')) return 'route-shared';
           if (source.endsWith('/src/progress/storageFaultAdapter.ts') || source.endsWith('/src/progress/parentAccessSchema.ts') || source.endsWith('/src/progress/advancedSessionSchema.ts')) return 'progress-core';
-          if (source.includes('/src/battle/')
-            || /\/src\/progress\/(?:equipment|progress|schema|storage|types)\.ts$/.test(source)
+          if ((source.includes('/src/battle/') || source.includes('/src/engine/') || source.includes('/src/blockly/') || source.includes('/src/progress/'))
+            && reachesEntryThroughStaticImports(id, getModuleInfo)
           ) return 'progress-core';
+          if (source.endsWith('/src/course/courseOutline.ts')) return 'progress-core';
           if (source.endsWith('/src/context/ProgressContext.tsx')
             || source.endsWith('/src/components/ToolErrorBoundary.tsx')) return 'app-core';
         },

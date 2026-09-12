@@ -10,6 +10,8 @@ import { runWeekSixClassification } from '../engine/weekSixClassificationContrac
 import { parseWeekSixClassificationEvidence, parseWeekSixClassificationSession, parseWeekSixClassificationWork } from './weekSixClassificationSessionSchema';
 import { deriveWeekSixPromptSource, runWeekSixPrompt } from '../engine/weekSixPromptContract';
 import { parseWeekSixPromptEvidence, parseWeekSixPromptSession, parseWeekSixPromptWork } from './weekSixPromptSessionSchema';
+import { deriveWeekSixFactCheckSource, runWeekSixFactCheck } from '../engine/weekSixFactCheckContract';
+import { parseWeekSixFactCheckEvidence, parseWeekSixFactCheckSession, parseWeekSixFactCheckWork } from './weekSixFactCheckSessionSchema';
 import { createInitialProgress, parseProgress } from './schema';
 import type {
   ManorHelpCompletionEvidence,
@@ -61,6 +63,9 @@ import type {
   WeekSixPromptCompletionEvidence,
   WeekSixPromptMissionSession,
   WeekSixPromptWorkV1,
+  WeekSixFactCheckCompletionEvidence,
+  WeekSixFactCheckMissionSession,
+  WeekSixFactCheckWorkV1,
   ProgressV3,
 } from './types';
 
@@ -1066,6 +1071,10 @@ function formalWeekSixPromptCompletionEvidence(session:WeekSixPromptMissionSessi
 function hasValidFormalWeekSixPromptCompletion(progress:ProgressV3):boolean{const mission=progress.missions['w6-m3'],rawEvidence=progress.missionCompletionEvidence['w6-m3'],rawSession=progress.sessions['w6-m3'],rawWork=progress.works['w6-m3-second-attempt-brief'],source=progress.works['w6-m2-fan-evidence-classification'];if(!hasValidFormalWeekSixClassificationCompletion(progress)||!hasValidCompletedMission(mission)||rawEvidence?.kind!=='formal-v3'||!rawSession||!rawWork||!source)return false;try{const session=parseWeekSixPromptSession(rawSession),work=parseWeekSixPromptWork(rawWork);return parseWeekSixPromptEvidence(rawEvidence,{mission,formalWeekSixClassification:true,session,work,sourceWork:source}).kind==='formal-v3';}catch{return false;}}
 export function completeWeekSixPromptProgress(progress:ProgressV3,input:CompletionInput):ProgressV3{const previous=progress.missions['w6-m3'],existing=progress.missionCompletionEvidence['w6-m3'];if(existing?.kind==='formal-v3'){if(hasValidFormalWeekSixPromptCompletion(progress))return progress;throw Error('W6-M3完成无效');}if(!hasValidFormalWeekSixClassificationCompletion(progress))throw Error('W6-M3完成无效');if(previous&&existing?.kind!=='legacy-replay-only')throw Error('W6-M3完成无效');const now=new Date().toISOString(),completion=formalWeekSixPromptCompletionEvidence(progress.sessions['w6-m3'],progress.works['w6-m2-fan-evidence-classification'],previous?.completedAt??now,now,now);if(!completion)throw Error('W6-M3完成无效');const mission=previous??{status:'completed' as const,stars:normalizeStars(input.stars),attempts:safeCount(0,1),hintsUsed:safeCount(0,normalizeHints(input.hintsUsed)),completedAt:now};return{...progress,missions:{...progress.missions,'w6-m3':mission},missionCompletionEvidence:{...progress.missionCompletionEvidence,'w6-m3':completion.evidence},works:{...progress.works,[completion.work.workId]:completion.work},savedAt:now};}
 
+function formalWeekSixFactCheckCompletionEvidence(session:WeekSixFactCheckMissionSession|undefined,sourceWork:WeekSixPromptWorkV1|undefined,completedAt:string,createdAt:string,verifiedAt:string):{evidence:Extract<WeekSixFactCheckCompletionEvidence,{kind:'formal-v3'}>;work:WeekSixFactCheckWorkV1}|null{if(!session||!sourceWork||!session.lastRun||!session.lastRunAt)return null;const source=deriveWeekSixFactCheckSource(sourceWork),run=runWeekSixFactCheck(session.input,source);if(!run.completed||run.state!=='review-proven'||run.failureSnapshots.length||session.failureSnapshot!==null||!deeplyEqual(run,session.lastRun)||session.sourceWorkId!==sourceWork.workId||session.sourceVerifiedAt!==sourceWork.verifiedAt||!deeplyEqual(session.source,source))return null;const work:WeekSixFactCheckWorkV1={kind:'ai-fact-check-report-v1',workId:'w6-m4-second-attempt-review',missionId:'w6-m4',title:'二调芭蕉扇回答审校报告',sourceWorkId:sourceWork.workId,sourceVerifiedAt:sourceWork.verifiedAt,source:structuredClone(source),input:structuredClone(session.input),run:structuredClone(run),createdAt,verifiedAt};return{work,evidence:{kind:'formal-v3',completedAt,verifiedAt,sourceWorkId:sourceWork.workId,sourceVerifiedAt:sourceWork.verifiedAt,source:structuredClone(source),input:structuredClone(session.input),run:structuredClone(run),workId:work.workId}}}
+function hasValidFormalWeekSixFactCheckCompletion(progress:ProgressV3):boolean{const mission=progress.missions['w6-m4'],rawEvidence=progress.missionCompletionEvidence['w6-m4'],rawSession=progress.sessions['w6-m4'],rawWork=progress.works['w6-m4-second-attempt-review'],source=progress.works['w6-m3-second-attempt-brief'];if(!hasValidFormalWeekSixPromptCompletion(progress)||!hasValidCompletedMission(mission)||rawEvidence?.kind!=='formal-v3'||!rawSession||!rawWork||!source)return false;try{const session=parseWeekSixFactCheckSession(rawSession),work=parseWeekSixFactCheckWork(rawWork);return parseWeekSixFactCheckEvidence(rawEvidence,{mission,formalWeekSixPrompt:true,session,work,sourceWork:source}).kind==='formal-v3'}catch{return false}}
+export function completeWeekSixFactCheckProgress(progress:ProgressV3,input:CompletionInput):ProgressV3{const previous=progress.missions['w6-m4'],existing=progress.missionCompletionEvidence['w6-m4'];if(existing?.kind==='formal-v3'){if(hasValidFormalWeekSixFactCheckCompletion(progress))return progress;throw Error('W6-M4完成无效')}if(!hasValidFormalWeekSixPromptCompletion(progress))throw Error('W6-M4完成无效');if(previous&&existing?.kind!=='legacy-replay-only')throw Error('W6-M4完成无效');const now=new Date().toISOString(),completion=formalWeekSixFactCheckCompletionEvidence(progress.sessions['w6-m4'],progress.works['w6-m3-second-attempt-brief'],previous?.completedAt??now,now,now);if(!completion)throw Error('W6-M4完成无效');const mission=previous??{status:'completed' as const,stars:normalizeStars(input.stars),attempts:safeCount(0,1),hintsUsed:safeCount(0,normalizeHints(input.hintsUsed)),completedAt:now};return{...progress,missions:{...progress.missions,'w6-m4':mission},missionCompletionEvidence:{...progress.missionCompletionEvidence,'w6-m4':completion.evidence},works:{...progress.works,[completion.work.workId]:completion.work},savedAt:now}}
+
 export function completeMission(progress: ProgressV3, missionId: string, input: CompletionInput): ProgressV3 {
   if (!allMissionOutlines.some((mission) => mission.id === missionId)) throw new Error('任务编号无效');
   if (missionId === 'w4-m3') return completeWeekFourBranchProgress(progress, input);
@@ -1079,6 +1088,7 @@ export function completeMission(progress: ProgressV3, missionId: string, input: 
   if (missionId === 'w6-m1') return completeWeekSixRecordsProgress(progress, input);
   if (missionId === 'w6-m2') return completeWeekSixClassificationProgress(progress, input);
   if (missionId === 'w6-m3') return completeWeekSixPromptProgress(progress, input);
+  if (missionId === 'w6-m4') return completeWeekSixFactCheckProgress(progress, input);
   const previous = progress.missions[missionId];
   const stars = normalizeStars(input.stars);
   const normalizedHints = normalizeHints(input.hintsUsed);
@@ -1235,7 +1245,8 @@ export function isMissionUnlocked(progress: ProgressV3, missionId: string): bool
   if (missionId === 'w6-m1') return getWeekSixRecordsAccess(progress).kind !== 'locked';
   if (missionId === 'w6-m2') return getWeekSixClassificationAccess(progress).kind !== 'locked';
   if (missionId === 'w6-m3') return getWeekSixPromptAccess(progress).kind !== 'locked';
-  if (missionId === 'w6-m4') return hasValidFormalWeekSixPromptCompletion(progress);
+  if (missionId === 'w6-m4') { const access=getWeekSixFactCheckAccess(progress);return access.kind==='formal'||(access.kind==='historical-read-only'&&access.completed); }
+  if (missionId === 'w6-m5') return hasValidFormalWeekSixFactCheckCompletion(progress);
   return progress.missions[allMissionOutlines[index - 1].id]?.status === 'completed';
 }
 
@@ -1405,6 +1416,8 @@ export type WeekSixClassificationAccess={kind:'locked'}|{kind:'historical-read-o
 export function getWeekSixClassificationAccess(progress:ProgressV3):WeekSixClassificationAccess{const evidence=progress.missionCompletionEvidence['w6-m2'];if(hasValidFormalWeekSixRecordsCompletion(progress))return{kind:'formal',upgradingLegacy:evidence?.kind==='legacy-replay-only'};const prerequisite=progress.missionCompletionEvidence['w6-m1'];if((progress.missions['w6-m1']?.status==='completed'&&prerequisite?.kind==='legacy-replay-only')||evidence?.kind==='legacy-replay-only')return{kind:'historical-read-only',completed:progress.missions['w6-m2']?.status==='completed'&&evidence?.kind==='legacy-replay-only'};return{kind:'locked'};}
 export type WeekSixPromptAccess={kind:'locked'}|{kind:'historical-read-only';completed:boolean}|{kind:'formal';upgradingLegacy:boolean};
 export function getWeekSixPromptAccess(progress:ProgressV3):WeekSixPromptAccess{const evidence=progress.missionCompletionEvidence['w6-m3'];if(hasValidFormalWeekSixClassificationCompletion(progress))return{kind:'formal',upgradingLegacy:evidence?.kind==='legacy-replay-only'};const prerequisite=progress.missionCompletionEvidence['w6-m2'];if((progress.missions['w6-m2']?.status==='completed'&&prerequisite?.kind==='legacy-replay-only')||evidence?.kind==='legacy-replay-only')return{kind:'historical-read-only',completed:progress.missions['w6-m3']?.status==='completed'&&evidence?.kind==='legacy-replay-only'};return{kind:'locked'};}
+export type WeekSixFactCheckAccess={kind:'locked'}|{kind:'historical-read-only';completed:boolean}|{kind:'formal';upgradingLegacy:boolean};
+export function getWeekSixFactCheckAccess(progress:ProgressV3):WeekSixFactCheckAccess{const evidence=progress.missionCompletionEvidence['w6-m4'];if(hasValidFormalWeekSixPromptCompletion(progress))return{kind:'formal',upgradingLegacy:evidence?.kind==='legacy-replay-only'};const prerequisite=progress.missionCompletionEvidence['w6-m3'];if((progress.missions['w6-m3']?.status==='completed'&&prerequisite?.kind==='legacy-replay-only')||evidence?.kind==='legacy-replay-only')return{kind:'historical-read-only',completed:progress.missions['w6-m4']?.status==='completed'&&evidence?.kind==='legacy-replay-only'};return{kind:'locked'}}
 
 export function serializeProgress(progress: ProgressV3): string {
   return JSON.stringify(progress, null, 2);

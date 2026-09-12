@@ -8,6 +8,7 @@ import { getWeekFiveStoryOrchestrationAccess } from '../progress/progress';
 import { getWeekSixRecordsAccess } from '../progress/progress';
 import { getWeekSixClassificationAccess } from '../progress/progress';
 import { getWeekSixPromptAccess } from '../progress/progress';
+import { getWeekSixFactCheckAccess } from '../progress/progress';
 import type { WeekFourListExperienceProps } from './WeekFourListExperience';
 import type { WeekFourBossExperienceProps } from './WeekFourBossExperience';
 import type { WeekFiveMonksExperienceProps } from './WeekFiveMonksExperience';
@@ -18,6 +19,7 @@ import type { WeekFiveStoryOrchestrationExperienceProps } from './WeekFiveStoryO
 import type { WeekSixRecordsExperienceProps } from './WeekSixRecordsExperience';
 import type { WeekSixClassificationExperienceProps } from './WeekSixClassificationExperience';
 import type { WeekSixPromptExperienceProps } from './WeekSixPromptExperience';
+import type { WeekSixFactCheckExperienceProps } from './WeekSixFactCheckExperience';
 import { WeekFourListAccessNotice } from './WeekFourListAccessNotice';
 import { WeekFourBossAccessNotice } from './WeekFourBossAccessNotice';
 import { WeekFiveMonksAccessNotice } from './WeekFiveMonksAccessNotice';
@@ -28,6 +30,7 @@ import { WeekFiveStoryOrchestrationAccessNotice } from './WeekFiveStoryOrchestra
 import { WeekSixRecordsAccessNotice } from './WeekSixRecordsAccessNotice';
 import { WeekSixClassificationAccessNotice } from './WeekSixClassificationAccessNotice';
 import { WeekSixPromptAccessNotice } from './WeekSixPromptAccessNotice';
+import { WeekSixFactCheckAccessNotice } from './WeekSixFactCheckAccessNotice';
 import {
   lazy,
   Suspense,
@@ -192,6 +195,10 @@ const loadWeekSixPromptExperience=()=>import('./WeekSixPromptExperience').then(m
 const loadWeekSixPromptExperienceRetry:()=>Promise<{default:ComponentType<WeekSixPromptExperienceProps>}>=()=>
   // @ts-expect-error Vite treats this literal query as a second statically bundled module URL.
   import('./WeekSixPromptExperience?retry=1').then(module=>({default:module.WeekSixPromptExperience}));
+const loadWeekSixFactCheckExperience=()=>import('./WeekSixFactCheckExperience').then(module=>({default:module.WeekSixFactCheckExperience}));
+const loadWeekSixFactCheckExperienceRetry:()=>Promise<{default:ComponentType<WeekSixFactCheckExperienceProps>}>=()=>
+  // @ts-expect-error Vite treats this literal query as a second statically bundled module URL.
+  import('./WeekSixFactCheckExperience?retry=1').then(module=>({default:module.WeekSixFactCheckExperience}));
 
 export function FourSeasRegaliaRouteBoundary({
   loader = loadFourSeasRegaliaExperience,
@@ -495,6 +502,7 @@ export function WeekFiveStoryOrchestrationRouteBoundary({ loader = loadWeekFiveS
 export function WeekSixRecordsRouteBoundary({loader=loadWeekSixRecordsExperience,reloadPage:_reloadPage,...props}:WeekSixRecordsExperienceProps&{loader?:()=>Promise<{default:ComponentType<WeekSixRecordsExperienceProps>}>;reloadPage?:()=>void}){const[retryGeneration,setRetryGeneration]=useState(0);const selected=loader===loadWeekSixRecordsExperience&&retryGeneration>0?loadWeekSixRecordsExperienceRetry:loader;const Experience=useMemo(()=>lazy(selected),[selected,retryGeneration]);return <LazySectionBoundary key={retryGeneration} label="结构化事实表体验" reloadPage={()=>setRetryGeneration((value)=>value+1)}><Suspense fallback={<p className="mission-tools-loading" role="status">结构化事实表体验加载中，请稍候……</p>}><Experience {...props}/></Suspense></LazySectionBoundary>}
 export function WeekSixClassificationRouteBoundary({loader=loadWeekSixClassificationExperience,reloadPage:_reloadPage,...props}:WeekSixClassificationExperienceProps&{loader?:()=>Promise<{default:ComponentType<WeekSixClassificationExperienceProps>}>;reloadPage?:()=>void}){const[retryGeneration,setRetryGeneration]=useState(0);const selected=loader===loadWeekSixClassificationExperience&&retryGeneration>0?loadWeekSixClassificationExperienceRetry:loader;const Experience=useMemo(()=>lazy(selected),[selected,retryGeneration]);return <LazySectionBoundary key={retryGeneration} label="证据分类台体验" reloadPage={()=>setRetryGeneration((value)=>value+1)}><Suspense fallback={<p className="mission-tools-loading" role="status">证据分类台体验加载中，请稍候……</p>}><Experience {...props}/></Suspense></LazySectionBoundary>}
 export function WeekSixPromptRouteBoundary({loader=loadWeekSixPromptExperience,reloadPage:_reloadPage,...props}:WeekSixPromptExperienceProps&{loader?:()=>Promise<{default:ComponentType<WeekSixPromptExperienceProps>}>;reloadPage?:()=>void}){const[retryGeneration,setRetryGeneration]=useState(0),selected=loader===loadWeekSixPromptExperience&&retryGeneration>0?loadWeekSixPromptExperienceRetry:loader,Experience=useMemo(()=>lazy(selected),[selected,retryGeneration]);return <LazySectionBoundary key={retryGeneration} label="任务说明书体验" reloadPage={()=>setRetryGeneration(value=>value+1)}><Suspense fallback={<p className="mission-tools-loading" role="status">任务说明书体验加载中，请稍候……</p>}><Experience {...props}/></Suspense></LazySectionBoundary>}
+export function WeekSixFactCheckRouteBoundary({loader=loadWeekSixFactCheckExperience,reloadPage:_reloadPage,...props}:WeekSixFactCheckExperienceProps&{loader?:()=>Promise<{default:ComponentType<WeekSixFactCheckExperienceProps>}>;reloadPage?:()=>void}){const[retryGeneration,setRetryGeneration]=useState(0),selected=loader===loadWeekSixFactCheckExperience&&retryGeneration>0?loadWeekSixFactCheckExperienceRetry:loader,Experience=useMemo(()=>lazy(selected),[selected,retryGeneration]);return <LazySectionBoundary key={retryGeneration} label="回答审校台体验" reloadPage={()=>setRetryGeneration(value=>value+1)}><Suspense fallback={<p className="mission-tools-loading" role="status">回答审校台体验加载中，请稍候……</p>}><Experience {...props}/></Suspense></LazySectionBoundary>}
 
 function playAudio(path: string, muted: boolean) {
   if (muted || typeof Audio === "undefined") return;
@@ -681,6 +689,7 @@ interface MissionPageProps {
   weekSixRecordsLoader?:()=>Promise<{default:ComponentType<WeekSixRecordsExperienceProps>}>;
   weekSixClassificationLoader?:()=>Promise<{default:ComponentType<WeekSixClassificationExperienceProps>}>;
   weekSixPromptLoader?:()=>Promise<{default:ComponentType<WeekSixPromptExperienceProps>}>;
+  weekSixFactCheckLoader?:()=>Promise<{default:ComponentType<WeekSixFactCheckExperienceProps>}>;
   weekFourBranchRuntimeFactory?: WeekFourBranchExperienceProps['runtimeFactory'];
   weekFourListRuntimeFactory?: WeekFourListExperienceProps['runtimeFactory'];
   weekFourBossRuntimeFactory?: WeekFourBossExperienceProps['runtimeFactory'];
@@ -709,6 +718,7 @@ export function MissionPageForId({
   weekSixRecordsLoader,
   weekSixClassificationLoader,
   weekSixPromptLoader,
+  weekSixFactCheckLoader,
   weekFourBranchRuntimeFactory,
   weekFourListRuntimeFactory,
   weekFourBossRuntimeFactory,
@@ -816,6 +826,8 @@ export function MissionPageForId({
   if(weekSixClassificationAccess&&weekSixClassificationAccess.kind!=='formal')return <WeekSixClassificationAccessNotice access={weekSixClassificationAccess}/>;
   const weekSixPromptAccess=mission.id==='w6-m3'?getWeekSixPromptAccess(progress):null;
   if(weekSixPromptAccess&&weekSixPromptAccess.kind!=='formal')return <WeekSixPromptAccessNotice access={weekSixPromptAccess}/>;
+  const weekSixFactCheckAccess=mission.id==='w6-m4'?getWeekSixFactCheckAccess(progress):null;
+  if(weekSixFactCheckAccess&&weekSixFactCheckAccess.kind!=='formal')return <WeekSixFactCheckAccessNotice access={weekSixFactCheckAccess}/>;
   if (!isMissionUnlocked(progress, mission.id))
     return (
       <main className="not-found">
@@ -960,6 +972,7 @@ export function MissionPageForId({
   const revealPersistedWeekSixRecordsCompletion=async(earnedStars:number,completionHints:number):Promise<boolean>=>{if(mission.id!=='w6-m1'||successRef.current||completionSaveRef.current!==null)return false;const request:CompletionSave={requestId:++requestGenerationRef.current,stars:earnedStars,hintsUsed:completionHints,status:'pending'};onCompletionPersistenceActiveChange(true);completionSaveRef.current=request;return revealSuccess(request,earnedStars);};
   const revealPersistedWeekSixClassificationCompletion=async(earnedStars:number,completionHints:number):Promise<boolean>=>{if(mission.id!=='w6-m2'||successRef.current||completionSaveRef.current!==null)return false;const request:CompletionSave={requestId:++requestGenerationRef.current,stars:earnedStars,hintsUsed:completionHints,status:'pending'};onCompletionPersistenceActiveChange(true);completionSaveRef.current=request;return revealSuccess(request,earnedStars);};
   const revealPersistedWeekSixPromptCompletion=async(earnedStars:number,completionHints:number):Promise<boolean>=>{if(mission.id!=='w6-m3'||successRef.current||completionSaveRef.current!==null)return false;const request:CompletionSave={requestId:++requestGenerationRef.current,stars:earnedStars,hintsUsed:completionHints,status:'pending'};onCompletionPersistenceActiveChange(true);completionSaveRef.current=request;return revealSuccess(request,earnedStars);};
+  const revealPersistedWeekSixFactCheckCompletion=async(earnedStars:number,completionHints:number):Promise<boolean>=>{if(mission.id!=='w6-m4'||successRef.current||completionSaveRef.current!==null)return false;const request:CompletionSave={requestId:++requestGenerationRef.current,stars:earnedStars,hintsUsed:completionHints,status:'pending'};onCompletionPersistenceActiveChange(true);completionSaveRef.current=request;return revealSuccess(request,earnedStars);};
   const retryCompletionSave = async () => {
     const failed = completionSaveRef.current;
     if (!failed || failed.status !== "unsaved") return;
@@ -1050,9 +1063,9 @@ export function MissionPageForId({
     );
   };
   const hintsLocked = isExecutableMissionId(mission.id)
-    && (battleInteractionLocked || completionSave !== null || (mission.id === 'w6-m1' && progress.missionCompletionEvidence['w6-m1']?.kind === 'formal-v3') || (mission.id === 'w6-m2' && progress.missionCompletionEvidence['w6-m2']?.kind === 'formal-v3') || (mission.id === 'w6-m3' && progress.missionCompletionEvidence['w6-m3']?.kind === 'formal-v3'));
+    && (battleInteractionLocked || completionSave !== null || (mission.id === 'w6-m1' && progress.missionCompletionEvidence['w6-m1']?.kind === 'formal-v3') || (mission.id === 'w6-m2' && progress.missionCompletionEvidence['w6-m2']?.kind === 'formal-v3') || (mission.id === 'w6-m3' && progress.missionCompletionEvidence['w6-m3']?.kind === 'formal-v3') || (mission.id === 'w6-m4' && progress.missionCompletionEvidence['w6-m4']?.kind === 'formal-v3'));
   const hintLockReason =
-    (mission.id === 'w6-m1' && progress.missionCompletionEvidence['w6-m1']?.kind === 'formal-v3') || (mission.id === 'w6-m2' && progress.missionCompletionEvidence['w6-m2']?.kind === 'formal-v3') || (mission.id === 'w6-m3' && progress.missionCompletionEvidence['w6-m3']?.kind === 'formal-v3')
+    (mission.id === 'w6-m1' && progress.missionCompletionEvidence['w6-m1']?.kind === 'formal-v3') || (mission.id === 'w6-m2' && progress.missionCompletionEvidence['w6-m2']?.kind === 'formal-v3') || (mission.id === 'w6-m3' && progress.missionCompletionEvidence['w6-m3']?.kind === 'formal-v3') || (mission.id === 'w6-m4' && progress.missionCompletionEvidence['w6-m4']?.kind === 'formal-v3')
       ? "正式作品已保存，回放不会再改写提示记录。"
       : completionSave?.status === "pending"
       ? "通关结果正在保存，请等保存完成后再使用提示。"
@@ -1421,6 +1434,8 @@ export function MissionPageForId({
               <WeekSixClassificationRouteBoundary loader={weekSixClassificationLoader} reducedMotion={reducedMotion} muted={progress.settings.muted} locked={completionSave!==null} onComplete={({stars:earnedStars,hintsUsed:used})=>revealPersistedWeekSixClassificationCompletion(earnedStars,used)} onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange} onInteractionLockChange={setBattleInteractionLocked}/>
             ) : mission.id==='w6-m3' ? (
               <WeekSixPromptRouteBoundary loader={weekSixPromptLoader} reducedMotion={reducedMotion} muted={progress.settings.muted} locked={completionSave!==null} onComplete={({stars:earnedStars,hintsUsed:used})=>revealPersistedWeekSixPromptCompletion(earnedStars,used)} onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange} onInteractionLockChange={setBattleInteractionLocked}/>
+            ) : mission.id==='w6-m4' ? (
+              <WeekSixFactCheckRouteBoundary loader={weekSixFactCheckLoader} reducedMotion={reducedMotion} muted={progress.settings.muted} locked={completionSave!==null} onComplete={({stars:earnedStars,hintsUsed:used})=>revealPersistedWeekSixFactCheckCompletion(earnedStars,used)} onSessionPersistenceActiveChange={onCompletionPersistenceActiveChange} onInteractionLockChange={setBattleInteractionLocked}/>
             ) : (
               renderLegacyMissionTools()
             )}

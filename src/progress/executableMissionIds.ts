@@ -29,6 +29,7 @@ const EXECUTABLE_MISSION_IDS = {
   'w6-m1': true,
   'w6-m2': true,
   'w6-m3': true,
+  'w6-m4': true,
 } as const satisfies Record<ExecutableMissionId, true>;
 
 export function isExecutableMissionId(value: string): value is ExecutableMissionId {

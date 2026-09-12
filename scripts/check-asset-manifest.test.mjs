@@ -1303,7 +1303,8 @@ test('W6-M1 scene inventory verifies real background hash, dimensions, provenanc
   const source = await readFile(join(sourceRoot, 'src/components/WeekSixRecordsScene.tsx'), 'utf8');
   const classificationSource = await readFile(join(sourceRoot, 'src/components/WeekSixClassificationScene.tsx'), 'utf8');
   const promptSource = await readFile(join(sourceRoot, 'src/components/WeekSixPromptScene.tsx'), 'utf8');
-  const input = { manifestRows, promptRecords, publicFiles, source, classificationSource, promptSource, mode: 'verify' };
+  const factCheckSource = await readFile(join(sourceRoot, 'src/components/WeekSixFactCheckScene.tsx'), 'utf8');
+  const input = { manifestRows, promptRecords, publicFiles, source, classificationSource, promptSource, factCheckSource, mode: 'verify' };
   const result = verifyRequiredWeekSixRecordsInventory(input);
   assert.equal(result.assetCount, 1);
   assert.equal(result.totalBytes, 179442);
@@ -1318,5 +1319,6 @@ test('W6-M1 scene inventory verifies real background hash, dimensions, provenanc
   assert.throws(() => verifyRequiredWeekSixRecordsInventory({ ...input, classificationSource: '' }), /W6-M2.*approved background/i);
   assert.throws(() => verifyRequiredWeekSixRecordsInventory({ ...input, classificationSource: classificationSource.replace('flaming-mountain-background.webp', 'unapproved.webp') }), /W6-M2.*approved background/i);
   assert.throws(() => verifyRequiredWeekSixRecordsInventory({ ...input, promptSource: promptSource.replace('flaming-mountain-background.webp', 'unapproved.webp') }), /W6-M3.*approved background/i);
+  assert.throws(() => verifyRequiredWeekSixRecordsInventory({ ...input, factCheckSource: factCheckSource.replace('flaming-mountain-background.webp', 'unapproved.webp') }), /W6-M4.*approved background/i);
   assert.throws(() => verifyRequiredWeekSixRecordsInventory({ ...input, manifestRows: changeRow({ screenSlots: 'w6-m1 WeekSixRecordsScene' }) }), /scene slot/i);
 });

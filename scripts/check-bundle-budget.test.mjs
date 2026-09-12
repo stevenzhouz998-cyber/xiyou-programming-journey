@@ -544,7 +544,15 @@ test('keeps the Four Seas E2E AST contract isolated while allowing the W3-M4 ent
 test('keeps the progress-core manual chunk stable in the E2E fault build', () => {
   const viteSource = readFileSync(new URL('../vite.config.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(viteSource, /!e2eStorageFaults\s*&&\s*\(source\.includes\('\/src\/battle\/\/'\)/);
-  assert.match(viteSource, /if \(source\.includes\('\/src\/battle\/'\)[\s\S]{0,180}return 'progress-core';/);
+  assert.match(viteSource, /const reachesEntryThroughStaticImports\s*=/);
+  assert.match(viteSource, /source\.includes\('\/src\/battle\/'\)[\s\S]{0,220}reachesEntryThroughStaticImports\(id, getModuleInfo\)[\s\S]{0,80}return 'progress-core';/);
+  assert.match(viteSource, /source\.includes\('\/src\/engine\/'\)/);
+  assert.match(viteSource, /source\.includes\('\/src\/blockly\/'\)/);
+  assert.match(viteSource, /source\.includes\('\/src\/progress\/'\)/);
+  assert.doesNotMatch(viteSource, /return 'progress-core';\s*\/\/.*cycle/i);
+  assert.match(viteSource, /source\.endsWith\('\/src\/utils\/assets\.ts'\)\) return 'asset-path'/);
+  assert.match(viteSource, /source\.endsWith\('\/src\/utils\/focus\.ts'\)\) return 'ui-shared'/);
+  assert.match(viteSource, /source\.endsWith\('\/src\/components\/LazySectionBoundary\.tsx'\)\) return 'ui-shared'/);
 });
 
 test('locks the supported browser build to the modern ESNext target after ES2022 misses the fixed budget', () => {

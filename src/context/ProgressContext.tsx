@@ -18,6 +18,7 @@ import type { WeekFiveStoryOrchestrationMissionSession } from '../progress/types
 import type { WeekSixRecordsMissionSession } from '../progress/types';
 import type { WeekSixClassificationMissionSession } from '../progress/types';
 import type { WeekSixPromptMissionSession } from '../progress/types';
+import type { WeekSixFactCheckMissionSession } from '../progress/types';
 import { parseWeekSixRecordsSession } from '../progress/weekSixRecordsSessionSchema';
 import { parseWeekSixClassificationSession } from '../progress/weekSixClassificationSessionSchema';
 import type { WeekFourListRunResult, WeekFourListTraceItem } from '../engine/weekFourListContract';
@@ -37,6 +38,7 @@ import { parseWeekFiveStoryOrchestrationSession } from '../progress/weekFiveStor
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   completeMission,
+  isMissionUnlocked,
   getWeekFourBranchAccess,
   type CompletionInput,
   type DragonPalaceMissionSession,
@@ -111,7 +113,8 @@ type MissionSessionUpdateArgs =
   | [missionId: 'w5-m5', update: (session: WeekFiveStoryOrchestrationMissionSession) => WeekFiveStoryOrchestrationMissionSession, options?: ProgressWriteOptions]
   | [missionId: 'w6-m1', update: (session: WeekSixRecordsMissionSession) => WeekSixRecordsMissionSession, options?: ProgressWriteOptions]
   | [missionId: 'w6-m2', update: (session: WeekSixClassificationMissionSession) => WeekSixClassificationMissionSession, options?: ProgressWriteOptions]
-  | [missionId: 'w6-m3', update: (session: WeekSixPromptMissionSession) => WeekSixPromptMissionSession, options?: ProgressWriteOptions];
+  | [missionId: 'w6-m3', update: (session: WeekSixPromptMissionSession) => WeekSixPromptMissionSession, options?: ProgressWriteOptions]
+  | [missionId: 'w6-m4', update: (session: WeekSixFactCheckMissionSession) => WeekSixFactCheckMissionSession, options?: ProgressWriteOptions];
 type MissionSessionUpdateAtArgs =
   | [missionId: 'w1-m1', update: (session: DragonPalaceMissionSession) => DragonPalaceMissionSession, now: string, options?: ProgressWriteOptions]
   | [missionId: 'w1-m2', update: (session: RuyiStaffMissionSession) => RuyiStaffMissionSession, now: string, options?: ProgressWriteOptions]
@@ -139,7 +142,8 @@ type MissionSessionUpdateAtArgs =
   | [missionId: 'w5-m5', update: (session: WeekFiveStoryOrchestrationMissionSession) => WeekFiveStoryOrchestrationMissionSession, now: string, options?: ProgressWriteOptions]
   | [missionId: 'w6-m1', update: (session: WeekSixRecordsMissionSession) => WeekSixRecordsMissionSession, now: string, options?: ProgressWriteOptions]
   | [missionId: 'w6-m2', update: (session: WeekSixClassificationMissionSession) => WeekSixClassificationMissionSession, now: string, options?: ProgressWriteOptions]
-  | [missionId: 'w6-m3', update: (session: WeekSixPromptMissionSession) => WeekSixPromptMissionSession, now: string, options?: ProgressWriteOptions];
+  | [missionId: 'w6-m3', update: (session: WeekSixPromptMissionSession) => WeekSixPromptMissionSession, now: string, options?: ProgressWriteOptions]
+  | [missionId: 'w6-m4', update: (session: WeekSixFactCheckMissionSession) => WeekSixFactCheckMissionSession, now: string, options?: ProgressWriteOptions];
 interface UpdateMissionSession {
   (
     missionId: 'w1-m1',
@@ -251,6 +255,7 @@ interface UpdateMissionSession {
   (missionId:'w6-m1',update:(session:WeekSixRecordsMissionSession)=>WeekSixRecordsMissionSession,options?:ProgressWriteOptions):Promise<CoordinatedSaveResult>;
   (missionId:'w6-m2',update:(session:WeekSixClassificationMissionSession)=>WeekSixClassificationMissionSession,options?:ProgressWriteOptions):Promise<CoordinatedSaveResult>;
   (missionId:'w6-m3',update:(session:WeekSixPromptMissionSession)=>WeekSixPromptMissionSession,options?:ProgressWriteOptions):Promise<CoordinatedSaveResult>;
+  (missionId:'w6-m4',update:(session:WeekSixFactCheckMissionSession)=>WeekSixFactCheckMissionSession,options?:ProgressWriteOptions):Promise<CoordinatedSaveResult>;
 }
 type MissionHintTier = MissionSession['usedHintTiers'][number];
 interface RecordMissionHint {
@@ -624,6 +629,7 @@ export function ProgressProvider({
     if(missionId==='w6-m1'){if(getWeekSixRecordsAccess(currentProgress).kind!=='formal')throw Error('W6-M1保存需要W5-M5 formal-v3正式证明');const recordsSession=parseWeekSixRecordsSession(updated);return commit({...currentProgress,sessions:{...currentProgress.sessions,'w6-m1':recordsSession},savedAt:now},true,options);}
     if(missionId==='w6-m2'){if(getWeekSixClassificationAccess(currentProgress).kind!=='formal')throw Error('W6-M2保存需要W6-M1 formal-v3正式证明');const classification=parseWeekSixClassificationSession(updated),source=currentProgress.works['w6-m1-structured-records-table'];if(!source||classification.sourceWorkId!==source.workId||classification.sourceVerifiedAt!==source.verifiedAt||JSON.stringify(classification.sourceRows)!==JSON.stringify(source.run.rows))throw Error('W6-M2保存来源必须绑定当前W6-M1正式作品');return commit({...currentProgress,sessions:{...currentProgress.sessions,'w6-m2':classification},savedAt:now},true,options);}
     if(missionId==='w6-m3'){if(getWeekSixPromptAccess(currentProgress).kind!=='formal')throw Error('W6-M3保存需要W6-M2 formal-v3正式证明');return commit(migrateProgress({...currentProgress,sessions:{...currentProgress.sessions,'w6-m3':updated},savedAt:now}),true,options);}
+    if(missionId==='w6-m4'){if(!isMissionUnlocked(currentProgress,'w6-m4'))throw Error('W6-M4保存需要W6-M3 formal-v3正式证明');return commit(migrateProgress({...currentProgress,sessions:{...currentProgress.sessions,'w6-m4':updated},savedAt:now}),true,options);}
     const next = migrateProgress({
       ...currentProgress,
       sessions: { ...currentProgress.sessions, [missionId]: updated },
@@ -634,10 +640,11 @@ export function ProgressProvider({
 
   const updateMissionSessionAt = (...args: MissionSessionUpdateAtArgs) => {
     const [missionId, update, now, options = {}] = args;
-    if(!/^w[1-5]-m[1-5]$|^w6-m[1-3]$/.test(missionId))throw Error('任务编号无效');
+    if(!/^w[1-5]-m[1-5]$|^w6-m[1-4]$/.test(missionId))throw Error('任务编号无效');
     if(missionId==='w6-m1'){const currentProgress=workingProgress(),stored=currentProgress.sessions['w6-m1'];if(stored)return persistMissionSession(missionId,update(structuredClone(stored)),now,options);return import('../progress/weekSixRecordsSession').then(({createWeekSixRecordsSession})=>persistMissionSession(missionId,update(createWeekSixRecordsSession(now)),now,options));}
     if(missionId==='w6-m2'){const currentProgress=workingProgress(),source=currentProgress.works['w6-m1-structured-records-table'];if(!source)throw Error('W6-M2需要W6-M1正式作品');const stored=currentProgress.sessions['w6-m2'];if(stored)return persistMissionSession(missionId,update(structuredClone(stored)),now,options);return import('../progress/weekSixClassificationSession').then(({createWeekSixClassificationSession})=>persistMissionSession(missionId,update(createWeekSixClassificationSession({workId:source.workId,verifiedAt:source.verifiedAt,rows:source.run.rows},now)),now,options));}
     if(missionId==='w6-m3'){const currentProgress=workingProgress(),source=currentProgress.works['w6-m2-fan-evidence-classification'];if(!source)throw Error('W6-M3需要W6-M2正式作品');const stored=currentProgress.sessions['w6-m3'];if(stored)return persistMissionSession(missionId,update(structuredClone(stored)),now,options);return import('../progress/weekSixPromptSession').then(({createWeekSixPromptSession})=>persistMissionSession(missionId,update(createWeekSixPromptSession(source,now)),now,options));}
+    if(missionId==='w6-m4'){const currentProgress=workingProgress(),source=currentProgress.works['w6-m3-second-attempt-brief'];if(!source)throw Error('W6-M4需要W6-M3正式作品');const stored=currentProgress.sessions['w6-m4'];if(stored)return persistMissionSession(missionId,update(structuredClone(stored)),now,options);return import('../progress/weekSixFactCheckSession').then(({createWeekSixFactCheckSession})=>persistMissionSession(missionId,update(createWeekSixFactCheckSession(source,now)),now,options));}
     const currentProgress = workingProgress();
     const save=(current:MissionSession)=>(persistMissionSession as unknown as (id:ExecutableMissionId,value:MissionSession,at:string,write:ProgressWriteOptions)=>Promise<CoordinatedSaveResult>)(missionId,(update as unknown as (value:MissionSession)=>MissionSession)(current),now,options);
     const stored=currentProgress.sessions[missionId] as MissionSession|undefined;
@@ -758,6 +765,7 @@ export function ProgressProvider({
   function updateMissionSession(missionId:'w6-m1',update:(session:WeekSixRecordsMissionSession)=>WeekSixRecordsMissionSession,options?:ProgressWriteOptions):Promise<CoordinatedSaveResult>;
   function updateMissionSession(missionId:'w6-m2',update:(session:WeekSixClassificationMissionSession)=>WeekSixClassificationMissionSession,options?:ProgressWriteOptions):Promise<CoordinatedSaveResult>;
   function updateMissionSession(missionId:'w6-m3',update:(session:WeekSixPromptMissionSession)=>WeekSixPromptMissionSession,options?:ProgressWriteOptions):Promise<CoordinatedSaveResult>;
+  function updateMissionSession(missionId:'w6-m4',update:(session:WeekSixFactCheckMissionSession)=>WeekSixFactCheckMissionSession,options?:ProgressWriteOptions):Promise<CoordinatedSaveResult>;
   function updateMissionSession(...args: MissionSessionUpdateArgs) {
     const now = new Date().toISOString();
     return (updateMissionSessionAt as unknown as (id:ExecutableMissionId,update:(session:MissionSession)=>MissionSession,at:string,options?:ProgressWriteOptions)=>Promise<CoordinatedSaveResult>)(args[0],args[1] as unknown as (session:MissionSession)=>MissionSession,now,args[2]);
@@ -972,6 +980,10 @@ export function ProgressProvider({
       if (missionId === 'w6-m3') return import('../progress/weekSixPromptSession').then(({ recordWeekSixPromptHint }) => {
         const loadedAt = new Date().toISOString();
         return updateMissionSessionAt(missionId, (session: WeekSixPromptMissionSession) => recordWeekSixPromptHint(session, tier, loadedAt), loadedAt);
+      });
+      if (missionId === 'w6-m4') return import('../progress/weekSixFactCheckSession').then(({ recordWeekSixFactCheckHint }) => {
+        const loadedAt = new Date().toISOString();
+        return updateMissionSessionAt(missionId, (session: WeekSixFactCheckMissionSession) => recordWeekSixFactCheckHint(session, tier, loadedAt), loadedAt);
       });
       throw new Error('任务编号无效');
     },

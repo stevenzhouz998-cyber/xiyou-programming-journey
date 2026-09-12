@@ -81,6 +81,8 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   const classificationProof = progress.missionCompletionEvidence['w6-m2'];
   const promptSession = progress.sessions['w6-m3'];
   const promptProof = progress.missionCompletionEvidence['w6-m3'];
+  const factCheckSession = progress.sessions['w6-m4'];
+  const factCheckProof = progress.missionCompletionEvidence['w6-m4'];
   const listSession = progress.sessions['w4-m4'];
   const listProof = progress.missionCompletionEvidence['w4-m4'];
   const blockerLabels = {
@@ -221,6 +223,12 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     <p>缺项调整 {promptSession?.missingFailures ?? 0} 次；任务范围调整 {promptSession?.taskFailures ?? 0} 次；事实调整 {promptSession?.factFailures ?? 0} 次；限制调整 {promptSession?.constraintFailures ?? 0} 次。</p>
     {promptProof?.kind === 'formal-v3' && progress.works['w6-m3-second-attempt-brief'] ? <p>任务说明书正式证明与作品已保存</p> : null}
     {promptProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式任务说明证明</p> : null}
+  </section><section aria-label="第六周回答核验学习摘要">
+    <h2>第六周回答核验学习摘要</h2>
+    <p>学习逐句判断、选择直接相关的依据，并作出保留、修订或暂不能确认的处置。已审校 {factCheckSession?.totalRuns ?? 0} 次。</p>
+    <p>缺项调整 {factCheckSession?.missingFailures ?? 0} 次；判断调整 {factCheckSession?.verdictFailures ?? 0} 次；依据调整 {factCheckSession?.evidenceFailures ?? 0} 次；处置调整 {factCheckSession?.dispositionFailures ?? 0} 次。</p>
+    {factCheckProof?.kind==='formal-v3'&&progress.works['w6-m4-second-attempt-review']?<p>回答审校正式证明与作品已保存</p>:null}
+    {factCheckProof?.kind==='legacy-replay-only'?<p>历史兼容记录，尚非正式回答审校证明</p>:null}
   </section></>
 }
 

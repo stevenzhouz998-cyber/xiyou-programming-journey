@@ -127,6 +127,9 @@ import type { WeekSixClassificationInput, WeekSixClassificationRunResult } from 
 import type { WeekSixPromptMissionSession } from './weekSixPromptSession';
 export type { WeekSixPromptMissionSession } from './weekSixPromptSession';
 import type { WeekSixPromptInput, WeekSixPromptRunResult, WeekSixPromptSource } from '../engine/weekSixPromptContract';
+import type { WeekSixFactCheckMissionSession } from './weekSixFactCheckSession';
+export type { WeekSixFactCheckMissionSession } from './weekSixFactCheckSession';
+import type { WeekSixFactCheckInput, WeekSixFactCheckRunResult, WeekSixFactCheckSource } from '../engine/weekSixFactCheckContract';
 
 export interface MissionProgress {
   status: 'completed';
@@ -607,6 +610,12 @@ export type WeekSixPromptCompletionEvidence=
   |{kind:'legacy-replay-only';completedAt:string;sourceVersion:3;sourceSchemaRevision:1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19}
   |{kind:'formal-v3';completedAt:string;verifiedAt:string;sourceWorkId:'w6-m2-fan-evidence-classification';sourceVerifiedAt:string;source:WeekSixPromptSource;input:WeekSixPromptInput;run:WeekSixPromptRunResult;workId:'w6-m3-second-attempt-brief'};
 export interface WeekSixPromptWorkV1{kind:'ai-prompt-brief-v1';workId:'w6-m3-second-attempt-brief';missionId:'w6-m3';title:string;sourceWorkId:'w6-m2-fan-evidence-classification';sourceVerifiedAt:string;source:WeekSixPromptSource;input:WeekSixPromptInput;run:WeekSixPromptRunResult;createdAt:string;verifiedAt:string}
+export type WeekSixFactCheckCompletionEvidence=
+  |{kind:'legacy-replay-only';completedAt:string;sourceVersion:1;sourceSchemaRevision:null}
+  |{kind:'legacy-replay-only';completedAt:string;sourceVersion:2;sourceSchemaRevision:1}
+  |{kind:'legacy-replay-only';completedAt:string;sourceVersion:3;sourceSchemaRevision:1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20}
+  |{kind:'formal-v3';completedAt:string;verifiedAt:string;sourceWorkId:'w6-m3-second-attempt-brief';sourceVerifiedAt:string;source:WeekSixFactCheckSource;input:WeekSixFactCheckInput;run:WeekSixFactCheckRunResult;workId:'w6-m4-second-attempt-review'};
+export interface WeekSixFactCheckWorkV1{kind:'ai-fact-check-report-v1';workId:'w6-m4-second-attempt-review';missionId:'w6-m4';title:string;sourceWorkId:'w6-m3-second-attempt-brief';sourceVerifiedAt:string;source:WeekSixFactCheckSource;input:WeekSixFactCheckInput;run:WeekSixFactCheckRunResult;createdAt:string;verifiedAt:string}
 
 export interface MissionCompletionEvidenceV1 {
   'w3-m1'?: ManorHelpCompletionEvidence;
@@ -627,6 +636,7 @@ export interface MissionCompletionEvidenceV1 {
   'w6-m1'?: WeekSixRecordsCompletionEvidence;
   'w6-m2'?: WeekSixClassificationCompletionEvidence;
   'w6-m3'?: WeekSixPromptCompletionEvidence;
+  'w6-m4'?: WeekSixFactCheckCompletionEvidence;
 }
 
 export interface MissionSessionById {
@@ -658,6 +668,7 @@ export interface MissionSessionById {
   'w6-m1': WeekSixRecordsMissionSession;
   'w6-m2': WeekSixClassificationMissionSession;
   'w6-m3': WeekSixPromptMissionSession;
+  'w6-m4': WeekSixFactCheckMissionSession;
 }
 
 export type ExecutableMissionId = keyof MissionSessionById;
@@ -667,7 +678,7 @@ export type MissionSessions = { [MissionId in keyof MissionSessionById]?: Missio
 
 export interface ProgressV3 {
   version: 3;
-  schemaRevision: 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
+  schemaRevision: 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21;
   learnerName: string;
   missions: Record<string, MissionProgress>;
   settings: ProgressSettings;
@@ -694,6 +705,7 @@ export interface ProgressV3 {
     'w6-m1-structured-records-table': WeekSixRecordsWorkV1;
     'w6-m2-fan-evidence-classification': WeekSixClassificationWorkV1;
     'w6-m3-second-attempt-brief': WeekSixPromptWorkV1;
+    'w6-m4-second-attempt-review': WeekSixFactCheckWorkV1;
   }>;
   savedAt: string;
 }

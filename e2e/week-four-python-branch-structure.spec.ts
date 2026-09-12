@@ -921,7 +921,7 @@ test.describe('W4-M3 Python 分支结构真实浏览器证据', () => {
     const corruptBytes = await page.evaluate((key) => Storage.prototype.getItem.call(globalThis.localStorage, key), CORRUPT_KEY);
     expect(corruptBytes).not.toBeNull();
     const recovered = await stored(page);
-    expect(recovered.schemaRevision).toBe(19);
+    expect(recovered.schemaRevision).toBe(21);
     expect(recovered.recovery).toMatchObject({ source: 'snapshot' });
     expect(recovered.sessions['w4-m3'].lastRun).toEqual(completed.sessions['w4-m3'].lastRun);
     expect(recovered.works['w4-m3-branch-structure-record']).toEqual(completed.works['w4-m3-branch-structure-record']);

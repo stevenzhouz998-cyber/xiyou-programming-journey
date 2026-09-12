@@ -74,7 +74,6 @@ export const course: CourseManifest = {
     deriveWeekFromOutline('week-6', { subtitle: '从原著事实学习 AI 思维', canon: c59to61,
       missions: [
         ...formalWeekSixMissions,
-        mission('w6-m4', { subtitle: '模型回答也要对照原著', objective: '找出与第五十九至六十一回不符的说法', mode: 'ai-lab', canon: c59to61, storyBeats: [beat('众神助战', '第三次借扇时，悟空一方与牛魔王交战并得神众相助。'), beat('扇息火焰', '最终取得真扇，扇息火焰后师徒继续西行。')], expectedSequence: ['read_claim', 'compare_source', 'mark_conflict', 'keep_canon'], aiDataset: [{ claim: '第二次取得真扇，后来又被骗回', correct: true }, { claim: '第三次最终借得真扇并息火', correct: true }, { claim: '火焰山之后师徒返回东土', correct: false }] }),
         mission('w6-m5', { subtitle: '代码、数据与核验合一', objective: '重建三调芭蕉扇原著事件链并核验结果', mode: 'ai-lab', canon: c59to61, storyBeats: [beat('三调完整经过', '一调得到假扇、二调取得真扇后被骗回、三调最终借得真扇。'), beat('原著结局', '火焰熄灭后，师徒越过火焰山继续西行。')], expectedSequence: ['first_fake', 'second_true', 'fan_reclaimed', 'third_battle', 'true_fan', 'cross_mountain'], aiDataset: [{ step: 1, event: '一调得假扇，火势更旺' }, { step: 2, event: '二调取得真扇，随后被骗回' }, { step: 3, event: '三调最终借得真扇' }, { step: 4, event: '扇息火焰继续西行' }] }),
       ],
     }),

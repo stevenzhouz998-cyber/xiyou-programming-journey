@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Approved W6-M4 Direction
+
+- On 2026-09-12 the user approved per-statement judgment, relevant evidence selection and child-authored structured revision for the local answer-review lab, delegated subsequent details, and required model-squad delivery to local One-level playable. Preserve M3 original brief/output read-only; planted practice errors must be explicitly labeled and never attributed to the child or real AI. Distinguish supported, conflicting and insufficient-in-the-provided-material claims. No automatic answers, zero-penalty failures, formal source-bound proof and successful saving before M5 unlock. Preserve existing bright storybook visuals and privacy. See `docs/superpowers/specs/2026-09-12-week-six-fact-check-design.md`. No commit, push, merge or deployment authorization.
+
 ## Approved W6-M3 Direction
 
 - On 2026-09-12 the user approved structured selections plus a local rule simulation for the second fan attempt, delegated subsequent local details, and requested model-squad implementation to local One-level playable. Children compose task, source facts, constraints and output format; event table and step list are both valid and must change the actual output. Use valid M2 work as read-only reference plus explicitly sourced identity facts. The simulator uses only selected facts, never secretly completes missing answers. Missing or contradictory instructions block completion with the first real issue; failures have zero penalty and help never selects or runs for the child. Clearly label the local simulation and remind children that real AI answers still require checking. Preserve approved bright storybook visuals. See `docs/superpowers/specs/2026-09-12-week-six-prompt-design.md`. No commit, push, merge or deployment authorization.
