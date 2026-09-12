@@ -1406,16 +1406,17 @@ export function verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows, pub
   return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
 }
 
-export function verifyRequiredWeekSixRecordsInventory({ manifestRows, publicFiles, promptRecords = [], source, classificationSource, mode = 'check' }) {
+export function verifyRequiredWeekSixRecordsInventory({ manifestRows, publicFiles, promptRecords = [], source, classificationSource, promptSource, mode = 'check' }) {
   const directory = 'assets/week-six-records/';
   const rows = familyRows(manifestRows, directory), files = familyFiles(publicFiles, directory);
   const path = `${directory}flaming-mountain-background.webp`;
   requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: [path], label: 'Week Six records' });
-  if (rows[0].screenSlots !== 'w6-m1 WeekSixRecordsScene; w6-m2 WeekSixClassificationScene') throw new Error('Asset manifest: W6-M1/M2 scene slot mismatch.');
+  if (rows[0].screenSlots !== 'w6-m1 WeekSixRecordsScene; w6-m2 WeekSixClassificationScene; w6-m3 WeekSixPromptScene') throw new Error('Asset manifest: W6-M1/M2/M3 scene slot mismatch.');
   if (files.length !== 1) throw new Error('Asset manifest: exactly one W6-M1 background file is required.');
   if (files[0].width !== 1536 || files[0].height !== 1024) throw new Error('Asset manifest: W6-M1 background must retain the approved 1536x1024 dimensions.');
   if (typeof source !== 'string' || !source.includes(`assetUrl('/${path}')`) || (source.match(/<img\b/g) ?? []).length !== 1) throw new Error('Asset manifest: W6-M1 must render the approved background through assetUrl.');
   if (typeof classificationSource !== 'string' || !classificationSource.includes(`assetUrl('/${path}')`) || (classificationSource.match(/<img\b/g) ?? []).length !== 1) throw new Error('Asset manifest: W6-M2 must render the approved background through assetUrl.');
+  if (typeof promptSource !== 'string' || !promptSource.includes(`assetUrl('/${path}')`) || (promptSource.match(/<img\b/g) ?? []).length !== 1) throw new Error('Asset manifest: W6-M3 must render the approved background through assetUrl.');
   return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
 }
 
@@ -2191,7 +2192,7 @@ async function main() {
     sharedBackgroundScreenSlots: sharedBackgroundManifest?.screenSlots,
     mode,
   });
-  const recordsResult = verifyRequiredWeekSixRecordsInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekSixRecordsScene.tsx'), 'utf8'), classificationSource: await readFile(join(root, 'src/components/WeekSixClassificationScene.tsx'), 'utf8'), mode });
+  const recordsResult = verifyRequiredWeekSixRecordsInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekSixRecordsScene.tsx'), 'utf8'), classificationSource: await readFile(join(root, 'src/components/WeekSixClassificationScene.tsx'), 'utf8'), promptSource: await readFile(join(root, 'src/components/WeekSixPromptScene.tsx'), 'utf8'), mode });
   const monksResult = verifyRequiredWeekFiveMonksInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekFiveMonksScene.tsx'), 'utf8'), mode });
   const templeResult = verifyRequiredWeekFiveTempleInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekFiveTempleScene.tsx'), 'utf8'), mode });
   const weatherResult = verifyRequiredWeekFiveWeatherInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekFiveWeatherScene.tsx'), 'utf8'), mode });

@@ -1,14 +1,12 @@
+import { updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProgressProvider, useProgress, type ProgressContextValue } from './ProgressContext';
 import { completeMission, createInitialProgress, getWeekFourBranchAccess, serializeProgress } from '../progress/progress';
 import { CORRUPT_PROGRESS_KEY, CURRENT_PROGRESS_KEY, LEGACY_PROGRESS_KEY, REVISION_PROGRESS_KEY, SNAPSHOT_PROGRESS_KEY } from '../progress/storage';
-import {
-  createMissionSession,
-  recordCompileFailure,
-  recordHint,
-  recordRun,
-} from '../progress/session';
+import { createMissionSession } from '../progress/session';
+import { recordHint } from '../progress/session';
+import { recordCompileFailure, recordRun } from '../progress/legacyWorkspaceSessionMutations';
 import { runRuyiStaffBattle } from '../battle/ruyiStaff';
 import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import type { RuyiStaffInstruction } from '../battle/types';
@@ -16,7 +14,6 @@ import * as Blockly from 'blockly';
 import { registerFourSeasRegaliaBlocks } from '../blockly/fourSeasRegaliaBlocks';
 import { compileFourSeasRegaliaWorkspace } from '../blockly/fourSeasRegaliaCompiler';
 import { loadFourSeasWorkspaceDraft, type FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft';
-import { updateWorkspaceDraft } from '../progress/session';
 import type { CoordinatedSaveResult } from '../progress/storageCoordinator';
 import { updateWeekFourMappingCode } from '../progress/weekFourMappingSession';
 import { createWeekFourMappingSession, recordWeekFourMappingRun } from '../progress/weekFourMappingSession';

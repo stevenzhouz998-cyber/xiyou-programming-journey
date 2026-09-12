@@ -1,9 +1,10 @@
+import { recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';
 import { lazy, Suspense, useRef, useState } from 'react';
 import './AdvancedWeekOneExperience.css';
 import { runFurnaceCondition, type FurnaceConditionDiagnostic, type FurnaceConditionRunResult, type FurnaceConditionRuntimeEvent } from '../blockly/weekTwoFurnaceConditionContract';
 import type { FurnaceConditionCompileResult } from '../blockly/weekTwoFurnaceConditionCompiler';
 import { useProgress } from '../context/ProgressContext';
-import { createMissionSession, recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/session';
+import { createMissionSession } from '../progress/session';
 import type { FurnaceConditionMissionSession } from '../progress/types';
 import { downloadTextFile } from '../utils/download';
 

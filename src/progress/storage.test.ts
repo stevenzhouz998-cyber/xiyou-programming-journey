@@ -10,31 +10,13 @@ import { loadFourSeasWorkspaceDraft, saveFourSeasWorkspaceDraft, type FourSeasWo
 import { createInitialProgress, serializeProgress } from './progress';
 import { PROGRESS_SCHEMA_LIMITS } from './schema';
 import {
-  CORRUPT,
-  CORRUPT_PROGRESS_KEY,
-  CURRENT,
-  CURRENT_PROGRESS_KEY,
-  LEGACY_PROGRESS_KEY,
-  LEGACY_V2_CORRUPT_KEY,
-  LEGACY_V2_CURRENT_KEY,
-  LEGACY_V2_SNAPSHOT_KEY,
-  LEGACY_WORKSPACE_KEY,
-  REVISION_PROGRESS_KEY,
-  SNAPSHOT,
-  SNAPSHOT_PROGRESS_KEY,
-  createProgressBackup,
-  loadProgressTransaction,
-} from './storage';
+  CORRUPT, CORRUPT_PROGRESS_KEY, CURRENT, CURRENT_PROGRESS_KEY, LEGACY_PROGRESS_KEY, LEGACY_V2_CORRUPT_KEY, LEGACY_V2_CURRENT_KEY, LEGACY_V2_SNAPSHOT_KEY, LEGACY_WORKSPACE_KEY, REVISION_PROGRESS_KEY, SNAPSHOT, SNAPSHOT_PROGRESS_KEY, createProgressBackup, loadProgressTransaction, } from './storage';
 import { repairLoadedProgressTransaction } from './storageRepair';
 import { clearProgressTransaction, importProgressTransaction } from './storageParent';
 import type { ProgressV3 } from './types';
-import {
-  createMissionSession,
-  recordCompileFailure,
-  recordHint,
-  recordRun,
-  updateWorkspaceDraft,
-} from './session';
+import { createMissionSession } from './session';
+import { recordHint } from './session';
+import { recordCompileFailure, recordRun, updateWorkspaceDraft } from './legacyWorkspaceSessionMutations';
 
 const NOW = new Date('2026-07-12T08:09:10.000Z');
 const clock = () => NOW;

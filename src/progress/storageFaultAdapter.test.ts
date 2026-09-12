@@ -1,10 +1,12 @@
+import { recordConditionObservationUse, recordCuilanConditionObservationUse, recordRun, updateWorkspaceDraft } from './legacyWorkspaceSessionMutations';
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import type { FourSeasInstruction } from '../battle/types';
 import { WEEK_FOUR_BRANCH_LATER_SETUP_MODES, storageFaultAdapter as e2eStorageFaultAdapter } from '../../e2e/support/storageFaultAdapter';
 import { completeMission, createInitialProgress, serializeProgress } from './progress';
-import { createMissionSession, recordConditionObservationUse, recordCuilanConditionObservationUse, recordHint, recordRun, updateWorkspaceDraft } from './session';
+import { createMissionSession } from './session';
+import { recordHint } from './session';
 import { compileManorHelpDraft, createDefaultManorHelpDraft, runManorHelp } from '../blockly/weekThreeManorHelpContract';
 import { compileCuilanBooleanDraft, createDefaultCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract';
 import { compileBajieJoiningDraft, runBajieJoiningForDraft } from '../blockly/weekThreeBajieJoiningContract';

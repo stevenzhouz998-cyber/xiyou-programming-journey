@@ -12,24 +12,11 @@ import { loadFourSeasWorkspaceDraft, type FourSeasWorkspaceDraftV1 } from '../bl
 import type { WorkspaceDraftV1 } from '../blockly/draft';
 import type { RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft';
 import type {
-  DragonPalaceMissionSession,
-  ExecutableMissionId,
-  FourSeasRegaliaMissionSession,
-  MissionSession,
-  MissionSessionById,
-  MissionSessions,
-  RuyiStaffMissionSession,
-  WeekFourBranchMissionSession,
-  WeekFourVariableMissionSession,
-} from './types';
-import {
-  createMissionSession,
-  getSessionSupport,
-  recordCompileFailure,
-  recordHint,
-  recordRun,
-  updateWorkspaceDraft,
-} from './session';
+  DragonPalaceMissionSession, ExecutableMissionId, FourSeasRegaliaMissionSession, MissionSession, MissionSessionById, MissionSessions, RuyiStaffMissionSession, WeekFourBranchMissionSession, WeekFourVariableMissionSession, } from './types';
+import { createMissionSession } from './session';
+import { getSessionSupport } from './weeklyReport';
+import { recordHint } from './session';
+import { recordCompileFailure, recordRun, updateWorkspaceDraft } from './legacyWorkspaceSessionMutations';
 import { updateWeekFourVariableCode } from './weekFourVariableSession';
 import { SOLVED_WEEK_FOUR_VARIABLE_PYTHON } from '../engine/weekFourVariablePythonGrammar';
 import { recordEquipmentEffectUse } from './equipmentEffectSession';

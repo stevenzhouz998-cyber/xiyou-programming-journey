@@ -1,9 +1,10 @@
+import { recordConditionObservationUse, recordRun, updateWorkspaceDraft } from './legacyWorkspaceSessionMutations';
 import { describe, expect, it } from 'vitest';
 import { compileCuilanBooleanDraft, createDefaultCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract';
 import { createInitialProgress, migrateProgress } from './schema';
 import { parseCuilanBooleanSession } from './cuilanBooleanSessionSchema';
 import { completeMission, importProgress, isMissionUnlocked, serializeProgress } from './progress';
-import { createMissionSession, recordConditionObservationUse, recordRun, updateWorkspaceDraft } from './session';
+import { createMissionSession } from './session';
 
 const NOW = '2026-08-27T00:00:00.000Z';
 const LATER = '2026-08-27T00:01:00.000Z';
@@ -15,7 +16,7 @@ describe('W3-M2 revision 5 session', () => {
       'w3-m2': { status: 'completed' as const, stars: 3 as const, attempts: 1, hintsUsed: 0, completedAt: NOW },
     } };
     const migrated = migrateProgress(old);
-    expect(migrated.schemaRevision).toBe(19);
+    expect(migrated.schemaRevision).toBe(20);
     expect(migrated.missionCompletionEvidence['w3-m2']).toMatchObject({ kind: 'legacy-preformal' });
     expect(migrated.sessions['w3-m2']).toBeUndefined();
   });

@@ -1,7 +1,7 @@
+import { updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { updateWorkspaceDraft } from '../progress/session';
 import { CURRENT_PROGRESS_KEY } from '../progress/storage';
 import { ProgressProvider, useProgress } from './ProgressContext';
 

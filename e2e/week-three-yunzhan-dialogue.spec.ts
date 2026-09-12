@@ -1,7 +1,8 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { completeMission, createInitialProgress, serializeProgress } from '../src/progress/progress';
-import { createMissionSession, recordRun, updateWorkspaceDraft } from '../src/progress/session';
+import { createMissionSession } from '../src/progress/session';
+import { recordRun, updateWorkspaceDraft } from '../src/progress/legacyWorkspaceSessionMutations';
 import { compileManorHelpDraft, createDefaultManorHelpDraft, runManorHelp } from '../src/blockly/weekThreeManorHelpContract';
 import { compileCuilanBooleanDraft, runCuilanBooleanForDraft } from '../src/blockly/weekThreeCuilanBooleanContract';
 import { WEEK_THREE_YUNZHAN_DIALOGUE_COLD_LOAD_MAX_BYTES } from '../scripts/budget-limits.mjs';

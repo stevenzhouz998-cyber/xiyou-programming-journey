@@ -1,3 +1,4 @@
+import { recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import './RuyiStaffExperience.css'
 import { runRuyiStaffBattle } from '../battle/ruyiStaff'
@@ -6,7 +7,7 @@ import type { RuyiCompileResult } from '../blockly/ruyiStaffCompiler'
 import type { RuyiWorkspaceDraftV1 } from '../blockly/ruyiStaffDraft'
 import { useProgress } from '../context/ProgressContext'
 import type { RuyiStaffMissionSession } from '../progress/progress'
-import { createMissionSession, recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/session'
+import { createMissionSession } from '../progress/session'
 import type { CoordinatedSaveResult } from '../progress/storageCoordinator'
 import { ToolErrorBoundary } from './ToolErrorBoundary'
 import { RuyiStaffFeedback } from './RuyiStaffFeedback'

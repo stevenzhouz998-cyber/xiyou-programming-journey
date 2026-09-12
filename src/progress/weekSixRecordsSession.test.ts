@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { formalW5M5Prerequisite } from '../../e2e/support/w6m1Prerequisite';
 import { DEFAULT_WEEK_SIX_RECORDS_PYTHON, SOLVED_WEEK_SIX_RECORDS_PYTHON, parseWeekSixRecordsPython } from '../engine/weekSixRecordsPythonGrammar';
-import { completeMission, getWeeklyReport, getWeekSixRecordsAccess, isMissionUnlocked, serializeProgress } from './progress';
+import { completeMission, getWeekSixRecordsAccess, isMissionUnlocked, serializeProgress } from './progress';
+import { getWeeklyReport } from './weeklyReport';
 import { parseProgress } from './schema';
 import { createWeekSixRecordsSession, recordWeekSixRecordsObservation, recordWeekSixRecordsRun, recordWeekSixRecordsValidationFailure, updateWeekSixRecordsCode } from './weekSixRecordsSession';
 import { parseWeekSixRecordsSession } from './weekSixRecordsSessionSchema';
@@ -43,7 +44,7 @@ describe('W6-M1 durable structured records', () => {
     expect(getWeekSixRecordsAccess(base)).toEqual({ kind: 'formal', upgradingLegacy: false });
     const session = run(SOLVED_WEEK_SIX_RECORDS_PYTHON, 8);
     const completed = completeMission({ ...base, sessions: { ...base.sessions, 'w6-m1': session }, savedAt: time(8) }, 'w6-m1', { stars: 3, hintsUsed: 0 });
-    expect(completed.schemaRevision).toBe(19);
+    expect(completed.schemaRevision).toBe(20);
     expect(completed.missionCompletionEvidence['w6-m1']?.kind).toBe('formal-v3');
     expect(completed.works['w6-m1-structured-records-table']?.run.completed).toBe(true);
     expect(isMissionUnlocked(completed, 'w6-m2')).toBe(true);

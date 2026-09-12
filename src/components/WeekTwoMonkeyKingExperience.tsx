@@ -1,10 +1,11 @@
+import { recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';
 import { lazy, Suspense, useMemo, useRef, useState, type ComponentType } from 'react';
 import './AdvancedWeekOneExperience.css';
 import './WeekTwoMonkeyKingExperience.css';
 import { runMonkeyKingEvents, type MonkeyKingDiagnostic, type MonkeyKingRunResult, type MonkeyKingRuntimeEvent } from '../blockly/weekTwoMonkeyKingContract';
 import type { MonkeyKingCompileResult } from '../blockly/weekTwoMonkeyKingCompiler';
 import { useProgress } from '../context/ProgressContext';
-import { createMissionSession, recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/session';
+import { createMissionSession } from '../progress/session';
 import type { MonkeyKingMissionSession } from '../progress/types';
 import { downloadTextFile } from '../utils/download';
 import { LazySectionBoundary } from './LazySectionBoundary';

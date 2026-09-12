@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { formalW5M5Prerequisite } from '../../e2e/support/w6m1Prerequisite';
 import { SOLVED_WEEK_SIX_RECORDS_PYTHON, parseWeekSixRecordsPython } from '../engine/weekSixRecordsPythonGrammar';
 import { runWeekSixClassification, type WeekSixClassificationInput } from '../engine/weekSixClassificationContract';
-import { completeMission, getWeekSixClassificationAccess, isMissionUnlocked, serializeProgress } from './progress';
+import { completeMission, getWeekSixClassificationAccess, getWeekSixPromptAccess, isMissionUnlocked, serializeProgress } from './progress';
 import { parseProgress } from './schema';
 import { createWeekSixRecordsSession, recordWeekSixRecordsRun, updateWeekSixRecordsCode } from './weekSixRecordsSession';
 import { createWeekSixClassificationSession, recordWeekSixClassificationCheck, updateWeekSixClassificationInput } from './weekSixClassificationSession';
@@ -31,7 +31,7 @@ describe('W6-M2 formal progress', () => {
     session = recordWeekSixClassificationCheck(session, solved, runWeekSixClassification(solved, source.run.rows), time(13));
     vi.setSystemTime(new Date(time(14)));
     const completed = completeMission({ ...m1, sessions: { ...m1.sessions, 'w6-m2': session }, savedAt: time(13) }, 'w6-m2', { stars: 3, hintsUsed: 0 });
-    expect(completed).toMatchObject({ schemaRevision: 19, missions: { 'w6-m2': { status: 'completed' } }, missionCompletionEvidence: { 'w6-m2': { kind: 'formal-v3', sourceWorkId: source.workId, workId: 'w6-m2-fan-evidence-classification' } } });
+    expect(completed).toMatchObject({ schemaRevision: 20, missions: { 'w6-m2': { status: 'completed' } }, missionCompletionEvidence: { 'w6-m2': { kind: 'formal-v3', sourceWorkId: source.workId, workId: 'w6-m2-fan-evidence-classification' } } });
     expect(completed.works['w6-m2-fan-evidence-classification']?.run.completed).toBe(true);
     expect(isMissionUnlocked(completed, 'w6-m3')).toBe(true);
     expect(completed.works['w6-m1-structured-records-table']).toEqual(m1.works['w6-m1-structured-records-table']);
@@ -40,15 +40,16 @@ describe('W6-M2 formal progress', () => {
     expect(completeMission(completed, 'w6-m2', { stars: 1, hintsUsed: 3 })).toBe(completed);
   });
 
-  it('migrates an old M2 completion to history without fabricating labels, a run, work, or M3 access', () => {
+  it('migrates an old M2 completion to history without fabricating labels, a run, work, or playable M3 access', () => {
     const m1 = formalM1(); const raw = JSON.parse(serializeProgress(m1)); raw.schemaRevision = 18;
     raw.missions['w6-m2'] = { status: 'completed', stars: 2, attempts: 1, hintsUsed: 0, completedAt: time(9) };
     const migrated = parseProgress(JSON.stringify(raw));
-    expect(migrated.schemaRevision).toBe(19);
+    expect(migrated.schemaRevision).toBe(20);
     expect(migrated.missionCompletionEvidence['w6-m2']).toMatchObject({ kind: 'legacy-replay-only', sourceSchemaRevision: 18 });
     expect(migrated.sessions['w6-m2']).toBeUndefined(); expect(migrated.works['w6-m2-fan-evidence-classification']).toBeUndefined();
     expect(getWeekSixClassificationAccess(migrated)).toEqual({ kind: 'formal', upgradingLegacy: true });
-    expect(isMissionUnlocked(migrated, 'w6-m3')).toBe(false);
+    expect(getWeekSixPromptAccess(migrated)).toEqual({ kind: 'historical-read-only', completed: false });
+    expect(isMissionUnlocked(migrated, 'w6-m3')).toBe(true);
   });
 
   it('rejects a classification session whose copied source no longer matches the M1 work', () => {

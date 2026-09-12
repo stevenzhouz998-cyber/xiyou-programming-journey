@@ -1,3 +1,4 @@
+import { recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import './FourSeasRegaliaExperience.css'
 import { runFourSeasRegalia } from '../battle/fourSeasRegalia'
@@ -7,7 +8,7 @@ import type { FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft'
 import type { FourSeasOpcode } from '../blockly/fourSeasRegaliaContract'
 import { useProgress } from '../context/ProgressContext'
 import type { FourSeasRegaliaMissionSession } from '../progress/types'
-import { createMissionSession, recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/session'
+import { createMissionSession } from '../progress/session'
 import type { CoordinatedSaveResult } from '../progress/storageCoordinator'
 import { downloadTextFile } from '../utils/download'
 import { FourSeasRegaliaFeedback } from './FourSeasRegaliaFeedback'

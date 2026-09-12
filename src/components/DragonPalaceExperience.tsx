@@ -4,13 +4,8 @@ import { runDragonPalaceBattle } from '../battle/dragonPalace'
 import type { CompileDiagnostic, CompileResult } from '../blockly/compiler'
 import type { WorkspaceDraftV1 } from '../blockly/draft'
 import { useProgress } from '../context/ProgressContext'
-import {
-  createMissionSession,
-  recordCompileFailure,
-  recordRun,
-  updateWorkspaceDraft,
-} from '../progress/session'
-import { BattleFeedback } from './BattleFeedback'
+import { createMissionSession } from '../progress/session';
+import { recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';import { BattleFeedback } from './BattleFeedback'
 import { ToolErrorBoundary } from './ToolErrorBoundary'
 
 const GameScene = lazy(() => import('./GameScene').then((module) => ({ default: module.GameScene })))

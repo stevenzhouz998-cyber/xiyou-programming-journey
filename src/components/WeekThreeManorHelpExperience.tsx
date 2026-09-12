@@ -1,3 +1,4 @@
+import { recordCompileFailure, recordConditionObservationUse, recordRun, updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import './AdvancedWeekOneExperience.css';
 import './WeekTwoHorseExperience.css';
@@ -5,7 +6,7 @@ import './WeekThreeManorHelpExperience.css';
 import { runManorHelp, type ManorHelpDiagnostic, type ManorHelpFailureSnapshot, type ManorHelpRunResult, type ManorHelpRuntimeEvent } from '../blockly/weekThreeManorHelpContract';
 import type { ManorHelpCompileResult } from '../blockly/weekThreeManorHelpCompiler';
 import { useProgress } from '../context/ProgressContext';
-import { createMissionSession, recordCompileFailure, recordConditionObservationUse, recordRun, updateWorkspaceDraft } from '../progress/session';
+import { createMissionSession } from '../progress/session';
 import type { ManorHelpMissionSession } from '../progress/types';
 import { downloadTextFile } from '../utils/download';
 import { LazySectionBoundary } from './LazySectionBoundary';

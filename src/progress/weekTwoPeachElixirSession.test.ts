@@ -1,12 +1,11 @@
+import { recordRun, updateWorkspaceDraft } from './legacyWorkspaceSessionMutations';
 import { describe, expect, it } from 'vitest';
 import {
-  compilePeachElixirDraft,
-  createDefaultPeachElixirDraft,
-  runPeachElixir,
-  type PeachElixirWorkspaceDraftV1,
-} from '../blockly/weekTwoPeachElixirContract';
-import { createInitialProgress, getWeeklyReport, importProgress, serializeProgress } from './progress';
-import { createMissionSession, getSessionSupport, recordRun, updateWorkspaceDraft } from './session';
+  compilePeachElixirDraft, createDefaultPeachElixirDraft, runPeachElixir, type PeachElixirWorkspaceDraftV1, } from '../blockly/weekTwoPeachElixirContract';
+import { createInitialProgress, importProgress, serializeProgress } from './progress';
+import { getWeeklyReport } from './weeklyReport';
+import { createMissionSession } from './session';
+import { getSessionSupport } from './weeklyReport';
 
 const NOW = '2026-08-22T15:30:00.000Z';
 const LATER = '2026-08-22T15:31:00.000Z';

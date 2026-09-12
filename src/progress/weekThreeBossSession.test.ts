@@ -1,10 +1,11 @@
+import { recordRun, updateWorkspaceDraft } from './legacyWorkspaceSessionMutations';
 import { describe, expect, it } from 'vitest';
 import { runWeekThreeBossDraft, WEEK_THREE_BOSS_COORDINATE_LIMIT } from '../blockly/weekThreeBossContract';
 import * as Blockly from 'blockly';
 import { restoreWeekThreeBossWorkspace, serializeWeekThreeBossWorkspace } from '../blockly/weekThreeBossWorkspaceCompiler';
 import { createSolvedWeekThreeBossDraftForTest } from '../blockly/weekThreeBossTestHelpers';
 import { createWeekThreeBossSession, parseWeekThreeBossSession, parseWeekThreeBossWorkspace, recordWeekThreeBossRun } from './weekThreeBossSessionSchema';
-import { createMissionSession, recordRun, updateWorkspaceDraft } from './session';
+import { createMissionSession } from './session';
 
 describe('W3-M5 会话保存', () => {
   it('通过统一任务会话保存可重放的运行，并在编辑图后清除当前运行证据但保留计数', () => {

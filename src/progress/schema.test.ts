@@ -8,22 +8,13 @@ import type { RuyiStaffInstruction } from '../battle/types';
 import { registerFourSeasRegaliaBlocks } from '../blockly/fourSeasRegaliaBlocks';
 import { compileFourSeasRegaliaWorkspace } from '../blockly/fourSeasRegaliaCompiler';
 import {
-  loadFourSeasWorkspaceDraft,
-  saveFourSeasWorkspaceDraft,
-  FOUR_SEAS_WORKSPACE_LIMITS,
-  type FourSeasWorkspaceDraftV1,
-} from '../blockly/fourSeasRegaliaDraft';
+  loadFourSeasWorkspaceDraft, saveFourSeasWorkspaceDraft, FOUR_SEAS_WORKSPACE_LIMITS, type FourSeasWorkspaceDraftV1, } from '../blockly/fourSeasRegaliaDraft';
 import { completeMission, createInitialProgress } from './progress';
 import { initialEquipment } from './equipment';
 import { migrateProgress, parseProgress, PROGRESS_SCHEMA_LIMITS } from './schema';
-import {
-  createMissionSession,
-  recordCompileFailure,
-  recordConditionObservationUse,
-  recordHint,
-  recordRun,
-  updateWorkspaceDraft,
-} from './session';
+import { createMissionSession } from './session';
+import { recordHint } from './session';
+import { recordCompileFailure, recordConditionObservationUse, recordRun, updateWorkspaceDraft } from './legacyWorkspaceSessionMutations';
 import type {
   DragonPalaceMissionSession,
   FourSeasRegaliaMissionSession,
@@ -164,7 +155,7 @@ type ValidV3 = Omit<ProgressV3, 'sessions'> & {
 const validV3 = (): ValidV3 => ({
   ...validV2,
   version: 3 as const,
-  schemaRevision: 19 as const,
+  schemaRevision: 20 as const,
   missions: structuredClone(validV2.missions),
   sessions: { 'w1-m1': validSession() },
   equipment: initialEquipment(),
@@ -615,7 +606,7 @@ describe('progress schema', () => {
     const progress = createInitialProgress();
     expect(progress).toMatchObject({
       version: 3,
-      schemaRevision: 19,
+      schemaRevision: 20,
       sessions: {},
       equipment: initialEquipment(),
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
@@ -634,7 +625,7 @@ describe('progress schema', () => {
     const migrated = migrateProgress(legacy);
     expect(migrated).toMatchObject({
       version: 3,
-      schemaRevision: 19,
+      schemaRevision: 20,
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
     });
     expect(migrated.equipment).toEqual({
@@ -819,7 +810,7 @@ describe('progress schema', () => {
     expect(migrateProgress(validV1)).toEqual({
       ...validV1,
       version: 3,
-      schemaRevision: 19,
+      schemaRevision: 20,
       works: {},
       settings: { ...validV1.settings, reducedMotionOverride: false },
       privacy: { localDataNoticeSeen: false },
@@ -835,7 +826,7 @@ describe('progress schema', () => {
     expect(migrateProgress(validV2)).toEqual({
       ...validV2,
       version: 3,
-      schemaRevision: 19,
+      schemaRevision: 20,
       works: {},
       sessions: {},
       equipment: initialEquipment(),
@@ -859,7 +850,7 @@ describe('progress schema', () => {
 
     expect(migrated).toMatchObject({
       version: 3,
-      schemaRevision: 19,
+      schemaRevision: 20,
       missions,
       settings: legacy.settings,
       privacy: legacy.privacy,
@@ -1483,9 +1474,9 @@ describe('progress schema', () => {
     expect(() => migrateProgress({ ...validV2, schemaRevision: 2 })).toThrow(/schemaRevision/);
   });
 
-  it('creates and round-trips only revision 19 for new progress documents', () => {
+  it('creates and round-trips only revision 20 for new progress documents', () => {
     const progress = createInitialProgress();
-    expect(progress.schemaRevision).toBe(19);
+    expect(progress.schemaRevision).toBe(20);
     expect(parseProgress(JSON.stringify(progress))).toEqual(progress);
   });
 
@@ -1497,7 +1488,7 @@ describe('progress schema', () => {
     const mission = { ...validMission, completedAt: NOW };
     const migrated = migrateProgress({ ...source, learnerName: '小行者', missions: { 'w4-m3': mission }, savedAt: NOW });
     expect(migrated).toMatchObject({
-      schemaRevision: 19,
+      schemaRevision: 20,
       sessions: {}, works: {},
       missionCompletionEvidence: {
         'w4-m3': { kind: 'legacy-replay-only', completedAt: NOW, sourceVersion, sourceSchemaRevision },
@@ -1523,7 +1514,7 @@ describe('progress schema', () => {
         legacy.works = {};
       }
       const migrated = migrateProgress(legacy);
-      expect(migrated.schemaRevision).toBe(19);
+      expect(migrated.schemaRevision).toBe(20);
       expect(migrated.sessions).toEqual({});
       expect(migrated.works).toEqual({});
       expect(migrated.missionCompletionEvidence['w4-m3']).toEqual({
@@ -1537,7 +1528,7 @@ describe('progress schema', () => {
     const before = structuredClone(revisionNine);
     const migrated = migrateProgress(revisionNine);
 
-    expect(migrated.schemaRevision).toBe(19);
+    expect(migrated.schemaRevision).toBe(20);
     expect(migrated.savedAt).toBe(before.savedAt);
     expect(migrated.sessions['w4-m1']).toEqual(before.sessions['w4-m1']);
     expect(migrated.sessions['w4-m2']).toEqual(before.sessions['w4-m2']);

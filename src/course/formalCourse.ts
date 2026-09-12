@@ -249,6 +249,11 @@ export const formalWeekSixMissions: FormalMissionSpec[] = [
     storyBeats: [beat('真假与结果分开', '一调得到假扇；二调取得真扇但随后被骗回；三调最终借得真扇并灭火通行。'), beat('材料不足先暂缓', '独立练习只依据卡片提供的信息判断；缺少身份线索时选择证据不足，不补写原著事件。')],
     hints: { observe: '先看核验指出的是哪条记录、哪个分类维度。', think: '扇子是真是假，与这次有没有完成灭火通行，是两个不同问题。', partial: '回到当前记录，只选择能直接支持这个标签的依据。' },
   }),
+  formalAiMission('w6-m3', {
+    subtitle: '把任务、事实与限制说完整', objective: '组成一份不改写原著的二调芭蕉扇任务说明书', canon: formalWeekSixCanon,
+    storyBeats: [beat('变作取扇', '悟空变作牛魔王模样取得真扇。'), beat('变作骗回', '牛魔王变作八戒模样骗回扇子；二调未完成灭火通行。')],
+    hints: { observe: '看看首个阻塞落在任务、事实、限制还是格式。', think: '说明书要说清做什么、依据什么、不能做什么，以及怎么呈现。', partial: '只检查当前标出的区域，对照已选材料是否完整且不矛盾。' },
+  }),
 ];
 
 export function getFormalMission(id: string): FormalMissionSpec | undefined {

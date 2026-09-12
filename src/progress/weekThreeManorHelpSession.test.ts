@@ -6,13 +6,8 @@ import {
 } from '../blockly/weekThreeManorHelpContract';
 import { completeMission, createInitialProgress, importProgress, serializeProgress } from './progress';
 import { parseManorHelpSession } from './manorHelpSessionSchema';
-import {
-  createMissionSession,
-  recordCompileFailure,
-  recordConditionObservationUse,
-  recordRun,
-  updateWorkspaceDraft,
-} from './session';
+import { createMissionSession } from './session';
+import { recordCompileFailure, recordConditionObservationUse, recordRun, updateWorkspaceDraft } from './legacyWorkspaceSessionMutations';
 
 const NOW = '2026-08-26T00:00:00.000Z';
 const LATER = '2026-08-26T00:01:00.000Z';

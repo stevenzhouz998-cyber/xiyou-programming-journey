@@ -1,6 +1,7 @@
 import { completeMission, createInitialProgress, serializeProgress } from '../../src/progress/progress';
 import { parseProgress } from '../../src/progress/schema';
-import { createMissionSession, recordRun, updateWorkspaceDraft } from '../../src/progress/session';
+import { createMissionSession } from '../../src/progress/session';
+import { recordRun, updateWorkspaceDraft } from '../../src/progress/legacyWorkspaceSessionMutations';
 import {
   createDefaultManorHelpDraft,
   compileManorHelpDraft,

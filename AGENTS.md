@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Approved W6-M3 Direction
+
+- On 2026-09-12 the user approved structured selections plus a local rule simulation for the second fan attempt, delegated subsequent local details, and requested model-squad implementation to local One-level playable. Children compose task, source facts, constraints and output format; event table and step list are both valid and must change the actual output. Use valid M2 work as read-only reference plus explicitly sourced identity facts. The simulator uses only selected facts, never secretly completes missing answers. Missing or contradictory instructions block completion with the first real issue; failures have zero penalty and help never selects or runs for the child. Clearly label the local simulation and remind children that real AI answers still require checking. Preserve approved bright storybook visuals. See `docs/superpowers/specs/2026-09-12-week-six-prompt-design.md`. No commit, push, merge or deployment authorization.
+
 ## Approved W6-M2 Direction
 
 - On 2026-09-12 the user approved dual-dimension fan classification with evidence selection and an insufficient-information practice card, delegated subsequent local decisions, and explicitly requested model-squad implementation to One-level playable. Preserve the approved bright storybook visuals and zero-penalty failures. Consume the valid W6-M1 saved work as read-only source records; separate fan authenticity from whether that attempt achieved extinguishing the fire and passage. The second attempt obtained the true fan but lost it afterwards. This is a local data-labeling experiment, not trained AI. See `docs/superpowers/specs/2026-09-12-week-six-evidence-classification-design.md`. Commit, push, merge and deployment are not authorized by this request.

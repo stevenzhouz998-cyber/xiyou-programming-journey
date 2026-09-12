@@ -60,7 +60,7 @@ export default defineConfig({
           if (source.endsWith('/src/utils/download.ts')) return 'route-shared';
           if (source.endsWith('/src/progress/storageFaultAdapter.ts') || source.endsWith('/src/progress/parentAccessSchema.ts') || source.endsWith('/src/progress/advancedSessionSchema.ts')) return 'progress-core';
           if (source.includes('/src/battle/')
-            || /\/src\/progress\/(?:equipment|progress|schema|session|storage|types)\.ts$/.test(source)
+            || /\/src\/progress\/(?:equipment|progress|schema|storage|types)\.ts$/.test(source)
           ) return 'progress-core';
           if (source.endsWith('/src/context/ProgressContext.tsx')
             || source.endsWith('/src/components/ToolErrorBoundary.tsx')) return 'app-core';

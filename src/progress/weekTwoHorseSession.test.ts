@@ -1,7 +1,9 @@
+import { recordRun, updateWorkspaceDraft } from './legacyWorkspaceSessionMutations';
 import { describe, expect, it } from 'vitest';
 import { compileHorseCareDraft, runHorseCare } from '../blockly/weekTwoHorseContract';
-import { createInitialProgress, getWeeklyReport, importProgress, serializeProgress } from './progress';
-import { createMissionSession, recordRun, updateWorkspaceDraft } from './session';
+import { createInitialProgress, importProgress, serializeProgress } from './progress';
+import { getWeeklyReport } from './weeklyReport';
+import { createMissionSession } from './session';
 
 const NOW = '2026-08-21T01:00:00.000Z';
 const draft = {

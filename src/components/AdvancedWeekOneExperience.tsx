@@ -1,10 +1,11 @@
+import { recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import './AdvancedWeekOneExperience.css'
 import { runAdvancedWeekOne, type AdvancedWeekOneDiagnostic, type AdvancedWeekOneEvent, type AdvancedWeekOneRunResult } from '../battle/advancedWeekOne'
 import type { AdvancedWeekOneCompileResult } from '../blockly/advancedWeekOneCompiler'
 import type { AdvancedWeekOneMissionId } from '../blockly/advancedWeekOneContract'
 import { useProgress } from '../context/ProgressContext'
-import { createMissionSession, recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/session'
+import { createMissionSession } from '../progress/session'
 import { recordEquipmentEffectUse } from '../progress/equipmentEffectSession'
 import type { AdvancedWeekOneMissionSession } from '../progress/types'
 import type { EquipmentEffect } from '../progress/equipment'

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { formalW5M4Prerequisite } from '../../e2e/support/w5m5Prerequisite';
 import { DEFAULT_WEEK_FIVE_STORY_ORCHESTRATION_PYTHON, SOLVED_WEEK_FIVE_STORY_ORCHESTRATION_PYTHON, parseWeekFiveStoryOrchestrationPython } from '../engine/weekFiveStoryOrchestrationPythonGrammar';
-import { completeMission, getWeekFiveStoryOrchestrationAccess, getWeeklyReport, isMissionUnlocked, serializeProgress } from './progress';
+import { completeMission, getWeekFiveStoryOrchestrationAccess, isMissionUnlocked, serializeProgress } from './progress';
+import { getWeeklyReport } from './weeklyReport';
 import { migrateProgress, parseProgress } from './schema';
 import { createWeekFiveStoryOrchestrationSession, recordWeekFiveStoryOrchestrationObservation, recordWeekFiveStoryOrchestrationRun, recordWeekFiveStoryOrchestrationValidationFailure, updateWeekFiveStoryOrchestrationCode } from './weekFiveStoryOrchestrationSession';
 import { parseWeekFiveStoryOrchestrationSession } from './weekFiveStoryOrchestrationSessionSchema';
@@ -51,7 +52,7 @@ describe('W5-M5 durable story-orchestration chain', () => {
     expect(session.pythonCode).toBe(SOLVED_WEEK_FIVE_STORY_ORCHESTRATION_PYTHON);
     expect(() => completeMission({ ...base, missionCompletionEvidence: {}, sessions: { ...base.sessions, 'w5-m5': session } }, 'w5-m5', { stars: 3, hintsUsed: 0 })).toThrow();
     const completed = completeMission({ ...base, sessions: { ...base.sessions, 'w5-m5': session }, savedAt: NOW }, 'w5-m5', { stars: 3, hintsUsed: 0 });
-    expect(completed.schemaRevision).toBe(19);
+    expect(completed.schemaRevision).toBe(20);
     expect(completed.missionCompletionEvidence['w5-m5']?.kind).toBe('formal-v3');
     expect(completed.works['w5-m5-story-orchestration-record']?.run.completed).toBe(true);
     expect(isMissionUnlocked(completed, 'w6-m1')).toBe(true);
@@ -70,7 +71,7 @@ describe('W5-M5 durable story-orchestration chain', () => {
     current.schemaRevision = 16;
     current.missions['w5-m5'] = { status: 'completed', stars: 2, attempts: 1, hintsUsed: 0, completedAt: NOW };
     const migrated = migrateProgress(current);
-    expect(migrated.schemaRevision).toBe(19);
+    expect(migrated.schemaRevision).toBe(20);
     expect(migrated.missionCompletionEvidence['w5-m5']).toMatchObject({ kind: 'legacy-replay-only', sourceSchemaRevision: 16 });
     expect(migrated.sessions['w5-m5']).toBeUndefined();
     expect(getWeekFiveStoryOrchestrationAccess(migrated)).toEqual({ kind: 'formal', upgradingLegacy: true });

@@ -1,8 +1,9 @@
+import { updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProgressProvider } from '../context/ProgressContext';
 import { createInitialProgress, serializeProgress } from '../progress/progress';
-import { createMissionSession, updateWorkspaceDraft } from '../progress/session';
+import { createMissionSession } from '../progress/session';
 import { CURRENT_PROGRESS_KEY } from '../progress/storage';
 import { WeekTwoHorseExperience } from './WeekTwoHorseExperience';
 

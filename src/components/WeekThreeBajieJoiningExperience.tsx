@@ -1,8 +1,9 @@
+import { recordCompileFailure, recordConditionObservationUse, recordRun, updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { BAJIE_JOINING_SCENARIOS, compileBajieJoiningDraft, runBajieJoiningForDraft, type BajieJoiningConditionKind, type BajieJoiningRunResult, type BajieJoiningWorkspaceDraftV1 } from '../blockly/weekThreeBajieJoiningContract';
 import type { BajieJoiningCompileResult } from '../blockly/weekThreeBajieJoiningCompiler';
 import { useProgress } from '../context/ProgressContext';
-import { createMissionSession, recordCompileFailure, recordConditionObservationUse, recordRun, updateWorkspaceDraft } from '../progress/session';
+import { createMissionSession } from '../progress/session';
 import type { BajieJoiningMissionSession } from '../progress/types';
 import { downloadTextFile } from '../utils/download';
 import { LazySectionBoundary } from './LazySectionBoundary';

@@ -79,6 +79,8 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   const recordsProof = progress.missionCompletionEvidence['w6-m1'];
   const classificationSession = progress.sessions['w6-m2'];
   const classificationProof = progress.missionCompletionEvidence['w6-m2'];
+  const promptSession = progress.sessions['w6-m3'];
+  const promptProof = progress.missionCompletionEvidence['w6-m3'];
   const listSession = progress.sessions['w4-m4'];
   const listProof = progress.missionCompletionEvidence['w4-m4'];
   const blockerLabels = {
@@ -213,6 +215,12 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     <p>漏选调整 {classificationSession?.incompleteChecks ?? 0} 次；标签调整 {classificationSession?.labelFailures ?? 0} 次；依据调整 {classificationSession?.evidenceFailures ?? 0} 次；材料不足判断调整 {classificationSession?.practiceFailures ?? 0} 次。</p>
     {classificationProof?.kind === 'formal-v3' && progress.works['w6-m2-fan-evidence-classification'] ? <p>证据分类正式证明与作品已保存</p> : null}
     {classificationProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式证据分类证明</p> : null}
+  </section><section aria-label="第六周任务说明学习摘要">
+    <h2>第六周任务说明学习摘要</h2>
+    <p>学习说清任务、事实、限制和输出格式。已试运行 {promptSession?.totalRuns ?? 0} 次。</p>
+    <p>缺项调整 {promptSession?.missingFailures ?? 0} 次；任务范围调整 {promptSession?.taskFailures ?? 0} 次；事实调整 {promptSession?.factFailures ?? 0} 次；限制调整 {promptSession?.constraintFailures ?? 0} 次。</p>
+    {promptProof?.kind === 'formal-v3' && progress.works['w6-m3-second-attempt-brief'] ? <p>任务说明书正式证明与作品已保存</p> : null}
+    {promptProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式任务说明证明</p> : null}
   </section></>
 }
 

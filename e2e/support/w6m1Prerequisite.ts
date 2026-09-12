@@ -7,6 +7,8 @@ import { SOLVED_WEEK_SIX_RECORDS_PYTHON, parseWeekSixRecordsPython } from '../..
 import { createWeekSixRecordsSession, recordWeekSixRecordsRun, updateWeekSixRecordsCode } from '../../src/progress/weekSixRecordsSession';
 import { runWeekSixClassification, type WeekSixClassificationInput } from '../../src/engine/weekSixClassificationContract';
 import { createWeekSixClassificationSession, recordWeekSixClassificationCheck, updateWeekSixClassificationInput } from '../../src/progress/weekSixClassificationSession';
+import { runWeekSixPrompt, type WeekSixPromptInput } from '../../src/engine/weekSixPromptContract';
+import { createWeekSixPromptSession, recordWeekSixPromptRun, updateWeekSixPromptInput } from '../../src/progress/weekSixPromptSession';
 
 export function formalW5M5Prerequisite(): string {
   const progress = parseProgress(formalW5M4Prerequisite());
@@ -56,4 +58,8 @@ export function formalW6M2Completion(): string {
   session = recordWeekSixClassificationCheck(session, input, runWeekSixClassification(input, source.run.rows), now);
   progress.sessions['w6-m2'] = session; progress.savedAt = now;
   return serializeProgress(completeMission(progress, 'w6-m2', { stars: 3, hintsUsed: 0 }));
+}
+
+export function formalW6M3Completion(outputFormat:'event-table'|'step-list'='event-table'):string{
+  const progress=parseProgress(formalW6M2Completion()),source=progress.works['w6-m2-fan-evidence-classification'];if(!source)throw Error('W6-M3 source fixture invalid');const now=new Date().toISOString();const input:WeekSixPromptInput={task:'organize-second-attempt',factIds:['sun-as-bull-gets-fan','bull-as-bajie-takes-fan','second-not-passed'],constraintIds:['follow-canon','no-invention'],outputFormat};let session=createWeekSixPromptSession(source,now);session=updateWeekSixPromptInput(session,input,now);session=recordWeekSixPromptRun(session,input,runWeekSixPrompt(input,session.source),now);progress.sessions['w6-m3']=session;progress.savedAt=now;return serializeProgress(completeMission(progress,'w6-m3',{stars:3,hintsUsed:0}));
 }

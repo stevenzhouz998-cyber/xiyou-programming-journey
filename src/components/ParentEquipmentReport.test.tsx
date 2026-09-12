@@ -1,7 +1,8 @@
+import { recordConditionObservationUse, recordCuilanConditionObservationUse, recordRun, updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { completeMission, createInitialProgress } from '../progress/progress'
-import { createMissionSession, recordConditionObservationUse, recordCuilanConditionObservationUse, recordRun, updateWorkspaceDraft } from '../progress/session'
+import { createMissionSession } from '../progress/session'
 import { recordEquipmentEffectUse } from '../progress/equipmentEffectSession'
 import { equipItem } from '../progress/equipmentOperations'
 import { compileManorHelpDraft, createDefaultManorHelpDraft, runManorHelp } from '../blockly/weekThreeManorHelpContract'

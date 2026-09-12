@@ -1,9 +1,10 @@
+import { recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';
 import { lazy, Suspense, useMemo, useRef, useState, type ComponentType } from 'react';
 import './AdvancedWeekOneExperience.css';
 import { runHeavenlySignalBoss, type HeavenlySignalBossDiagnostic, type HeavenlySignalBossRunResult, type HeavenlySignalBossRuntimeEvent } from '../blockly/weekTwoHeavenlySignalBossContract';
 import type { HeavenlySignalBossCompileResult } from '../blockly/weekTwoHeavenlySignalBossCompiler';
 import { useProgress } from '../context/ProgressContext';
-import { createMissionSession, recordCompileFailure, recordRun, updateWorkspaceDraft } from '../progress/session';
+import { createMissionSession } from '../progress/session';
 import type { HeavenlySignalBossMissionSession } from '../progress/types';
 import { downloadTextFile } from '../utils/download';
 import { LazySectionBoundary } from './LazySectionBoundary';

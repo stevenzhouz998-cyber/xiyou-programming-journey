@@ -1,8 +1,9 @@
+import { recordCompileFailure, recordCuilanConditionObservationUse, recordRun, updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { runCuilanBooleanForDraft, type CuilanBooleanRunResult } from '../blockly/weekThreeCuilanBooleanContract';
 import type { CuilanBooleanCompileResult } from '../blockly/weekThreeCuilanBooleanCompiler';
 import { useProgress } from '../context/ProgressContext';
-import { createMissionSession, recordCompileFailure, recordCuilanConditionObservationUse, recordRun, updateWorkspaceDraft } from '../progress/session';
+import { createMissionSession } from '../progress/session';
 import type { CuilanBooleanMissionSession } from '../progress/types';
 import type { WeekThreeCuilanBooleanBlocklyWorkspace, WeekThreeCuilanBooleanBlocklyWorkspaceProps } from './WeekThreeCuilanBooleanBlocklyWorkspace';
 import type { WeekThreeCuilanBooleanScene, WeekThreeCuilanBooleanSceneProps } from './WeekThreeCuilanBooleanScene';

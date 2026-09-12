@@ -1,14 +1,14 @@
+import { recordConditionObservationUse, recordRun, updateWorkspaceDraft } from './legacyWorkspaceSessionMutations';
 import { describe, expect, it } from 'vitest';
 import {
-  compileBajieJoiningDraft,
-  runBajieJoiningForDraft,
-} from '../blockly/weekThreeBajieJoiningContract';
+  compileBajieJoiningDraft, runBajieJoiningForDraft, } from '../blockly/weekThreeBajieJoiningContract';
 import { compileYunzhanDialogueDraft, runYunzhanDialogueForDraft } from '../blockly/weekThreeYunzhanDialogueContract';
 import { compileCuilanBooleanDraft, runCuilanBooleanForDraft } from '../blockly/weekThreeCuilanBooleanContract';
-import { completeMission, createInitialProgress, getWeeklyReport, isMissionUnlocked, serializeProgress } from './progress';
+import { completeMission, createInitialProgress, isMissionUnlocked, serializeProgress } from './progress';
+import { getWeeklyReport } from './weeklyReport';
 import { isExecutableMissionId } from './executableMissionIds';
 import { migrateProgress } from './schema';
-import { createMissionSession, recordConditionObservationUse, recordRun, updateWorkspaceDraft } from './session';
+import { createMissionSession } from './session';
 import { parseBajieJoiningSession, parseBajieJoiningWorkspace, sameBajieJoiningData } from './bajieJoiningSessionSchema';
 import { runWeekThreeBossDraft } from '../blockly/weekThreeBossContract';
 import { createSolvedWeekThreeBossDraftForTest } from '../blockly/weekThreeBossTestHelpers';
@@ -52,7 +52,7 @@ describe('W3-M4 八戒归队 Progress V3', () => {
     const legacy = oldV3(5);
     legacy.missions['w3-m4'] = { status: 'completed', stars: 2, attempts: 1, hintsUsed: 0, completedAt: NOW };
     const migrated = migrateProgress(legacy);
-    expect(migrated.schemaRevision).toBe(19);
+    expect(migrated.schemaRevision).toBe(20);
     expect((migrated as any).missionCompletionEvidence['w3-m4']).toMatchObject({ kind: 'legacy-preformal', completedAt: NOW });
     expect(isMissionUnlocked(migrated, 'w3-m5')).toBe(false);
   });

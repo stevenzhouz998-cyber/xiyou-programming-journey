@@ -1,3 +1,4 @@
+import { recordRun } from '../progress/legacyWorkspaceSessionMutations';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StrictMode, type ComponentType } from 'react'
@@ -6,7 +7,7 @@ import { runRuyiStaffBattle } from '../battle/ruyiStaff'
 import type { RuyiCompileResult } from '../blockly/ruyiStaffCompiler'
 import { ProgressProvider, useProgress } from '../context/ProgressContext'
 import { createInitialProgress, serializeProgress } from '../progress/progress'
-import { createMissionSession, recordRun } from '../progress/session'
+import { createMissionSession } from '../progress/session'
 import { CURRENT_PROGRESS_KEY } from '../progress/storage'
 import type { CoordinatedSaveResult } from '../progress/storageCoordinator'
 import { RuyiStaffExperience } from './RuyiStaffExperience'

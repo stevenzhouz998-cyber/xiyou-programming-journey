@@ -1,8 +1,10 @@
+import { recordRun, updateWorkspaceDraft } from './legacyWorkspaceSessionMutations';
 import { describe, expect, it } from 'vitest';
 import { compileFurnaceConditionDraft, createDefaultFurnaceConditionDraft, runFurnaceCondition } from '../blockly/weekTwoFurnaceConditionContract';
-import { createMissionSession, recordRun, updateWorkspaceDraft } from './session';
+import { createMissionSession } from './session';
 import { parseFurnaceConditionSession } from './furnaceConditionSessionSchema';
-import { createInitialProgress, getWeeklyReport, importProgress, serializeProgress } from './progress';
+import { createInitialProgress, importProgress, serializeProgress } from './progress';
+import { getWeeklyReport } from './weeklyReport';
 
 const now = '2026-08-23T00:00:00.000Z';
 

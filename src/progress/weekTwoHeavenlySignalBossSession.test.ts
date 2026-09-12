@@ -1,8 +1,10 @@
+import { recordRun, updateWorkspaceDraft } from './legacyWorkspaceSessionMutations';
 import { describe, expect, it } from 'vitest';
 import { compileHeavenlySignalBossDraft, createDefaultHeavenlySignalBossDraft, runHeavenlySignalBoss } from '../blockly/weekTwoHeavenlySignalBossContract';
-import { completeMission, createInitialProgress, getWeeklyReport, importProgress, isMissionUnlocked, serializeProgress } from './progress';
+import { completeMission, createInitialProgress, importProgress, isMissionUnlocked, serializeProgress } from './progress';
+import { getWeeklyReport } from './weeklyReport';
 import { parseHeavenlySignalBossSession } from './heavenlySignalBossSessionSchema';
-import { createMissionSession, recordRun, updateWorkspaceDraft } from './session';
+import { createMissionSession } from './session';
 
 const now = '2026-08-24T00:00:00.000Z';
 const later = '2026-08-24T00:00:01.000Z';

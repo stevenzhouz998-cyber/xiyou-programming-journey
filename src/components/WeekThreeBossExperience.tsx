@@ -1,8 +1,9 @@
+import { recordConditionObservationUse, recordRun, recordWeekThreeBossCompileFailure, updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { compileWeekThreeBossDraft, type WeekThreeBossCompileResult } from '../blockly/weekThreeBossCompiler';
 import { publicWeekThreeBossScenario, runWeekThreeBossDraft, type WeekThreeBossRunResult, type WeekThreeBossWorkspaceDraftV1 } from '../blockly/weekThreeBossContract';
 import { useProgress } from '../context/ProgressContext';
-import { createMissionSession, recordConditionObservationUse, recordRun, recordWeekThreeBossCompileFailure, updateWorkspaceDraft } from '../progress/session';
+import { createMissionSession } from '../progress/session';
 import type { WeekThreeBossMissionSession } from '../progress/types';
 import { downloadTextFile } from '../utils/download';
 import { LazySectionBoundary } from './LazySectionBoundary';

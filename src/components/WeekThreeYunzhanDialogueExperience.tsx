@@ -1,8 +1,9 @@
+import { recordCompileFailure, recordConditionObservationUse, recordRun, updateWorkspaceDraft } from '../progress/legacyWorkspaceSessionMutations';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { runYunzhanDialogueForDraft, type YunzhanDialogueRunResult } from '../blockly/weekThreeYunzhanDialogueContract';
 import type { YunzhanDialogueCompileResult } from '../blockly/weekThreeYunzhanDialogueCompiler';
 import { useProgress } from '../context/ProgressContext';
-import { createMissionSession, recordCompileFailure, recordConditionObservationUse, recordRun, updateWorkspaceDraft } from '../progress/session';
+import { createMissionSession } from '../progress/session';
 import type { WeekThreeYunzhanDialogueBlocklyWorkspaceProps } from './WeekThreeYunzhanDialogueBlocklyWorkspace';
 import type { WeekThreeYunzhanDialogueSceneProps } from './WeekThreeYunzhanDialogueScene';
 import { downloadTextFile } from '../utils/download';

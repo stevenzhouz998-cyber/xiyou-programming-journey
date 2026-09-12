@@ -1,22 +1,16 @@
+import { recordConditionObservationUse, recordRun, updateWorkspaceDraft } from './legacyWorkspaceSessionMutations';
 import * as Blockly from 'blockly';
 import { describe, expect, it } from 'vitest';
 import { runFourSeasRegalia } from '../battle/fourSeasRegalia';
 import {
-  completeMission,
-  createInitialProgress,
-  getWeekFourBranchAccess,
-  getWeekFourVariableAccess,
-  getWeeklyReport,
-  importProgress,
-  isMissionUnlocked,
-  serializeProgress,
-} from './progress';
+  completeMission, createInitialProgress, getWeekFourBranchAccess, getWeekFourVariableAccess, importProgress, isMissionUnlocked, serializeProgress } from './progress';
+import { getWeeklyReport } from './weeklyReport';
 import { runRuyiStaffBattle } from '../battle/ruyiStaff';
 import type { RuyiStaffInstruction } from '../battle/types';
 import { registerFourSeasRegaliaBlocks } from '../blockly/fourSeasRegaliaBlocks';
 import { compileFourSeasRegaliaWorkspace } from '../blockly/fourSeasRegaliaCompiler';
 import { loadFourSeasWorkspaceDraft, type FourSeasWorkspaceDraftV1 } from '../blockly/fourSeasRegaliaDraft';
-import { createMissionSession, recordConditionObservationUse, recordRun, updateWorkspaceDraft } from './session';
+import { createMissionSession } from './session';
 import { recordEquipmentEffectUse } from './equipmentEffectSession';
 import { equipItem } from './equipmentOperations';
 import {
@@ -632,7 +626,7 @@ describe('progress rules', () => {
     expect(progress.missions['w1-m1']).toMatchObject({ stars: 3, attempts: 1, hintsUsed: 0, status: 'completed' });
     expect(progress).toMatchObject({
       version: 3,
-      schemaRevision: 19,
+      schemaRevision: 20,
       sessions: {},
       privacy: { localDataNoticeSeen: true },
       recovery: { lastRecoveredAt: '2026-07-12T00:00:00.000Z', source: 'snapshot' },
@@ -642,7 +636,7 @@ describe('progress rules', () => {
   it('publishes the derived condition-observation ability with w2 completion and keeps it idempotent', () => {
     let progress = createInitialProgress();
     expect(progress).toMatchObject({
-      schemaRevision: 19,
+      schemaRevision: 20,
       abilities: { conditionObservation: { acquiredAt: null, stableUnlockedAt: null } },
     });
 

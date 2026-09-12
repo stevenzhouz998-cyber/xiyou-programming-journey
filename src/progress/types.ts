@@ -124,6 +124,9 @@ import type { WeekSixRecordsRunResult, WeekSixRecordsTraceItem } from '../engine
 import type { WeekSixClassificationMissionSession } from './weekSixClassificationSession';
 export type { WeekSixClassificationMissionSession } from './weekSixClassificationSession';
 import type { WeekSixClassificationInput, WeekSixClassificationRunResult } from '../engine/weekSixClassificationContract';
+import type { WeekSixPromptMissionSession } from './weekSixPromptSession';
+export type { WeekSixPromptMissionSession } from './weekSixPromptSession';
+import type { WeekSixPromptInput, WeekSixPromptRunResult, WeekSixPromptSource } from '../engine/weekSixPromptContract';
 
 export interface MissionProgress {
   status: 'completed';
@@ -598,6 +601,12 @@ export type WeekSixClassificationCompletionEvidence =
   | { kind:'legacy-replay-only';completedAt:string;sourceVersion:3;sourceSchemaRevision:1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18 }
   | { kind:'formal-v3';completedAt:string;verifiedAt:string;sourceWorkId:'w6-m1-structured-records-table';sourceVerifiedAt:string;sourceRows:import('../engine/weekSixRecordsContract').WeekSixRecordsRow[];input:WeekSixClassificationInput;run:WeekSixClassificationRunResult;workId:'w6-m2-fan-evidence-classification' };
 export interface WeekSixClassificationWorkV1 {kind:'ai-evidence-classification-v1';workId:'w6-m2-fan-evidence-classification';missionId:'w6-m2';title:string;sourceWorkId:'w6-m1-structured-records-table';sourceVerifiedAt:string;sourceRows:import('../engine/weekSixRecordsContract').WeekSixRecordsRow[];input:WeekSixClassificationInput;run:WeekSixClassificationRunResult;createdAt:string;verifiedAt:string}
+export type WeekSixPromptCompletionEvidence=
+  |{kind:'legacy-replay-only';completedAt:string;sourceVersion:1;sourceSchemaRevision:null}
+  |{kind:'legacy-replay-only';completedAt:string;sourceVersion:2;sourceSchemaRevision:1}
+  |{kind:'legacy-replay-only';completedAt:string;sourceVersion:3;sourceSchemaRevision:1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19}
+  |{kind:'formal-v3';completedAt:string;verifiedAt:string;sourceWorkId:'w6-m2-fan-evidence-classification';sourceVerifiedAt:string;source:WeekSixPromptSource;input:WeekSixPromptInput;run:WeekSixPromptRunResult;workId:'w6-m3-second-attempt-brief'};
+export interface WeekSixPromptWorkV1{kind:'ai-prompt-brief-v1';workId:'w6-m3-second-attempt-brief';missionId:'w6-m3';title:string;sourceWorkId:'w6-m2-fan-evidence-classification';sourceVerifiedAt:string;source:WeekSixPromptSource;input:WeekSixPromptInput;run:WeekSixPromptRunResult;createdAt:string;verifiedAt:string}
 
 export interface MissionCompletionEvidenceV1 {
   'w3-m1'?: ManorHelpCompletionEvidence;
@@ -617,6 +626,7 @@ export interface MissionCompletionEvidenceV1 {
   'w5-m5'?: WeekFiveStoryOrchestrationCompletionEvidence;
   'w6-m1'?: WeekSixRecordsCompletionEvidence;
   'w6-m2'?: WeekSixClassificationCompletionEvidence;
+  'w6-m3'?: WeekSixPromptCompletionEvidence;
 }
 
 export interface MissionSessionById {
@@ -647,6 +657,7 @@ export interface MissionSessionById {
   'w5-m5': WeekFiveStoryOrchestrationMissionSession;
   'w6-m1': WeekSixRecordsMissionSession;
   'w6-m2': WeekSixClassificationMissionSession;
+  'w6-m3': WeekSixPromptMissionSession;
 }
 
 export type ExecutableMissionId = keyof MissionSessionById;
@@ -656,7 +667,7 @@ export type MissionSessions = { [MissionId in keyof MissionSessionById]?: Missio
 
 export interface ProgressV3 {
   version: 3;
-  schemaRevision: 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19;
+  schemaRevision: 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
   learnerName: string;
   missions: Record<string, MissionProgress>;
   settings: ProgressSettings;
@@ -682,6 +693,7 @@ export interface ProgressV3 {
     'w5-m5-story-orchestration-record': WeekFiveStoryOrchestrationWorkV1;
     'w6-m1-structured-records-table': WeekSixRecordsWorkV1;
     'w6-m2-fan-evidence-classification': WeekSixClassificationWorkV1;
+    'w6-m3-second-attempt-brief': WeekSixPromptWorkV1;
   }>;
   savedAt: string;
 }
