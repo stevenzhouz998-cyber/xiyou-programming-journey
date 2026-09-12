@@ -234,7 +234,16 @@ export const formalWeekFiveMissions: FormalMissionSpec[] = [
   }),
 ];
 
+export const formalWeekSixCanon: CanonRef = { chapters: [59, 60, 61], title: '第五十九至六十一回　三调芭蕉扇', sourceUrl: 'https://zh.wikisource.org/zh-hans/西游记/第059回' };
+export const formalWeekSixMissions: FormalMissionSpec[] = [
+  formalPythonMission('w6-m1', {
+    subtitle: '按字段读出三次借扇记录', objective: '用字典保存调次和经过，并让循环逐条生成事实表', canon: formalWeekSixCanon,
+    storyBeats: [beat('一调与二调', '一调得到假扇，反使火势更旺；二调取得真扇，随后又被骗回。'), beat('三调通行', '第三次最终借得真扇，灭火通行并还扇西行。')],
+    hints: { observe: '对照实际表格的两列，找到第一次重复的内容。', think: '同一条 record 有“第几调”和“经过”两个字段；两列要读取各自的字段。', partial: '检查 record_attempt 的第二个参数正在读取哪个字段。' },
+  }),
+];
+
 export function getFormalMission(id: string): FormalMissionSpec | undefined {
-  return [...formalWeekOneMissions, ...formalWeekTwoMissions, ...formalWeekThreeMissions, ...formalWeekFourMissions, ...formalWeekFiveMissions]
+  return [...formalWeekOneMissions, ...formalWeekTwoMissions, ...formalWeekThreeMissions, ...formalWeekFourMissions, ...formalWeekFiveMissions, ...formalWeekSixMissions]
     .find((mission) => mission.id === id);
 }

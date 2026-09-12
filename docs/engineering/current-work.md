@@ -2,6 +2,15 @@
 
 更新时间：2026-09-12。此索引定位现场，不代表全项目完成，也不是提交、推送、合并或部署授权。
 
+## W6-M1 当前工作
+
+- 实际入口仍为下述 `5806` 工作树；W5 已提交推送后的 W6 实施基线 HEAD 为 `77ccc53e667c452b76af4a65342e78eae3a9c35c`，分支 `codex/w4-m3-branch-structure`。下面 W5 段落中的更早 HEAD 和提交授权仅属于其历史交付。
+- 用户已确认 W6-M1 字典记录玩法、必要原著事实更正，并要求模型小队实施至 One-level playable；用户随后明确授权本次 W6-M1 交接、commit and push；不包含合并或部署。
+- W6-M1 已达到本地 **One-level playable**，progress revision 18；五配置相关浏览器 60/60、全量单测 1993/1993、构建/预算/素材门禁及普通生产包独立复验通过。本次提交涵盖 W6-M1 交付；最终 HEAD 与远端状态以 Git 和工作区外交接文件为准。状态与有效证据以 [W6-M1 验收记录](../verification/week-six-structured-records.md) 为准。
+- [W6-M1 已确认规格](../superpowers/specs/2026-09-12-week-six-structured-records-design.md)。
+
+## W5 历史交付
+
 - 工作区：`/Users/macmini-zz/.codex/worktrees/5806/少儿编程学习网页`；分支 `codex/w4-m3-branch-structure`；验收基线 HEAD `dc81a12fa9f5ebd0f1419399b490560be1d1f93b`；最终提交与远端状态请查本次临时目录交接文件和 Git。
 - W5-M5「车迟国故事总编排」达到本地 **One-level playable**：一份可见 Python 程序、九个函数、四个顺序阻塞、真实 Pyodide Worker、失败零惩罚、提示不代解、正式作品与证明、刷新/恢复/导入导出和只读真实回放。
 - Progress revision 17。只有 W5-M4 `formal-v3` 可正式进入，只有 W5-M5 `formal-v3` 解锁 W6-M1；旧 W5-M5 仅保留历史。此前作品、证明、装备和记录保留。

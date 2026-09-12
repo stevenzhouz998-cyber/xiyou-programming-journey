@@ -42,7 +42,7 @@ describe('W4-M4 durable semantic chain', () => {
   it('migrates revision 10 without fabricating evidence and upgrades only by rerunning', () => {
     const old = parseProgress(formalW4M3Prerequisite()); old.schemaRevision = 10;
     old.missions['w4-m4'] = {status:'completed',stars:2,attempts:1,hintsUsed:1,completedAt:'2026-09-08T00:00:00.000Z'};
-    const migrated = migrateProgress(old); expect(migrated.schemaRevision).toBe(17);
+    const migrated = migrateProgress(old); expect(migrated.schemaRevision).toBe(18);
     expect(migrated.sessions['w4-m4']).toBeUndefined(); expect(migrated.works['w4-m4-list-loop-record']).toBeUndefined();
     expect(migrated.missionCompletionEvidence['w4-m4']).toMatchObject({kind:'legacy-replay-only',sourceSchemaRevision:10});
     const upgraded = completeMission({...migrated,sessions:{...migrated.sessions,'w4-m4':run(updateWeekFourListCode(createWeekFourListSession(time(0)),solved,time(1)),2)}},'w4-m4',{stars:3,hintsUsed:0});

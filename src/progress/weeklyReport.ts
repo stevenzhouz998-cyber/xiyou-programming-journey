@@ -73,6 +73,7 @@ export interface WeeklyReport {
   weekFiveWeather?: { runs:number; callFailures:number; parameterFailures:number; validationFailures:number; infrastructureFailures:number; observations:number; workSaved:boolean; proof:'formal-v3'|'legacy-replay-only'|'none'; completedAt:string|null };
   weekFiveDecomposition?: { runs:number; coordinatorFailures:number; ownershipFailures:number; validationFailures:number; infrastructureFailures:number; observations:number; workSaved:boolean; proof:'formal-v3'|'legacy-replay-only'|'none'; completedAt:string|null };
   weekFiveStoryOrchestration?: { runs:number; monkLoopFailures:number; templeCallFailures:number; weatherBindingFailures:number; laterCallOrderFailures:number; validationFailures:number; infrastructureFailures:number; observations:number; workSaved:boolean; proof:'formal-v3'|'legacy-replay-only'|'none'; completedAt:string|null };
+  weekSixRecords?: { runs:number; recordFailures:number; fieldFailures:number; validationFailures:number; infrastructureFailures:number; observations:number; workSaved:boolean; proof:'formal-v3'|'legacy-replay-only'|'none'; completedAt:string|null };
 }
 
 export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyReport {
@@ -105,6 +106,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
   const weekFiveWeatherSession = week === 5 ? progress.sessions['w5-m3'] : undefined;
   const weekFiveDecompositionSession = week === 5 ? progress.sessions['w5-m4'] : undefined;
   const weekFiveStoryOrchestrationSession = week === 5 ? progress.sessions['w5-m5'] : undefined;
+  const weekSixRecordsSession = week === 6 ? progress.sessions['w6-m1'] : undefined;
   const weekFourListSession = week === 4 ? progress.sessions['w4-m4'] : undefined;
   const sessionSupport = [
     ...(dragonSession ? getSessionSupport(dragonSession, 'w1-m1') : []),
@@ -146,7 +148,7 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
     total: missions.length,
     stars: records.reduce((sum, record) => safeCount(sum, record.stars), 0),
     hintsUsed: records.reduce((sum, record) => safeCount(sum, record.hintsUsed), 0),
-    sessionRuns: safeCount(safeCount(safeCount(safeCount(safeCount(safeCount(sessionRuns, weekFourBossSession?.totalRuns ?? 0), weekFiveMonksSession?.totalRuns ?? 0), weekFiveFunctionSession?.totalRuns ?? 0), weekFiveWeatherSession?.totalRuns ?? 0), weekFiveDecompositionSession?.totalRuns ?? 0), weekFiveStoryOrchestrationSession?.totalRuns ?? 0),
+    sessionRuns: safeCount(safeCount(safeCount(safeCount(safeCount(safeCount(safeCount(sessionRuns, weekFourBossSession?.totalRuns ?? 0), weekFiveMonksSession?.totalRuns ?? 0), weekFiveFunctionSession?.totalRuns ?? 0), weekFiveWeatherSession?.totalRuns ?? 0), weekFiveDecompositionSession?.totalRuns ?? 0), weekFiveStoryOrchestrationSession?.totalRuns ?? 0), weekSixRecordsSession?.totalRuns ?? 0),
     sessionAdjustments: [
       sessionAdjustments,
       weekFiveMonksSession ? safeCount(safeCount(weekFiveMonksSession.coverageFailures, weekFiveMonksSession.actionFailures), weekFiveMonksSession.validationFailures) : 0,
@@ -156,8 +158,9 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
       weekFiveWeatherSession ? safeCount(safeCount(weekFiveWeatherSession.callFailures, weekFiveWeatherSession.parameterFailures), weekFiveWeatherSession.validationFailures) : 0,
       weekFiveDecompositionSession ? safeCount(safeCount(weekFiveDecompositionSession.coordinatorFailures, weekFiveDecompositionSession.ownershipFailures), weekFiveDecompositionSession.validationFailures) : 0,
       weekFiveStoryOrchestrationSession ? [weekFiveStoryOrchestrationSession.monkLoopFailures, weekFiveStoryOrchestrationSession.templeCallFailures, weekFiveStoryOrchestrationSession.weatherBindingFailures, weekFiveStoryOrchestrationSession.laterCallOrderFailures, weekFiveStoryOrchestrationSession.validationFailures].reduce((total, value) => safeCount(total, value), 0) : 0,
+      weekSixRecordsSession ? [weekSixRecordsSession.recordFailures, weekSixRecordsSession.fieldFailures, weekSixRecordsSession.validationFailures].reduce((total, value) => safeCount(total, value), 0) : 0,
     ].reduce((total, value) => safeCount(total, value), 0),
-    needsSupport: [...new Set([...missionSupport, ...sessionSupport, ...(weekFiveFunctionSession?.firstBlockingConcept ? [weekFiveFunctionSession.firstBlockingConcept] : []), ...(weekFiveWeatherSession?.firstBlockingConcept ? [weekFiveWeatherSession.firstBlockingConcept] : []), ...(weekFiveDecompositionSession?.firstBlockingConcept ? [weekFiveDecompositionSession.firstBlockingConcept] : []), ...(weekFiveStoryOrchestrationSession?.firstBlockingConcept ? [weekFiveStoryOrchestrationSession.firstBlockingConcept] : [])])],
+    needsSupport: [...new Set([...missionSupport, ...sessionSupport, ...(weekFiveFunctionSession?.firstBlockingConcept ? [weekFiveFunctionSession.firstBlockingConcept] : []), ...(weekFiveWeatherSession?.firstBlockingConcept ? [weekFiveWeatherSession.firstBlockingConcept] : []), ...(weekFiveDecompositionSession?.firstBlockingConcept ? [weekFiveDecompositionSession.firstBlockingConcept] : []), ...(weekFiveStoryOrchestrationSession?.firstBlockingConcept ? [weekFiveStoryOrchestrationSession.firstBlockingConcept] : []), ...(weekSixRecordsSession?.firstBlockingConcept ? ['按字段读取记录'] : [])])],
     ...(week !== 3 ? {} : {
       bajieJoining: {
         runs: bajieJoiningSession?.totalRuns ?? 0,
@@ -223,6 +226,9 @@ export function getWeeklyReport(progress: ProgressV3, week: number): WeeklyRepor
       weekFiveWeather: { runs:weekFiveWeatherSession?.totalRuns??0,callFailures:weekFiveWeatherSession?.callFailures??0,parameterFailures:weekFiveWeatherSession?.parameterFailures??0,validationFailures:weekFiveWeatherSession?.validationFailures??0,infrastructureFailures:weekFiveWeatherSession?.runnerInfrastructureFailures??0,observations:weekFiveWeatherSession?.conditionObservationUses.length??0,workSaved:progress.works['w5-m3-weather-parameter-record']!==undefined,proof:progress.missionCompletionEvidence['w5-m3']?.kind??'none',completedAt:progress.missions['w5-m3']?.completedAt??null},
       weekFiveDecomposition: { runs:weekFiveDecompositionSession?.totalRuns??0,coordinatorFailures:weekFiveDecompositionSession?.coordinatorFailures??0,ownershipFailures:weekFiveDecompositionSession?.ownershipFailures??0,validationFailures:weekFiveDecompositionSession?.validationFailures??0,infrastructureFailures:weekFiveDecompositionSession?.runnerInfrastructureFailures??0,observations:weekFiveDecompositionSession?.conditionObservationUses.length??0,workSaved:progress.works['w5-m4-problem-decomposition-record']!==undefined,proof:progress.missionCompletionEvidence['w5-m4']?.kind??'none',completedAt:progress.missions['w5-m4']?.completedAt??null},
       weekFiveStoryOrchestration: { runs:weekFiveStoryOrchestrationSession?.totalRuns??0,monkLoopFailures:weekFiveStoryOrchestrationSession?.monkLoopFailures??0,templeCallFailures:weekFiveStoryOrchestrationSession?.templeCallFailures??0,weatherBindingFailures:weekFiveStoryOrchestrationSession?.weatherBindingFailures??0,laterCallOrderFailures:weekFiveStoryOrchestrationSession?.laterCallOrderFailures??0,validationFailures:weekFiveStoryOrchestrationSession?.validationFailures??0,infrastructureFailures:weekFiveStoryOrchestrationSession?.runnerInfrastructureFailures??0,observations:weekFiveStoryOrchestrationSession?.conditionObservationUses.length??0,workSaved:progress.works['w5-m5-story-orchestration-record']!==undefined,proof:progress.missionCompletionEvidence['w5-m5']?.kind??'none',completedAt:progress.missions['w5-m5']?.completedAt??null},
+    }),
+    ...(week !== 6 ? {} : {
+      weekSixRecords: { runs:weekSixRecordsSession?.totalRuns??0,recordFailures:weekSixRecordsSession?.recordFailures??0,fieldFailures:weekSixRecordsSession?.fieldFailures??0,validationFailures:weekSixRecordsSession?.validationFailures??0,infrastructureFailures:weekSixRecordsSession?.runnerInfrastructureFailures??0,observations:weekSixRecordsSession?.conditionObservationUses.length??0,workSaved:progress.works['w6-m1-structured-records-table']!==undefined,proof:progress.missionCompletionEvidence['w6-m1']?.kind??'none',completedAt:progress.missions['w6-m1']?.completedAt??null},
     }),
   };
 }

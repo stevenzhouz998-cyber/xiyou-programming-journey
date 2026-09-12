@@ -52,7 +52,7 @@ const REQUIRED_METADATA = [
 ];
 
 const QA_STATUSES = new Set(['planned', 'generated', 'provenance-verified', 'visual-qa-passed', 'rejected']);
-const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/', 'assets/week-three-yunzhan-dialogue/', 'assets/week-three-bajie-joining/', 'assets/week-three-boss/', 'assets/week-four-mapping/', 'assets/week-four-variables/', 'assets/week-four-branches/', 'assets/week-five-monks/', 'assets/week-five-temple/', 'assets/week-five-weather/', 'assets/week-five-trials/'];
+const APPROVED_ASSET_DIRECTORIES = ['assets/dragon-palace/', 'assets/week-one-advanced/', 'assets/week-two-heaven/', 'assets/week-two-great-sage/', 'assets/week-two-peach-elixir/', 'assets/week-two-furnace/', 'assets/week-two-heavenly-boss/', 'assets/week-three-manor-help/', 'assets/week-three-cuilan/', 'assets/week-three-yunzhan-dialogue/', 'assets/week-three-bajie-joining/', 'assets/week-three-boss/', 'assets/week-four-mapping/', 'assets/week-four-variables/', 'assets/week-four-branches/', 'assets/week-five-monks/', 'assets/week-five-temple/', 'assets/week-five-weather/', 'assets/week-five-trials/', 'assets/week-six-records/'];
 
 const REQUIRED_DRAGON_PALACE_SLOTS = new Map([
   ['assets/dragon-palace/background.webp', [
@@ -658,7 +658,9 @@ function verifyPromptRecords(promptRecords, manifestRows) {
     const record = recordsByAnchor.get(anchor);
     if (!record) throw new Error(`Asset manifest: prompt anchor ${anchor} is missing for ${row.assetId}.`);
     if (record.promptId !== linkedPromptId) throw new Error(`Asset manifest: prompt ${linkedPromptId.startsWith('DP-') ? 'DP label' : 'identifier'} ${linkedPromptId} does not match heading ${record.heading}.`);
-    const requiredArtDirection = row.assetId.startsWith('assets/week-five-trials/')
+    const requiredArtDirection = row.assetId.startsWith('assets/week-six-records/')
+      ? 'Bright polished soft 3D storybook illustration'
+      : row.assetId.startsWith('assets/week-five-trials/')
       ? REQUIRED_WEEK_FIVE_DECOMPOSITION_ART_DIRECTION
       : row.assetId.startsWith('assets/week-five-weather/')
       ? REQUIRED_WEEK_FIVE_WEATHER_ART_DIRECTION
@@ -1404,6 +1406,18 @@ export function verifyRequiredWeekThreeBajieJoiningInventory({ manifestRows, pub
   return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
 }
 
+export function verifyRequiredWeekSixRecordsInventory({ manifestRows, publicFiles, promptRecords = [], source, mode = 'check' }) {
+  const directory = 'assets/week-six-records/';
+  const rows = familyRows(manifestRows, directory), files = familyFiles(publicFiles, directory);
+  const path = `${directory}flaming-mountain-background.webp`;
+  requireExactInventory({ manifestRows: rows, publicFiles: files, expectedPaths: [path], label: 'Week Six records' });
+  if (rows[0].screenSlots !== 'w6-m1 WeekSixRecordsScene') throw new Error('Asset manifest: W6-M1 scene slot mismatch.');
+  if (files.length !== 1) throw new Error('Asset manifest: exactly one W6-M1 background file is required.');
+  if (files[0].width !== 1536 || files[0].height !== 1024) throw new Error('Asset manifest: W6-M1 background must retain the approved 1536x1024 dimensions.');
+  if (typeof source !== 'string' || !source.includes(`assetUrl('/${path}')`) || (source.match(/<img\b/g) ?? []).length !== 1) throw new Error('Asset manifest: W6-M1 must render the approved background through assetUrl.');
+  return verifyAssetManifest({ manifestRows: rows, publicFiles: files, promptRecords: promptRecordsForRows(promptRecords, rows), mode });
+}
+
 export function verifyRequiredWeekFiveMonksInventory({ manifestRows, publicFiles, promptRecords = [], source, mode = 'check' }) {
   const directory = 'assets/week-five-monks/';
   const rows = familyRows(manifestRows, directory), files = familyFiles(publicFiles, directory);
@@ -2110,6 +2124,7 @@ async function main() {
     ...await collectAssetFiles(join(root, 'public/assets/week-five-temple'), 'assets/week-five-temple'),
     ...await collectAssetFiles(join(root, 'public/assets/week-five-weather'), 'assets/week-five-weather'),
     ...await collectAssetFiles(join(root, 'public/assets/week-five-trials'), 'assets/week-five-trials'),
+    ...await collectAssetFiles(join(root, 'public/assets/week-six-records'), 'assets/week-six-records'),
   ];
   const sourceFiles = new Map(await Promise.all([
     'src/components/GameScene.tsx',
@@ -2175,6 +2190,7 @@ async function main() {
     sharedBackgroundScreenSlots: sharedBackgroundManifest?.screenSlots,
     mode,
   });
+  const recordsResult = verifyRequiredWeekSixRecordsInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekSixRecordsScene.tsx'), 'utf8'), mode });
   const monksResult = verifyRequiredWeekFiveMonksInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekFiveMonksScene.tsx'), 'utf8'), mode });
   const templeResult = verifyRequiredWeekFiveTempleInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekFiveTempleScene.tsx'), 'utf8'), mode });
   const weatherResult = verifyRequiredWeekFiveWeatherInventory({ manifestRows, publicFiles, promptRecords, source: await readFile(join(root, 'src/components/WeekFiveWeatherScene.tsx'), 'utf8'), mode });
@@ -2186,6 +2202,7 @@ async function main() {
     storySource: await readFile(join(root, 'src/components/WeekFiveStoryOrchestrationScene.tsx'), 'utf8'),
     mode,
   });
+  console.log(`Week Six records assets: ${recordsResult.assetCount} files, ${recordsResult.totalBytes} bytes (${mode}).`);
   console.log(`Week Five monks assets: ${monksResult.assetCount} files, ${monksResult.totalBytes} bytes (${mode}).`);
   console.log(`Week Five temple assets: ${templeResult.assetCount} files, ${templeResult.totalBytes} bytes (${mode}).`);
   console.log(`Week Five weather assets: ${weatherResult.assetCount} files, ${weatherResult.totalBytes} bytes (${mode}).`);

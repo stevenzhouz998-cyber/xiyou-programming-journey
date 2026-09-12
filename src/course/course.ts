@@ -10,6 +10,7 @@ import {
   formalWeekFourCanon,
   formalWeekFourMissions,
   formalWeekFiveMissions,
+  formalWeekSixMissions,
 } from './formalCourse';
 
 const SOURCE_ROOT = 'https://zh.wikisource.org/zh-hans/西游记';
@@ -72,11 +73,11 @@ export const course: CourseManifest = {
     }),
     deriveWeekFromOutline('week-6', { subtitle: '从原著事实学习 AI 思维', canon: c59to61,
       missions: [
-        mission('w6-m1', { subtitle: '先整理事实，再谈智能', objective: '用 Python 输出一调、二调、三调顺序', mode: 'python', canon: c59to61, storyBeats: [beat('路阻火焰山', '师徒西行被火焰山阻住。'), beat('三次调扇', '悟空先后三次设法取得芭蕉扇。')], expectedSequence: ['first_fan', 'second_fan', 'third_fan'], starterCode: "attempts = ['一调', '二调', '三调']\nfor attempt in attempts:\n    print(attempt)", expectedOutput: '一调\n二调\n三调' }),
-        mission('w6-m2', { subtitle: '分类前先看证据', objective: '依据原著结果分类扇子真假与效果', mode: 'ai-lab', canon: c59to61, storyBeats: [beat('一调受挫', '悟空初次借扇未能如愿。'), beat('二调得假扇', '悟空第二次取得假扇，火势反而更旺。')], expectedSequence: ['label_first', 'label_fake', 'verify_effect'], aiDataset: [{ attempt: 1, result: '受挫', effective: false }, { attempt: 2, result: '假扇火旺', effective: false }, { attempt: 3, result: '真扇息火', effective: true }] }),
+        ...formalWeekSixMissions,
+        mission('w6-m2', { subtitle: '分类前先看证据', objective: '依据原著结果分类扇子真假与效果', mode: 'ai-lab', canon: c59to61, storyBeats: [beat('一调得假扇', '悟空初次得到假扇，扇后火势反而更旺。'), beat('二调取得真扇', '悟空第二次变化取得真扇，后来又被牛魔王骗回。')], expectedSequence: ['label_first', 'label_fake', 'verify_effect'], aiDataset: [{ attempt: 1, result: '假扇火旺', effective: false }, { attempt: 2, result: '真扇后被骗回', effective: false }, { attempt: 3, result: '最终真扇息火', effective: true }] }),
         mission('w6-m3', { subtitle: '把任务、事实与限制说完整', objective: '从原著材料中选择完整提示词要素', mode: 'ai-lab', canon: c59to61, storyBeats: [beat('变化牛魔王', '悟空曾变作牛魔王模样骗取芭蕉扇。'), beat('牛王夺回', '牛魔王又变作八戒模样将扇骗回。')], expectedSequence: ['state_task', 'provide_canon_facts', 'forbid_alt_ending', 'request_format'], aiDataset: [{ field: '任务', value: '按原著整理二调芭蕉扇' }, { field: '事实', value: '悟空变牛魔王，牛魔王变八戒' }, { field: '限制', value: '不改变原著结局' }] }),
-        mission('w6-m4', { subtitle: '模型回答也要对照原著', objective: '找出与第五十九至六十一回不符的说法', mode: 'ai-lab', canon: c59to61, storyBeats: [beat('众神助战', '第三次借扇时，悟空一方与牛魔王交战并得神众相助。'), beat('扇息火焰', '最终取得真扇，扇息火焰后师徒继续西行。')], expectedSequence: ['read_claim', 'compare_source', 'mark_conflict', 'keep_canon'], aiDataset: [{ claim: '第二次拿到真扇', correct: false }, { claim: '第三次取得真扇并息火', correct: true }, { claim: '火焰山之后师徒返回东土', correct: false }] }),
-        mission('w6-m5', { subtitle: '代码、数据与核验合一', objective: '重建三调芭蕉扇原著事件链并核验结果', mode: 'ai-lab', canon: c59to61, storyBeats: [beat('三调完整经过', '一调受挫、二调得假扇、三调终得真扇。'), beat('原著结局', '火焰熄灭后，师徒越过火焰山继续西行。')], expectedSequence: ['first_attempt', 'second_fake', 'third_battle', 'true_fan', 'cross_mountain'], aiDataset: [{ step: 1, event: '一调受挫' }, { step: 2, event: '二调得假扇' }, { step: 3, event: '三调得真扇' }, { step: 4, event: '扇息火焰继续西行' }] }),
+        mission('w6-m4', { subtitle: '模型回答也要对照原著', objective: '找出与第五十九至六十一回不符的说法', mode: 'ai-lab', canon: c59to61, storyBeats: [beat('众神助战', '第三次借扇时，悟空一方与牛魔王交战并得神众相助。'), beat('扇息火焰', '最终取得真扇，扇息火焰后师徒继续西行。')], expectedSequence: ['read_claim', 'compare_source', 'mark_conflict', 'keep_canon'], aiDataset: [{ claim: '第二次取得真扇，后来又被骗回', correct: true }, { claim: '第三次最终借得真扇并息火', correct: true }, { claim: '火焰山之后师徒返回东土', correct: false }] }),
+        mission('w6-m5', { subtitle: '代码、数据与核验合一', objective: '重建三调芭蕉扇原著事件链并核验结果', mode: 'ai-lab', canon: c59to61, storyBeats: [beat('三调完整经过', '一调得到假扇、二调取得真扇后被骗回、三调最终借得真扇。'), beat('原著结局', '火焰熄灭后，师徒越过火焰山继续西行。')], expectedSequence: ['first_fake', 'second_true', 'fan_reclaimed', 'third_battle', 'true_fan', 'cross_mountain'], aiDataset: [{ step: 1, event: '一调得假扇，火势更旺' }, { step: 2, event: '二调取得真扇，随后被骗回' }, { step: 3, event: '三调最终借得真扇' }, { step: 4, event: '扇息火焰继续西行' }] }),
       ],
     }),
   ],

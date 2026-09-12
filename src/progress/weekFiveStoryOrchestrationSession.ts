@@ -1,5 +1,4 @@
 import {
-  DEFAULT_WEEK_FIVE_STORY_ORCHESTRATION_PYTHON,
   parseWeekFiveStoryOrchestrationDraftEnvelope,
   parseWeekFiveStoryOrchestrationPython,
   type WeekFiveStoryOrchestrationPythonRunnable,
@@ -37,6 +36,7 @@ export interface WeekFiveStoryOrchestrationMissionSession {
   lastRunAt: string | null;
   savedAt: string;
 }
+export { createWeekFiveStoryOrchestrationSession } from './weekFiveStoryOrchestrationSessionFactory';
 
 type RunInput = {
   canonicalTrace: WeekFiveStoryOrchestrationTraceItem[];
@@ -70,31 +70,6 @@ function runnableFor(code: string): WeekFiveStoryOrchestrationPythonRunnable {
   const parsed = parseWeekFiveStoryOrchestrationPython(code);
   if ('state' in parsed) throw Error('W5-M5数据无效');
   return parsed;
-}
-
-export function createWeekFiveStoryOrchestrationSession(now: string): WeekFiveStoryOrchestrationMissionSession {
-  parseIso(now);
-  parseWeekFiveStoryOrchestrationDraftEnvelope(DEFAULT_WEEK_FIVE_STORY_ORCHESTRATION_PYTHON);
-  return {
-    kind: 'python-story-orchestration-v1',
-    pythonCode: DEFAULT_WEEK_FIVE_STORY_ORCHESTRATION_PYTHON,
-    lastCanonicalTrace: [],
-    lastWorkerTrace: [],
-    lastRun: null,
-    failureSnapshot: null,
-    totalRuns: 0,
-    monkLoopFailures: 0,
-    templeCallFailures: 0,
-    weatherBindingFailures: 0,
-    laterCallOrderFailures: 0,
-    validationFailures: 0,
-    runnerInfrastructureFailures: 0,
-    conditionObservationUses: [],
-    usedHintTiers: [],
-    firstBlockingConcept: null,
-    lastRunAt: null,
-    savedAt: now,
-  };
 }
 
 export function updateWeekFiveStoryOrchestrationCode(

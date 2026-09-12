@@ -88,7 +88,7 @@ test('@w5-m4-full real decomposition reports ownership first, exposes the missin
   await runButton(page).click();
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 30_000 });
   const completed = await saved(page);
-  expect(completed.schemaRevision).toBe(17);
+  expect(completed.schemaRevision).toBe(18);
   expect(completed.missionCompletionEvidence['w5-m4'].kind).toBe('formal-v3');
   expect(completed.works['w5-m4-problem-decomposition-record'].run.completed).toBe(true);
 

@@ -44,7 +44,6 @@ export default defineConfig({
           if (id.includes('/node_modules/phaser/')) return 'phaser';
           if (id.includes('/node_modules/blockly/')) return 'blockly-editor';
           if (id.includes('/node_modules/@codemirror/')) return 'codemirror-editor';
-          if (/\/node_modules\/@phosphor-icons\/react\/dist\/csr\/(?:LockKey|Medal)\.es\.js$/.test(id.replaceAll('\\', '/'))) return 'route-shared';
           if (id.includes('/node_modules/@phosphor-icons/react/dist/lib/')) return 'phosphor-core';
           if (/\/node_modules\/(?:react|react-dom|react-router|react-router-dom|scheduler)\//.test(id)) return 'app-vendor';
           const source = id.replaceAll('\\', '/');
@@ -57,8 +56,8 @@ export default defineConfig({
           if (source.endsWith('/src/course/formalCourse.ts')) return 'formal-course';
           if (source.endsWith('/src/course/course.ts')) return 'course-content';
           if (source.endsWith('/src/blockly/advancedWeekOneContract.ts')) return 'advanced-session-contract';
-          if (source.endsWith('/src/components/LazySectionBoundary.tsx')
-            || source.endsWith('/src/utils/download.ts')) return 'route-shared';
+          if (source.endsWith('/src/components/LazySectionBoundary.tsx')) return 'lazy-section-boundary';
+          if (source.endsWith('/src/utils/download.ts')) return 'route-shared';
           if (source.endsWith('/src/progress/storageFaultAdapter.ts') || source.endsWith('/src/progress/parentAccessSchema.ts') || source.endsWith('/src/progress/advancedSessionSchema.ts')) return 'progress-core';
           if (source.includes('/src/battle/')
             || /\/src\/progress\/(?:equipment|progress|schema|session|storage|types)\.ts$/.test(source)

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { LoadStatus } from '../progress/storage';
+import type { ProgressBackup } from '../progress/storage';
+import { downloadTextFile } from '../utils/download';
 
 interface RecoveryNoticeProps {
   loadStatus: LoadStatus;
@@ -12,10 +14,11 @@ interface RecoveryNoticeProps {
   conflict?: boolean;
   retryable?: boolean;
   onDownloadConflictBackup?: () => void;
+  onCreateConflictBackup?: () => ProgressBackup;
   onReloadExternal?: () => void;
 }
 
-export function RecoveryNotice({ loadStatus, persistence, loadError, corruptError = null, saveError, hasCorruptDownload, onRetry, conflict = false, retryable = true, onDownloadConflictBackup, onReloadExternal }: RecoveryNoticeProps) {
+export function RecoveryNotice({ loadStatus, persistence, loadError, corruptError = null, saveError, hasCorruptDownload, onRetry, conflict = false, retryable = true, onDownloadConflictBackup, onCreateConflictBackup, onReloadExternal }: RecoveryNoticeProps) {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => setDismissed(false), [persistence, loadStatus]);
@@ -28,7 +31,7 @@ export function RecoveryNotice({ loadStatus, persistence, loadError, corruptErro
   if (persistence === 'unsaved') {
     if (conflict) return <aside className="recovery-notice recovery-notice-alert" role="alert">
       <div><strong>其他标签页已更新，已暂停保存</strong><p>{saveError ?? '本页草稿仍保留在内存中，不会自动覆盖其他标签页。'}</p></div>
-      <button type="button" onClick={onDownloadConflictBackup}>下载本页备份</button>
+      <button type="button" onClick={onDownloadConflictBackup ?? (() => { const backup = onCreateConflictBackup?.(); if (backup) downloadTextFile(backup.filename, backup.contents, backup.mimeType); })}>下载本页备份</button>
       <button type="button" onClick={onReloadExternal}>载入其他标签页版本</button>
     </aside>;
     const message = loadStatus === 'recovered-from-snapshot'

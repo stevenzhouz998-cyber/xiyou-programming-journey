@@ -24,7 +24,7 @@ const labels: Record<string, string> = {
   label_first: '标注一调', label_fake: '标注假扇', verify_effect: '核验效果',
   state_task: '说明任务', provide_canon_facts: '提供原著事实', forbid_alt_ending: '禁止改写结局', request_format: '约定输出格式',
   read_claim: '读取说法', compare_source: '对照原著', mark_conflict: '标记冲突', keep_canon: '保留原著结论',
-  first_attempt: '一调受挫', second_fake: '二调得假扇', third_battle: '三调交战', true_fan: '取得真扇', cross_mountain: '越过火焰山',
+  first_attempt: '一调受挫', second_fake: '二调取扇（旧记录）', first_fake: '一调得到假扇', second_true: '二调取得真扇', fan_reclaimed: '真扇被牛魔王骗回', third_battle: '三调交战', true_fan: '最终取得真扇', cross_mountain: '越过火焰山',
 };
 
 export function commandLabel(command: string): string {

@@ -8,10 +8,12 @@ import { createWeekFiveFunctionSession } from './weekFiveFunctionSession';
 import type { WeekFiveFunctionMissionSession } from './weekFiveFunctionSession';
 import { createWeekFiveWeatherSession } from './weekFiveWeatherSession';
 import type { WeekFiveWeatherMissionSession } from './weekFiveWeatherSession';
-import { createWeekFiveDecompositionSession } from './weekFiveDecompositionSession';
+import { createWeekFiveDecompositionSession } from './weekFiveDecompositionSessionFactory';
 import type { WeekFiveDecompositionMissionSession } from './weekFiveDecompositionSession';
-import { createWeekFiveStoryOrchestrationSession } from './weekFiveStoryOrchestrationSession';
+import { createWeekFiveStoryOrchestrationSession } from './weekFiveStoryOrchestrationSessionFactory';
 import type { WeekFiveStoryOrchestrationMissionSession } from './weekFiveStoryOrchestrationSession';
+import { createWeekSixRecordsSession } from './weekSixRecordsSessionFactory';
+import type { WeekSixRecordsMissionSession } from './weekSixRecordsSession';
 import type {
   BattleRunResult,
   DragonPalaceInstruction,
@@ -141,8 +143,8 @@ import type {
 import { isExecutableMissionId } from './executableMissionIds';
 
 type HintTier = MissionSession['usedHintTiers'][number];
-export type WorkspaceMissionSession = Exclude<MissionSession, WeekFourVariableMissionSession | WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession | WeekFiveWeatherMissionSession | WeekFiveDecompositionMissionSession | WeekFiveStoryOrchestrationMissionSession>;
-type CompileFailureMissionSession = Exclude<MissionSession, WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession | WeekFiveWeatherMissionSession | WeekFiveDecompositionMissionSession | WeekFiveStoryOrchestrationMissionSession>;
+export type WorkspaceMissionSession = Exclude<MissionSession, WeekFourVariableMissionSession | WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession | WeekFiveWeatherMissionSession | WeekFiveDecompositionMissionSession | WeekFiveStoryOrchestrationMissionSession | WeekSixRecordsMissionSession>;
+type CompileFailureMissionSession = Exclude<MissionSession, WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession | WeekFiveWeatherMissionSession | WeekFiveDecompositionMissionSession | WeekFiveStoryOrchestrationMissionSession | WeekSixRecordsMissionSession>;
 
 export {
   recordWeekFourVariableHint,
@@ -211,6 +213,7 @@ export function createMissionSession(missionId: 'w4-m1', now: string): WeekFourM
 export function createMissionSession(missionId: 'w4-m2', now: string): WeekFourVariableMissionSession;
 export function createMissionSession(missionId: 'w5-m4', now: string): WeekFiveDecompositionMissionSession;
 export function createMissionSession(missionId: 'w5-m5', now: string): WeekFiveStoryOrchestrationMissionSession;
+export function createMissionSession(missionId: 'w6-m1', now: string): WeekSixRecordsMissionSession;
 export function createMissionSession<TMissionId extends keyof MissionSessionById>(
   missionId: TMissionId,
   now: string,
@@ -236,6 +239,7 @@ export function createMissionSession(
   if (missionIdOrNow === 'w5-m3') return createWeekFiveWeatherSession(now);
   if (missionIdOrNow === 'w5-m4') return createWeekFiveDecompositionSession(now);
   if (missionIdOrNow === 'w5-m5') return createWeekFiveStoryOrchestrationSession(now);
+  if (missionIdOrNow === 'w6-m1') return createWeekSixRecordsSession(now);
   const session = {
     workspace: missionIdOrNow === 'w3-m5'
       ? createDefaultWeekThreeBossDraft()

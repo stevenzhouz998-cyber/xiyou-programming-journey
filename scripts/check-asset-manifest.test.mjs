@@ -24,6 +24,7 @@ import {
   verifyRequiredWeekThreeBossInventory,
   verifyRequiredWeekFourMappingInventory,
   verifyRequiredWeekFourVariableInventory,
+  verifyRequiredWeekSixRecordsInventory,
   verifyRequiredWeekFiveTempleInventory,
   verifyRequiredWeekFiveWeatherInventory,
   verifyRequiredWeekFiveDecompositionInventory,
@@ -1292,4 +1293,24 @@ test('check accepts provenance-verified while verify requires visual QA', () => 
 
 test('rejects unknown QA states in every mode', () => {
   assert.throws(() => verifyAssetManifest(scenario({ manifestRows: [row({ qaStatus: 'approved' })], mode: 'check' })), /QA status/i);
+});
+
+
+test('W6-M1 scene inventory verifies real background hash, dimensions, provenance, QA and unchanged raster budget', async () => {
+  const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const { manifestRows, promptRecords } = parseAssetManifest(await readFile(join(sourceRoot, 'docs/assets/asset-manifest.md'), 'utf8'));
+  const publicFiles = await collectAssetFiles(join(sourceRoot, 'public/assets/week-six-records'), 'assets/week-six-records');
+  const source = await readFile(join(sourceRoot, 'src/components/WeekSixRecordsScene.tsx'), 'utf8');
+  const input = { manifestRows, promptRecords, publicFiles, source, mode: 'verify' };
+  const result = verifyRequiredWeekSixRecordsInventory(input);
+  assert.equal(result.assetCount, 1);
+  assert.equal(result.totalBytes, 179442);
+  assert.throws(() => verifyRequiredWeekSixRecordsInventory({ ...input, publicFiles: [] }), /required|exactly/i);
+  assert.throws(() => verifyRequiredWeekSixRecordsInventory({ ...input, publicFiles: [{ ...publicFiles[0], sha256: 'b'.repeat(64) }] }), /hash mismatch/i);
+  assert.throws(() => verifyRequiredWeekSixRecordsInventory({ ...input, publicFiles: [{ ...publicFiles[0], width: 1024 }] }), /1536x1024/i);
+  assert.throws(() => verifyRequiredWeekSixRecordsInventory({ ...input, publicFiles: [{ ...publicFiles[0], bytes: 512 * 1024 + 1 }] }), /512 KiB/i);
+  const changeRow = (change) => manifestRows.map((row) => row.assetId.startsWith('assets/week-six-records/') ? { ...row, ...change } : row);
+  assert.throws(() => verifyRequiredWeekSixRecordsInventory({ ...input, manifestRows: changeRow({ qaStatus: 'provenance-verified' }) }), /visual-qa-passed/i);
+  assert.throws(() => verifyRequiredWeekSixRecordsInventory({ ...input, manifestRows: changeRow({ screenSlots: 'wrong' }) }), /scene slot/i);
+  assert.throws(() => verifyRequiredWeekSixRecordsInventory({ ...input, source: source.replace('flaming-mountain-background.webp', 'unapproved.webp') }), /approved background/i);
 });

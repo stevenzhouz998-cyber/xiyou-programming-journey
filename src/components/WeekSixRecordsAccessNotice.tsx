@@ -1,0 +1,2 @@
+import type { WeekSixRecordsAccess } from '../progress/progress';
+export function WeekSixRecordsAccessNotice({access}:{access:WeekSixRecordsAccess}){if(access.kind==='locked')return <main className="not-found"><h1>先完成车迟国总试炼</h1><p>只有 W5-M5 的正式 Python 证明可以进入三次借扇记录。</p></main>;if(access.kind==='historical-read-only')return <main className="not-found"><h1>历史记录仅供查看</h1><p>{access.completed?'这台设备保留了旧版 W6-M1 完成历史，但没有伪造新的字典代码、运行轨迹或正式作品。':'现有前置只有历史标记，不能代替 W5-M5 正式证明。'}</p></main>;return null;}

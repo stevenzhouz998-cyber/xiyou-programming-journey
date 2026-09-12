@@ -75,6 +75,8 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   const decompositionProof = progress.missionCompletionEvidence['w5-m4'];
   const storySession = progress.sessions['w5-m5'];
   const storyProof = progress.missionCompletionEvidence['w5-m5'];
+  const recordsSession = progress.sessions['w6-m1'];
+  const recordsProof = progress.missionCompletionEvidence['w6-m1'];
   const listSession = progress.sessions['w4-m4'];
   const listProof = progress.missionCompletionEvidence['w4-m4'];
   const blockerLabels = {
@@ -196,6 +198,13 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     <p>主动观察 {storySession?.conditionObservationUses.length ?? 0} 次。</p>
     {storyProof?.kind === 'formal-v3' && progress.works['w5-m5-story-orchestration-record'] ? <p>车迟国故事总编排正式证明及作品已保存</p> : null}
     {storyProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式故事总编排证明</p> : null}
+  </section><section aria-label="第六周结构化记录学习摘要">
+    <h2>第六周结构化记录学习摘要</h2>
+    <p>学习按字段读取记录。已运行 {recordsSession?.totalRuns ?? 0} 次；记录内容调整 {recordsSession?.recordFailures ?? 0} 次，字段读取调整 {recordsSession?.fieldFailures ?? 0} 次。</p>
+    <p>结构验证未通过 {recordsSession?.validationFailures ?? 0} 次；运行环境故障 {recordsSession?.runnerInfrastructureFailures ?? 0} 次（不计入学习困难）。</p>
+    <p>主动观察 {recordsSession?.conditionObservationUses.length ?? 0} 次。</p>
+    {recordsProof?.kind === 'formal-v3' && progress.works['w6-m1-structured-records-table'] ? <p>结构化事实表正式证明与作品已保存</p> : null}
+    {recordsProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式结构化记录证明</p> : null}
   </section></>
 }
 

@@ -5,6 +5,7 @@ import { getWeekFiveFunctionAccess } from '../progress/progress';
 import { getWeekFiveWeatherAccess } from '../progress/progress';
 import { getWeekFiveDecompositionAccess } from '../progress/progress';
 import { getWeekFiveStoryOrchestrationAccess } from '../progress/progress';
+import { getWeekSixRecordsAccess } from '../progress/progress';
 import type { WeekFourListMissionSession } from '../progress/types';
 import type { WeekFourBossMissionSession } from '../progress/types';
 import type { WeekFiveMonksMissionSession } from '../progress/types';
@@ -12,6 +13,8 @@ import type { WeekFiveFunctionMissionSession } from '../progress/types';
 import type { WeekFiveWeatherMissionSession } from '../progress/types';
 import type { WeekFiveDecompositionMissionSession } from '../progress/types';
 import type { WeekFiveStoryOrchestrationMissionSession } from '../progress/types';
+import type { WeekSixRecordsMissionSession } from '../progress/types';
+import { parseWeekSixRecordsSession } from '../progress/weekSixRecordsSessionSchema';
 import type { WeekFourListRunResult, WeekFourListTraceItem } from '../engine/weekFourListContract';
 import type { WeekFourBossRunResult, WeekFourBossTraceItem } from '../engine/weekFourBossContract';
 import type { WeekFiveMonksRunResult, WeekFiveMonksTraceItem } from '../engine/weekFiveMonksContract';
@@ -24,8 +27,6 @@ import { recordWeekFourBossHint, recordWeekFourBossInfrastructureFailure, record
 import { recordWeekFiveMonksHint, recordWeekFiveMonksInfrastructureFailure, recordWeekFiveMonksObservation, recordWeekFiveMonksRun, recordWeekFiveMonksValidationFailure, updateWeekFiveMonksCode } from '../progress/weekFiveMonksSession';
 import { recordWeekFiveFunctionHint, recordWeekFiveFunctionInfrastructureFailure, recordWeekFiveFunctionObservation, recordWeekFiveFunctionRun, recordWeekFiveFunctionValidationFailure, updateWeekFiveFunctionCode } from '../progress/weekFiveFunctionSession';
 import { recordWeekFiveWeatherHint, recordWeekFiveWeatherInfrastructureFailure, recordWeekFiveWeatherObservation, recordWeekFiveWeatherRun, recordWeekFiveWeatherValidationFailure, updateWeekFiveWeatherCode } from '../progress/weekFiveWeatherSession';
-import { recordWeekFiveDecompositionHint, recordWeekFiveDecompositionInfrastructureFailure, recordWeekFiveDecompositionObservation, recordWeekFiveDecompositionRun, recordWeekFiveDecompositionValidationFailure, updateWeekFiveDecompositionCode } from '../progress/weekFiveDecompositionSession';
-import { recordWeekFiveStoryOrchestrationHint, recordWeekFiveStoryOrchestrationInfrastructureFailure, recordWeekFiveStoryOrchestrationObservation, recordWeekFiveStoryOrchestrationRun, recordWeekFiveStoryOrchestrationValidationFailure, updateWeekFiveStoryOrchestrationCode } from '../progress/weekFiveStoryOrchestrationSession';
 import { parseWeekFourListSession } from '../progress/weekFourListSessionSchema';
 import { parseWeekFourBossSession } from '../progress/weekFourBossSessionSchema';
 import { parseWeekFiveMonksSession } from '../progress/weekFiveMonksSessionSchema';
@@ -123,7 +124,8 @@ type MissionSessionUpdateArgs =
   | [missionId: 'w5-m2', update: (session: WeekFiveFunctionMissionSession) => WeekFiveFunctionMissionSession, options?: ProgressWriteOptions]
   | [missionId: 'w5-m3', update: (session: WeekFiveWeatherMissionSession) => WeekFiveWeatherMissionSession, options?: ProgressWriteOptions]
   | [missionId: 'w5-m4', update: (session: WeekFiveDecompositionMissionSession) => WeekFiveDecompositionMissionSession, options?: ProgressWriteOptions]
-  | [missionId: 'w5-m5', update: (session: WeekFiveStoryOrchestrationMissionSession) => WeekFiveStoryOrchestrationMissionSession, options?: ProgressWriteOptions];
+  | [missionId: 'w5-m5', update: (session: WeekFiveStoryOrchestrationMissionSession) => WeekFiveStoryOrchestrationMissionSession, options?: ProgressWriteOptions]
+  | [missionId: 'w6-m1', update: (session: WeekSixRecordsMissionSession) => WeekSixRecordsMissionSession, options?: ProgressWriteOptions];
 type MissionSessionUpdateAtArgs =
   | [missionId: 'w1-m1', update: (session: DragonPalaceMissionSession) => DragonPalaceMissionSession, now: string, options?: ProgressWriteOptions]
   | [missionId: 'w1-m2', update: (session: RuyiStaffMissionSession) => RuyiStaffMissionSession, now: string, options?: ProgressWriteOptions]
@@ -148,7 +150,8 @@ type MissionSessionUpdateAtArgs =
   | [missionId: 'w5-m2', update: (session: WeekFiveFunctionMissionSession) => WeekFiveFunctionMissionSession, now: string, options?: ProgressWriteOptions]
   | [missionId: 'w5-m3', update: (session: WeekFiveWeatherMissionSession) => WeekFiveWeatherMissionSession, now: string, options?: ProgressWriteOptions]
   | [missionId: 'w5-m4', update: (session: WeekFiveDecompositionMissionSession) => WeekFiveDecompositionMissionSession, now: string, options?: ProgressWriteOptions]
-  | [missionId: 'w5-m5', update: (session: WeekFiveStoryOrchestrationMissionSession) => WeekFiveStoryOrchestrationMissionSession, now: string, options?: ProgressWriteOptions];
+  | [missionId: 'w5-m5', update: (session: WeekFiveStoryOrchestrationMissionSession) => WeekFiveStoryOrchestrationMissionSession, now: string, options?: ProgressWriteOptions]
+  | [missionId: 'w6-m1', update: (session: WeekSixRecordsMissionSession) => WeekSixRecordsMissionSession, now: string, options?: ProgressWriteOptions];
 interface UpdateMissionSession {
   (
     missionId: 'w1-m1',
@@ -257,6 +260,7 @@ interface UpdateMissionSession {
   ): Promise<CoordinatedSaveResult>;
   (missionId: 'w5-m3', update: (session: WeekFiveWeatherMissionSession) => WeekFiveWeatherMissionSession, options?: ProgressWriteOptions): Promise<CoordinatedSaveResult>;
   (missionId: 'w5-m4', update: (session: WeekFiveDecompositionMissionSession) => WeekFiveDecompositionMissionSession, options?: ProgressWriteOptions): Promise<CoordinatedSaveResult>;
+  (missionId:'w6-m1',update:(session:WeekSixRecordsMissionSession)=>WeekSixRecordsMissionSession,options?:ProgressWriteOptions):Promise<CoordinatedSaveResult>;
 }
 type MissionHintTier = MissionSession['usedHintTiers'][number];
 interface RecordMissionHint {
@@ -627,6 +631,7 @@ export function ProgressProvider({
       const storySession = parseWeekFiveStoryOrchestrationSession(updated);
       return commit({ ...currentProgress, sessions: { ...currentProgress.sessions, 'w5-m5': storySession }, savedAt: now }, true, options);
     }
+    if(missionId==='w6-m1'){if(getWeekSixRecordsAccess(currentProgress).kind!=='formal')throw Error('W6-M1保存需要W5-M5 formal-v3正式证明');const recordsSession=parseWeekSixRecordsSession(updated);return commit({...currentProgress,sessions:{...currentProgress.sessions,'w6-m1':recordsSession},savedAt:now},true,options);}
     const next = migrateProgress({
       ...currentProgress,
       sessions: { ...currentProgress.sessions, [missionId]: updated },
@@ -670,6 +675,7 @@ export function ProgressProvider({
         : createMissionSession('w5-m5', now);
       return persistMissionSession(missionId, update(current), now, options);
     }
+    if(missionId==='w6-m1'){const currentProgress=workingProgress();const current=currentProgress.sessions['w6-m1']?structuredClone(currentProgress.sessions['w6-m1']):createMissionSession('w6-m1',now);return persistMissionSession(missionId,update(current),now,options);}
     if (missionId === 'w1-m2') {
       const currentProgress = workingProgress();
       const current = currentProgress.sessions['w1-m2']
@@ -882,6 +888,7 @@ export function ProgressProvider({
   function updateMissionSession(missionId:'w5-m3',update:(session:WeekFiveWeatherMissionSession)=>WeekFiveWeatherMissionSession,options?:ProgressWriteOptions):Promise<CoordinatedSaveResult>;
   function updateMissionSession(missionId:'w5-m4',update:(session:WeekFiveDecompositionMissionSession)=>WeekFiveDecompositionMissionSession,options?:ProgressWriteOptions):Promise<CoordinatedSaveResult>;
   function updateMissionSession(missionId:'w5-m5',update:(session:WeekFiveStoryOrchestrationMissionSession)=>WeekFiveStoryOrchestrationMissionSession,options?:ProgressWriteOptions):Promise<CoordinatedSaveResult>;
+  function updateMissionSession(missionId:'w6-m1',update:(session:WeekSixRecordsMissionSession)=>WeekSixRecordsMissionSession,options?:ProgressWriteOptions):Promise<CoordinatedSaveResult>;
   function updateMissionSession(...args: MissionSessionUpdateArgs) {
     const now = new Date().toISOString();
     if (args[0] === 'w1-m1') {
@@ -915,6 +922,7 @@ export function ProgressProvider({
     if (args[0] === 'w5-m3') return updateMissionSessionAt(args[0], args[1], now, args[2]);
     if (args[0] === 'w5-m4') return updateMissionSessionAt(args[0], args[1], now, args[2]);
     if (args[0] === 'w5-m5') return updateMissionSessionAt(args[0], args[1], now, args[2]);
+    if(args[0]==='w6-m1')return updateMissionSessionAt(args[0],args[1],now,args[2]);
     throw new Error('任务编号无效');
   }
 
@@ -1135,45 +1143,65 @@ export function ProgressProvider({
     },
     completeWeekFiveWeather: (input) => commit(completeMission(workingProgress(), 'w5-m3', input), false, {}, true, true, 'w5-m3'),
     saveWeekFiveDecompositionDraft: (code) => {
-      const now = new Date().toISOString();
-      return updateMissionSessionAt('w5-m4', (session: WeekFiveDecompositionMissionSession) => updateWeekFiveDecompositionCode(session, code, now), now);
+      return import('../progress/weekFiveDecompositionSession').then(({ updateWeekFiveDecompositionCode }) => {
+        const now = new Date().toISOString();
+        return updateMissionSessionAt('w5-m4', (session: WeekFiveDecompositionMissionSession) => updateWeekFiveDecompositionCode(session, code, now), now);
+      });
     },
     saveWeekFiveDecompositionRun: (value) => {
-      const now = new Date().toISOString();
-      return updateMissionSessionAt('w5-m4', (session: WeekFiveDecompositionMissionSession) => recordWeekFiveDecompositionRun(session, value, now), now);
+      return import('../progress/weekFiveDecompositionSession').then(({ recordWeekFiveDecompositionRun }) => {
+        const now = new Date().toISOString();
+        return updateMissionSessionAt('w5-m4', (session: WeekFiveDecompositionMissionSession) => recordWeekFiveDecompositionRun(session, value, now), now);
+      });
     },
     saveWeekFiveDecompositionObservation: () => {
-      const now = new Date().toISOString();
-      return updateMissionSessionAt('w5-m4', (session: WeekFiveDecompositionMissionSession) => recordWeekFiveDecompositionObservation(session, now), now);
+      return import('../progress/weekFiveDecompositionSession').then(({ recordWeekFiveDecompositionObservation }) => {
+        const now = new Date().toISOString();
+        return updateMissionSessionAt('w5-m4', (session: WeekFiveDecompositionMissionSession) => recordWeekFiveDecompositionObservation(session, now), now);
+      });
     },
     saveWeekFiveDecompositionInfrastructureFailure: (input) => {
-      const now = new Date().toISOString();
-      return updateMissionSessionAt('w5-m4', (session: WeekFiveDecompositionMissionSession) => recordWeekFiveDecompositionInfrastructureFailure(session, input, now), now);
+      return import('../progress/weekFiveDecompositionSession').then(({ recordWeekFiveDecompositionInfrastructureFailure }) => {
+        const now = new Date().toISOString();
+        return updateMissionSessionAt('w5-m4', (session: WeekFiveDecompositionMissionSession) => recordWeekFiveDecompositionInfrastructureFailure(session, input, now), now);
+      });
     },
     saveWeekFiveDecompositionValidationFailure: () => {
-      const now = new Date().toISOString();
-      return updateMissionSessionAt('w5-m4', (session: WeekFiveDecompositionMissionSession) => recordWeekFiveDecompositionValidationFailure(session, now), now);
+      return import('../progress/weekFiveDecompositionSession').then(({ recordWeekFiveDecompositionValidationFailure }) => {
+        const now = new Date().toISOString();
+        return updateMissionSessionAt('w5-m4', (session: WeekFiveDecompositionMissionSession) => recordWeekFiveDecompositionValidationFailure(session, now), now);
+      });
     },
     completeWeekFiveDecomposition: (input) => commit(completeMission(workingProgress(), 'w5-m4', input), false, {}, true, true, 'w5-m4'),
     saveWeekFiveStoryOrchestrationDraft: (code) => {
-      const now = new Date().toISOString();
-      return updateMissionSessionAt('w5-m5', (session: WeekFiveStoryOrchestrationMissionSession) => updateWeekFiveStoryOrchestrationCode(session, code, now), now);
+      return import('../progress/weekFiveStoryOrchestrationSession').then(({ updateWeekFiveStoryOrchestrationCode }) => {
+        const now = new Date().toISOString();
+        return updateMissionSessionAt('w5-m5', (session: WeekFiveStoryOrchestrationMissionSession) => updateWeekFiveStoryOrchestrationCode(session, code, now), now);
+      });
     },
     saveWeekFiveStoryOrchestrationRun: (value) => {
-      const now = new Date().toISOString();
-      return updateMissionSessionAt('w5-m5', (session: WeekFiveStoryOrchestrationMissionSession) => recordWeekFiveStoryOrchestrationRun(session, value, now), now);
+      return import('../progress/weekFiveStoryOrchestrationSession').then(({ recordWeekFiveStoryOrchestrationRun }) => {
+        const now = new Date().toISOString();
+        return updateMissionSessionAt('w5-m5', (session: WeekFiveStoryOrchestrationMissionSession) => recordWeekFiveStoryOrchestrationRun(session, value, now), now);
+      });
     },
     saveWeekFiveStoryOrchestrationObservation: () => {
-      const now = new Date().toISOString();
-      return updateMissionSessionAt('w5-m5', (session: WeekFiveStoryOrchestrationMissionSession) => recordWeekFiveStoryOrchestrationObservation(session, now), now);
+      return import('../progress/weekFiveStoryOrchestrationSession').then(({ recordWeekFiveStoryOrchestrationObservation }) => {
+        const now = new Date().toISOString();
+        return updateMissionSessionAt('w5-m5', (session: WeekFiveStoryOrchestrationMissionSession) => recordWeekFiveStoryOrchestrationObservation(session, now), now);
+      });
     },
     saveWeekFiveStoryOrchestrationInfrastructureFailure: (input) => {
-      const now = new Date().toISOString();
-      return updateMissionSessionAt('w5-m5', (session: WeekFiveStoryOrchestrationMissionSession) => recordWeekFiveStoryOrchestrationInfrastructureFailure(session, input, now), now);
+      return import('../progress/weekFiveStoryOrchestrationSession').then(({ recordWeekFiveStoryOrchestrationInfrastructureFailure }) => {
+        const now = new Date().toISOString();
+        return updateMissionSessionAt('w5-m5', (session: WeekFiveStoryOrchestrationMissionSession) => recordWeekFiveStoryOrchestrationInfrastructureFailure(session, input, now), now);
+      });
     },
     saveWeekFiveStoryOrchestrationValidationFailure: () => {
-      const now = new Date().toISOString();
-      return updateMissionSessionAt('w5-m5', (session: WeekFiveStoryOrchestrationMissionSession) => recordWeekFiveStoryOrchestrationValidationFailure(session, now), now);
+      return import('../progress/weekFiveStoryOrchestrationSession').then(({ recordWeekFiveStoryOrchestrationValidationFailure }) => {
+        const now = new Date().toISOString();
+        return updateMissionSessionAt('w5-m5', (session: WeekFiveStoryOrchestrationMissionSession) => recordWeekFiveStoryOrchestrationValidationFailure(session, now), now);
+      });
     },
     completeWeekFiveStoryOrchestration: (input) => commit(completeMission(workingProgress(), 'w5-m5', input), false, {}, true, true, 'w5-m5'),
     recordMissionHint: (missionId, tier) => {
@@ -1183,21 +1211,15 @@ export function ProgressProvider({
         progress: unpublished.draft,
         error: '通关结果仍在等待保存，提示没有记入本次通关。',
       });
-      const now = new Date().toISOString();
       if (missionId === 'w1-m1') {
-        return updateMissionSessionAt(
-          missionId,
-          (session: DragonPalaceMissionSession) => recordHint(session, tier, now),
-          now,
-        );
+        const now = new Date().toISOString();
+        return updateMissionSessionAt(missionId, (session: DragonPalaceMissionSession) => recordHint(session, tier, now), now);
       }
       if (missionId === 'w1-m2') {
-        return updateMissionSessionAt(
-          missionId,
-          (session: RuyiStaffMissionSession) => recordHint(session, tier, now),
-          now,
-        );
+        const now = new Date().toISOString();
+        return updateMissionSessionAt(missionId, (session: RuyiStaffMissionSession) => recordHint(session, tier, now), now);
       }
+      const now = new Date().toISOString();
       if (missionId === 'w1-m3') return updateMissionSessionAt(missionId, (session: FourSeasRegaliaMissionSession) => recordHint(session, tier, now), now);
       if (missionId === 'w1-m4' || missionId === 'w1-m5') return updateMissionSessionAt(missionId, (session: AdvancedWeekOneMissionSession) => recordHint(session, tier, now), now);
       if (missionId === 'w2-m1') return updateMissionSessionAt(missionId, (session: HorseCareMissionSession) => recordHint(session, tier, now), now);
@@ -1221,8 +1243,18 @@ export function ProgressProvider({
       if (missionId === 'w5-m1') return updateMissionSessionAt(missionId, (session: WeekFiveMonksMissionSession) => recordWeekFiveMonksHint(session, tier, now), now);
       if (missionId === 'w5-m2') return updateMissionSessionAt(missionId, (session: WeekFiveFunctionMissionSession) => recordWeekFiveFunctionHint(session, tier, now), now);
       if (missionId === 'w5-m3') return updateMissionSessionAt(missionId, (session: WeekFiveWeatherMissionSession) => recordWeekFiveWeatherHint(session, tier, now), now);
-      if (missionId === 'w5-m4') return updateMissionSessionAt(missionId, (session: WeekFiveDecompositionMissionSession) => recordWeekFiveDecompositionHint(session, tier, now), now);
-      if (missionId === 'w5-m5') return updateMissionSessionAt(missionId, (session: WeekFiveStoryOrchestrationMissionSession) => recordWeekFiveStoryOrchestrationHint(session, tier, now), now);
+      if (missionId === 'w5-m4') return import('../progress/weekFiveDecompositionSession').then(({ recordWeekFiveDecompositionHint }) => {
+        const loadedAt = new Date().toISOString();
+        return updateMissionSessionAt(missionId, (session: WeekFiveDecompositionMissionSession) => recordWeekFiveDecompositionHint(session, tier, loadedAt), loadedAt);
+      });
+      if (missionId === 'w5-m5') return import('../progress/weekFiveStoryOrchestrationSession').then(({ recordWeekFiveStoryOrchestrationHint }) => {
+        const loadedAt = new Date().toISOString();
+        return updateMissionSessionAt(missionId, (session: WeekFiveStoryOrchestrationMissionSession) => recordWeekFiveStoryOrchestrationHint(session, tier, loadedAt), loadedAt);
+      });
+      if (missionId === 'w6-m1') return import('../progress/weekSixRecordsSession').then(({ recordWeekSixRecordsHint }) => {
+        const loadedAt = new Date().toISOString();
+        return updateMissionSessionAt(missionId, (session: WeekSixRecordsMissionSession) => recordWeekSixRecordsHint(session, tier, loadedAt), loadedAt);
+      });
       throw new Error('任务编号无效');
     },
     replaceProgress: (next) => commit(next),

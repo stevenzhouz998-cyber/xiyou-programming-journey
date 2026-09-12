@@ -1,5 +1,4 @@
 import {
-  DEFAULT_WEEK_FIVE_DECOMPOSITION_PYTHON,
   parseWeekFiveDecompositionDraftEnvelope,
   parseWeekFiveDecompositionPython,
   type WeekFiveDecompositionPythonRunnable,
@@ -35,6 +34,7 @@ export interface WeekFiveDecompositionMissionSession {
   lastRunAt: string | null;
   savedAt: string;
 }
+export { createWeekFiveDecompositionSession } from './weekFiveDecompositionSessionFactory';
 
 type RunInput = {
   canonicalTrace: WeekFiveDecompositionTraceItem[];
@@ -68,29 +68,6 @@ function runnableFor(code: string): WeekFiveDecompositionPythonRunnable {
   const parsed = parseWeekFiveDecompositionPython(code);
   if ('state' in parsed) throw Error('W5-M4 当前 Python 结构无效。');
   return parsed;
-}
-
-export function createWeekFiveDecompositionSession(now: string): WeekFiveDecompositionMissionSession {
-  parseIso(now);
-  parseWeekFiveDecompositionDraftEnvelope(DEFAULT_WEEK_FIVE_DECOMPOSITION_PYTHON);
-  return {
-    kind: 'python-problem-decomposition-v1',
-    pythonCode: DEFAULT_WEEK_FIVE_DECOMPOSITION_PYTHON,
-    lastCanonicalTrace: [],
-    lastWorkerTrace: [],
-    lastRun: null,
-    failureSnapshot: null,
-    totalRuns: 0,
-    coordinatorFailures: 0,
-    ownershipFailures: 0,
-    validationFailures: 0,
-    runnerInfrastructureFailures: 0,
-    conditionObservationUses: [],
-    usedHintTiers: [],
-    firstBlockingConcept: null,
-    lastRunAt: null,
-    savedAt: now,
-  };
 }
 
 export function updateWeekFiveDecompositionCode(

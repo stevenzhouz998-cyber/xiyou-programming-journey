@@ -288,7 +288,7 @@ test('counts the unique real built W4-M3 Worker in its closure and fails closed 
   const manifestFiles = Object.values(manifest).map((chunk) => chunk.file).filter((file) => file?.endsWith('.js'));
   const workerFiles = emittedFiles.filter((file) => /^assets\/weekFourBranchPython\.worker-[A-Za-z0-9_-]+\.js$/.test(file));
   assert.equal(workerFiles.length, 1);
-  const allWorkerFiles = emittedFiles.filter(file => /^assets\/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration))Python\.worker-[A-Za-z0-9_-]+\.js$/.test(file));
+  const allWorkerFiles = emittedFiles.filter(file => /^assets\/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration)|weekSixRecords)Python\.worker-[A-Za-z0-9_-]+\.js$/.test(file));
   const files = [...new Set([...manifestFiles, ...allWorkerFiles])];
   const rawSizes = Object.fromEntries(files.map((file) => [file, statSync(fileURLToPath(new URL(`../dist/${file}`, import.meta.url))).size]));
   const gzipSizes = Object.fromEntries(files.map((file) => [file, gzipSync(readFileSync(fileURLToPath(new URL(`../dist/${file}`, import.meta.url)))).byteLength]));
@@ -1601,7 +1601,7 @@ test('rejects every E2E storage fault sentinel from production bundle bytes', ()
 test('bounds both W4-M4 entry closures including their unique real Worker and rejects oversized or missing Worker bytes', () => {
   const manifest = JSON.parse(readFileSync('dist/.vite/manifest.json', 'utf8'));
   const emitted = readdirSync('dist/assets').map(name => `assets/${name}`);
-  const all = [...new Set([...Object.values(manifest).map(c=>c.file).filter(f=>f?.endsWith('.js')), ...emitted.filter(f=>/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration))Python\.worker-/.test(f))])];
+  const all = [...new Set([...Object.values(manifest).map(c=>c.file).filter(f=>f?.endsWith('.js')), ...emitted.filter(f=>/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration)|weekSixRecords)Python\.worker-/.test(f))])];
   const raw = Object.fromEntries(all.map(f=>[f,statSync(`dist/${f}`).size]));
   const gzip = Object.fromEntries(all.map(f=>[f,gzipSync(readFileSync(`dist/${f}`)).byteLength]));
   const workers=emitted.filter(f=>/weekFourListPython\.worker-/.test(f));assert.equal(workers.length,1);
@@ -1617,7 +1617,7 @@ test('bounds both W4-M4 entry closures including their unique real Worker and re
 test('bounds both W4-M5 entry closures including their unique real Worker and rejects oversized or missing Worker bytes', () => {
   const manifest = JSON.parse(readFileSync('dist/.vite/manifest.json', 'utf8'));
   const emitted = readdirSync('dist/assets').map(name => `assets/${name}`);
-  const all = [...new Set([...Object.values(manifest).map(c=>c.file).filter(f=>f?.endsWith('.js')), ...emitted.filter(f=>/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration))Python\.worker-/.test(f))])];
+  const all = [...new Set([...Object.values(manifest).map(c=>c.file).filter(f=>f?.endsWith('.js')), ...emitted.filter(f=>/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration)|weekSixRecords)Python\.worker-/.test(f))])];
   const raw = Object.fromEntries(all.map(f=>[f,statSync(`dist/${f}`).size]));
   const gzip = Object.fromEntries(all.map(f=>[f,gzipSync(readFileSync(`dist/${f}`)).byteLength]));
   const workers=emitted.filter(f=>/weekFourBossPython\.worker-/.test(f));assert.equal(workers.length,1);
@@ -1633,7 +1633,7 @@ test('bounds both W4-M5 entry closures including their unique real Worker and re
 test('bounds both W5-M1 entry closures including their unique real Worker and rejects oversized or missing Worker bytes', () => {
   const manifest = JSON.parse(readFileSync('dist/.vite/manifest.json', 'utf8'));
   const emitted = readdirSync('dist/assets').map(name => `assets/${name}`);
-  const all = [...new Set([...Object.values(manifest).map(c=>c.file).filter(f=>f?.endsWith('.js')), ...emitted.filter(f=>/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration))Python\.worker-/.test(f))])];
+  const all = [...new Set([...Object.values(manifest).map(c=>c.file).filter(f=>f?.endsWith('.js')), ...emitted.filter(f=>/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration)|weekSixRecords)Python\.worker-/.test(f))])];
   const raw = Object.fromEntries(all.map(f=>[f,statSync(`dist/${f}`).size]));
   const gzip = Object.fromEntries(all.map(f=>[f,gzipSync(readFileSync(`dist/${f}`)).byteLength]));
   const workers=emitted.filter(f=>/weekFiveMonksPython\.worker-/.test(f));assert.equal(workers.length,1);
@@ -1649,7 +1649,7 @@ test('bounds both W5-M1 entry closures including their unique real Worker and re
 test('bounds both W5-M2 entry closures including their unique real Worker and rejects oversized or missing Worker bytes', () => {
   const manifest = JSON.parse(readFileSync('dist/.vite/manifest.json', 'utf8'));
   const emitted = readdirSync('dist/assets').map(name => `assets/${name}`);
-  const all = [...new Set([...Object.values(manifest).map(c=>c.file).filter(f=>f?.endsWith('.js')), ...emitted.filter(f=>/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration))Python\.worker-/.test(f))])];
+  const all = [...new Set([...Object.values(manifest).map(c=>c.file).filter(f=>f?.endsWith('.js')), ...emitted.filter(f=>/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration)|weekSixRecords)Python\.worker-/.test(f))])];
   const raw = Object.fromEntries(all.map(f=>[f,statSync(`dist/${f}`).size]));
   const gzip = Object.fromEntries(all.map(f=>[f,gzipSync(readFileSync(`dist/${f}`)).byteLength]));
   const workers=emitted.filter(f=>/weekFiveFunctionPython\.worker-/.test(f));assert.equal(workers.length,1);
@@ -1665,7 +1665,7 @@ test('bounds both W5-M2 entry closures including their unique real Worker and re
 test('bounds both W5-M3 entry closures including their unique real Worker and rejects oversized or missing Worker bytes', () => {
   const manifest = JSON.parse(readFileSync('dist/.vite/manifest.json', 'utf8'));
   const emitted = readdirSync('dist/assets').map(name => `assets/${name}`);
-  const all = [...new Set([...Object.values(manifest).map(c=>c.file).filter(f=>f?.endsWith('.js')), ...emitted.filter(f=>/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration))Python\.worker-/.test(f))])];
+  const all = [...new Set([...Object.values(manifest).map(c=>c.file).filter(f=>f?.endsWith('.js')), ...emitted.filter(f=>/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration)|weekSixRecords)Python\.worker-/.test(f))])];
   const raw = Object.fromEntries(all.map(f=>[f,statSync(`dist/${f}`).size]));
   const gzip = Object.fromEntries(all.map(f=>[f,gzipSync(readFileSync(`dist/${f}`)).byteLength]));
   const workers=emitted.filter(f=>/weekFiveWeatherPython\.worker-/.test(f));assert.equal(workers.length,1);
@@ -1681,7 +1681,7 @@ test('bounds both W5-M3 entry closures including their unique real Worker and re
 test('bounds both W5-M4 entry closures including their unique real Worker and rejects oversized or missing Worker bytes', () => {
   const manifest = JSON.parse(readFileSync('dist/.vite/manifest.json', 'utf8'));
   const emitted = readdirSync('dist/assets').map(name => `assets/${name}`);
-  const all = [...new Set([...Object.values(manifest).map(c=>c.file).filter(f=>f?.endsWith('.js')), ...emitted.filter(f=>/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration))Python\.worker-/.test(f))])];
+  const all = [...new Set([...Object.values(manifest).map(c=>c.file).filter(f=>f?.endsWith('.js')), ...emitted.filter(f=>/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration)|weekSixRecords)Python\.worker-/.test(f))])];
   const raw = Object.fromEntries(all.map(f=>[f,statSync(`dist/${f}`).size]));
   const gzip = Object.fromEntries(all.map(f=>[f,gzipSync(readFileSync(`dist/${f}`)).byteLength]));
   const workers=emitted.filter(f=>/weekFiveDecompositionPython\.worker-/.test(f));assert.equal(workers.length,1);
@@ -1697,7 +1697,7 @@ test('bounds both W5-M4 entry closures including their unique real Worker and re
 test('bounds both W5-M5 entry closures including their unique real Worker and rejects oversized or missing Worker bytes', () => {
   const manifest = JSON.parse(readFileSync('dist/.vite/manifest.json', 'utf8'));
   const emitted = readdirSync('dist/assets').map(name => `assets/${name}`);
-  const all = [...new Set([...Object.values(manifest).map(c=>c.file).filter(f=>f?.endsWith('.js')), ...emitted.filter(f=>/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration))Python\.worker-/.test(f))])];
+  const all = [...new Set([...Object.values(manifest).map(c=>c.file).filter(f=>f?.endsWith('.js')), ...emitted.filter(f=>/(?:weekFour(?:Branch|List|Boss)|weekFive(?:Monks|Function|Weather|Decomposition|StoryOrchestration)|weekSixRecords)Python\.worker-/.test(f))])];
   const raw = Object.fromEntries(all.map(f=>[f,statSync(`dist/${f}`).size]));
   const gzip = Object.fromEntries(all.map(f=>[f,gzipSync(readFileSync(`dist/${f}`)).byteLength]));
   const workers=emitted.filter(f=>/weekFiveStoryOrchestrationPython\.worker-/.test(f));assert.equal(workers.length,1);
