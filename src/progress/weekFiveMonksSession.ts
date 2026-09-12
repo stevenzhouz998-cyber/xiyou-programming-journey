@@ -1,5 +1,4 @@
 import {
-  DEFAULT_WEEK_FIVE_MONKS_PYTHON,
   parseWeekFiveMonksDraftEnvelope,
   parseWeekFiveMonksPython,
   type WeekFiveMonksPythonRunnable,
@@ -35,6 +34,7 @@ export interface WeekFiveMonksMissionSession {
   lastRunAt: string | null;
   savedAt: string;
 }
+export { createWeekFiveMonksSession } from './weekFiveMonksSessionFactory';
 
 type WeekFiveMonksRunInput = {
   canonicalTrace: WeekFiveMonksTraceItem[];
@@ -73,29 +73,6 @@ function runnableFor(code: string): WeekFiveMonksPythonRunnable {
     throw new Error('W5-M1 当前 Python 结构无效，不是 runnable 输入。');
   }
   return parsed;
-}
-
-export function createWeekFiveMonksSession(now: string): WeekFiveMonksMissionSession {
-  parseIso(now);
-  parseWeekFiveMonksDraftEnvelope(DEFAULT_WEEK_FIVE_MONKS_PYTHON);
-  return {
-    kind: 'python-monks-loop-v1',
-    pythonCode: DEFAULT_WEEK_FIVE_MONKS_PYTHON,
-    lastCanonicalTrace: [],
-    lastWorkerTrace: [],
-    lastRun: null,
-    failureSnapshot: null,
-    totalRuns: 0,
-    coverageFailures: 0,
-    actionFailures: 0,
-    validationFailures: 0,
-    runnerInfrastructureFailures: 0,
-    conditionObservationUses: [],
-    usedHintTiers: [],
-    firstBlockingConcept: null,
-    lastRunAt: null,
-    savedAt: now,
-  };
 }
 
 export function updateWeekFiveMonksCode(

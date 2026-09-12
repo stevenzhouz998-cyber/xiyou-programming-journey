@@ -1,12 +1,12 @@
-import { createWeekFourListSession } from './weekFourListSession';
+import { createWeekFourListSession } from './weekFourListSessionFactory';
 import type { WeekFourListMissionSession } from './weekFourListSession';
-import { createWeekFourBossSession } from './weekFourBossSession';
+import { createWeekFourBossSession } from './weekFourBossSessionFactory';
 import type { WeekFourBossMissionSession } from './weekFourBossSession';
-import { createWeekFiveMonksSession } from './weekFiveMonksSession';
+import { createWeekFiveMonksSession } from './weekFiveMonksSessionFactory';
 import type { WeekFiveMonksMissionSession } from './weekFiveMonksSession';
-import { createWeekFiveFunctionSession } from './weekFiveFunctionSession';
+import { createWeekFiveFunctionSession } from './weekFiveFunctionSessionFactory';
 import type { WeekFiveFunctionMissionSession } from './weekFiveFunctionSession';
-import { createWeekFiveWeatherSession } from './weekFiveWeatherSession';
+import { createWeekFiveWeatherSession } from './weekFiveWeatherSessionFactory';
 import type { WeekFiveWeatherMissionSession } from './weekFiveWeatherSession';
 import { createWeekFiveDecompositionSession } from './weekFiveDecompositionSessionFactory';
 import type { WeekFiveDecompositionMissionSession } from './weekFiveDecompositionSession';
@@ -99,27 +99,11 @@ import {
   type WeekThreeBossRunResult,
   type WeekThreeBossWorkspaceDraftV1,
 } from '../blockly/weekThreeBossContract';
-import { createWeekFourMappingSession } from './weekFourMappingSession';
+import { createWeekFourMappingSession } from './weekFourMappingSessionFactory';
 import type { WeekFourMappingMissionSession } from './weekFourMappingSession';
-import {
-  createWeekFourVariableSession,
-  recordWeekFourVariableHint,
-  recordWeekFourVariableInfrastructureFailure,
-  recordWeekFourVariableObservation,
-  recordWeekFourVariableRun,
-  recordWeekFourVariableValidationFailure,
-  updateWeekFourVariableCode,
-} from './weekFourVariableSession';
+import { createWeekFourVariableSession } from './weekFourVariableSessionFactory';
 import type { WeekFourVariableMissionSession } from './weekFourVariableSession';
-import {
-  createWeekFourBranchSession,
-  recordWeekFourBranchHint,
-  recordWeekFourBranchInfrastructureFailure,
-  recordWeekFourBranchObservation,
-  recordWeekFourBranchRun,
-  recordWeekFourBranchValidationFailure,
-  updateWeekFourBranchCode,
-} from './weekFourBranchSession';
+import { createWeekFourBranchSession } from './weekFourBranchSessionFactory';
 import type { WeekFourBranchMissionSession } from './weekFourBranchSession';
 import type {
   DragonPalaceMissionSession,
@@ -139,27 +123,13 @@ import type {
   YunzhanDialogueMissionSession,
   BajieJoiningMissionSession,
   WeekThreeBossMissionSession,
+  WeekSixClassificationMissionSession,
 } from './types';
 import { isExecutableMissionId } from './executableMissionIds';
 
 type HintTier = MissionSession['usedHintTiers'][number];
-export type WorkspaceMissionSession = Exclude<MissionSession, WeekFourVariableMissionSession | WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession | WeekFiveWeatherMissionSession | WeekFiveDecompositionMissionSession | WeekFiveStoryOrchestrationMissionSession | WeekSixRecordsMissionSession>;
-type CompileFailureMissionSession = Exclude<MissionSession, WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession | WeekFiveWeatherMissionSession | WeekFiveDecompositionMissionSession | WeekFiveStoryOrchestrationMissionSession | WeekSixRecordsMissionSession>;
-
-export {
-  recordWeekFourVariableHint,
-  recordWeekFourVariableInfrastructureFailure,
-  recordWeekFourVariableObservation,
-  recordWeekFourVariableRun,
-  recordWeekFourVariableValidationFailure,
-  updateWeekFourVariableCode,
-  recordWeekFourBranchHint,
-  recordWeekFourBranchInfrastructureFailure,
-  recordWeekFourBranchObservation,
-  recordWeekFourBranchRun,
-  recordWeekFourBranchValidationFailure,
-  updateWeekFourBranchCode,
-};
+export type WorkspaceMissionSession = Exclude<MissionSession, WeekFourVariableMissionSession | WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession | WeekFiveWeatherMissionSession | WeekFiveDecompositionMissionSession | WeekFiveStoryOrchestrationMissionSession | WeekSixRecordsMissionSession | WeekSixClassificationMissionSession>;
+type CompileFailureMissionSession = Exclude<MissionSession, WeekFourBranchMissionSession | WeekFourListMissionSession | WeekFourBossMissionSession | WeekFiveMonksMissionSession | WeekFiveFunctionMissionSession | WeekFiveWeatherMissionSession | WeekFiveDecompositionMissionSession | WeekFiveStoryOrchestrationMissionSession | WeekSixRecordsMissionSession | WeekSixClassificationMissionSession>;
 
 function assertCanonicalIso(now: string): void {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(now)) {
@@ -240,6 +210,7 @@ export function createMissionSession(
   if (missionIdOrNow === 'w5-m4') return createWeekFiveDecompositionSession(now);
   if (missionIdOrNow === 'w5-m5') return createWeekFiveStoryOrchestrationSession(now);
   if (missionIdOrNow === 'w6-m1') return createWeekSixRecordsSession(now);
+  if (missionIdOrNow === 'w6-m2') throw new Error('W6-M2 会话必须绑定 W6-M1 正式作品后创建');
   const session = {
     workspace: missionIdOrNow === 'w3-m5'
       ? createDefaultWeekThreeBossDraft()

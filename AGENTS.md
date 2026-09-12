@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Approved W6-M2 Direction
+
+- On 2026-09-12 the user approved dual-dimension fan classification with evidence selection and an insufficient-information practice card, delegated subsequent local decisions, and explicitly requested model-squad implementation to One-level playable. Preserve the approved bright storybook visuals and zero-penalty failures. Consume the valid W6-M1 saved work as read-only source records; separate fan authenticity from whether that attempt achieved extinguishing the fire and passage. The second attempt obtained the true fan but lost it afterwards. This is a local data-labeling experiment, not trained AI. See `docs/superpowers/specs/2026-09-12-week-six-evidence-classification-design.md`. Commit, push, merge and deployment are not authorized by this request.
+
 ## User Context
 
 The user is a non-programmer using Codex for vibe coding. They cannot reliably review code, architecture, terminal output, or implementation details, but they can review complete product behavior, visible UI, wording, and whether the result matches the intended product rules.

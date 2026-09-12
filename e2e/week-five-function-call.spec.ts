@@ -69,7 +69,7 @@ test('@w5-m2-full definition is inert, calls really execute, formal proof surviv
   await setCode(page, `${DEFAULT}\nrecord_arrival()\nrecord_sanqing()`); await run(page); expect((await session(page)).lastRun.state).toBe('body-conflict');
   await setCode(page, `${SOLVED}\nrecord_sanqing()`); await run(page); expect((await session(page)).lastRun.state).toBe('call-conflict');
   await setCode(page, SOLVED); await runButton(page).click(); await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 30_000 });
-  const completed = await saved(page); expect(completed.schemaRevision).toBe(17); expect(completed.missionCompletionEvidence['w5-m2'].kind).toBe('formal-v3'); expect(completed.works['w5-m2-sanqing-function-record'].run.completed).toBe(true);
+  const completed = await saved(page); expect(completed.schemaRevision).toBe(19); expect(completed.missionCompletionEvidence['w5-m2'].kind).toBe('formal-v3'); expect(completed.works['w5-m2-sanqing-function-record'].run.completed).toBe(true);
   await page.reload(); await open(page); const replay = await saved(page); await expect(page.getByText('悟空、八戒、沙僧夜入三清观，悟空随后说明他们是西行取经的僧众。故事接着进入车迟国祈雨比试。', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '真实回放函数作品' }).click(); await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 30_000 }); expect(await saved(page)).toEqual(replay);
   await parent(page); const summary = page.getByRole('region', { name: '第五周函数学习摘要' }); await expect(summary).toContainText('函数定义与调用正式证明及三清观记录作品已保存'); await expect(summary).not.toContainText(/record_sanqing|record_arrival|record_names|trace|pythonCode/);

@@ -18,6 +18,8 @@ import { createWeekFourVariableSession, recordWeekFourVariableRun, updateWeekFou
 import { SOLVED_WEEK_FOUR_BRANCH_PYTHON, parseWeekFourBranchPython } from '../engine/weekFourBranchPythonGrammar'
 import { createWeekFourBranchSession, recordWeekFourBranchRun, updateWeekFourBranchCode } from '../progress/weekFourBranchSession'
 import { createWeekFiveFunctionSession } from '../progress/weekFiveFunctionSession'
+import { createWeekSixClassificationSession } from '../progress/weekSixClassificationSession'
+import { WEEK_SIX_RECORD_FACTS } from '../engine/weekSixRecordsContract'
 import { ParentEquipmentReport } from './ParentEquipmentReport'
 
 describe('ParentEquipmentReport', () => {
@@ -224,5 +226,24 @@ describe('ParentEquipmentReport', () => {
     expect(report).toHaveTextContent('主动观察 1 次')
     expect(report).toHaveTextContent('函数定义与调用正式证明及三清观记录作品已保存')
     expect(report).not.toHaveTextContent(/record_sanqing|record_arrival|record_names|pythonCode|trace|snapshotId|w5-m2-sanqing-function-record/)
+  })
+
+  it('summarizes W6 evidence-classification learning without revealing labels or evidence answers', () => {
+    const progress = createInitialProgress()
+    progress.sessions['w6-m2'] = {
+      ...createWeekSixClassificationSession({ workId: 'w6-m1-structured-records-table', verifiedAt: '2026-09-12T00:00:00.000Z', rows: WEEK_SIX_RECORD_FACTS.map((row) => ({ ...row })) }, '2026-09-12T00:00:01.000Z'),
+      totalChecks: 6, incompleteChecks: 2, labelFailures: 1, evidenceFailures: 2, practiceFailures: 1,
+    }
+    progress.missionCompletionEvidence['w6-m2'] = { kind: 'formal-v3' } as never
+    progress.works['w6-m2-fan-evidence-classification'] = { kind: 'ai-evidence-classification-v1' } as never
+    render(<ParentEquipmentReport progress={progress} />)
+    const report = screen.getByRole('region', { name: '第六周证据分类学习摘要' })
+    expect(report).toHaveTextContent('已核验 6 次')
+    expect(report).toHaveTextContent('漏选调整 2 次')
+    expect(report).toHaveTextContent('标签调整 1 次')
+    expect(report).toHaveTextContent('依据调整 2 次')
+    expect(report).toHaveTextContent('材料不足判断调整 1 次')
+    expect(report).toHaveTextContent('证据分类正式证明与作品已保存')
+    expect(report).not.toHaveTextContent(/genuine|false|not-passed|one-not-real|three-fire-cleared|sourceRows|workId|snapshotId/)
   })
 })

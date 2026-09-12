@@ -89,7 +89,7 @@ it.each([
     learnerName: '小行者', missions: { 'w4-m2': mission }, savedAt: NOW,
   });
   expect(migrated).toMatchObject({
-    schemaRevision: 18,
+    schemaRevision: 19,
     missionCompletionEvidence: { 'w4-m2': { kind: 'legacy-replay-only', sourceVersion, sourceSchemaRevision } },
     sessions: {}, works: {},
   });

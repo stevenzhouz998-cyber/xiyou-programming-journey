@@ -2,7 +2,15 @@
 
 更新时间：2026-09-12。此索引定位现场，不代表全项目完成，也不是提交、推送、合并或部署授权。
 
-## W6-M1 当前工作
+## W6-M2 当前工作
+
+- 实际入口 `/Users/macmini-zz/.codex/worktrees/5806/少儿编程学习网页`；分支 `codex/w4-m3-branch-structure`；本次实施与验收基线HEAD为 `5cd99e920cc19851dccf9a7958a86933e62fa570`。用户随后明确授权W6-M2交接、commit and push；最终HEAD与远端状态以Git及工作区外交接文件为准。
+- 用户已确认设计并授权后续细节自主决定，实际使用模型小队。W6-M2「真假扇证据分类」达到本地 **One-level playable**，progress revision19；仅有效M1正式作品作为来源，M2正式证明解锁M3。
+- M2五配置22/22、全量单元2009/2009、工程合同245/245、素材60/60及构建/预算通过；普通生产包独立八组复验39.406秒通过。相关旧关卡联合矩阵保留133通过/5失败原记录，失败闭合及证据复用边界详见验收，不称一次138全绿。
+- 入口184055/184320 B（余265 B），未放宽预算。原有未跟踪审计、依赖及回归/视觉产物保留。本次提交涵盖W6-M2交付；未授权合并或部署，不代表整周或全站交付。
+- [W6-M2规格](../superpowers/specs/2026-09-12-week-six-evidence-classification-design.md)；[W6-M2验收](../verification/week-six-evidence-classification.md)。
+
+## W6-M1 历史交付
 
 - 实际入口仍为下述 `5806` 工作树；W5 已提交推送后的 W6 实施基线 HEAD 为 `77ccc53e667c452b76af4a65342e78eae3a9c35c`，分支 `codex/w4-m3-branch-structure`。下面 W5 段落中的更早 HEAD 和提交授权仅属于其历史交付。
 - 用户已确认 W6-M1 字典记录玩法、必要原著事实更正，并要求模型小队实施至 One-level playable；用户随后明确授权本次 W6-M1 交接、commit and push；不包含合并或部署。

@@ -1,5 +1,4 @@
 import {
-  DEFAULT_WEEK_FIVE_WEATHER_PYTHON,
   parseWeekFiveWeatherDraftEnvelope,
   parseWeekFiveWeatherPython,
   type WeekFiveWeatherPythonRunnable,
@@ -35,6 +34,7 @@ export interface WeekFiveWeatherMissionSession {
   lastRunAt: string | null;
   savedAt: string;
 }
+export { createWeekFiveWeatherSession } from './weekFiveWeatherSessionFactory';
 
 type RunInput = {
   canonicalTrace: WeekFiveWeatherTraceItem[];
@@ -68,29 +68,6 @@ function runnableFor(code: string): WeekFiveWeatherPythonRunnable {
   const parsed = parseWeekFiveWeatherPython(code);
   if ('state' in parsed) throw Error('W5-M3 当前 Python 结构无效。');
   return parsed;
-}
-
-export function createWeekFiveWeatherSession(now: string): WeekFiveWeatherMissionSession {
-  parseIso(now);
-  parseWeekFiveWeatherDraftEnvelope(DEFAULT_WEEK_FIVE_WEATHER_PYTHON);
-  return {
-    kind: 'python-function-parameter-v1',
-    pythonCode: DEFAULT_WEEK_FIVE_WEATHER_PYTHON,
-    lastCanonicalTrace: [],
-    lastWorkerTrace: [],
-    lastRun: null,
-    failureSnapshot: null,
-    totalRuns: 0,
-    callFailures: 0,
-    parameterFailures: 0,
-    validationFailures: 0,
-    runnerInfrastructureFailures: 0,
-    conditionObservationUses: [],
-    usedHintTiers: [],
-    firstBlockingConcept: null,
-    lastRunAt: null,
-    savedAt: now,
-  };
 }
 
 export function updateWeekFiveWeatherCode(

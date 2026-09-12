@@ -39,11 +39,15 @@ async function success(page:Page) { await button(page).click(); await expect(pag
 async function parent(page: Page) {
   await page.goto('./#/parent');
   const acknowledge = page.getByRole('button', { name: '我知道了', exact: true });
-  if (await acknowledge.isVisible()) await acknowledge.click();
-  await expect(page.getByTestId('app-background')).not.toHaveAttribute('inert', '');
   const report = page.getByRole('button', { name: '导出进度', exact: true });
   const login = page.getByLabel('家长 PIN', { exact: true });
   const setup = page.getByLabel('设置 4 位家长 PIN', { exact: true });
+  if (!(await saved(page)).privacy.localDataNoticeSeen) {
+    await expect(acknowledge).toBeVisible();
+    await acknowledge.click();
+    await expect.poll(async () => (await saved(page)).privacy.localDataNoticeSeen).toBe(true);
+  }
+  await expect(page.getByTestId('app-background')).not.toHaveAttribute('inert', '');
   await expect(report.or(login).or(setup)).toBeVisible();
   if (await report.isVisible()) return;
   if (await login.isVisible()) {
@@ -87,7 +91,7 @@ test('@w5-m1-full actual loop, independent bugs, refresh, readonly replay, paren
   await page.screenshot({path:info.outputPath('w5m1-action-conflict.png'),fullPage:true});
   await setCode(page,'import os');const count=(await session(page)).totalRuns;await run(page);expect((await session(page)).validationFailures).toBe(1);expect((await session(page)).totalRuns).toBe(count);await expect(page.getByLabel('W5-M1 Python 代码')).toBeFocused();
   await setCode(page,SOLVED);await success(page);
-  const completed=await saved(page);expect(completed.schemaRevision).toBe(17);expect(completed.missionCompletionEvidence['w5-m1'].kind).toBe('formal-v3');expect(completed.works['w5-m1-monks-rescue-record'].run.completed).toBe(true);
+  const completed=await saved(page);expect(completed.schemaRevision).toBe(19);expect(completed.missionCompletionEvidence['w5-m1'].kind).toBe('formal-v3');expect(completed.works['w5-m1-monks-rescue-record'].run.completed).toBe(true);
   for(const id of ['w4-m1','w4-m2','w4-m3','w4-m4','w4-m5']){expect(completed.sessions[id]).toEqual(before.sessions[id]);expect(completed.missionCompletionEvidence[id]).toEqual(before.missionCompletionEvidence[id]);}
   await page.reload();await open(page);const replay=await saved(page);await page.screenshot({path:info.outputPath('w5m1-proven.png'),fullPage:true});expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.getByLabel('固定原著尾声')).toBeVisible();await success(page);expect(await saved(page)).toEqual(replay);

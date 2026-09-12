@@ -34,6 +34,9 @@ const formalMission = (id: string, extension: Omit<FormalMissionExtension, 'mode
 const formalPythonMission = (id: string, extension: Omit<FormalMissionExtension, 'mode'>): FormalMissionSpec => (
   deriveFormalMissionFromOutline(id, { ...extension, mode: 'python' })
 );
+const formalAiMission = (id: string, extension: Omit<FormalMissionExtension, 'mode'>): FormalMissionSpec => (
+  deriveFormalMissionFromOutline(id, { ...extension, mode: 'ai-lab' })
+);
 
 export const formalWeekOneMissions: FormalMissionSpec[] = [
   formalMission('w1-m1', { subtitle: '按先后试遍兵器', objective: '排列求兵的正确步骤', canon: formalWeekOneCanon, storyBeats: [beat('入东海龙宫', '悟空来到东海龙宫求一件趁手兵器。'), beat('试用兵器', '龙王先后命人抬出兵器，悟空都嫌太轻。')] }),
@@ -240,6 +243,11 @@ export const formalWeekSixMissions: FormalMissionSpec[] = [
     subtitle: '按字段读出三次借扇记录', objective: '用字典保存调次和经过，并让循环逐条生成事实表', canon: formalWeekSixCanon,
     storyBeats: [beat('一调与二调', '一调得到假扇，反使火势更旺；二调取得真扇，随后又被骗回。'), beat('三调通行', '第三次最终借得真扇，灭火通行并还扇西行。')],
     hints: { observe: '对照实际表格的两列，找到第一次重复的内容。', think: '同一条 record 有“第几调”和“经过”两个字段；两列要读取各自的字段。', partial: '检查 record_attempt 的第二个参数正在读取哪个字段。' },
+  }),
+  formalAiMission('w6-m2', {
+    subtitle: '为每个判断找到证据', objective: '按扇子真假和灭火通行两个维度标注三次记录，并为每个标签选择依据', canon: formalWeekSixCanon,
+    storyBeats: [beat('真假与结果分开', '一调得到假扇；二调取得真扇但随后被骗回；三调最终借得真扇并灭火通行。'), beat('材料不足先暂缓', '独立练习只依据卡片提供的信息判断；缺少身份线索时选择证据不足，不补写原著事件。')],
+    hints: { observe: '先看核验指出的是哪条记录、哪个分类维度。', think: '扇子是真是假，与这次有没有完成灭火通行，是两个不同问题。', partial: '回到当前记录，只选择能直接支持这个标签的依据。' },
   }),
 ];
 

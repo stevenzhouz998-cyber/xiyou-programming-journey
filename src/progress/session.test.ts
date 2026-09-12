@@ -28,9 +28,9 @@ import {
   recordCompileFailure,
   recordHint,
   recordRun,
-  updateWeekFourVariableCode,
   updateWorkspaceDraft,
 } from './session';
+import { updateWeekFourVariableCode } from './weekFourVariableSession';
 import { SOLVED_WEEK_FOUR_VARIABLE_PYTHON } from '../engine/weekFourVariablePythonGrammar';
 import { recordEquipmentEffectUse } from './equipmentEffectSession';
 

@@ -77,6 +77,8 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
   const storyProof = progress.missionCompletionEvidence['w5-m5'];
   const recordsSession = progress.sessions['w6-m1'];
   const recordsProof = progress.missionCompletionEvidence['w6-m1'];
+  const classificationSession = progress.sessions['w6-m2'];
+  const classificationProof = progress.missionCompletionEvidence['w6-m2'];
   const listSession = progress.sessions['w4-m4'];
   const listProof = progress.missionCompletionEvidence['w4-m4'];
   const blockerLabels = {
@@ -205,6 +207,12 @@ export function ParentEquipmentReport({ progress }: { progress: ProgressV3 }) {
     <p>主动观察 {recordsSession?.conditionObservationUses.length ?? 0} 次。</p>
     {recordsProof?.kind === 'formal-v3' && progress.works['w6-m1-structured-records-table'] ? <p>结构化事实表正式证明与作品已保存</p> : null}
     {recordsProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式结构化记录证明</p> : null}
+  </section><section aria-label="第六周证据分类学习摘要">
+    <h2>第六周证据分类学习摘要</h2>
+    <p>学习按两个维度分类，并用证据支撑标签；材料不足时暂缓判断。已核验 {classificationSession?.totalChecks ?? 0} 次。</p>
+    <p>漏选调整 {classificationSession?.incompleteChecks ?? 0} 次；标签调整 {classificationSession?.labelFailures ?? 0} 次；依据调整 {classificationSession?.evidenceFailures ?? 0} 次；材料不足判断调整 {classificationSession?.practiceFailures ?? 0} 次。</p>
+    {classificationProof?.kind === 'formal-v3' && progress.works['w6-m2-fan-evidence-classification'] ? <p>证据分类正式证明与作品已保存</p> : null}
+    {classificationProof?.kind === 'legacy-replay-only' ? <p>历史兼容记录，尚非正式证据分类证明</p> : null}
   </section></>
 }
 

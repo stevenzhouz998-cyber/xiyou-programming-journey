@@ -1396,6 +1396,30 @@ function exactW6RecordsCompletionDelta(previous: ProgressV3, next: ProgressV3) {
   return exactAfterAllowedDelta(previous, next, (expected) => { if (initial) expected.missions['w6-m1'] = structuredClone(completion); expected.missionCompletionEvidence['w6-m1'] = structuredClone(evidence); expected.works['w6-m1-structured-records-table'] = structuredClone(work); });
 }
 
+function hasNoW6ClassificationPublication(progress: ProgressV3) {
+  return progress.missions['w6-m2'] === undefined
+    && progress.missionCompletionEvidence['w6-m2'] === undefined
+    && progress.works['w6-m2-fan-evidence-classification'] === undefined;
+}
+
+function exactW6ClassificationSessionDelta(previous: ProgressV3, next: ProgressV3) {
+  const candidate = next.sessions['w6-m2'];
+  if (!candidate || !hasNoW6ClassificationPublication(next)) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => { expected.sessions['w6-m2'] = structuredClone(candidate); });
+}
+
+function exactW6ClassificationCompletionDelta(previous: ProgressV3, next: ProgressV3) {
+  const completion = next.missions['w6-m2'];
+  const evidence = next.missionCompletionEvidence['w6-m2'];
+  const work = next.works['w6-m2-fan-evidence-classification'];
+  if (!completion || evidence?.kind !== 'formal-v3' || !work || !hasNoW6ClassificationPublication(previous)) return false;
+  return exactAfterAllowedDelta(previous, next, (expected) => {
+    expected.missions['w6-m2'] = structuredClone(completion);
+    expected.missionCompletionEvidence['w6-m2'] = structuredClone(evidence);
+    expected.works['w6-m2-fan-evidence-classification'] = structuredClone(work);
+  });
+}
+
 export const storageFaultAdapter: StorageFaultAdapter = {
   beforeProgressWrite: ({ storage, progress }) => {
     const mode = storage.getItem(MODE_KEY);
@@ -1454,6 +1478,7 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-w5-m4-draft' && exactW5DecompositionDraftDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m5-draft' && exactW5StorySessionDelta(previous, progress, 'draft')) return FAILURE;
     if (mode === 'fail-w6-m1-draft' && exactW6RecordsSessionDelta(previous, progress, 'draft')) return FAILURE;
+    if (mode === 'fail-w6-m2-session' && exactW6ClassificationSessionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m3-run' && exactW4BranchRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m4-run' && exactW4ListRunDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w4-m5-run' && exactW4BossRunDelta(previous, progress)) return FAILURE;
@@ -1490,6 +1515,7 @@ export const storageFaultAdapter: StorageFaultAdapter = {
     if (mode === 'fail-w5-m4-completion' && exactW5DecompositionCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w5-m5-completion' && exactW5StoryCompletionDelta(previous, progress)) return FAILURE;
     if (mode === 'fail-w6-m1-completion' && exactW6RecordsCompletionDelta(previous, progress)) return FAILURE;
+    if (mode === 'fail-w6-m2-completion' && exactW6ClassificationCompletionDelta(previous, progress)) return FAILURE;
     const advancedFailure = advancedStorageFaultHandler({ storage, progress });
     if (advancedFailure !== null) return advancedFailure;
     return null;

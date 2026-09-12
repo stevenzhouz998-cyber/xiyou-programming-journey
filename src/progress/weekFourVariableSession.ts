@@ -1,5 +1,4 @@
 import {
-  DEFAULT_WEEK_FOUR_VARIABLE_PYTHON,
   parseWeekFourVariablePython,
 } from '../engine/weekFourVariablePythonGrammar';
 import type {
@@ -29,6 +28,7 @@ export interface WeekFourVariableMissionSession {
   lastRunAt: string | null;
   savedAt: string;
 }
+export { createWeekFourVariableSession } from './weekFourVariableSessionFactory';
 
 type RunInput = {
   canonicalTrace: WeekFourVariableTraceItem[];
@@ -61,20 +61,6 @@ function increment(value: number): number {
 
 function same(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
-}
-
-export function createWeekFourVariableSession(now: string): WeekFourVariableMissionSession {
-  parseIso(now);
-  const parsed = parseWeekFourVariablePython(DEFAULT_WEEK_FOUR_VARIABLE_PYTHON);
-  return {
-    lastTrace: [], runtimeFailures: 0, compileFailures: 0,
-    pythonCode: DEFAULT_WEEK_FOUR_VARIABLE_PYTHON, pythonSourceSpan: parsed.sourceSpan,
-    lastCanonicalTrace: [], lastWorkerTrace: [], lastRun: null, failureSnapshot: null,
-    conditionObservationUses: [], totalRuns: 0, overwriteFailures: 0, validationFailures: 0,
-    runnerInfrastructureFailures: 0, usedHintTiers: [],
-    conceptFailures: { variableOverwrite: 0, programStructure: 0, safeExecution: 0, completeness: 0 },
-    lastRunAt: null, savedAt: now,
-  };
 }
 
 export function updateWeekFourVariableCode(

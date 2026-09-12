@@ -71,7 +71,7 @@ test('@w5-m3-full parameters bind real arguments, failures preserve zero penalty
   await setCode(page, SOLVED.replace("weather('雨')", '')); await run(page); expect((await session(page)).lastRun.state).toBe('call-conflict');
   await setCode(page, `${SOLVED}\nweather('雨')`); await run(page); expect((await session(page)).lastRun.state).toBe('call-conflict');
   await setCode(page, SOLVED); await runButton(page).click(); await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 30_000 });
-  const completed = await saved(page); expect(completed.schemaRevision).toBe(17); expect(completed.missionCompletionEvidence['w5-m3'].kind).toBe('formal-v3'); expect(completed.works['w5-m3-weather-parameter-record'].run.completed).toBe(true);
+  const completed = await saved(page); expect(completed.schemaRevision).toBe(19); expect(completed.missionCompletionEvidence['w5-m3'].kind).toBe('formal-v3'); expect(completed.works['w5-m3-weather-parameter-record'].run.completed).toBe(true);
   await page.reload(); await open(page); const replay = await saved(page); await expect(page.getByText(/风、云、雷、雨四步之后/)).toBeVisible();
   await page.getByRole('button', { name: '真实回放参数作品' }).click(); await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 30_000 }); expect(await saved(page)).toEqual(replay);
   await parent(page); const summary = page.getByRole('region', { name: '第五周参数学习摘要' }); await expect(summary).toContainText('函数参数正式证明及祈雨记录作品已保存'); await expect(summary).not.toContainText(/record_weather|weather\(|trace|pythonCode/);

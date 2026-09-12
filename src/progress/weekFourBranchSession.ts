@@ -1,5 +1,4 @@
 import {
-  DEFAULT_WEEK_FOUR_BRANCH_PYTHON,
   parseWeekFourBranchDraftEnvelope,
   parseWeekFourBranchPython,
   type WeekFourBranchPythonRunnable,
@@ -35,6 +34,7 @@ export interface WeekFourBranchMissionSession {
   lastRunAt: string | null;
   savedAt: string;
 }
+export { createWeekFourBranchSession } from './weekFourBranchSessionFactory';
 
 type WeekFourBranchRunInput = {
   canonicalTrace: WeekFourBranchTraceItem[];
@@ -73,29 +73,6 @@ function runnableFor(code: string): WeekFourBranchPythonRunnable {
     throw new Error('W4-M3 当前 Python 结构无效，不是 runnable 输入。');
   }
   return parsed;
-}
-
-export function createWeekFourBranchSession(now: string): WeekFourBranchMissionSession {
-  parseIso(now);
-  parseWeekFourBranchDraftEnvelope(DEFAULT_WEEK_FOUR_BRANCH_PYTHON);
-  return {
-    kind: 'python-branch-structure-v1',
-    pythonCode: DEFAULT_WEEK_FOUR_BRANCH_PYTHON,
-    lastCanonicalTrace: [],
-    lastWorkerTrace: [],
-    lastRun: null,
-    failureSnapshot: null,
-    totalRuns: 0,
-    branchConflictFailures: 0,
-    branchMissingFailures: 0,
-    validationFailures: 0,
-    runnerInfrastructureFailures: 0,
-    conditionObservationUses: [],
-    usedHintTiers: [],
-    firstBlockingConcept: null,
-    lastRunAt: null,
-    savedAt: now,
-  };
 }
 
 export function updateWeekFourBranchCode(

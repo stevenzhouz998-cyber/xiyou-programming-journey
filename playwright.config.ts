@@ -51,8 +51,19 @@ const config = defineConfig({
 
 const W6_DESKTOP = /@w6-m1-(?:full|storage|external|corrupt|runtime|assets|legacy|parent|security|lazy|home-lazy|cold)/;
 const W6_CROSS_BROWSER = /@w6-m1-(?:full|cold)/;
+const W6_M2_DESKTOP = /@w6-m2-(?:full|keyboard|storage|assets|lazy|parent)/;
+const W6_M2_CROSS_BROWSER = /@w6-m2-full/;
+const W6_M2_KEYBOARD = /@w6-m2-keyboard/;
+const W6_M2_TOUCH = /@w6-m2-touch/;
 export default defineConfig({ ...config, projects: config.projects?.map((project) => {
   const current = project.grep instanceof RegExp ? project.grep : /$a/;
   const weekSix = project.name === 'desktop-chromium-1440x1024' ? W6_DESKTOP : W6_CROSS_BROWSER;
-  return { ...project, grep: new RegExp(`${current.source}|${weekSix.source}`) };
+  const classification = project.name === 'desktop-chromium-1440x1024'
+    ? W6_M2_DESKTOP
+    : project.name === 'desktop-firefox-1440x1024'
+      ? new RegExp(`${W6_M2_CROSS_BROWSER.source}|${W6_M2_KEYBOARD.source}`)
+      : project.name === 'mobile-chromium-390x844' || project.name === 'narrow-chromium-320x844'
+        ? new RegExp(`${W6_M2_CROSS_BROWSER.source}|${W6_M2_TOUCH.source}`)
+        : W6_M2_CROSS_BROWSER;
+  return { ...project, grep: new RegExp(`${current.source}|${weekSix.source}|${classification.source}`) };
 }) });

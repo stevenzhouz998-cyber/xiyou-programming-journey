@@ -92,7 +92,7 @@ test('@w5-m5-full real orchestration reveals four blockers in order, seals proof
   await runButton(page).click();
   await expect(page.getByRole('dialog', { name: '闯关成功' })).toBeVisible({ timeout: 30_000 });
   const completed = await saved(page);
-  expect(completed.schemaRevision).toBe(18);
+  expect(completed.schemaRevision).toBe(19);
   expect(completed.missionCompletionEvidence['w5-m5'].kind).toBe('formal-v3');
   expect(completed.works['w5-m5-story-orchestration-record'].run.completed).toBe(true);
 

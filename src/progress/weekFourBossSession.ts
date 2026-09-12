@@ -1,5 +1,4 @@
 import {
-  DEFAULT_WEEK_FOUR_BOSS_PYTHON,
   parseWeekFourBossDraftEnvelope,
   parseWeekFourBossPython,
   type WeekFourBossPythonRunnable,
@@ -35,6 +34,7 @@ export interface WeekFourBossMissionSession {
   lastRunAt: string | null;
   savedAt: string;
 }
+export { createWeekFourBossSession } from './weekFourBossSessionFactory';
 
 type WeekFourBossRunInput = {
   canonicalTrace: WeekFourBossTraceItem[];
@@ -73,29 +73,6 @@ function runnableFor(code: string): WeekFourBossPythonRunnable {
     throw new Error('W4-M5 当前 Python 结构无效，不是 runnable 输入。');
   }
   return parsed;
-}
-
-export function createWeekFourBossSession(now: string): WeekFourBossMissionSession {
-  parseIso(now);
-  parseWeekFourBossDraftEnvelope(DEFAULT_WEEK_FOUR_BOSS_PYTHON);
-  return {
-    kind: 'python-verification-station-v1',
-    pythonCode: DEFAULT_WEEK_FOUR_BOSS_PYTHON,
-    lastCanonicalTrace: [],
-    lastWorkerTrace: [],
-    lastRun: null,
-    failureSnapshot: null,
-    totalRuns: 0,
-    identityFailures: 0,
-    branchFailures: 0,
-    validationFailures: 0,
-    runnerInfrastructureFailures: 0,
-    conditionObservationUses: [],
-    usedHintTiers: [],
-    firstBlockingConcept: null,
-    lastRunAt: null,
-    savedAt: now,
-  };
 }
 
 export function updateWeekFourBossCode(

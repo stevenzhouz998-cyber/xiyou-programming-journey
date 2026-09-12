@@ -5,6 +5,8 @@ import { createWeekFiveStoryOrchestrationSession, recordWeekFiveStoryOrchestrati
 import { formalW5M4Prerequisite } from './w5m5Prerequisite';
 import { SOLVED_WEEK_SIX_RECORDS_PYTHON, parseWeekSixRecordsPython } from '../../src/engine/weekSixRecordsPythonGrammar';
 import { createWeekSixRecordsSession, recordWeekSixRecordsRun, updateWeekSixRecordsCode } from '../../src/progress/weekSixRecordsSession';
+import { runWeekSixClassification, type WeekSixClassificationInput } from '../../src/engine/weekSixClassificationContract';
+import { createWeekSixClassificationSession, recordWeekSixClassificationCheck, updateWeekSixClassificationInput } from '../../src/progress/weekSixClassificationSession';
 
 export function formalW5M5Prerequisite(): string {
   const progress = parseProgress(formalW5M4Prerequisite());
@@ -34,4 +36,24 @@ export function formalW6M1Completion(): string {
   session = recordWeekSixRecordsRun(session, { canonicalTrace: parsed.trace, workerTrace: parsed.trace, run: parsed.run }, now);
   progress.sessions['w6-m1'] = session; progress.savedAt = now;
   return serializeProgress(completeMission(progress, 'w6-m1', { stars: 3, hintsUsed: 0 }));
+}
+
+export function formalW6M2Completion(): string {
+  const progress = parseProgress(formalW6M1Completion());
+  const source = progress.works['w6-m1-structured-records-table'];
+  if (!source) throw Error('W6-M2 source fixture invalid');
+  const now = new Date().toISOString();
+  const input: WeekSixClassificationInput = {
+    labels: [
+      { attempt: '一调', fanAuthenticity: 'false', fanEvidenceId: 'one-not-real', passageOutcome: 'not-passed', passageEvidenceId: 'one-fire-worse' },
+      { attempt: '二调', fanAuthenticity: 'genuine', fanEvidenceId: 'two-true-fan', passageOutcome: 'not-passed', passageEvidenceId: 'two-stolen-back' },
+      { attempt: '三调', fanAuthenticity: 'genuine', fanEvidenceId: 'three-true-fan', passageOutcome: 'passed', passageEvidenceId: 'three-fire-cleared' },
+    ],
+    practiceAuthenticity: 'insufficient',
+  };
+  let session = createWeekSixClassificationSession({ workId: source.workId, verifiedAt: source.verifiedAt, rows: source.run.rows }, now);
+  session = updateWeekSixClassificationInput(session, input, now);
+  session = recordWeekSixClassificationCheck(session, input, runWeekSixClassification(input, source.run.rows), now);
+  progress.sessions['w6-m2'] = session; progress.savedAt = now;
+  return serializeProgress(completeMission(progress, 'w6-m2', { stars: 3, hintsUsed: 0 }));
 }

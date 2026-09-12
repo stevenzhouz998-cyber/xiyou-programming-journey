@@ -40,14 +40,14 @@ describe('W5-M2 durable function chain', () => {
     const solved = run(updateWeekFiveFunctionCode(run(), SOLVED_FUNCTION, NOW));
     expect(() => completeMission({ ...parseProgress(formalW4M5Prerequisite()), sessions: { 'w5-m2': solved } }, 'w5-m2', { stars: 3, hintsUsed: 0 })).toThrow();
     const completed = completeMission({ ...base, sessions: { ...base.sessions, 'w5-m2': solved }, savedAt: NOW }, 'w5-m2', { stars: 3, hintsUsed: 0 });
-    expect(completed.schemaRevision).toBe(18); expect(completed.missionCompletionEvidence['w5-m2']?.kind).toBe('formal-v3'); expect(completed.works['w5-m2-sanqing-function-record']?.run.completed).toBe(true);
+    expect(completed.schemaRevision).toBe(19); expect(completed.missionCompletionEvidence['w5-m2']?.kind).toBe('formal-v3'); expect(completed.works['w5-m2-sanqing-function-record']?.run.completed).toBe(true);
     expect(isMissionUnlocked(completed, 'w5-m3')).toBe(true); expect(parseProgress(serializeProgress(completed))).toEqual(completed); expect(completeMission(completed, 'w5-m2', { stars: 1, hintsUsed: 3 })).toBe(completed);
     expect(getWeeklyReport(completed, 5).weekFiveFunction).toMatchObject({ runs: 2, callFailures: 1, workSaved: true, proof: 'formal-v3' });
   });
 
   it('migrates revision 13 without damaging formal W5-M1 or fabricating W5-M2 evidence', () => {
     const current = withW5M1(); const old = JSON.parse(serializeProgress(current)); old.schemaRevision = 13;
-    const migrated = migrateProgress(old); expect(migrated.schemaRevision).toBe(18); expect(migrated.missionCompletionEvidence['w5-m1']).toEqual(current.missionCompletionEvidence['w5-m1']); expect(migrated.sessions['w5-m2']).toBeUndefined();
+    const migrated = migrateProgress(old); expect(migrated.schemaRevision).toBe(19); expect(migrated.missionCompletionEvidence['w5-m1']).toEqual(current.missionCompletionEvidence['w5-m1']); expect(migrated.sessions['w5-m2']).toBeUndefined();
     old.missions['w5-m2'] = { status: 'completed', stars: 2, attempts: 1, hintsUsed: 0, completedAt: NOW };
     const legacy = migrateProgress(old); expect(legacy.missionCompletionEvidence['w5-m2']).toMatchObject({ kind: 'legacy-replay-only', sourceSchemaRevision: 13 }); expect(getWeekFiveFunctionAccess(legacy)).toMatchObject({ kind: 'formal', upgradingLegacy: true });
   });

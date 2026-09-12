@@ -1,0 +1,4 @@
+import { DEFAULT_WEEK_FOUR_VARIABLE_PYTHON, parseWeekFourVariablePython } from '../engine/weekFourVariablePythonGrammar';
+import type { WeekFourVariableMissionSession } from './weekFourVariableSession';
+const UTC=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+export function createWeekFourVariableSession(now:string):WeekFourVariableMissionSession{if(!UTC.test(now)||new Date(now).toISOString()!==now)throw Error('W4-M2 会话时间必须是标准 UTC ISO。');return{lastTrace:[],runtimeFailures:0,compileFailures:0,pythonCode:DEFAULT_WEEK_FOUR_VARIABLE_PYTHON,pythonSourceSpan:parseWeekFourVariablePython(DEFAULT_WEEK_FOUR_VARIABLE_PYTHON).sourceSpan,lastCanonicalTrace:[],lastWorkerTrace:[],lastRun:null,failureSnapshot:null,conditionObservationUses:[],totalRuns:0,overwriteFailures:0,validationFailures:0,runnerInfrastructureFailures:0,usedHintTiers:[],conceptFailures:{variableOverwrite:0,programStructure:0,safeExecution:0,completeness:0},lastRunAt:null,savedAt:now};}

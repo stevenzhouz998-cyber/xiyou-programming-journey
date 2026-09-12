@@ -1,5 +1,4 @@
 import {
-  DEFAULT_WEEK_FOUR_LIST_PYTHON,
   parseWeekFourListDraftEnvelope,
   parseWeekFourListPython,
   type WeekFourListPythonRunnable,
@@ -35,6 +34,7 @@ export interface WeekFourListMissionSession {
   lastRunAt: string | null;
   savedAt: string;
 }
+export { createWeekFourListSession } from './weekFourListSessionFactory';
 
 type WeekFourListRunInput = {
   canonicalTrace: WeekFourListTraceItem[];
@@ -73,29 +73,6 @@ function runnableFor(code: string): WeekFourListPythonRunnable {
     throw new Error('W4-M4 当前 Python 结构无效，不是 runnable 输入。');
   }
   return parsed;
-}
-
-export function createWeekFourListSession(now: string): WeekFourListMissionSession {
-  parseIso(now);
-  parseWeekFourListDraftEnvelope(DEFAULT_WEEK_FOUR_LIST_PYTHON);
-  return {
-    kind: 'python-list-loop-v1',
-    pythonCode: DEFAULT_WEEK_FOUR_LIST_PYTHON,
-    lastCanonicalTrace: [],
-    lastWorkerTrace: [],
-    lastRun: null,
-    failureSnapshot: null,
-    totalRuns: 0,
-    listOrderFailures: 0,
-    loopValueFailures: 0,
-    validationFailures: 0,
-    runnerInfrastructureFailures: 0,
-    conditionObservationUses: [],
-    usedHintTiers: [],
-    firstBlockingConcept: null,
-    lastRunAt: null,
-    savedAt: now,
-  };
 }
 
 export function updateWeekFourListCode(

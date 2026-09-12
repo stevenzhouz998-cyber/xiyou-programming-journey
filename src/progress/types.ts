@@ -121,6 +121,9 @@ import type { WeekFiveStoryOrchestrationRunResult, WeekFiveStoryOrchestrationTra
 import type { WeekSixRecordsMissionSession } from './weekSixRecordsSession';
 export type { WeekSixRecordsMissionSession } from './weekSixRecordsSession';
 import type { WeekSixRecordsRunResult, WeekSixRecordsTraceItem } from '../engine/weekSixRecordsContract';
+import type { WeekSixClassificationMissionSession } from './weekSixClassificationSession';
+export type { WeekSixClassificationMissionSession } from './weekSixClassificationSession';
+import type { WeekSixClassificationInput, WeekSixClassificationRunResult } from '../engine/weekSixClassificationContract';
 
 export interface MissionProgress {
   status: 'completed';
@@ -589,6 +592,12 @@ export type WeekSixRecordsCompletionEvidence =
   | { kind:'legacy-replay-only';completedAt:string;sourceVersion:3;sourceSchemaRevision:1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17 }
   | { kind:'formal-v3';completedAt:string;verifiedAt:string;pythonCode:string;canonicalTrace:WeekSixRecordsTraceItem[];workerTrace:WeekSixRecordsTraceItem[];run:WeekSixRecordsRunResult;workId:'w6-m1-structured-records-table' };
 export interface WeekSixRecordsWorkV1 {kind:'python-structured-records-v1';workId:'w6-m1-structured-records-table';missionId:'w6-m1';title:string;pythonCode:string;canonicalTrace:WeekSixRecordsTraceItem[];workerTrace:WeekSixRecordsTraceItem[];run:WeekSixRecordsRunResult;createdAt:string;verifiedAt:string}
+export type WeekSixClassificationCompletionEvidence =
+  | { kind:'legacy-replay-only';completedAt:string;sourceVersion:1;sourceSchemaRevision:null }
+  | { kind:'legacy-replay-only';completedAt:string;sourceVersion:2;sourceSchemaRevision:1 }
+  | { kind:'legacy-replay-only';completedAt:string;sourceVersion:3;sourceSchemaRevision:1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18 }
+  | { kind:'formal-v3';completedAt:string;verifiedAt:string;sourceWorkId:'w6-m1-structured-records-table';sourceVerifiedAt:string;sourceRows:import('../engine/weekSixRecordsContract').WeekSixRecordsRow[];input:WeekSixClassificationInput;run:WeekSixClassificationRunResult;workId:'w6-m2-fan-evidence-classification' };
+export interface WeekSixClassificationWorkV1 {kind:'ai-evidence-classification-v1';workId:'w6-m2-fan-evidence-classification';missionId:'w6-m2';title:string;sourceWorkId:'w6-m1-structured-records-table';sourceVerifiedAt:string;sourceRows:import('../engine/weekSixRecordsContract').WeekSixRecordsRow[];input:WeekSixClassificationInput;run:WeekSixClassificationRunResult;createdAt:string;verifiedAt:string}
 
 export interface MissionCompletionEvidenceV1 {
   'w3-m1'?: ManorHelpCompletionEvidence;
@@ -607,6 +616,7 @@ export interface MissionCompletionEvidenceV1 {
   'w5-m4'?: WeekFiveDecompositionCompletionEvidence;
   'w5-m5'?: WeekFiveStoryOrchestrationCompletionEvidence;
   'w6-m1'?: WeekSixRecordsCompletionEvidence;
+  'w6-m2'?: WeekSixClassificationCompletionEvidence;
 }
 
 export interface MissionSessionById {
@@ -636,6 +646,7 @@ export interface MissionSessionById {
   'w5-m4': WeekFiveDecompositionMissionSession;
   'w5-m5': WeekFiveStoryOrchestrationMissionSession;
   'w6-m1': WeekSixRecordsMissionSession;
+  'w6-m2': WeekSixClassificationMissionSession;
 }
 
 export type ExecutableMissionId = keyof MissionSessionById;
@@ -645,7 +656,7 @@ export type MissionSessions = { [MissionId in keyof MissionSessionById]?: Missio
 
 export interface ProgressV3 {
   version: 3;
-  schemaRevision: 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18;
+  schemaRevision: 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19;
   learnerName: string;
   missions: Record<string, MissionProgress>;
   settings: ProgressSettings;
@@ -670,6 +681,7 @@ export interface ProgressV3 {
     'w5-m4-problem-decomposition-record': WeekFiveDecompositionWorkV1;
     'w5-m5-story-orchestration-record': WeekFiveStoryOrchestrationWorkV1;
     'w6-m1-structured-records-table': WeekSixRecordsWorkV1;
+    'w6-m2-fan-evidence-classification': WeekSixClassificationWorkV1;
   }>;
   savedAt: string;
 }

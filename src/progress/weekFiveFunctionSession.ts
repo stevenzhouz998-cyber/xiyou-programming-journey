@@ -1,5 +1,4 @@
 import {
-  DEFAULT_WEEK_FIVE_FUNCTION_PYTHON,
   parseWeekFiveFunctionDraftEnvelope,
   parseWeekFiveFunctionPython,
   type WeekFiveFunctionPythonRunnable,
@@ -31,6 +30,7 @@ export interface WeekFiveFunctionMissionSession {
   lastRunAt: string | null;
   savedAt: string;
 }
+export { createWeekFiveFunctionSession } from './weekFiveFunctionSessionFactory';
 
 type RunInput = { canonicalTrace: WeekFiveFunctionTraceItem[]; workerTrace: WeekFiveFunctionTraceItem[]; run: WeekFiveFunctionRunResult };
 const UTC_ISO_MILLISECONDS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
@@ -51,17 +51,6 @@ function runnableFor(code: string): WeekFiveFunctionPythonRunnable {
   const parsed = parseWeekFiveFunctionPython(code);
   if ('state' in parsed) throw new Error('W5-M2 当前 Python 结构无效，不是 runnable 输入。');
   return parsed;
-}
-
-export function createWeekFiveFunctionSession(now: string): WeekFiveFunctionMissionSession {
-  parseIso(now);
-  parseWeekFiveFunctionDraftEnvelope(DEFAULT_WEEK_FIVE_FUNCTION_PYTHON);
-  return {
-    kind: 'python-function-call-v1', pythonCode: DEFAULT_WEEK_FIVE_FUNCTION_PYTHON,
-    lastCanonicalTrace: [], lastWorkerTrace: [], lastRun: null, failureSnapshot: null,
-    totalRuns: 0, callFailures: 0, bodyFailures: 0, validationFailures: 0, runnerInfrastructureFailures: 0,
-    conditionObservationUses: [], usedHintTiers: [], firstBlockingConcept: null, lastRunAt: null, savedAt: now,
-  };
 }
 
 export function updateWeekFiveFunctionCode(session: WeekFiveFunctionMissionSession, code: string, now: string): WeekFiveFunctionMissionSession {

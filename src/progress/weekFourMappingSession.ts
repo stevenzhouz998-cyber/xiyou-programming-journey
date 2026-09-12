@@ -1,6 +1,6 @@
-import { compileWeekFourMappingDraft, createDefaultWeekFourMappingDraft, type WeekFourMappingWorkspaceDraftV1 } from '../blockly/weekFourMappingDraft';
+import { compileWeekFourMappingDraft, type WeekFourMappingWorkspaceDraftV1 } from '../blockly/weekFourMappingDraft';
 import { compareWeekFourMappingTraces, type WeekFourMappingFailureSnapshot, type WeekFourMappingRunResult, type WeekFourMappingTraceItem } from '../blockly/weekFourMappingContract';
-import { DEFAULT_WEEK_FOUR_MAPPING_PYTHON, parseWeekFourMappingPython } from '../engine/weekFourPythonMappingGrammar';
+import { parseWeekFourMappingPython } from '../engine/weekFourPythonMappingGrammar';
 
 export interface WeekFourMappingMissionSession {
   workspace: WeekFourMappingWorkspaceDraftV1;
@@ -20,12 +20,9 @@ export interface WeekFourMappingMissionSession {
   conceptFailures: { mappingField: number; programStructure: number; safeExecution: number; completeness: number };
   lastRunAt: string | null; savedAt: string;
 }
+export { createWeekFourMappingSession } from './weekFourMappingSessionFactory';
 const iso = (value: string) => { if (new Date(value).toISOString() !== value) throw new Error('W4-M1 保存时间必须是标准 UTC ISO。'); };
 const count = (value: number) => { if (!Number.isSafeInteger(value) || value < 0) throw new Error('W4-M1 计数无效。'); return value + 1; };
-export function createWeekFourMappingSession(now: string): WeekFourMappingMissionSession {
-  iso(now); const parsed = parseWeekFourMappingPython(DEFAULT_WEEK_FOUR_MAPPING_PYTHON);
-  return { workspace: createDefaultWeekFourMappingDraft(), lastTrace: [], runtimeFailures: 0, compileFailures: 0, pythonCode: DEFAULT_WEEK_FOUR_MAPPING_PYTHON, pythonSourceSpan: parsed.sourceSpan, lastBlocklyTrace: [], lastPythonTrace: [], lastRun: null, failureSnapshot: null, conditionObservationUses: [], totalRuns: 0, semanticMismatchFailures: 0, validationFailures: 0, runnerInfrastructureFailures: 0, usedHintTiers: [], conceptFailures: { mappingField: 0, programStructure: 0, safeExecution: 0, completeness: 0 }, lastRunAt: null, savedAt: now };
-}
 export function updateWeekFourMappingCode(session: WeekFourMappingMissionSession, code: string, now: string): WeekFourMappingMissionSession {
   iso(now);
   if (code === session.pythonCode) return structuredClone(session);
